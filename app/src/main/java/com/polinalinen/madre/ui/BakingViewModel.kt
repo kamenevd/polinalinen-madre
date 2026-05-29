@@ -5,11 +5,17 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.gson.Gson
 import com.polinalinen.madre.model.*
-import kotlinx.coroutines.*
 import com.polinalinen.madre.service.TimerHelper
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
 class BakingViewModel(application: Application) : AndroidViewModel(application) {
+
+    companion object {
+        /** Debug speed multiplier. 1 = normal, 1000 = 8h in 29sec */
+        var speedMultiplier: Int = 1
+            private set
+    }
 
     private val _recipes = MutableStateFlow<List<Recipe>>(emptyList())
     val recipes: StateFlow<List<Recipe>> = _recipes.asStateFlow()
@@ -22,6 +28,9 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
+
+    private val _devMode = MutableStateFlow(false)
+    val devMode: StateFlow<Boolean> = _devMode.asStateFlow()
 
     private var timerJob: Job? = null
 
@@ -47,6 +56,11 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun toggleDevMode() {
+        _devMode.value = !_devMode.value
+        speedMultiplier = if (_devMode.value) 1000 else 1
+    }
+
     fun selectRecipe(recipe: Recipe) {
         val newSession = BakingSession(recipe = recipe)
         _session.value = newSession
@@ -65,6 +79,11 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
         } else {
             _remainingSeconds.value = 0
         }
+    }
+
+    /** Skip current step entirely (dev only) */
+    fun skipCurrentStep() {
+        advanceStep()
     }
 
     fun togglePause() {
@@ -88,21 +107,28 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
     private fun startStepTimer(session: BakingSession) {
         timerJob?.cancel()
         val step = session.currentStep
-        val totalSeconds = step.durationMinutes * 60L
+        val realTotalSeconds = step.durationMinutes * 60L
+        val acceleratedSeconds = realTotalSeconds / speedMultiplier
 
-        _remainingSeconds.value = totalSeconds
+        _remainingSeconds.value = realTotalSeconds // Show real time on display
 
-        if (step.type == StepType.WAIT && totalSeconds > 0) {
+        if (step.type == StepType.WAIT && realTotalSeconds > 0) {
             timerJob = viewModelScope.launch {
+                val startedAt = System.currentTimeMillis()
+                val acceleratedDurationMs = acceleratedSeconds * 1000L
+
                 while (isActive) {
                     val current = _session.value ?: break
                     if (current.isPaused) break
 
-                    val elapsed = (System.currentTimeMillis() - current.stepStartedAtMillis) / 1000
-                    val remaining = (totalSeconds - elapsed).coerceAtLeast(0)
-                    _remainingSeconds.value = remaining
+                    val elapsedMs = System.currentTimeMillis() - startedAt
+                    val acceleratedRemaining = ((acceleratedDurationMs - elapsedMs) / 1000).coerceAtLeast(0)
+                    // Display shows real remaining time scaled by progress
+                    val progress = if (acceleratedDurationMs > 0) elapsedMs.toFloat() / acceleratedDurationMs else 1f
+                    val displayRemaining = ((realTotalSeconds * (1f - progress))).toLong().coerceAtLeast(0)
+                    _remainingSeconds.value = displayRemaining
 
-                    if (remaining <= 0) {
+                    if (acceleratedRemaining <= 0) {
                         try {
                             val context = getApplication<Application>()
                             TimerHelper.showStepCompleteNotification(context, current.currentStep.title)

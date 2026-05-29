@@ -126,7 +126,10 @@ fun LevitoApp(
                     onBack = {
                         viewModel.exitSession()
                         currentScreen = Screen.RecipeList
-                    }
+                    },
+                    devMode = viewModel.devMode.collectAsState().value,
+                    onToggleDevMode = { viewModel.toggleDevMode() },
+                    onSkipStep = { viewModel.skipCurrentStep() }
                 )
             }
 

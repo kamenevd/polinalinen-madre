@@ -2,7 +2,9 @@ package com.polinalinen.madre.ui
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -22,7 +24,7 @@ import com.polinalinen.madre.model.*
 import com.polinalinen.madre.ui.theme.*
 import kotlinx.coroutines.delay
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun BakingTimelineScreen(
     session: BakingSession,
@@ -30,6 +32,9 @@ fun BakingTimelineScreen(
     onAdvance: () -> Unit,
     onTogglePause: () -> Unit,
     onBack: () -> Unit,
+    devMode: Boolean = false,
+    onToggleDevMode: () -> Unit = {},
+    onSkipStep: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val step = session.currentStep
@@ -64,7 +69,13 @@ fun BakingTimelineScreen(
                     text = session.recipe.name,
                     style = MaterialTheme.typography.titleLarge,
                     color = AccentGold,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .combinedClickable(
+                            onClick = {},
+                            onDoubleClick = {},
+                            onLongClick = onToggleDevMode
+                        ),
                     textAlign = TextAlign.Center
                 )
                 Spacer(modifier = Modifier.width(48.dp)) // balance back button
@@ -106,6 +117,35 @@ fun BakingTimelineScreen(
             )
 
             Spacer(modifier = Modifier.height(24.dp))
+
+            // Dev mode indicator + skip button
+            if (devMode) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "⚡ DEV ×1000",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = AccentRose
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Button(
+                        onClick = onSkipStep,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = AccentRose,
+                            contentColor = BackgroundDark
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.height(36.dp)
+                    ) {
+                        Text("Пропустить ⏭", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
 
             // Timeline overview
             Text(

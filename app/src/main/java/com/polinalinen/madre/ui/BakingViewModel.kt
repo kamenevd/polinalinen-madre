@@ -5,8 +5,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.gson.Gson
 import com.polinalinen.madre.model.*
-import com.polinalinen.madre.service.TimerService
 import kotlinx.coroutines.*
+import com.polinalinen.madre.service.TimerHelper
 import kotlinx.coroutines.flow.*
 
 class BakingViewModel(application: Application) : AndroidViewModel(application) {
@@ -19,6 +19,9 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _remainingSeconds = MutableStateFlow(0L)
     val remainingSeconds: StateFlow<Long> = _remainingSeconds.asStateFlow()
+
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
 
     private var timerJob: Job? = null
 
@@ -38,6 +41,7 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
                 val db = Gson().fromJson(json, RecipeDatabase::class.java)
                 _recipes.value = db.recipes
             } catch (e: Exception) {
+                _error.value = "Ошибка загрузки рецептов: ${e.message}"
                 e.printStackTrace()
             }
         }
@@ -69,7 +73,6 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
         _session.value = updated
 
         if (!updated.isPaused) {
-            // Resuming — restart timer with adjusted start time
             startStepTimer(updated)
         } else {
             timerJob?.cancel()
@@ -100,8 +103,12 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
                     _remainingSeconds.value = remaining
 
                     if (remaining <= 0) {
-                        // Timer complete — send notification
-                        sendTimerNotification(current.currentStep.title)
+                        try {
+                            val context = getApplication<Application>()
+                            TimerHelper.showStepCompleteNotification(context, current.currentStep.title)
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
                         break
                     }
 
@@ -109,12 +116,6 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
                 }
             }
         }
-    }
-
-    private fun sendTimerNotification(stepTitle: String) {
-        val context = getApplication<Application>()
-        // Delegate to TimerService for notification
-        TimerService.showStepCompleteNotification(context, stepTitle)
     }
 
     override fun onCleared() {

@@ -15,17 +15,20 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.polinalinen.madre.model.BakingSession
 import com.polinalinen.madre.model.Recipe
-import com.polinalinen.madre.service.TimerService
+import com.polinalinen.madre.service.TimerHelper
 import com.polinalinen.madre.ui.theme.LevitoMadreTheme
 
 class MainActivity : ComponentActivity() {
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { /* granted or not */ }
+    ) { _ -> }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Create notification channel early
+        TimerHelper.createChannel(this)
 
         // Request notification permission (Android 13+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -58,14 +61,23 @@ fun LevitoApp(
     val recipes by viewModel.recipes.collectAsState()
     val session by viewModel.session.collectAsState()
     val remainingSeconds by viewModel.remainingSeconds.collectAsState()
+    val error by viewModel.error.collectAsState()
 
     var currentScreen by remember { mutableStateOf<Screen>(Screen.RecipeList) }
 
-    // Auto-navigate when session changes
+    // Auto-navigate when session starts
     LaunchedEffect(session) {
         if (session != null && currentScreen is Screen.RecipeDetail) {
             currentScreen = Screen.Baking(session!!)
         }
+    }
+
+    // Show error if any
+    if (error != null) {
+        androidx.compose.material3.Text(
+            text = error ?: "",
+            color = androidx.compose.ui.graphics.Color.Red
+        )
     }
 
     AnimatedContent(
@@ -86,12 +98,10 @@ fun LevitoApp(
             }
 
             is Screen.RecipeDetail -> {
-                val ctx = LocalContext.current
                 RecipeDetailScreen(
                     recipe = screen.recipe,
                     onStartBaking = {
                         viewModel.selectRecipe(screen.recipe)
-                        TimerService.startForeground(ctx, screen.recipe.name, "")
                     },
                     onBack = {
                         currentScreen = Screen.RecipeList

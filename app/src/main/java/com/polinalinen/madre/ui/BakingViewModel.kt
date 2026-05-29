@@ -9,10 +9,25 @@ import com.polinalinen.madre.service.TimerHelper
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
+data class ActiveSession(
+    val id: String,
+    val name: String,
+    val session: BakingSession,
+    val remainingSeconds: Long = 0
+) {
+    val progressPercent: Int
+        get() = (session.progress * 100).toInt()
+
+    val currentStepTitle: String
+        get() = session.currentStep.title
+
+    val isTimerRunning: Boolean
+        get() = !session.isCompleted && !session.isPaused && session.currentStep.type == StepType.WAIT
+}
+
 class BakingViewModel(application: Application) : AndroidViewModel(application) {
 
     companion object {
-        /** Debug speed multiplier. 1 = normal, 1000 = 8h in 29sec */
         var speedMultiplier: Int = 1
             private set
     }
@@ -20,8 +35,16 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
     private val _recipes = MutableStateFlow<List<Recipe>>(emptyList())
     val recipes: StateFlow<List<Recipe>> = _recipes.asStateFlow()
 
-    private val _session = MutableStateFlow<BakingSession?>(null)
-    val session: StateFlow<BakingSession?> = _session.asStateFlow()
+    // Current active session (for the timeline screen)
+    private val _currentSessionId = MutableStateFlow<String?>(null)
+    private val _sessionsMap = MutableStateFlow<Map<String, ActiveSession>>(emptyMap())
+
+    val activeSessions: StateFlow<List<ActiveSession>> = _sessionsMap.map { map ->
+        map.values.filter { !it.session.isCompleted }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    private val _currentSession = MutableStateFlow<BakingSession?>(null)
+    val session: StateFlow<BakingSession?> = _currentSession.asStateFlow()
 
     private val _remainingSeconds = MutableStateFlow(0L)
     val remainingSeconds: StateFlow<Long> = _remainingSeconds.asStateFlow()
@@ -32,7 +55,7 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
     private val _devMode = MutableStateFlow(false)
     val devMode: StateFlow<Boolean> = _devMode.asStateFlow()
 
-    private var timerJob: Job? = null
+    private val timerJobs = mutableMapOf<String, Job>()
 
     init {
         loadRecipes()
@@ -42,16 +65,12 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val json = getApplication<Application>()
-                    .assets
-                    .open("recipes.json")
-                    .bufferedReader()
-                    .use { it.readText() }
-
+                    .assets.open("recipes.json")
+                    .bufferedReader().use { it.readText() }
                 val db = Gson().fromJson(json, RecipeDatabase::class.java)
                 _recipes.value = db.recipes
             } catch (e: Exception) {
                 _error.value = "Ошибка загрузки рецептов: ${e.message}"
-                e.printStackTrace()
             }
         }
     }
@@ -61,80 +80,136 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
         speedMultiplier = if (_devMode.value) 1000 else 1
     }
 
-    fun selectRecipe(recipe: Recipe) {
+    fun selectRecipe(recipe: Recipe, sessionName: String = recipe.name) {
+        val id = "${recipe.id}_${System.currentTimeMillis()}"
         val newSession = BakingSession(recipe = recipe)
-        _session.value = newSession
-        startStepTimer(newSession)
+
+        val active = ActiveSession(
+            id = id,
+            name = sessionName,
+            session = newSession
+        )
+
+        _sessionsMap.value = _sessionsMap.value + (id to active)
+        _currentSessionId.value = id
+        _currentSession.value = newSession
+        startStepTimer(id, newSession)
+    }
+
+    fun resumeSession(sessionId: String) {
+        val active = _sessionsMap.value[sessionId] ?: return
+        _currentSessionId.value = sessionId
+        _currentSession.value = active.session
+        _remainingSeconds.value = active.remainingSeconds
+
+        // Restart timer if it was a wait step
+        if (active.isTimerRunning) {
+            startStepTimer(sessionId, active.session)
+        }
     }
 
     fun advanceStep() {
-        val current = _session.value ?: return
-        timerJob?.cancel()
+        val current = _currentSession.value ?: return
+        val sessionId = _currentSessionId.value ?: return
+        timerJobs[sessionId]?.cancel()
 
         val next = current.advance()
-        _session.value = next
+        _currentSession.value = next
+
+        // Update sessions map
+        _sessionsMap.value = _sessionsMap.value.toMutableMap().apply {
+            this[sessionId] = this[sessionId]?.copy(session = next) ?: return@apply
+        }
 
         if (!next.isCompleted) {
-            startStepTimer(next)
+            startStepTimer(sessionId, next)
         } else {
             _remainingSeconds.value = 0
         }
     }
 
-    /** Skip current step entirely (dev only) */
     fun skipCurrentStep() {
         advanceStep()
     }
 
     fun togglePause() {
-        val current = _session.value ?: return
+        val current = _currentSession.value ?: return
+        val sessionId = _currentSessionId.value ?: return
         val updated = current.togglePause()
-        _session.value = updated
+        _currentSession.value = updated
+
+        _sessionsMap.value = _sessionsMap.value.toMutableMap().apply {
+            this[sessionId] = this[sessionId]?.copy(session = updated) ?: return@apply
+        }
 
         if (!updated.isPaused) {
-            startStepTimer(updated)
+            startStepTimer(sessionId, updated)
         } else {
-            timerJob?.cancel()
+            timerJobs[sessionId]?.cancel()
         }
     }
 
     fun exitSession() {
-        timerJob?.cancel()
-        _session.value = null
+        // Don't remove session, just leave the screen
+        _currentSession.value = null
+        _currentSessionId.value = null
         _remainingSeconds.value = 0
     }
 
-    private fun startStepTimer(session: BakingSession) {
-        timerJob?.cancel()
+    fun removeSession(sessionId: String) {
+        timerJobs[sessionId]?.cancel()
+        timerJobs.remove(sessionId)
+        _sessionsMap.value = _sessionsMap.value - sessionId
+        if (_currentSessionId.value == sessionId) {
+            _currentSession.value = null
+            _currentSessionId.value = null
+        }
+    }
+
+    private fun startStepTimer(sessionId: String, session: BakingSession) {
+        timerJobs[sessionId]?.cancel()
         val step = session.currentStep
         val realTotalSeconds = step.durationMinutes * 60L
         val acceleratedSeconds = realTotalSeconds / speedMultiplier
 
-        _remainingSeconds.value = realTotalSeconds // Show real time on display
+        _remainingSeconds.value = realTotalSeconds
 
         if (step.type == StepType.WAIT && realTotalSeconds > 0) {
-            timerJob = viewModelScope.launch {
+            timerJobs[sessionId] = viewModelScope.launch {
                 val startedAt = System.currentTimeMillis()
                 val acceleratedDurationMs = acceleratedSeconds * 1000L
 
                 while (isActive) {
-                    val current = _session.value ?: break
+                    val current = _currentSession.value ?: break
                     if (current.isPaused) break
 
                     val elapsedMs = System.currentTimeMillis() - startedAt
-                    val acceleratedRemaining = ((acceleratedDurationMs - elapsedMs) / 1000).coerceAtLeast(0)
-                    // Display shows real remaining time scaled by progress
                     val progress = if (acceleratedDurationMs > 0) elapsedMs.toFloat() / acceleratedDurationMs else 1f
                     val displayRemaining = ((realTotalSeconds * (1f - progress))).toLong().coerceAtLeast(0)
+
                     _remainingSeconds.value = displayRemaining
 
-                    if (acceleratedRemaining <= 0) {
+                    // Update sessions map
+                    _sessionsMap.value = _sessionsMap.value.toMutableMap().apply {
+                        this[sessionId] = this[sessionId]?.copy(remainingSeconds = displayRemaining) ?: return@apply
+                    }
+
+                    // Update notification
+                    try {
+                        val context = getApplication<Application>()
+                        val name = _sessionsMap.value[sessionId]?.name ?: ""
+                        TimerHelper.updateProgressNotification(
+                            context, sessionId, name,
+                            step.title, displayRemaining, realTotalSeconds
+                        )
+                    } catch (_: Exception) {}
+
+                    if (progress >= 1f) {
                         try {
                             val context = getApplication<Application>()
-                            TimerHelper.showStepCompleteNotification(context, current.currentStep.title)
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
+                            val name = _sessionsMap.value[sessionId]?.name ?: ""
+                            TimerHelper.showStepCompleteNotification(context, "${name}: ${step.title}")
+                        } catch (_: Exception) {}
                         break
                     }
 
@@ -146,6 +221,6 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
 
     override fun onCleared() {
         super.onCleared()
-        timerJob?.cancel()
+        timerJobs.values.forEach { it.cancel() }
     }
 }

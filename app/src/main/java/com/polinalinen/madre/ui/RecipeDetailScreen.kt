@@ -9,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
@@ -37,104 +38,110 @@ fun RecipeDetailScreen(
         modifier = modifier.fillMaxSize(),
         color = BackgroundDark
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 20.dp)
-        ) {
-            // Top bar
-            Row(
+        // Root Box: content + sticky bottom button
+        Box(modifier = Modifier.fillMaxSize()) {
+            // Scrollable content
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 16.dp, bottom = 8.dp),
-                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 88.dp) // space for sticky button
             ) {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Назад",
-                        tint = TextSecondary
-                    )
-                }
-                Text(
-                    text = "${recipe.emoji} ${recipe.name}",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = AccentGold,
-                    modifier = Modifier.weight(1f),
-                    textAlign = TextAlign.Center
-                )
-                Spacer(modifier = Modifier.width(48.dp))
-            }
-
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                contentPadding = PaddingValues(top = 16.dp, bottom = 100.dp)
-            ) {
-                // Description
-                item {
-                    Text(
-                        text = recipe.description,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = TextSecondary
-                    )
-                }
-
-                // Total time
-                item {
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = BackgroundCard),
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceEvenly
-                        ) {
-                            InfoChip(label = "Время", value = timeText)
-                            InfoChip(label = "Шагов", value = "${recipe.timeline.size}")
-                        }
-                    }
-                }
-
-                // Ingredients by section
-                items(recipe.ingredients.entries.toList()) { entry ->
-                    Column {
-                        Text(
-                            text = entry.key.replaceFirstChar { it.uppercase() },
-                            style = MaterialTheme.typography.titleMedium,
-                            color = TextAccent,
-                            modifier = Modifier.padding(bottom = 8.dp)
+                // Top bar
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp, bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Назад",
+                            tint = TextSecondary
                         )
-                        entry.value.forEach { ingredient ->
+                    }
+                    Text(
+                        text = "${recipe.emoji} ${recipe.name}",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = AccentGold,
+                        modifier = Modifier.weight(1f),
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.width(48.dp))
+                }
+
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp)
+                ) {
+                    // Description
+                    item {
+                        Text(
+                            text = recipe.description,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = TextSecondary
+                        )
+                    }
+
+                    // Total time
+                    item {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = BackgroundCard),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 4.dp)
+                                    .padding(16.dp),
+                                horizontalArrangement = Arrangement.SpaceEvenly
                             ) {
-                                Text(
-                                    text = "•",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = AccentGold,
-                                    modifier = Modifier.padding(end = 8.dp)
-                                )
-                                Text(
-                                    text = ingredient,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = TextSecondary
-                                )
+                                InfoChip(label = "Время", value = timeText)
+                                InfoChip(label = "Шагов", value = "${recipe.timeline.size}")
+                            }
+                        }
+                    }
+
+                    // Ingredients by section
+                    items(recipe.ingredients.entries.toList()) { entry ->
+                        Column {
+                            Text(
+                                text = entry.key.replaceFirstChar { it.uppercase() },
+                                style = MaterialTheme.typography.titleMedium,
+                                color = TextAccent,
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                            entry.value.forEach { ingredient ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        text = "•",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = AccentGold,
+                                        modifier = Modifier.padding(end = 8.dp)
+                                    )
+                                    Text(
+                                        text = ingredient,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = TextSecondary
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
 
-            // Start button (sticky bottom)
+            // Sticky bottom button
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
                     .background(BackgroundDark)
-                    .padding(vertical = 16.dp)
+                    .padding(horizontal = 20.dp, vertical = 16.dp)
             ) {
                 Button(
                     onClick = onStartBaking,
@@ -159,7 +166,7 @@ fun RecipeDetailScreen(
 
 @Composable
 private fun InfoChip(label: String, value: String) {
-    Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             text = value,
             style = MaterialTheme.typography.titleMedium,

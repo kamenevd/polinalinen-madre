@@ -15,7 +15,6 @@ object TimerHelper {
 
     fun createChannel(context: Context) {
         try {
-            // Complete notification channel
             val completeChannel = NotificationChannel(
                 CHANNEL_ID,
                 "Таймер выпечки",
@@ -25,7 +24,6 @@ object TimerHelper {
                 enableVibration(true)
             }
 
-            // Progress channel (silent, ongoing)
             val progressChannel = NotificationChannel(
                 CHANNEL_PROGRESS,
                 "Прогресс выпечки",
@@ -44,13 +42,16 @@ object TimerHelper {
         }
     }
 
-    fun showStepCompleteNotification(context: Context, title: String) {
+    fun showStepCompleteNotification(context: Context, title: String, sessionId: String = "") {
         try {
             createChannel(context)
 
-            val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+            val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)?.apply {
+                putExtra("SESSION_ID", sessionId)
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
             val pendingIntent = PendingIntent.getActivity(
-                context, 0, intent,
+                context, sessionId.hashCode(), intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
@@ -96,9 +97,12 @@ object TimerHelper {
 
             val notificationId = NOTIFICATION_ID_PROGRESS + (sessionId.hashCode() and 0xFFFF)
 
-            val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+            val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)?.apply {
+                putExtra("SESSION_ID", sessionId)
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
             val pendingIntent = PendingIntent.getActivity(
-                context, 0, intent,
+                context, notificationId, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 

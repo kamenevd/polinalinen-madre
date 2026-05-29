@@ -47,15 +47,22 @@ fun RecipeListScreen(
 
             Text(
                 text = "Печём дома с любовью",
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.bodyMedium,
                 color = TextSecondary,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp),
+                    .padding(top = 6.dp),
                 textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(40.dp))
+            // Decorative divider — warm golden line
+            Box(
+                modifier = Modifier
+                    .padding(horizontal = 80.dp, vertical = 20.dp)
+                    .height(1.dp)
+                    .fillMaxWidth()
+                    .background(AccentGold.copy(alpha = 0.3f))
+            )
 
             // Recipe cards
             LazyColumn(
@@ -92,31 +99,31 @@ private fun RecipeCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(20.dp))
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
             containerColor = BackgroundCard
         ),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(20.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp),
+                .padding(horizontal = 20.dp, vertical = 18.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Emoji icon
+            // Emoji icon — warm golden glow
             Box(
                 modifier = Modifier
-                    .size(56.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(AccentBrown.copy(alpha = 0.3f)),
+                    .size(52.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(AccentGold.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = recipe.emoji,
-                    style = MaterialTheme.typography.displayMedium
+                    style = MaterialTheme.typography.headlineMedium
                 )
             }
 

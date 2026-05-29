@@ -1,6 +1,7 @@
 package com.polinalinen.madre.ui
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -51,9 +52,17 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             LevitoMadreTheme {
-                LevitoApp()
+                LevitoApp(
+                    initialSessionId = intent?.getStringExtra("SESSION_ID"),
+                    onConsumedIntent = { intent.removeExtra("SESSION_ID") }
+                )
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
     }
 }
 
@@ -66,7 +75,9 @@ sealed class Screen {
 
 @Composable
 fun LevitoApp(
-    viewModel: BakingViewModel = viewModel()
+    viewModel: BakingViewModel = viewModel(),
+    initialSessionId: String? = null,
+    onConsumedIntent: () -> Unit = {}
 ) {
     val recipes by viewModel.recipes.collectAsState()
     val session by viewModel.session.collectAsState()
@@ -75,6 +86,16 @@ fun LevitoApp(
     val devMode by viewModel.devMode.collectAsState()
 
     var currentScreen by remember { mutableStateOf<Screen>(Screen.RecipeList) }
+
+    // Handle notification tap — navigate to the baking session
+    LaunchedEffect(initialSessionId) {
+        val sid = initialSessionId
+        if (sid != null) {
+            viewModel.resumeSession(sid)
+            currentScreen = Screen.Baking(sid)
+            onConsumedIntent()
+        }
+    }
 
     // Handle system back button — stay in app on inner screens
     BackHandler(enabled = currentScreen !is Screen.RecipeList) {

@@ -102,9 +102,10 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
         _currentSession.value = active.session
         _remainingSeconds.value = active.remainingSeconds
 
-        // Restart timer if it was a wait step
-        if (active.isTimerRunning) {
-            startStepTimer(sessionId, active.session)
+        // Resume timer from where it left off
+        val step = active.session.currentStep
+        if (!active.session.isCompleted && !active.session.isPaused && step.type == StepType.WAIT && step.durationMinutes > 0) {
+            resumeStepTimer(sessionId, active.session, active.remainingSeconds)
         }
     }
 
@@ -143,7 +144,9 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
         }
 
         if (!updated.isPaused) {
-            startStepTimer(sessionId, updated)
+            // Resume from saved remaining time
+            val savedRemaining = _sessionsMap.value[sessionId]?.remainingSeconds ?: 0L
+            resumeStepTimer(sessionId, updated, savedRemaining)
         } else {
             timerJobs[sessionId]?.cancel()
         }
@@ -167,17 +170,24 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun startStepTimer(sessionId: String, session: BakingSession) {
+        val step = session.currentStep
+        val realTotalSeconds = step.durationMinutes * 60L
+        resumeStepTimer(sessionId, session, realTotalSeconds)
+    }
+
+    private fun resumeStepTimer(sessionId: String, session: BakingSession, remainingAtResume: Long) {
         timerJobs[sessionId]?.cancel()
         val step = session.currentStep
         val realTotalSeconds = step.durationMinutes * 60L
-        val acceleratedSeconds = realTotalSeconds / speedMultiplier
 
-        _remainingSeconds.value = realTotalSeconds
+        _remainingSeconds.value = remainingAtResume
 
-        if (step.type == StepType.WAIT && realTotalSeconds > 0) {
+        if (step.type == StepType.WAIT && remainingAtResume > 0) {
+            val acceleratedRemaining = remainingAtResume / speedMultiplier
+
             timerJobs[sessionId] = viewModelScope.launch {
                 val startedAt = System.currentTimeMillis()
-                val acceleratedDurationMs = acceleratedSeconds * 1000L
+                val acceleratedDurationMs = acceleratedRemaining * 1000L
 
                 while (isActive) {
                     val current = _currentSession.value ?: break
@@ -185,7 +195,7 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
 
                     val elapsedMs = System.currentTimeMillis() - startedAt
                     val progress = if (acceleratedDurationMs > 0) elapsedMs.toFloat() / acceleratedDurationMs else 1f
-                    val displayRemaining = ((realTotalSeconds * (1f - progress))).toLong().coerceAtLeast(0)
+                    val displayRemaining = ((remainingAtResume * (1f - progress))).toLong().coerceAtLeast(0)
 
                     _remainingSeconds.value = displayRemaining
 
@@ -208,7 +218,7 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
                         try {
                             val context = getApplication<Application>()
                             val name = _sessionsMap.value[sessionId]?.name ?: ""
-                            TimerHelper.showStepCompleteNotification(context, "${name}: ${step.title}")
+                            TimerHelper.showStepCompleteNotification(context, "${name}: ${step.title}", sessionId)
                         } catch (_: Exception) {}
                         break
                     }

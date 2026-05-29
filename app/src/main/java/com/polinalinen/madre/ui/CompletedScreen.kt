@@ -31,7 +31,7 @@ fun CompletedScreen(
                 style = MaterialTheme.typography.displayLarge
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
             Text(
                 text = "Готово!",
@@ -40,10 +40,10 @@ fun CompletedScreen(
                 textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Ваша выпечка готова.\nПриятного аппетита!",
+                text = "Ваша выпечка готова.\nПриятного аппетита! 🍞",
                 style = MaterialTheme.typography.bodyLarge,
                 color = TextSecondary,
                 textAlign = TextAlign.Center

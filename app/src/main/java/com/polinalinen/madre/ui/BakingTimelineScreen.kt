@@ -358,23 +358,22 @@ private fun TimerCircle(
 
     Box(
         contentAlignment = Alignment.Center,
-        modifier = Modifier.size(160.dp)
+        modifier = Modifier.size(180.dp)
     ) {
         // Background circle
         Box(
             modifier = Modifier
-                .size(160.dp)
+                .size(180.dp)
                 .clip(CircleShape)
                 .background(TimerBackground)
         )
 
-        // Progress arc — using LinearProgressIndicator as simplified arc
-        // (Full arc would use Canvas, keeping it simple)
+        // Progress arc
         CircularProgressIndicator(
             progress = progress,
-            modifier = Modifier.size(150.dp),
+            modifier = Modifier.size(168.dp),
             color = color,
-            strokeWidth = 4.dp,
+            strokeWidth = 5.dp,
             trackColor = DividerColor
         )
 

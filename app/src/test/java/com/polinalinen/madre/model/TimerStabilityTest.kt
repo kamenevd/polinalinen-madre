@@ -91,8 +91,8 @@ class TimerStabilityTest {
         session = session.advance() // step 1 — WAIT
         val waitStartedAt = session.stepStartedAtMillis
 
-        // Small delay to ensure time passes
-        Thread.sleep(10)
+        // Ensure measurable time passes for timestamp comparison
+        Thread.sleep(50)
 
         val next = session.advance() // step 2 — ACTION
         assertThat(next.currentStepIndex).isEqualTo(2)
@@ -117,7 +117,7 @@ class TimerStabilityTest {
         var session = BakingSession(recipe = recipe)
         val firstStartedAt = session.stepStartedAtMillis
 
-        Thread.sleep(10)
+        Thread.sleep(50)
 
         val next = session.advance()
         assertThat(next.currentStepIndex).isEqualTo(1)

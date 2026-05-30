@@ -275,6 +275,14 @@ private fun CurrentStepCard(
                     accentColor = accentColor
                 )
                 Spacer(modifier = Modifier.height(20.dp))
+            } else if (isWait && remainingSeconds <= 0) {
+                // Timer finished — show "Time's up!"
+                Text(
+                    text = "⏰ Время вышло!",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = TimerUrgent
+                )
+                Spacer(modifier = Modifier.height(20.dp))
             } else if (!isWait) {
                 // Show duration for action steps
                 Text(

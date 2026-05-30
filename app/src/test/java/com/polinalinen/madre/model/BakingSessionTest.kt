@@ -105,9 +105,17 @@ class BakingSessionTest {
     // ── Total duration ──────────────────────────────────────────
 
     @Test
-    fun `totalDurationMinutes sums all steps`() {
-        val recipe = testRecipe() // 10 + 60 + 5 = 75
-        assertThat(recipe.timeline.sumOf { it.durationMinutes }).isEqualTo(75)
+    fun `totalDurationMinutes property sums all steps`() {
+        val session = BakingSession(recipe = testRecipe()) // 10 + 60 + 5 = 75
+        assertThat(session.totalDurationMinutes).isEqualTo(75)
+    }
+
+    @Test
+    fun `totalDurationMinutes matches recipe timeline sum`() {
+        val session = BakingSession(recipe = testRecipe())
+        assertThat(session.totalDurationMinutes).isEqualTo(
+            session.recipe.timeline.sumOf { it.durationMinutes }
+        )
     }
 
     // ── Progress ────────────────────────────────────────────────
@@ -144,6 +152,42 @@ class BakingSessionTest {
         val recipe = testRecipe(steps = emptyList())
         val session = BakingSession(recipe = recipe)
         assertThat(session.progress).isEqualTo(0f)
+    }
+
+    // ── advance() on completed session is no-op ────────────────
+
+    @Test
+    fun `advance on completed session returns same instance`() {
+        val recipe = testRecipe() // 3 steps
+        var session = BakingSession(recipe = recipe)
+        repeat(3) { session = session.advance() }
+        assertThat(session.isCompleted).isTrue()
+
+        val beforeAdvance = session
+        val afterAdvance = session.advance()
+        // advance() on completed returns this (no-op)
+        assertThat(afterAdvance.isCompleted).isTrue()
+        assertThat(afterAdvance.currentStepIndex).isEqualTo(beforeAdvance.currentStepIndex)
+        assertThat(afterAdvance.completedAt).isEqualTo(beforeAdvance.completedAt)
+    }
+
+    // ── Empty timeline edge case ────────────────────────────────
+
+    @Test(expected = IndexOutOfBoundsException::class)
+    fun `currentStep on empty timeline throws IndexOutOfBoundsException`() {
+        val recipe = testRecipe(steps = emptyList())
+        val session = BakingSession(recipe = recipe)
+        // Accessing currentStep should crash — empty timeline has no steps
+        session.currentStep
+    }
+
+    @Test
+    fun `empty timeline has zero progress and is not completed`() {
+        val recipe = testRecipe(steps = emptyList())
+        val session = BakingSession(recipe = recipe)
+        assertThat(session.progress).isEqualTo(0f)
+        assertThat(session.isCompleted).isFalse()
+        assertThat(session.currentStepIndex).isEqualTo(0)
     }
 
     // ── Full recipe walkthrough (Хлебушек домашний pattern) ──────

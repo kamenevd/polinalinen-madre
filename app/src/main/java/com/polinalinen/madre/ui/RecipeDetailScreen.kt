@@ -21,7 +21,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -62,9 +62,7 @@ import com.polinalinen.madre.ui.theme.TextAccent
 import com.polinalinen.madre.ui.theme.TextPrimary
 import com.polinalinen.madre.ui.theme.TextSecondary
 
-@Composable
-private fun getHeroImageResId(recipeId: String): Int {
-    val context = androidx.compose.ui.platform.LocalContext.current
+private fun lookupHeroResId(recipeId: String, packageName: String, resources: android.content.res.Resources): Int {
     val heroMap = mapOf(
         "pirozhki" to "hero_pirozhki",
         "belyashi" to "hero_belyashi",
@@ -79,9 +77,7 @@ private fun getHeroImageResId(recipeId: String): Int {
         "garlic_buns" to "hero_garlic_buns"
     )
     val resName = heroMap[recipeId] ?: return 0
-    return context.resources.getIdentifier(
-        resName, "drawable", context.packageName
-    )
+    return resources.getIdentifier(resName, "drawable", packageName)
 }
 
 @Composable
@@ -91,6 +87,10 @@ fun RecipeDetailScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val heroResId = remember(recipe.id) {
+        lookupHeroResId(recipe.id, context.packageName, context.resources)
+    }
     val checkedIngredients = remember { mutableStateListOf<String>() }
     val allIngredients = recipe.ingredients.values.flatten()
     val totalMinutes = recipe.timeline.sumOf { it.durationMinutes }
@@ -106,7 +106,7 @@ fun RecipeDetailScreen(
         1 -> "Легко"
         2 -> "Просто"
         3 -> "Средне"
-        else -> ""
+        else -> "—"
     }
 
     Surface(color = BackgroundDark) {
@@ -160,7 +160,7 @@ fun RecipeDetailScreen(
                             )
                         )
                         // Hero image or emoji fallback
-                        val heroResId = getHeroImageResId(recipe.id)
+                        // heroResId is remembered above
                         if (heroResId != 0) {
                             Image(
                                 painter = painterResource(id = heroResId),
@@ -188,7 +188,7 @@ fun RecipeDetailScreen(
                         ) {
                             IconButton(onClick = onBack) {
                                 Icon(
-                                    imageVector = Icons.Default.ArrowBack,
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                     contentDescription = "Назад",
                                     tint = AccentBrown
                                 )
@@ -307,16 +307,17 @@ fun RecipeDetailScreen(
                         }
                     }
                     items(items) { ingredient ->
-                        val isChecked = ingredient in checkedIngredients
+                        val uniqueKey = "$sectionName::$ingredient"
+                        val isChecked = uniqueKey in checkedIngredients
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
                                     if (isChecked) {
-                                        checkedIngredients.remove(ingredient)
+                                        checkedIngredients.remove(uniqueKey)
                                     } else {
-                                        checkedIngredients.add(ingredient)
+                                        checkedIngredients.add(uniqueKey)
                                     }
                                 }
                                 .padding(horizontal = 20.dp, vertical = 6.dp)

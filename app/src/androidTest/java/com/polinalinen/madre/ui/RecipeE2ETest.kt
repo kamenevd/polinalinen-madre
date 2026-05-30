@@ -2,6 +2,8 @@ package com.polinalinen.madre.ui
 
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import com.polinalinen.madre.model.*
 import org.junit.Assert.*
 import org.junit.Rule
@@ -92,7 +94,8 @@ class RecipeE2ETest {
 
     @Test
     fun e2e_lastStep_showsDoneButton() {
-        val session = BakingSession(recipe = khlebushekRecipe, currentStepIndex = 10)
+        val lastStepIndex = khlebushekRecipe.timeline.lastIndex
+        val session = BakingSession(recipe = khlebushekRecipe, currentStepIndex = lastStepIndex)
 
         composeTestRule.setContent {
             BakingTimelineScreen(
@@ -104,29 +107,38 @@ class RecipeE2ETest {
             )
         }
 
-        composeTestRule.onNodeWithText("Шаг 11 из 11").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Остывание").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Шаг ${lastStepIndex + 1} из ${khlebushekRecipe.timeline.size}").assertIsDisplayed()
+        composeTestRule.onNodeWithText(khlebushekRecipe.timeline[lastStepIndex].title).assertIsDisplayed()
         composeTestRule.onNodeWithText("Готово! 🎉").assertIsDisplayed()
     }
 
     @Test
     fun e2e_advanceStep_updatesStepCounter() {
-        var session = BakingSession(recipe = khlebushekRecipe)
+        val sessionState = mutableStateOf(BakingSession(recipe = khlebushekRecipe))
 
         composeTestRule.setContent {
+            val session = sessionState.value
             BakingTimelineScreen(
                 session = session,
                 remainingSeconds = 0L,
-                onAdvance = { session = session.advance() },
+                onAdvance = { sessionState.value = sessionState.value.advance() },
                 onTogglePause = {},
                 onBack = {},
             )
         }
 
-        // Initially step 1
+        // Initially step 1 of 11
         composeTestRule.onNodeWithText("Шаг 1 из 11").assertIsDisplayed()
+        composeTestRule.onNodeWithText("ДЕЛАЕМ").assertIsDisplayed()
 
-        // Advance
+        // Click "Далее →"
         composeTestRule.onNodeWithText("Далее →").performClick()
+
+        // After advance: step 2 of 11, WAIT step with timer
+        composeTestRule.onNodeWithText("Шаг 2 из 11").assertIsDisplayed()
+        composeTestRule.onNodeWithText("ЖДЁМ").assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Опара подходит (ночь)")[0].assertIsDisplayed()
+        assertEquals(1, sessionState.value.currentStepIndex)
+        assertEquals(StepType.WAIT, sessionState.value.currentStep.type)
     }
 }

@@ -39,6 +39,9 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestPermission()
     ) { _ -> }
 
+    // Mutable state for notification deep-links so Compose recomposes
+    private var _notifSessionId = mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -52,11 +55,19 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        // Handle initial intent (cold start from notification)
+        _notifSessionId.value = intent?.getStringExtra("SESSION_ID")
+
         setContent {
             LevitoMadreTheme {
+                // Read from MutableState so Compose observes changes
+                val sessionId by remember { _notifSessionId }
                 LevitoApp(
-                    initialSessionId = intent?.getStringExtra("SESSION_ID"),
-                    onConsumedIntent = { intent.removeExtra("SESSION_ID") }
+                    initialSessionId = sessionId,
+                    onConsumedIntent = {
+                        _notifSessionId.value = null
+                        intent.removeExtra("SESSION_ID")
+                    }
                 )
             }
         }
@@ -65,6 +76,8 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        // Trigger recomposition for notification taps while activity is alive
+        _notifSessionId.value = intent.getStringExtra("SESSION_ID")
     }
 }
 

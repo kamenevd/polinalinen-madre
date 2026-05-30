@@ -30,7 +30,7 @@ class RecipeListScreenTest {
                     title = "Шаг ${i + 1}",
                     description = "Описание шага ${i + 1}",
                     durationMinutes = (i + 1) * 10
-                )
+                    )
             }
         ),
         Recipe(
@@ -89,5 +89,27 @@ class RecipeListScreenTest {
         composeTestRule.onNodeWithText("Хлебушек домашний").performClick()
         assertNotNull("Recipe click should trigger callback", clickedRecipe)
         assertEquals("khlebushek", clickedRecipe!!.id)
+    }
+
+    @Test
+    fun recipeList_displaysEmojis() {
+        composeTestRule.setContent {
+            RecipeListScreen(recipes = testRecipes, onRecipeClick = {})
+        }
+
+        composeTestRule.onNodeWithText("🍞").assertIsDisplayed()
+        composeTestRule.onNodeWithText("🥧").assertIsDisplayed()
+    }
+
+    @Test
+    fun emptyRecipeList_doesNotCrash() {
+        composeTestRule.setContent {
+            RecipeListScreen(recipes = emptyList(), onRecipeClick = {})
+        }
+
+        // Header should still be visible even with no recipes
+        composeTestRule.onNodeWithText("Levito Madre").assertIsDisplayed()
+        // No recipe cards should be shown
+        composeTestRule.onNodeWithText("Хлебушек домашний").assertDoesNotExist()
     }
 }

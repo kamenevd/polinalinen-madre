@@ -301,6 +301,8 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
         resumeStepTimer(sessionId, session, realTotalSeconds)
     }
 
+    private var lastPersistTimeMs = 0L
+
     private fun resumeStepTimer(sessionId: String, session: BakingSession, remainingAtResume: Long) {
         timerJobs[sessionId]?.cancel()
         val step = session.currentStep
@@ -309,29 +311,37 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
         _remainingSeconds.value = remainingAtResume
 
         if (step.type == StepType.WAIT && remainingAtResume > 0) {
-            val acceleratedRemaining = remainingAtResume / speedMultiplier
+            val acceleratedRemaining = if (speedMultiplier > 0) remainingAtResume / speedMultiplier else remainingAtResume
 
             timerJobs[sessionId] = viewModelScope.launch {
                 val startedAt = System.currentTimeMillis()
                 val acceleratedDurationMs = acceleratedRemaining * 1000L
+                lastPersistTimeMs = startedAt
 
                 while (isActive) {
-                    val current = _currentSession.value ?: break
+                    // Read from sessionsMap, not _currentSession — timer survives navigation
+                    val activeEntry = _sessionsMap.value[sessionId] ?: break
+                    val current = activeEntry.session
                     if (current.isPaused) break
 
                     val elapsedMs = System.currentTimeMillis() - startedAt
                     val progress = if (acceleratedDurationMs > 0) elapsedMs.toFloat() / acceleratedDurationMs else 1f
                     val displayRemaining = ((remainingAtResume * (1f - progress))).toLong().coerceAtLeast(0)
 
-                    _remainingSeconds.value = displayRemaining
+                    // Only update UI timer if this is the current session on screen
+                    if (_currentSessionId.value == sessionId) {
+                        _remainingSeconds.value = displayRemaining
+                    }
 
                     // Update sessions map
                     _sessionsMap.value = _sessionsMap.value.toMutableMap().apply {
                         this[sessionId] = this[sessionId]?.copy(remainingSeconds = displayRemaining) ?: return@apply
                     }
-                    // Persist every 10 seconds (not every tick to avoid I/O)
-                    if (displayRemaining % 10 == 0L) {
+                    // Persist every 30 seconds (wall-clock based, not modulo)
+                    val now = System.currentTimeMillis()
+                    if (now - lastPersistTimeMs >= 30_000) {
                         persistSession(sessionId)
+                        lastPersistTimeMs = now
                     }
 
                     // Update notification (handles both normal and urgent states)
@@ -348,7 +358,6 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
                         try {
                             val context = getApplication<Application>()
                             val name = _sessionsMap.value[sessionId]?.name ?: ""
-                            // Timer completed — show completion notification
                             val nextStepIndex = session.currentStepIndex + 1
                             val nextStepTitle = if (nextStepIndex < session.recipe.timeline.size) {
                                 session.recipe.timeline[nextStepIndex].title

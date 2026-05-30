@@ -306,7 +306,7 @@ object TimerHelper {
                 .build()
 
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            manager.notify(NOTIFICATION_ID_COMPLETE, notification)
+            manager.notify(NOTIFICATION_ID_COMPLETE + (sessionId.hashCode() and 0xFF), notification)
         } catch (e: Exception) {
             e.printStackTrace()
         }

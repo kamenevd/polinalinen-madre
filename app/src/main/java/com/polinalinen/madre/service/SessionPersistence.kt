@@ -26,7 +26,8 @@ object SessionPersistence {
         val currentStepIndex: Int,
         val stepStartedAtMillis: Long,
         val isPaused: Boolean,
-        val remainingSeconds: Long
+        val remainingSeconds: Long,
+        val completedAt: Long? = null
     )
 
     private fun prefs(context: Context): SharedPreferences {
@@ -51,7 +52,8 @@ object SessionPersistence {
             currentStepIndex = session.currentStepIndex,
             stepStartedAtMillis = session.stepStartedAtMillis,
             isPaused = session.isPaused,
-            remainingSeconds = remainingSeconds
+            remainingSeconds = remainingSeconds,
+            completedAt = session.completedAt
         )
         saveAll(context, sessions)
     }
@@ -94,13 +96,7 @@ object SessionPersistence {
         while (iterator.hasNext()) {
             val entry = iterator.next()
             val s = entry.value
-            val session = BakingSession(
-                recipe = s.recipe,
-                currentStepIndex = s.currentStepIndex,
-                stepStartedAtMillis = s.stepStartedAtMillis,
-                isPaused = s.isPaused
-            )
-            if (session.isCompleted) {
+            if (s.completedAt != null) {
                 iterator.remove()
             }
         }
@@ -120,7 +116,8 @@ object SessionPersistence {
             recipe = saved.recipe,
             currentStepIndex = saved.currentStepIndex,
             stepStartedAtMillis = saved.stepStartedAtMillis,
-            isPaused = saved.isPaused
+            isPaused = saved.isPaused,
+            completedAt = saved.completedAt
         )
         return Triple(saved.id, saved.name, session)
     }

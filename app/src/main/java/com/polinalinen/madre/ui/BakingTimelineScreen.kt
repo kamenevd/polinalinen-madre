@@ -292,6 +292,42 @@ private fun CurrentStepCard(
                 Spacer(modifier = Modifier.height(20.dp))
             }
 
+            // Baker's tip for long wait steps
+            if (isWait && remainingSeconds > 0 && step.durationMinutes >= 30) {
+                val tip = when {
+                    step.title.contains("расстойк", ignoreCase = true) ->
+                        "💡 Пока подходит тесто — подготовьте форму и пергамент"
+                    step.title.contains("ферментац", ignoreCase = true) ->
+                        "💡 Идеальная температура для ферментации 24-28°C"
+                    step.title.contains("аутолиз", ignoreCase = true) ->
+                        "💡 Аутолиз развивает клейковину без замеса"
+                    step.title.contains("выпечк", ignoreCase = true) ->
+                        "💡 Не открывайте духовку первые 20 минут!"
+                    step.title.contains("остыв", ignoreCase = true) ->
+                        "💡 Хлеб должен остыть на решётке минимум 30 мин"
+                    step.durationMinutes >= 120 ->
+                        "💡 Долгая ферментация = более сложный вкус"
+                    else ->
+                        "💡 Терпение — главный ингредиент хлеба 🍞"
+                }
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = BackgroundCardHover),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp)
+                ) {
+                    Text(
+                        text = tip,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = AccentCream,
+                        modifier = Modifier.padding(12.dp),
+                        textAlign = TextAlign.Center
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
             // Action buttons
             Row(
                 modifier = Modifier.fillMaxWidth(),

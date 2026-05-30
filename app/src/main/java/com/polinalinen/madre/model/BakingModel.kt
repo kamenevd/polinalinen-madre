@@ -15,7 +15,8 @@ data class Recipe(
     val emoji: String,
     val description: String,
     val ingredients: Map<String, List<String>>,
-    val timeline: List<TimelineStep>
+    val timeline: List<TimelineStep>,
+    val difficulty: Int = 0  // 0 = not set, 1–5 difficulty dots
 )
 
 data class TimelineStep(

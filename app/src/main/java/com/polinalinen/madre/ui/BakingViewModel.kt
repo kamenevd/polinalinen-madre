@@ -90,7 +90,10 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
             session = newSession
         )
 
-        _sessionsMap.value = _sessionsMap.value + (id to active)
+        // Bugfix 3a: Explicit map update to ensure flow emits
+        val updatedMap = _sessionsMap.value + (id to active)
+        _sessionsMap.value = updatedMap
+
         _currentSessionId.value = id
         _currentSession.value = newSession
         startStepTimer(id, newSession)
@@ -100,12 +103,31 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
         val active = _sessionsMap.value[sessionId] ?: return
         _currentSessionId.value = sessionId
         _currentSession.value = active.session
-        _remainingSeconds.value = active.remainingSeconds
+
+        // Bugfix 3b: If remainingSeconds == 0 and step is WAIT, recalculate from stepStartedAtMillis
+        var effectiveRemaining = active.remainingSeconds
+        val step = active.session.currentStep
+        if (step.type == StepType.WAIT && step.durationMinutes > 0) {
+            if (effectiveRemaining <= 0) {
+                val elapsedRealMs = System.currentTimeMillis() - active.session.stepStartedAtMillis
+                val totalRealSeconds = step.durationMinutes * 60L
+                val elapsedRealSeconds = elapsedRealMs / 1000
+                effectiveRemaining = (totalRealSeconds - elapsedRealSeconds).coerceAtLeast(0)
+            }
+        }
+
+        _remainingSeconds.value = effectiveRemaining
+
+        // Update the sessions map with corrected remaining time
+        if (effectiveRemaining != active.remainingSeconds) {
+            _sessionsMap.value = _sessionsMap.value.toMutableMap().apply {
+                this[sessionId] = active.copy(remainingSeconds = effectiveRemaining)
+            }
+        }
 
         // Resume timer from where it left off
-        val step = active.session.currentStep
         if (!active.session.isCompleted && !active.session.isPaused && step.type == StepType.WAIT && step.durationMinutes > 0) {
-            resumeStepTimer(sessionId, active.session, active.remainingSeconds)
+            resumeStepTimer(sessionId, active.session, effectiveRemaining)
         }
     }
 
@@ -114,6 +136,7 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
         val sessionId = _currentSessionId.value ?: return
         timerJobs[sessionId]?.cancel()
 
+        val completedStepTitle = current.currentStep.title
         val next = current.advance()
         _currentSession.value = next
 
@@ -123,9 +146,36 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
         }
 
         if (!next.isCompleted) {
+            // Show step complete notification with next step info
+            try {
+                val context = getApplication<Application>()
+                val name = _sessionsMap.value[sessionId]?.name ?: ""
+                val nextStepTitle = next.currentStep.title
+                TimerHelper.showStepCompleteNotification(
+                    context,
+                    completedStepTitle = completedStepTitle,
+                    nextStepTitle = nextStepTitle,
+                    recipeName = name,
+                    sessionId = sessionId
+                )
+            } catch (_: Exception) {}
+
             startStepTimer(sessionId, next)
         } else {
             _remainingSeconds.value = 0
+            // Show final completion notification
+            try {
+                val context = getApplication<Application>()
+                val name = _sessionsMap.value[sessionId]?.name ?: ""
+                TimerHelper.showStepCompleteNotification(
+                    context,
+                    completedStepTitle = completedStepTitle,
+                    nextStepTitle = null,
+                    recipeName = name,
+                    sessionId = sessionId
+                )
+            } catch (_: Exception) {}
+            TimerHelper.cancelProgressNotification(getApplication(), sessionId)
         }
     }
 
@@ -167,10 +217,29 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
             _currentSession.value = null
             _currentSessionId.value = null
         }
+        TimerHelper.cancelProgressNotification(getApplication(), sessionId)
     }
 
     private fun startStepTimer(sessionId: String, session: BakingSession) {
         val step = session.currentStep
+
+        // Show action notification for ACTION steps
+        if (step.type == StepType.ACTION) {
+            try {
+                val context = getApplication<Application>()
+                val name = _sessionsMap.value[sessionId]?.name ?: ""
+                TimerHelper.showActionStepNotification(
+                    context,
+                    recipeName = name,
+                    stepTitle = step.title,
+                    sessionId = sessionId
+                )
+            } catch (_: Exception) {}
+            _remainingSeconds.value = 0
+            return
+        }
+
+        // For WAIT steps, start the timer
         val realTotalSeconds = step.durationMinutes * 60L
         resumeStepTimer(sessionId, session, realTotalSeconds)
     }
@@ -204,7 +273,7 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
                         this[sessionId] = this[sessionId]?.copy(remainingSeconds = displayRemaining) ?: return@apply
                     }
 
-                    // Update notification
+                    // Update notification (handles both normal and urgent states)
                     try {
                         val context = getApplication<Application>()
                         val name = _sessionsMap.value[sessionId]?.name ?: ""
@@ -218,7 +287,18 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
                         try {
                             val context = getApplication<Application>()
                             val name = _sessionsMap.value[sessionId]?.name ?: ""
-                            TimerHelper.showStepCompleteNotification(context, "${name}: ${step.title}", sessionId)
+                            // Timer completed — show completion notification
+                            val nextStepIndex = session.currentStepIndex + 1
+                            val nextStepTitle = if (nextStepIndex < session.recipe.timeline.size) {
+                                session.recipe.timeline[nextStepIndex].title
+                            } else null
+                            TimerHelper.showStepCompleteNotification(
+                                context,
+                                completedStepTitle = step.title,
+                                nextStepTitle = nextStepTitle,
+                                recipeName = name,
+                                sessionId = sessionId
+                            )
                         } catch (_: Exception) {}
                         break
                     }

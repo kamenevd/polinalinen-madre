@@ -11,8 +11,8 @@ android {
         applicationId = "com.polinalinen.madre"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.2"
     }
 
     buildTypes {
@@ -71,4 +71,11 @@ dependencies {
 
     // Notifications
     implementation("androidx.core:core:1.12.0")
+
+    // Testing
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("com.google.truth:truth:1.2.0")
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

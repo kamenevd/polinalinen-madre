@@ -64,7 +64,7 @@ class MainActivity : ComponentActivity() {
         _notifSessionId.value = intent?.getStringExtra("SESSION_ID")
 
         setContent {
-            LevitoMadreTheme {
+            LevitoMadreTheme(isDarkTheme = true) {
                 // Read from MutableState so Compose observes changes
                 val sessionId by remember { _notifSessionId }
                 LevitoApp(
@@ -257,7 +257,9 @@ fun LevitoApp(
                         if (recipe != null) {
                             viewModel.selectRecipe(recipe)
                         }
-                    }
+                    },
+                    recipeEmoji = completedRecipe?.emoji ?: "🍞",
+                    recipeName = completedRecipe?.name ?: ""
                 )
             }
 

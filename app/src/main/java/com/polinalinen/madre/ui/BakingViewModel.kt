@@ -401,11 +401,12 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
     fun getDiagnostics(context: android.content.Context): Map<String, String> {
         val prefs = context.getSharedPreferences("levito_sessions", android.content.Context.MODE_PRIVATE)
         val prefsSize = prefs.all.entries.sumOf { e -> e.key.length + (e.value?.toString()?.length ?: 0) }
+        val versionStr = try {
+            val pi = context.packageManager.getPackageInfo(context.packageName, 0)
+            "${pi.versionName} (${pi.longVersionCode})"
+        } catch (_: Exception) { "unknown" }
         return mapOf(
-            "appVersion" to try {
-                val pi = context.packageManager.getPackageInfo(context.packageName, 0)
-                "${pi.versionName} (${pi.longVersionCode})"
-            } catch (_: Exception) "unknown",
+            "appVersion" to versionStr,
             "activeSessions" to _sessionsMap.value.size.toString(),
             "restoredOnLaunch" to _restoredSessionCount.value.toString(),
             "timerJobsRunning" to timerJobs.size.toString(),

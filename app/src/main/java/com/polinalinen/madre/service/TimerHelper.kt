@@ -256,6 +256,7 @@ object TimerHelper {
                 .setPriority(if (isUrgent) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_LOW)
                 .setContentIntent(pendingIntent)
                 .setColor(color)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .build()
 
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -326,7 +327,7 @@ object TimerHelper {
     }
 
     /**
-     * Update progress notification — delegates to showWaitStepNotification
+     * Update progress notification — delegates to showWaitStepNotification with full step info
      */
     fun updateProgressNotification(
         context: Context,
@@ -334,11 +335,17 @@ object TimerHelper {
         sessionName: String,
         stepTitle: String,
         remainingSeconds: Long,
-        totalSeconds: Long
+        totalSeconds: Long,
+        currentStepIndex: Int = 0,
+        totalSteps: Int = 1,
+        nextStepTitle: String? = null,
+        nextStepTime: String? = null
     ) {
         showWaitStepNotification(
             context, sessionId, sessionName, stepTitle,
-            remainingSeconds, totalSeconds
+            remainingSeconds, totalSeconds,
+            currentStepIndex, totalSteps,
+            nextStepTitle, nextStepTime
         )
     }
 

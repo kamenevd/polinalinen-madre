@@ -58,7 +58,9 @@ data class BakingSession(
     val completedAt: Long? = null
 ) {
     val currentStep: TimelineStep
-        get() = recipe.timeline[currentStepIndex]
+        get() = recipe.timeline.getOrElse(currentStepIndex) {
+            recipe.timeline.lastOrNull() ?: TimelineStep(StepType.WAIT, "—", "", 0)
+        }
 
     val isLastStep: Boolean
         get() = currentStepIndex >= recipe.timeline.size - 1

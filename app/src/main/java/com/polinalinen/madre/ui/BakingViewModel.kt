@@ -56,6 +56,9 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
     private val _devMode = MutableStateFlow(false)
     val devMode: StateFlow<Boolean> = _devMode.asStateFlow()
 
+    private val _restoredSessionCount = MutableStateFlow(0)
+    val restoredSessionCount: StateFlow<Int> = _restoredSessionCount.asStateFlow()
+
     private val timerJobs = mutableMapOf<String, Job>()
 
     private val persistence = SessionPersistence
@@ -94,6 +97,7 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
             }
             if (restoredMap.isNotEmpty()) {
                 _sessionsMap.value = restoredMap
+                _restoredSessionCount.value = restoredMap.size
             }
         } catch (_: Exception) {}
     }
@@ -131,6 +135,10 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
     fun toggleDevMode() {
         _devMode.value = !_devMode.value
         speedMultiplier = if (_devMode.value) 1000 else 1
+    }
+
+    fun consumeRestoredCount() {
+        _restoredSessionCount.value = 0
     }
 
     fun selectRecipe(recipe: Recipe, sessionName: String = recipe.name) {
@@ -348,9 +356,19 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
                     try {
                         val context = getApplication<Application>()
                         val name = _sessionsMap.value[sessionId]?.name ?: ""
+                        val stepIdx = session.currentStepIndex
+                        val totalStepsCount = session.recipe.timeline.size
+                        val nextIdx = stepIdx + 1
+                        val nextTitle = if (nextIdx < totalStepsCount) session.recipe.timeline[nextIdx].title else null
+                        val nextTime = if (nextIdx < totalStepsCount) {
+                            val nextStep = session.recipe.timeline[nextIdx]
+                            if (nextStep.durationMinutes > 0) "${nextStep.durationMinutes} мин" else null
+                        } else null
                         TimerHelper.updateProgressNotification(
                             context, sessionId, name,
-                            step.title, displayRemaining, realTotalSeconds
+                            step.title, displayRemaining, realTotalSeconds,
+                            stepIdx, totalStepsCount,
+                            nextTitle, nextTime
                         )
                     } catch (_: Exception) {}
 
@@ -377,6 +395,27 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
                 }
             }
         }
+    }
+
+    /** Get diagnostics data for the app */
+    fun getDiagnostics(context: android.content.Context): Map<String, String> {
+        val prefs = context.getSharedPreferences("levito_sessions", android.content.Context.MODE_PRIVATE)
+        val prefsSize = prefs.all.entries.sumOf { e -> e.key.length + (e.value?.toString()?.length ?: 0) }
+        return mapOf(
+            "appVersion" to try {
+                val pi = context.packageManager.getPackageInfo(context.packageName, 0)
+                "${pi.versionName} (${pi.longVersionCode})"
+            } catch (_: Exception) "unknown",
+            "activeSessions" to _sessionsMap.value.size.toString(),
+            "restoredOnLaunch" to _restoredSessionCount.value.toString(),
+            "timerJobsRunning" to timerJobs.size.toString(),
+            "devMode" to _devMode.value.toString(),
+            "speedMultiplier" to speedMultiplier.toString(),
+            "recipesLoaded" to _recipes.value.size.toString(),
+            "prefsSizeBytes" to prefsSize.toString(),
+            "sdkVersion" to android.os.Build.VERSION.SDK_INT.toString(),
+            "device" to "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}"
+        )
     }
 
     override fun onCleared() {

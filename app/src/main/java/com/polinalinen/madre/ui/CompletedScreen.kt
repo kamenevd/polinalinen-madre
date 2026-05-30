@@ -13,6 +13,7 @@ import com.polinalinen.madre.ui.theme.*
 @Composable
 fun CompletedScreen(
     onHome: () -> Unit,
+    onRestart: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -64,6 +65,25 @@ fun CompletedScreen(
             ) {
                 Text(
                     text = "На главную",
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedButton(
+                onClick = onRestart,
+                border = androidx.compose.foundation.BorderStroke(1.dp, AccentGold),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = AccentGold
+                ),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+            ) {
+                Text(
+                    text = "🔄 Испечь ещё раз",
                     style = MaterialTheme.typography.titleMedium
                 )
             }

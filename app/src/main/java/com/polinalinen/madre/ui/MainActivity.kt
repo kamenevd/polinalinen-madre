@@ -15,9 +15,13 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,6 +32,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.launch
 import com.polinalinen.madre.model.BakingSession
 import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.service.TimerHelper
@@ -86,6 +91,7 @@ sealed class Screen {
     data class RecipeDetail(val recipe: Recipe) : Screen()
     data class Baking(val sessionId: String) : Screen()
     data object Completed : Screen()
+    data object Diagnostics : Screen()
 }
 
 @Composable
@@ -99,8 +105,27 @@ fun LevitoApp(
     val sessions by viewModel.activeSessions.collectAsState()
     val remainingSeconds by viewModel.remainingSeconds.collectAsState()
     val devMode by viewModel.devMode.collectAsState()
+    val restoredCount by viewModel.restoredSessionCount.collectAsState()
 
     var currentScreen by remember { mutableStateOf<Screen>(Screen.RecipeList) }
+
+    // Snackbar state for crash recovery notification
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
+    // Show snackbar when sessions are restored from crash
+    LaunchedEffect(restoredCount) {
+        if (restoredCount > 0) {
+            val msg = "\u2615 Ваша готовка восстановлена!"
+            scope.launch {
+                snackbarHostState.showSnackbar(
+                    message = msg,
+                    duration = SnackbarDuration.Long
+                )
+            }
+            viewModel.consumeRestoredCount()
+        }
+    }
 
     // Handle notification tap — navigate to the baking session
     LaunchedEffect(initialSessionId) {
@@ -122,6 +147,9 @@ fun LevitoApp(
             is Screen.RecipeDetail -> {
                 currentScreen = Screen.RecipeList
             }
+            is Screen.Diagnostics -> {
+                currentScreen = Screen.RecipeList
+            }
             else -> {}
         }
     }
@@ -133,12 +161,24 @@ fun LevitoApp(
         }
     }
 
+    Scaffold(
+        snackbarHost = {
+            SnackbarHost(hostState = snackbarHostState) { data ->
+                Snackbar(
+                    snackbarData = data,
+                    containerColor = BackgroundCard,
+                    contentColor = TextPrimary
+                )
+            }
+        }
+    ) { padding ->
     AnimatedContent(
         targetState = currentScreen,
         transitionSpec = {
             fadeIn(tween(300)) togetherWith fadeOut(tween(300))
         },
-        label = "screenTransition"
+        label = "screenTransition",
+        modifier = Modifier.padding(padding)
     ) { screen ->
         when (screen) {
             is Screen.RecipeList -> {
@@ -162,6 +202,7 @@ fun LevitoApp(
                         onRecipeClick = { recipe ->
                             currentScreen = Screen.RecipeDetail(recipe)
                         },
+                        onDiagnostics = { currentScreen = Screen.Diagnostics },
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -204,15 +245,31 @@ fun LevitoApp(
             }
 
             is Screen.Completed -> {
+                val completedRecipe = session?.recipe
                 CompletedScreen(
                     onHome = {
                         viewModel.exitSession()
                         currentScreen = Screen.RecipeList
+                    },
+                    onRestart = {
+                        val recipe = completedRecipe
+                        viewModel.exitSession()
+                        if (recipe != null) {
+                            viewModel.selectRecipe(recipe)
+                        }
                     }
+                )
+            }
+
+            is Screen.Diagnostics -> {
+                DiagnosticsScreen(
+                    viewModel = viewModel,
+                    onBack = { currentScreen = Screen.RecipeList }
                 )
             }
         }
     }
+    } // Scaffold
 }
 
 @Composable
@@ -260,6 +317,17 @@ fun ActiveSessionChip(
     val step = session.session.currentStep
     val isWait = step.type == com.polinalinen.madre.model.StepType.WAIT
 
+    // Format remaining time
+    val remainingText = if (session.remainingSeconds > 0 && isWait) {
+        val mins = session.remainingSeconds / 60
+        val secs = session.remainingSeconds % 60
+        when {
+            mins > 0 && secs > 0 -> "${mins}:${String.format("%02d", secs)}"
+            mins > 0 -> "${mins}мин"
+            else -> "${secs}с"
+        }
+    } else null
+
     Card(
         modifier = modifier
             .width(200.dp)
@@ -291,6 +359,16 @@ fun ActiveSessionChip(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                // Remaining time
+                if (remainingText != null) {
+                    Text(
+                        text = "⏱ $remainingText",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (session.remainingSeconds <= 60) TimerUrgent else AccentGold,
+                        maxLines = 1,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
                 // Mini progress bar
                 LinearProgressIndicator(
                     progress = session.session.progress,
@@ -310,6 +388,80 @@ fun ActiveSessionChip(
                 modifier = Modifier.size(24.dp)
             ) {
                 Text("✕", color = TextSecondary, style = MaterialTheme.typography.labelSmall)
+            }
+        }
+    }
+}
+
+@Composable
+fun DiagnosticsScreen(
+    viewModel: BakingViewModel,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val diagnostics = remember { viewModel.getDiagnostics(context) }
+
+    Surface(
+        modifier = modifier.fillMaxSize(),
+        color = BackgroundDark
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 20.dp)
+                .statusBarsPadding()
+        ) {
+            // Top bar
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp, bottom = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Назад",
+                        tint = TextSecondary
+                    )
+                }
+                Text(
+                    text = "\u2699\uFE0F Диагностика",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = AccentGold
+                )
+            }
+
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(bottom = 32.dp)
+            ) {
+                items(diagnostics.entries.toList()) { entry ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = BackgroundCard),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = entry.key,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = TextSecondary
+                            )
+                            Text(
+                                text = entry.value,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = TextPrimary
+                            )
+                        }
+                    }
+                }
             }
         }
     }

@@ -173,12 +173,14 @@ class BakingSessionTest {
 
     // ── Empty timeline edge case ────────────────────────────────
 
-    @Test(expected = IndexOutOfBoundsException::class)
-    fun `currentStep on empty timeline throws IndexOutOfBoundsException`() {
+    @Test
+    fun `currentStep on empty timeline returns fallback`() {
         val recipe = testRecipe(steps = emptyList())
         val session = BakingSession(recipe = recipe)
-        // Accessing currentStep should crash — empty timeline has no steps
-        session.currentStep
+        // No longer crashes — returns fallback TimelineStep
+        val step = session.currentStep
+        assertThat(step.title).isEqualTo("—")
+        assertThat(step.durationMinutes).isEqualTo(0)
     }
 
     @Test

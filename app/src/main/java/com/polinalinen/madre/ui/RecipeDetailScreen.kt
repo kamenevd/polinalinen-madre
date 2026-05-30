@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -44,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.model.TasteReview
 import com.polinalinen.madre.model.ServingTip
+import com.polinalinen.madre.ui.theme.AccentBrown
 import com.polinalinen.madre.ui.theme.AccentCream
 import com.polinalinen.madre.ui.theme.AccentGold
 import com.polinalinen.madre.ui.theme.AccentRose
@@ -51,6 +51,9 @@ import com.polinalinen.madre.ui.theme.BackgroundCard
 import com.polinalinen.madre.ui.theme.BackgroundCardHover
 import com.polinalinen.madre.ui.theme.BackgroundDark
 import com.polinalinen.madre.ui.theme.DividerColor
+import com.polinalinen.madre.ui.theme.DifficultyEasy
+import com.polinalinen.madre.ui.theme.DifficultyMedium
+import com.polinalinen.madre.ui.theme.DifficultyHard
 import com.polinalinen.madre.ui.theme.StatusCompleted
 import com.polinalinen.madre.ui.theme.TextAccent
 import com.polinalinen.madre.ui.theme.TextPrimary
@@ -78,8 +81,6 @@ fun RecipeDetailScreen(
         1 -> "Легко"
         2 -> "Просто"
         3 -> "Средне"
-        4 -> "Сложно"
-        5 -> "Мастер"
         else -> ""
     }
 
@@ -89,7 +90,7 @@ fun RecipeDetailScreen(
                 contentPadding = PaddingValues(bottom = 96.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
-                // 1. Hero section
+                // ── 1. Hero section ──
                 item {
                     Box(
                         modifier = Modifier
@@ -98,14 +99,13 @@ fun RecipeDetailScreen(
                             .background(
                                 brush = Brush.linearGradient(
                                     colors = listOf(
-                                        Color(0xFF3A2810),
+                                        Color(0xFFD4B88C),
                                         BackgroundCard,
-                                        Color(0xFF1A1410)
+                                        Color(0xFFC9A87C)
                                     )
                                 )
                             )
                     ) {
-                        // Top gradient overlay for nav readability
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -114,34 +114,31 @@ fun RecipeDetailScreen(
                                 .background(
                                     brush = Brush.verticalGradient(
                                         colors = listOf(
-                                            Color(0xFF1A1410).copy(alpha = 0.8f),
+                                            BackgroundDark.copy(alpha = 0.9f),
                                             Color.Transparent
                                         )
                                     )
                                 )
                         )
-                        // Bottom gradient overlay
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(60.dp)
-                                .align(Alignment.BottomCenter)
-                                .background(
-                                    brush = Brush.verticalGradient(
-                                        colors = listOf(
-                                            Color.Transparent,
-                                            BackgroundDark.copy(alpha = 0.9f)
-                                        )
+                            .align(Alignment.BottomCenter)
+                            .background(
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        BackgroundDark.copy(alpha = 0.9f)
                                     )
                                 )
+                            )
                         )
-                        // Large emoji centered
                         Text(
                             text = recipe.emoji,
                             fontSize = 72.sp,
                             modifier = Modifier.align(Alignment.Center)
                         )
-                        // Nav bar overlaid on hero
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
@@ -154,32 +151,31 @@ fun RecipeDetailScreen(
                                 Icon(
                                     imageVector = Icons.Default.ArrowBack,
                                     contentDescription = "Назад",
-                                    tint = AccentGold
+                                    tint = AccentBrown
                                 )
                             }
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = recipe.name,
-                                color = AccentGold,
+                                color = AccentBrown,
                                 fontSize = 20.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
-                        // Badge: review count bottom-right
                         if (recipe.tasteReviews.isNotEmpty()) {
                             Box(
                                 modifier = Modifier
                                     .align(Alignment.BottomEnd)
                                     .padding(end = 16.dp, bottom = 12.dp)
                                     .background(
-                                        color = AccentGold.copy(alpha = 0.2f),
+                                        color = AccentGold.copy(alpha = 0.3f),
                                         shape = RoundedCornerShape(12.dp)
                                     )
                                     .padding(horizontal = 10.dp, vertical = 4.dp)
                             ) {
                                 Text(
                                     text = "💬 ${recipe.tasteReviews.size}",
-                                    color = AccentGold,
+                                    color = AccentBrown,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Medium
                                 )
@@ -188,7 +184,7 @@ fun RecipeDetailScreen(
                     }
                 }
 
-                // 2. Description + Meta row
+                // ── 2. Description + Meta chips (fixed height) ──
                 item {
                     Column(
                         modifier = Modifier.padding(horizontal = 20.dp)
@@ -201,6 +197,7 @@ fun RecipeDetailScreen(
                             lineHeight = 22.sp
                         )
                         Spacer(modifier = Modifier.height(16.dp))
+                        // 3 chips — fixed height 72dp each
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                             modifier = Modifier.fillMaxWidth()
@@ -215,9 +212,15 @@ fun RecipeDetailScreen(
                                 label = "$stepCount шагов",
                                 modifier = Modifier.weight(1f)
                             )
-                            DifficultyChip(
-                                difficulty = recipe.difficulty,
+                            MetaChip(
+                                icon = "📊",
                                 label = difficultyLabel,
+                                iconColor = when (recipe.difficulty) {
+                                    1 -> DifficultyEasy
+                                    2 -> DifficultyMedium
+                                    3 -> DifficultyHard
+                                    else -> TextSecondary
+                                },
                                 modifier = Modifier.weight(1f)
                             )
                         }
@@ -225,57 +228,7 @@ fun RecipeDetailScreen(
                     }
                 }
 
-                // 3. Taste reviews
-                if (recipe.tasteReviews.isNotEmpty()) {
-                    item {
-                        Column(
-                            modifier = Modifier.padding(horizontal = 20.dp)
-                        ) {
-                            Text(
-                                text = "💬 Как это на вкус",
-                                color = TextPrimary,
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                        }
-                    }
-                    items(recipe.tasteReviews) { review ->
-                        TasteReviewCard(
-                            review = review,
-                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
-                        )
-                    }
-                    item {
-                        Spacer(modifier = Modifier.height(12.dp))
-                    }
-                }
-
-                // 4. Serving tips
-                if (recipe.servingTips.isNotEmpty()) {
-                    item {
-                        ServingTipsCard(
-                            title = "✨ Как подать",
-                            tips = recipe.servingTips,
-                            modifier = Modifier.padding(horizontal = 20.dp)
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                    }
-                }
-
-                // 5. Variations
-                if (recipe.variations.isNotEmpty()) {
-                    item {
-                        ServingTipsCard(
-                            title = "🔄 Вариации",
-                            tips = recipe.variations,
-                            modifier = Modifier.padding(horizontal = 20.dp)
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                    }
-                }
-
-                // 6. Ingredients with checkboxes
+                // ── 3. Ingredients with checkboxes ──
                 item {
                     Column(
                         modifier = Modifier.padding(horizontal = 20.dp)
@@ -300,7 +253,6 @@ fun RecipeDetailScreen(
                         Spacer(modifier = Modifier.height(12.dp))
                     }
                 }
-                // Ingredient sections
                 recipe.ingredients.forEach { (sectionName, items) ->
                     item {
                         Column(
@@ -330,7 +282,6 @@ fun RecipeDetailScreen(
                                 }
                                 .padding(horizontal = 20.dp, vertical = 6.dp)
                         ) {
-                            // Custom checkbox: 20dp rounded square
                             Box(
                                 contentAlignment = Alignment.Center,
                                 modifier = Modifier
@@ -366,9 +317,59 @@ fun RecipeDetailScreen(
                         Spacer(modifier = Modifier.height(8.dp))
                     }
                 }
+
+                // ── 4. Serving tips ──
+                if (recipe.servingTips.isNotEmpty()) {
+                    item {
+                        ServingTipsCard(
+                            title = "✨ Как подать",
+                            tips = recipe.servingTips,
+                            modifier = Modifier.padding(horizontal = 20.dp)
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+                }
+
+                // ── 5. Variations ──
+                if (recipe.variations.isNotEmpty()) {
+                    item {
+                        ServingTipsCard(
+                            title = "🔄 Вариации",
+                            tips = recipe.variations,
+                            modifier = Modifier.padding(horizontal = 20.dp)
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+                }
+
+                // ── 6. Taste reviews ──
+                if (recipe.tasteReviews.isNotEmpty()) {
+                    item {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 20.dp)
+                        ) {
+                            Text(
+                                text = "💬 Как это на вкус",
+                                color = TextPrimary,
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                        }
+                    }
+                    items(recipe.tasteReviews) { review ->
+                        TasteReviewCard(
+                            review = review,
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
+                        )
+                    }
+                    item {
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+                }
             }
 
-            // 7. Sticky CTA button
+            // ── Sticky CTA ──
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -389,14 +390,14 @@ fun RecipeDetailScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp))
-                        .background(color = AccentGold)
+                        .background(color = AccentBrown)
                         .clickable { onStartBaking() }
                         .padding(vertical = 16.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = "Всё есть. Начинаем ${recipe.emoji}",
-                        color = BackgroundDark,
+                        color = AccentCream,
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -410,6 +411,7 @@ fun RecipeDetailScreen(
 fun MetaChip(
     icon: String,
     label: String,
+    iconColor: Color = TextPrimary,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -419,47 +421,17 @@ fun MetaChip(
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(vertical = 10.dp, horizontal = 8.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(72.dp)
+                .padding(vertical = 10.dp, horizontal = 8.dp),
+            verticalArrangement = Arrangement.Center
         ) {
-            Text(text = icon, fontSize = 20.sp)
-            Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = label,
-                color = TextPrimary,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium
+                text = icon,
+                fontSize = 20.sp,
+                color = iconColor
             )
-        }
-    }
-}
-
-@Composable
-fun DifficultyChip(
-    difficulty: Int,
-    label: String,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = BackgroundCard),
-        modifier = modifier
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(vertical = 10.dp, horizontal = 8.dp)
-        ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                for (i in 1..5) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(
-                                color = if (i <= difficulty) AccentGold else DividerColor
-                            )
-                    )
-                }
-            }
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = label,
@@ -485,7 +457,6 @@ fun TasteReviewCard(
             modifier = Modifier.padding(14.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // Avatar emoji in circle
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
@@ -506,7 +477,6 @@ fun TasteReviewCard(
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold
                     )
-                    // Star rating
                     val stars = buildString {
                         for (i in 1..5) {
                             append(if (i <= review.rating) "★" else "☆")
@@ -541,7 +511,7 @@ fun ServingTipsCard(
     Card(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = AccentGold.copy(alpha = 0.05f)
+            containerColor = AccentGold.copy(alpha = 0.08f)
         ),
         modifier = modifier
     ) {

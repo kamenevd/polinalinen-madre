@@ -84,7 +84,8 @@ class RecipeE2ETest {
         // Verify step 1 UI
         composeTestRule.onNodeWithText("Шаг 1 из 11").assertIsDisplayed()
         composeTestRule.onNodeWithText("ДЕЛАЕМ").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Готовим опару (с вечера)").assertIsDisplayed()
+        // Step title appears in card + timeline — use onAllNodes
+        composeTestRule.onAllNodesWithText("Готовим опару (с вечера)")[0].assertIsDisplayed()
         composeTestRule.onNodeWithText("~5 мин").assertIsDisplayed()
         composeTestRule.onNodeWithText("Далее →").assertIsDisplayed()
     }

@@ -74,6 +74,7 @@ data class BakingSession(
         get() = recipe.timeline.sumOf { it.durationMinutes }
 
     fun advance(): BakingSession {
+        if (isCompleted) return this // already completed, no-op
         return if (isLastStep) {
             copy(completedAt = System.currentTimeMillis())
         } else {

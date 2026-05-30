@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
 import android.os.Build
+import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import com.polinalinen.madre.R
 
@@ -24,6 +25,9 @@ object TimerHelper {
 
     fun createChannel(context: Context) {
         try {
+            val timerSoundUri = android.net.Uri.parse("android.resource://com.polinalinen.madre/${R.raw.notif_timer}")
+            val stepSoundUri = android.net.Uri.parse("android.resource://com.polinalinen.madre/${R.raw.notif_step}")
+
             val completeChannel = NotificationChannel(
                 CHANNEL_ID,
                 "Таймер выпечки",
@@ -32,7 +36,7 @@ object TimerHelper {
                 description = "Уведомления когда шаг завершён"
                 enableVibration(true)
                 setSound(
-                    android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION),
+                    stepSoundUri,
                     AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION).build()
                 )
             }
@@ -54,10 +58,8 @@ object TimerHelper {
             ).apply {
                 description = "Меньше 5 минут осталось!"
                 enableVibration(true)
-                // Urgent uses same timer sound
-                val soundUri = android.net.Uri.parse("android.resource://com.polinalinen.madre/${R.raw.notif_timer}")
                 setSound(
-                    soundUri,
+                    timerSoundUri,
                     AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT).build()
                 )
             }
@@ -72,10 +74,72 @@ object TimerHelper {
     }
 
     /**
+     * Build custom RemoteViews for wait step notification (Concept 3)
+     */
+    private fun buildWaitRemoteViews(
+        context: Context,
+        recipeName: String,
+        stepTitle: String,
+        timeText: String,
+        progress: Int,
+        isUrgent: Boolean,
+        currentStepIndex: Int,
+        totalSteps: Int,
+        nextStepTitle: String?,
+        nextStepTime: String?
+    ): RemoteViews {
+        val views = RemoteViews(context.packageName, R.layout.notification_timer)
+
+        // Recipe name
+        views.setTextViewText(R.id.notif_recipe, recipeName)
+
+        // Step badge + name
+        views.setTextViewText(R.id.notif_step_badge, if (isUrgent) "⚠️ СРОЧНО" else "⏳ ЖДЁМ")
+        views.setTextViewText(R.id.notif_step_name, stepTitle)
+
+        // Timer
+        views.setTextViewText(R.id.notif_timer, timeText)
+
+        // Progress bar
+        views.setProgressBar(R.id.notif_progress, 100, progress, false)
+
+        // Progress bar drawable — gold or urgent
+        val progressDrawable = if (isUrgent) R.drawable.notif_progress_urgent else R.drawable.notif_progress_gold
+        // Note: RemoteViews can't swap drawables at runtime easily, so we use a fixed layout
+
+        // Step dots (text-based for RemoteViews compatibility)
+        val dotsText = buildString {
+            for (i in 0 until totalSteps) {
+                when {
+                    i < currentStepIndex -> append("● ")
+                    i == currentStepIndex -> append("▸ ")
+                    else -> append("○ ")
+                }
+            }
+        }.trim()
+        views.setTextViewText(R.id.notif_dots_text, dotsText)
+
+        // Next step
+        if (nextStepTitle != null) {
+            views.setTextViewText(R.id.notif_next_name, nextStepTitle)
+            views.setTextViewText(R.id.notif_next_time, nextStepTime ?: "")
+            views.setViewVisibility(R.id.notif_next_container, android.view.View.VISIBLE)
+        } else {
+            views.setViewVisibility(R.id.notif_next_container, android.view.View.GONE)
+        }
+
+        // Urgent tint
+        if (isUrgent) {
+            views.setTextColor(R.id.notif_timer, 0xFFC4756E.toInt())
+            views.setTextColor(R.id.notif_app_name, 0xFFC4756E.toInt())
+        }
+
+        return views
+    }
+
+    /**
      * State 1: ACTION step notification
-     * Title: "🍞 {recipe name}"
-     * Text: "👨‍🍳 ДЕЛАЕМ: {step}"
-     * Button: "Готово"
+     * Uses standard NotificationCompat (no timer to show)
      */
     fun showActionStepNotification(
         context: Context,
@@ -96,7 +160,7 @@ object TimerHelper {
             )
 
             val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setSmallIcon(R.drawable.ic_bread)
                 .setContentTitle("🍞 $recipeName")
                 .setContentText("👨‍🍳 ДЕЛАЕМ: $stepTitle")
                 .setStyle(NotificationCompat.BigTextStyle().bigText("👨‍🍳 ДЕЛАЕМ: $stepTitle"))
@@ -105,7 +169,7 @@ object TimerHelper {
                 .setContentIntent(pendingIntent)
                 .setDefaults(NotificationCompat.DEFAULT_ALL)
                 .setSound(android.net.Uri.parse("android.resource://com.polinalinen.madre/${R.raw.notif_step}"))
-                .setColor(0xFFC49A5C.toInt()) // AccentGold
+                .setColor(0xFFC49A5C.toInt())
                 .build()
 
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -116,10 +180,7 @@ object TimerHelper {
     }
 
     /**
-     * State 2: WAIT step (normal) — progress notification
-     * Title: "🍞 {recipe name}"
-     * Text: "{step} • {timer}"
-     * Progress bar
+     * State 2 & 3: WAIT step (normal or urgent) — custom layout with timer, progress bar, step info
      */
     fun showWaitStepNotification(
         context: Context,
@@ -127,12 +188,16 @@ object TimerHelper {
         sessionName: String,
         stepTitle: String,
         remainingSeconds: Long,
-        totalSeconds: Long
+        totalSeconds: Long,
+        currentStepIndex: Int = 0,
+        totalSteps: Int = 1,
+        nextStepTitle: String? = null,
+        nextStepTime: String? = null
     ) {
         try {
             createChannel(context)
 
-            val isUrgent = remainingSeconds in 1..299 // < 5 min and > 0
+            val isUrgent = remainingSeconds in 1..299
 
             val hours = remainingSeconds / 3600
             val minutes = (remainingSeconds % 3600) / 60
@@ -158,19 +223,35 @@ object TimerHelper {
             )
 
             val channelId = if (isUrgent) CHANNEL_URGENT else CHANNEL_PROGRESS
-            val contentText = if (isUrgent) {
+            val color = if (isUrgent) 0xFFC4756E.toInt() else 0xFFC49A5C.toInt()
+
+            // Build custom RemoteViews (Concept 3 layout)
+            val customView = buildWaitRemoteViews(
+                context = context,
+                recipeName = sessionName,
+                stepTitle = stepTitle,
+                timeText = timeText,
+                progress = progress,
+                isUrgent = isUrgent,
+                currentStepIndex = currentStepIndex,
+                totalSteps = totalSteps,
+                nextStepTitle = nextStepTitle,
+                nextStepTime = nextStepTime
+            )
+
+            // Fallback text for wearable/lock screen
+            val fallbackText = if (isUrgent) {
                 "⚠️ СРОЧНО $stepTitle • $timeText"
             } else {
                 "$stepTitle • $timeText"
             }
-            val color = if (isUrgent) 0xFFC4756E.toInt() else 0xFFC49A5C.toInt() // AccentRose vs AccentGold
 
             val notification = NotificationCompat.Builder(context, channelId)
-                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setSmallIcon(R.drawable.ic_bread)
                 .setContentTitle("🍞 $sessionName")
-                .setContentText(contentText)
-                .setStyle(NotificationCompat.BigTextStyle().bigText(contentText))
-                .setProgress(100, progress, false)
+                .setContentText(fallbackText)
+                .setCustomContentView(customView)
+                .setStyle(NotificationCompat.DecoratedCustomViewStyle())
                 .setOngoing(true)
                 .setPriority(if (isUrgent) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_LOW)
                 .setContentIntent(pendingIntent)
@@ -185,15 +266,7 @@ object TimerHelper {
     }
 
     /**
-     * State 3: WAIT step (<5 min) — handled by showWaitStepNotification with isUrgent flag
-     * Adds "⚠️ СРОЧНО" prefix and rose color
-     */
-
-    /**
      * State 4: Step completed notification
-     * Title: "✅ {step} завершён!"
-     * Text: "Далее: {next step}"
-     * Button: "Начать шаг"
      */
     fun showStepCompleteNotification(
         context: Context,
@@ -221,7 +294,7 @@ object TimerHelper {
             }
 
             val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setSmallIcon(R.drawable.ic_bread)
                 .setContentTitle("✅ $completedStepTitle завершён!")
                 .setContentText(contentText)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(contentText))
@@ -229,7 +302,7 @@ object TimerHelper {
                 .setAutoCancel(true)
                 .setContentIntent(pendingIntent)
                 .setDefaults(NotificationCompat.DEFAULT_ALL)
-                .setColor(0xFF7FA870.toInt()) // StatusCompleted green
+                .setColor(0xFF7FA870.toInt())
                 .build()
 
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

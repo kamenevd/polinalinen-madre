@@ -16,7 +16,22 @@ data class Recipe(
     val description: String,
     val ingredients: Map<String, List<String>>,
     val timeline: List<TimelineStep>,
-    val difficulty: Int = 0  // 0 = not set, 1–5 difficulty dots
+    val difficulty: Int = 0,  // 0 = not set, 1–5 difficulty dots
+    val tasteReviews: List<TasteReview> = emptyList(),
+    val servingTips: List<ServingTip> = emptyList(),
+    val variations: List<ServingTip> = emptyList()
+)
+
+data class TasteReview(
+    val author: String,
+    val avatarEmoji: String,
+    val rating: Int,
+    val text: String
+)
+
+data class ServingTip(
+    val emoji: String,
+    val text: String
 )
 
 data class TimelineStep(

@@ -13,6 +13,8 @@ android {
         targetSdk = 34
         versionCode = 2
         versionName = "1.2"
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -77,5 +79,7 @@ dependencies {
     testImplementation("com.google.truth:truth:1.2.0")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("androidx.test:runner:1.5.2")
+    androidTestImplementation("androidx.test:rules:1.5.0")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

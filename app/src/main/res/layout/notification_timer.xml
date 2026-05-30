@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="14dp">
+
+    <!-- Header row -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="8dp">
+
+        <ImageView
+            android:id="@+id/notif_icon"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:src="@drawable/ic_bread"
+            android:contentDescription="Levito Madre" />
+
+        <TextView
+            android:id="@+id/notif_app_name"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:text="Levito Madre"
+            android:textColor="#E8C9A0"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/notif_time"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="сейчас"
+            android:textColor="#6B6057"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <!-- Recipe name -->
+    <TextView
+        android:id="@+id/notif_recipe"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:fontFamily="serif"
+        android:textColor="#F5EDE4"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="4dp" />
+
+    <!-- Step badge + name -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="8dp">
+
+        <TextView
+            android:id="@+id/notif_step_badge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="#1A6B9DA3"
+            android:textColor="#6B9DA3"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:paddingTop="2dp"
+            android:paddingBottom="2dp"
+            android:layout_marginEnd="8dp" />
+
+        <TextView
+            android:id="@+id/notif_step_name"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textColor="#B5A597"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <!-- Timer display (for wait steps) -->
+    <LinearLayout
+        android:id="@+id/notif_timer_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="bottom"
+        android:layout_marginBottom="6dp">
+
+        <TextView
+            android:id="@+id/notif_timer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#F5EDE4"
+            android:textSize="28sp"
+            android:textStyle="bold"
+            android:fontFamily="sans-serif-medium" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=" осталось"
+            android:textColor="#6B6057"
+            android:textSize="11sp"
+            android:layout_marginStart="6dp"
+            android:layout_marginBottom="3dp" />
+    </LinearLayout>
+
+    <!-- Progress bar - full width -->
+    <ProgressBar
+        android:id="@+id/notif_progress"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="6dp"
+        android:layout_marginLeft="-14dp"
+        android:layout_marginRight="-14dp"
+        android:layout_marginBottom="8dp"
+        android:max="100"
+        android:progress="42" />
+
+    <!-- Step dots container -->
+    <LinearLayout
+        android:id="@+id/notif_dots"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="8dp" />
+
+    <!-- Next step info -->
+    <LinearLayout
+        android:id="@+id/notif_next_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingTop="6dp"
+        android:layout_marginBottom="4dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Далее: "
+            android:textColor="#6B6057"
+            android:textSize="10sp" />
+
+        <TextView
+            android:id="@+id/notif_next_name"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textColor="#B5A597"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/notif_next_time"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#6B6057"
+            android:textSize="10sp" />
+    </LinearLayout>
+</LinearLayout>

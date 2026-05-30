@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.gson.Gson
 import com.polinalinen.madre.model.*
+import com.polinalinen.madre.service.SessionPersistence
 import com.polinalinen.madre.service.TimerHelper
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -57,8 +58,60 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
 
     private val timerJobs = mutableMapOf<String, Job>()
 
+    private val persistence = SessionPersistence
+
     init {
         loadRecipes()
+        restoreSessions()
+    }
+
+    private fun restoreSessions() {
+        try {
+            val saved = persistence.loadAll(getApplication())
+            if (saved.isEmpty()) return
+
+            val restoredMap = mutableMapOf<String, ActiveSession>()
+            for ((id, s) in saved) {
+                val (sessionId, name, session) = persistence.restoreActiveSession(s)
+                if (session.isCompleted) continue // skip completed
+
+                val remaining = if (session.currentStep.type == com.polinalinen.madre.model.StepType.WAIT
+                    && session.currentStep.durationMinutes > 0 && !session.isPaused) {
+                    // Recalculate remaining from stepStartedAtMillis
+                    val elapsed = (System.currentTimeMillis() - session.stepStartedAtMillis) / 1000
+                    val total = session.currentStep.durationMinutes * 60L
+                    (total - elapsed).coerceAtLeast(0)
+                } else {
+                    persistence.getRemainingSeconds(s)
+                }
+
+                restoredMap[id] = ActiveSession(
+                    id = id,
+                    name = name,
+                    session = session,
+                    remainingSeconds = remaining
+                )
+            }
+            if (restoredMap.isNotEmpty()) {
+                _sessionsMap.value = restoredMap
+            }
+        } catch (_: Exception) {}
+    }
+
+    private fun persistSession(id: String) {
+        try {
+            val active = _sessionsMap.value[id] ?: return
+            persistence.saveSession(
+                getApplication(),
+                id, active.name, active.session, active.remainingSeconds
+            )
+        } catch (_: Exception) {}
+    }
+
+    private fun removePersistedSession(id: String) {
+        try {
+            persistence.removeSession(getApplication(), id)
+        } catch (_: Exception) {}
     }
 
     private fun loadRecipes() {
@@ -144,6 +197,7 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
         _sessionsMap.value = _sessionsMap.value.toMutableMap().apply {
             this[sessionId] = this[sessionId]?.copy(session = next) ?: return@apply
         }
+        persistSession(sessionId)
 
         if (!next.isCompleted) {
             // Show step complete notification with next step info
@@ -176,6 +230,7 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
                 )
             } catch (_: Exception) {}
             TimerHelper.cancelProgressNotification(getApplication(), sessionId)
+            removePersistedSession(sessionId)
         }
     }
 
@@ -192,6 +247,7 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
         _sessionsMap.value = _sessionsMap.value.toMutableMap().apply {
             this[sessionId] = this[sessionId]?.copy(session = updated) ?: return@apply
         }
+        persistSession(sessionId)
 
         if (!updated.isPaused) {
             // Resume from saved remaining time
@@ -213,6 +269,7 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
         timerJobs[sessionId]?.cancel()
         timerJobs.remove(sessionId)
         _sessionsMap.value = _sessionsMap.value - sessionId
+        removePersistedSession(sessionId)
         if (_currentSessionId.value == sessionId) {
             _currentSession.value = null
             _currentSessionId.value = null
@@ -271,6 +328,10 @@ class BakingViewModel(application: Application) : AndroidViewModel(application) 
                     // Update sessions map
                     _sessionsMap.value = _sessionsMap.value.toMutableMap().apply {
                         this[sessionId] = this[sessionId]?.copy(remainingSeconds = displayRemaining) ?: return@apply
+                    }
+                    // Persist every 10 seconds (not every tick to avoid I/O)
+                    if (displayRemaining % 10 == 0L) {
+                        persistSession(sessionId)
                     }
 
                     // Update notification (handles both normal and urgent states)

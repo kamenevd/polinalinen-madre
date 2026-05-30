@@ -33,10 +33,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.Image
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -58,6 +61,28 @@ import com.polinalinen.madre.ui.theme.StatusCompleted
 import com.polinalinen.madre.ui.theme.TextAccent
 import com.polinalinen.madre.ui.theme.TextPrimary
 import com.polinalinen.madre.ui.theme.TextSecondary
+
+@Composable
+private fun getHeroImageResId(recipeId: String): Int {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val heroMap = mapOf(
+        "pirozhki" to "hero_pirozhki",
+        "belyashi" to "hero_belyashi",
+        "ciabatta" to "hero_ciabatta",
+        "focaccia" to "hero_focaccia",
+        "pizza" to "hero_pizza",
+        "waffles" to "hero_waffles",
+        "pancakes" to "hero_pancakes",
+        "home_bread" to "hero_home_bread",
+        "family_bread" to "hero_family_bread",
+        "cinnamon_buns" to "hero_cinnamon_buns",
+        "garlic_buns" to "hero_garlic_buns"
+    )
+    val resName = heroMap[recipeId] ?: return 0
+    return context.resources.getIdentifier(
+        resName, "drawable", context.packageName
+    )
+}
 
 @Composable
 fun RecipeDetailScreen(
@@ -134,11 +159,24 @@ fun RecipeDetailScreen(
                                 )
                             )
                         )
-                        Text(
-                            text = recipe.emoji,
-                            fontSize = 72.sp,
-                            modifier = Modifier.align(Alignment.Center)
-                        )
+                        // Hero image or emoji fallback
+                        val heroResId = getHeroImageResId(recipe.id)
+                        if (heroResId != 0) {
+                            Image(
+                                painter = painterResource(id = heroResId),
+                                contentDescription = recipe.name,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .align(Alignment.Center)
+                            )
+                        } else {
+                            Text(
+                                text = recipe.emoji,
+                                fontSize = 72.sp,
+                                modifier = Modifier.align(Alignment.Center)
+                            )
+                        }
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier

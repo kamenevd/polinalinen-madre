@@ -3,8 +3,10 @@ package com.polinalinen.madre.service
 import android.app.*
 import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import com.polinalinen.madre.R
 
 object TimerHelper {
 
@@ -29,6 +31,10 @@ object TimerHelper {
             ).apply {
                 description = "Уведомления когда шаг завершён"
                 enableVibration(true)
+                setSound(
+                    android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION),
+                    AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION).build()
+                )
             }
 
             val progressChannel = NotificationChannel(
@@ -48,6 +54,12 @@ object TimerHelper {
             ).apply {
                 description = "Меньше 5 минут осталось!"
                 enableVibration(true)
+                // Urgent uses same timer sound
+                val soundUri = android.net.Uri.parse("android.resource://com.polinalinen.madre/${R.raw.notif_timer}")
+                setSound(
+                    soundUri,
+                    AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT).build()
+                )
             }
 
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -92,6 +104,7 @@ object TimerHelper {
                 .setAutoCancel(true)
                 .setContentIntent(pendingIntent)
                 .setDefaults(NotificationCompat.DEFAULT_ALL)
+                .setSound(android.net.Uri.parse("android.resource://com.polinalinen.madre/${R.raw.notif_step}"))
                 .setColor(0xFFC49A5C.toInt()) // AccentGold
                 .build()
 

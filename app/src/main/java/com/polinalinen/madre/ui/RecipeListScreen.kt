@@ -142,6 +142,7 @@ fun RecipeListScreen(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun RecipeCard(
     recipe: Recipe,

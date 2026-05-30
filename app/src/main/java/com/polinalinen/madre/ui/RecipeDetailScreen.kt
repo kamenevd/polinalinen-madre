@@ -167,8 +167,9 @@ fun RecipeDetailScreen(
                                 contentDescription = recipe.name,
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
-                                    .fillMaxSize()
-                                    .align(Alignment.Center)
+                                    .fillMaxWidth()
+                                    .height(280.dp) // taller than container to shift bottom watermark out of view
+                                    .align(Alignment.TopCenter)
                             )
                         } else {
                             Text(

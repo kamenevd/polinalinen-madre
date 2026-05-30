@@ -211,7 +211,7 @@ fun ActiveSessionsBar(
 ) {
     Surface(
         color = BackgroundCard,
-        shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp),
+        shape = RoundedCornerShape(0.dp),
         modifier = modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(12.dp)) {

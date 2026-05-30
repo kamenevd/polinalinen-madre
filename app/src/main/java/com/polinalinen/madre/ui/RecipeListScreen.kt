@@ -33,9 +33,8 @@ fun RecipeListScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 20.dp)
+                .statusBarsPadding()
         ) {
-            Spacer(modifier = Modifier.height(60.dp))
-
             // App header
             Text(
                 text = "Levito Madre",

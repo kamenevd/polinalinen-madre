@@ -10,6 +10,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import android.content.Context
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -27,6 +28,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -64,11 +66,19 @@ class MainActivity : ComponentActivity() {
         _notifSessionId.value = intent?.getStringExtra("SESSION_ID")
 
         setContent {
-            LevitoMadreTheme(isDarkTheme = true) {
+            val prefs = remember { getSharedPreferences("levito_prefs", Context.MODE_PRIVATE) }
+            val isDarkTheme = remember { mutableStateOf(prefs.getBoolean("is_dark_theme", true)) }
+
+            LevitoMadreTheme(isDarkTheme = isDarkTheme.value) {
                 // Read from MutableState so Compose observes changes
                 val sessionId by remember { _notifSessionId }
                 LevitoApp(
                     initialSessionId = sessionId,
+                    isDarkTheme = isDarkTheme.value,
+                    onToggleTheme = {
+                        isDarkTheme.value = !isDarkTheme.value
+                        prefs.edit().putBoolean("is_dark_theme", isDarkTheme.value).apply()
+                    },
                     onConsumedIntent = {
                         _notifSessionId.value = null
                         intent.removeExtra("SESSION_ID")
@@ -98,6 +108,8 @@ sealed class Screen {
 fun LevitoApp(
     viewModel: BakingViewModel = viewModel(),
     initialSessionId: String? = null,
+    isDarkTheme: Boolean = true,
+    onToggleTheme: () -> Unit = {},
     onConsumedIntent: () -> Unit = {}
 ) {
     val recipes by viewModel.recipes.collectAsState()
@@ -203,6 +215,8 @@ fun LevitoApp(
                             currentScreen = Screen.RecipeDetail(recipe)
                         },
                         onDiagnostics = { currentScreen = Screen.Diagnostics },
+                        onToggleTheme = onToggleTheme,
+                        isDarkTheme = isDarkTheme,
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -251,15 +265,9 @@ fun LevitoApp(
                         viewModel.exitSession()
                         currentScreen = Screen.RecipeList
                     },
-                    onRestart = {
-                        val recipe = completedRecipe
-                        viewModel.exitSession()
-                        if (recipe != null) {
-                            viewModel.selectRecipe(recipe)
-                        }
-                    },
                     recipeEmoji = completedRecipe?.emoji ?: "🍞",
-                    recipeName = completedRecipe?.name ?: ""
+                    recipeName = completedRecipe?.name ?: "",
+                    recipeId = completedRecipe?.id ?: ""
                 )
             }
 

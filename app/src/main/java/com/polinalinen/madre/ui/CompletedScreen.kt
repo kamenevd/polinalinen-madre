@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -27,13 +28,13 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
 
-private fun galleryDir(context: Context): File {
+fun galleryDir(context: Context): File {
     val dir = File(context.filesDir, "bake_gallery")
     if (!dir.exists()) dir.mkdirs()
     return dir
 }
 
-private fun savePhoto(context: Context, uri: Uri): String {
+fun savePhotoFromUri(context: Context, uri: Uri): String {
     val fileName = "bake_${UUID.randomUUID()}.jpg"
     val outFile = File(galleryDir(context), fileName)
     context.contentResolver.openInputStream(uri)?.use { input ->
@@ -44,7 +45,16 @@ private fun savePhoto(context: Context, uri: Uri): String {
     return fileName
 }
 
-private fun loadPhotos(context: Context): List<String> {
+fun loadPhotosForRecipe(context: Context, recipeId: String): List<String> {
+    val dir = galleryDir(context)
+    return dir.listFiles()
+        ?.filter { it.name.startsWith("bake_${recipeId}_") && it.name.endsWith(".jpg") }
+        ?.sortedByDescending { it.lastModified() }
+        ?.map { it.absolutePath }
+        ?: emptyList()
+}
+
+fun loadAllPhotos(context: Context): List<String> {
     val dir = galleryDir(context)
     return dir.listFiles()
         ?.filter { it.name.startsWith("bake_") && it.name.endsWith(".jpg") }
@@ -53,23 +63,37 @@ private fun loadPhotos(context: Context): List<String> {
         ?: emptyList()
 }
 
+fun saveCameraPhoto(context: Context, uri: Uri, recipeId: String): String {
+    val fileName = "bake_${recipeId}_${UUID.randomUUID()}.jpg"
+    val outFile = File(galleryDir(context), fileName)
+    context.contentResolver.openInputStream(uri)?.use { input ->
+        FileOutputStream(outFile).use { output ->
+            input.copyTo(output)
+        }
+    }
+    return fileName
+}
+
 @Composable
 fun CompletedScreen(
     onHome: () -> Unit,
-    onRestart: () -> Unit = {},
     recipeEmoji: String = "🍞",
     recipeName: String = "",
+    recipeId: String = "",
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var galleryPhotos by remember { mutableStateOf(loadPhotos(context)) }
+    var galleryPhotos by remember { mutableStateOf(loadPhotosForRecipe(context, recipeId)) }
+    var cameraImageUri by remember { mutableStateOf<Uri?>(null) }
 
-    val photoLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        uri?.let {
-            savePhoto(context, it)
-            galleryPhotos = loadPhotos(context)
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success: Boolean ->
+        if (success && cameraImageUri != null) {
+            saveCameraPhoto(context, cameraImageUri!!, recipeId)
+            // Delete temp file
+            try { File(cameraImageUri!!.path!!).delete() } catch (_: Exception) {}
+            galleryPhotos = loadPhotosForRecipe(context, recipeId)
         }
     }
 
@@ -143,9 +167,18 @@ fun CompletedScreen(
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
-            // Add photo button
+            // Camera button
             OutlinedButton(
-                onClick = { photoLauncher.launch("image/*") },
+                onClick = {
+                    val photoFile = File(context.cacheDir, "temp_camera_${System.currentTimeMillis()}.jpg")
+                    val uri = androidx.core.content.FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        photoFile
+                    )
+                    cameraImageUri = uri
+                    cameraLauncher.launch(uri)
+                },
                 border = androidx.compose.foundation.BorderStroke(1.dp, AccentGold.copy(alpha = 0.5f)),
                 colors = ButtonDefaults.outlinedButtonColors(
                     contentColor = AccentGold
@@ -156,7 +189,7 @@ fun CompletedScreen(
                     .height(48.dp)
             ) {
                 Text(
-                    text = "📸 Добавить фото результата",
+                    text = "📸 Сфотографировать результат",
                     style = MaterialTheme.typography.labelLarge
                 )
             }
@@ -176,25 +209,6 @@ fun CompletedScreen(
             ) {
                 Text(
                     text = "На главную",
-                    style = MaterialTheme.typography.titleMedium
-                )
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            OutlinedButton(
-                onClick = onRestart,
-                border = androidx.compose.foundation.BorderStroke(1.dp, AccentGold),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = AccentGold
-                ),
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp)
-            ) {
-                Text(
-                    text = "🔄 Испечь ещё раз",
                     style = MaterialTheme.typography.titleMedium
                 )
             }

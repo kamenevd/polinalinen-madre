@@ -9,15 +9,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,16 +27,10 @@ fun RecipeListScreen(
     recipes: List<Recipe>,
     onRecipeClick: (Recipe) -> Unit,
     onDiagnostics: () -> Unit = {},
+    onToggleTheme: () -> Unit = {},
+    isDarkTheme: Boolean = true,
     modifier: Modifier = Modifier
 ) {
-    var searchQuery by remember { mutableStateOf("") }
-    val filteredRecipes = if (searchQuery.isBlank()) recipes else {
-        recipes.filter { recipe ->
-            recipe.name.contains(searchQuery, ignoreCase = true) ||
-            recipe.description.contains(searchQuery, ignoreCase = true)
-        }
-    }
-
     Surface(
         modifier = modifier.fillMaxSize(),
         color = BackgroundDark
@@ -52,16 +41,29 @@ fun RecipeListScreen(
                 .padding(horizontal = 20.dp)
                 .statusBarsPadding()
         ) {
-            // App header
-            Text(
-                text = "Levito Madre",
-                style = MaterialTheme.typography.displayLarge,
-                color = AccentGold,
+            // App header with theme toggle
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 16.dp),
-                textAlign = TextAlign.Center
-            )
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Spacer(modifier = Modifier.width(40.dp))
+                Text(
+                    text = "Levito Madre",
+                    style = MaterialTheme.typography.displayLarge,
+                    color = AccentGold,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = onToggleTheme) {
+                    Text(
+                        text = if (isDarkTheme) "☀️" else "🌙",
+                        style = MaterialTheme.typography.headlineSmall
+                    )
+                }
+            }
             Text(
                 text = "Печём дома с любовью",
                 style = MaterialTheme.typography.bodyMedium,
@@ -71,51 +73,6 @@ fun RecipeListScreen(
                     .padding(top = 6.dp),
                 textAlign = TextAlign.Center
             )
-
-            // Search bar
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                placeholder = { Text("Найти рецепт...", color = TextSecondary) },
-                leadingIcon = {
-                    Icon(Icons.Default.Search, contentDescription = "Поиск", tint = AccentGold)
-                },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { searchQuery = "" }) {
-                            Icon(Icons.Default.Close, contentDescription = "Очистить", tint = TextSecondary)
-                        }
-                    }
-                },
-                singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = AccentGold,
-                    unfocusedBorderColor = DividerColor,
-                    focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary,
-                    cursorColor = AccentGold,
-                    focusedContainerColor = BackgroundCard,
-                    unfocusedContainerColor = BackgroundCard
-                ),
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 16.dp)
-            )
-
-            // Results count when searching
-            if (searchQuery.isNotEmpty()) {
-                Text(
-                    text = if (filteredRecipes.isEmpty()) "Ничего не найдено 😔" else "${filteredRecipes.size} рецепт${when (filteredRecipes.size) {
-                        1 -> ""
-                        in 2..4 -> "а"
-                        else -> "ов"
-                    }}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = TextSecondary,
-                    modifier = Modifier.padding(top = 8.dp, start = 4.dp)
-                )
-            }
 
             // Decorative divider
             Box(
@@ -131,7 +88,7 @@ fun RecipeListScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 contentPadding = PaddingValues(bottom = 32.dp)
             ) {
-                items(filteredRecipes) { recipe ->
+                items(recipes) { recipe ->
                     RecipeCard(
                         recipe = recipe,
                         onClick = { onRecipeClick(recipe) }
@@ -179,12 +136,12 @@ private fun RecipeCard(
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Emoji icon
+            // Emoji icon — warm golden glow (v1.3 style)
             Box(
                 modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(BackgroundCardHover),
+                    .size(52.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(AccentGold.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center
             ) {
                 Text(

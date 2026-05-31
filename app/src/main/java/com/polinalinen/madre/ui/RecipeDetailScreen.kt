@@ -1,5 +1,7 @@
 package com.polinalinen.madre.ui
 
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,14 +34,16 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
-import androidx.compose.foundation.Image
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -87,9 +92,12 @@ fun RecipeDetailScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
     val heroResId = remember(recipe.id) {
         lookupHeroResId(recipe.id, context.packageName, context.resources)
+    }
+    val galleryPhotos = remember(recipe.id) {
+        mutableStateOf(loadPhotosForRecipe(context, recipe.id))
     }
     val checkedIngredients = remember { mutableStateListOf<String>() }
     val allIngredients = recipe.ingredients.values.flatten()
@@ -218,6 +226,74 @@ fun RecipeDetailScreen(
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Medium
                                 )
+                            }
+                        }
+                    }
+                }
+
+                // ── Gallery badge ──
+                if (galleryPhotos.value.isNotEmpty()) {
+                    item {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 20.dp)
+                        ) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Card(
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = AccentGold.copy(alpha = 0.1f)
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .clickable { /* open gallery */ }
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(14.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "📸",
+                                        fontSize = 20.sp
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Ваши результаты",
+                                            color = TextPrimary,
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        Text(
+                                            text = "${galleryPhotos.value.size} фото",
+                                            color = TextSecondary,
+                                            fontSize = 13.sp
+                                        )
+                                    }
+                                    // Preview thumbnails
+                                    LazyRow(
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        modifier = Modifier.width(120.dp)
+                                    ) {
+                                        items(galleryPhotos.value.take(3)) { photoPath ->
+                                            val bitmap = remember(photoPath) {
+                                                BitmapFactory.decodeFile(photoPath)?.asImageBitmap()
+                                            }
+                                            bitmap?.let {
+                                                Image(
+                                                    bitmap = it,
+                                                    contentDescription = null,
+                                                    contentScale = ContentScale.Crop,
+                                                    modifier = Modifier
+                                                        .size(40.dp)
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

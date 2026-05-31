@@ -128,10 +128,10 @@ object TimerHelper {
             views.setViewVisibility(R.id.notif_next_container, android.view.View.GONE)
         }
 
-        // Urgent tint
+        // Urgent tint — keep warm readable color
         if (isUrgent) {
-            views.setTextColor(R.id.notif_timer, 0xFFC4756E.toInt())
-            views.setTextColor(R.id.notif_app_name, 0xFFC4756E.toInt())
+            views.setTextColor(R.id.notif_timer, 0xFFD4C4B0.toInt())
+            views.setTextColor(R.id.notif_app_name, 0xFFD4C4B0.toInt())
         }
 
         return views

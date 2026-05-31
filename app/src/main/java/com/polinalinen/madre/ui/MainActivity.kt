@@ -69,7 +69,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val prefs = remember { getSharedPreferences("levito_prefs", Context.MODE_PRIVATE) }
-            val isDarkTheme = remember { mutableStateOf(prefs.getBoolean("is_dark_theme", true)) }
+            val isDarkTheme = remember { mutableStateOf(prefs.getBoolean("is_dark_theme", false)) }
 
             LevitoMadreTheme(isDarkTheme = isDarkTheme.value) {
                 // Read from MutableState so Compose observes changes

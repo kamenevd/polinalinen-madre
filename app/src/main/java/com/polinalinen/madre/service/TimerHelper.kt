@@ -266,6 +266,7 @@ object TimerHelper {
                 .setContentTitle("🍞 $sessionName")
                 .setContentText(fallbackText)
                 .setCustomContentView(customView)
+                .setCustomBigContentView(customView)
                 .setStyle(NotificationCompat.DecoratedCustomViewStyle())
                 .setOngoing(true)
                 .setPriority(if (isUrgent) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_LOW)

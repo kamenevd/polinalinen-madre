@@ -34,7 +34,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -85,6 +87,7 @@ fun RecipeDetailScreen(
     val galleryPhotos = remember(recipe.id) {
         mutableStateOf(loadPhotosForRecipe(context, recipe.id))
     }
+    var showGallery by remember { mutableStateOf(false) }
     val checkedIngredients = remember { mutableStateListOf<String>() }
     val allIngredients = recipe.ingredients.values.flatten()
     val totalMinutes = recipe.timeline.sumOf { it.durationMinutes }
@@ -109,6 +112,14 @@ fun RecipeDetailScreen(
 
     Surface(color = bgColor) {
         Box(modifier = Modifier.fillMaxSize()) {
+            // Full-screen gallery overlay
+            if (showGallery && galleryPhotos.value.isNotEmpty()) {
+                FullScreenGallery(
+                    photos = galleryPhotos.value,
+                    initialIndex = 0,
+                    onClose = { showGallery = false }
+                )
+            } else {
             LazyColumn(
                 contentPadding = PaddingValues(bottom = 96.dp),
                 modifier = Modifier.fillMaxSize()
@@ -233,7 +244,7 @@ fun RecipeDetailScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(16.dp))
-                                    .clickable { /* open gallery */ }
+                                    .clickable { showGallery = true }
                             ) {
                                 Row(
                                     modifier = Modifier
@@ -505,6 +516,7 @@ fun RecipeDetailScreen(
                     )
                 }
             }
+            } // else (not showGallery)
         }
     }
 }

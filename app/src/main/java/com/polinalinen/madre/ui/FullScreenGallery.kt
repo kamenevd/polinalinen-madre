@@ -30,6 +30,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * Full-screen photo gallery with swipe navigation, share, and close gestures.
@@ -99,22 +102,45 @@ fun FullScreenGallery(
             state = pagerState,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(vertical = 80.dp),
+                .padding(vertical = 60.dp),
             verticalAlignment = Alignment.CenterVertically
         ) { page ->
             val photoPath = photos[page]
             val bitmap = remember(photoPath) {
                 BitmapFactory.decodeFile(photoPath)?.asImageBitmap()
             }
-            bitmap?.let {
-                Image(
-                    bitmap = it,
-                    contentDescription = "Фото ${page + 1}",
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 8.dp)
-                )
+            val dateText = remember(photoPath) {
+                val file = File(photoPath)
+                val lastModified = file.lastModified()
+                if (lastModified > 0) {
+                    val sdf = SimpleDateFormat("d MMMM yyyy, HH:mm", Locale("ru"))
+                    sdf.format(Date(lastModified))
+                } else {
+                    ""
+                }
+            }
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                bitmap?.let {
+                    Image(
+                        bitmap = it,
+                        contentDescription = "Фото ${page + 1}",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 8.dp)
+                    )
+                }
+                if (dateText.isNotEmpty()) {
+                    Text(
+                        text = dateText,
+                        color = Color.White.copy(alpha = 0.6f),
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                    )
+                }
             }
         }
 

@@ -12,12 +12,13 @@ import com.polinalinen.madre.R
 object TimerHelper {
 
     private const val CHANNEL_ID = "levito_timer_v2"
-    private const val CHANNEL_PROGRESS = "levito_progress_v2"
+    private const val CHANNEL_PROGRESS = "levito_progress_v3"
     private const val CHANNEL_URGENT = "levito_urgent_v2"
 
     // Legacy channel IDs — delete on first launch so stale config doesn't persist
     private const val CHANNEL_ID_LEGACY = "levito_timer"
-    private const val CHANNEL_PROGRESS_LEGACY = "levito_progress"
+    private const val CHANNEL_PROGRESS_LEGACY = "levito_progress_v2"
+    private const val CHANNEL_PROGRESS_LEGACY_V1 = "levito_progress"
     private const val CHANNEL_URGENT_LEGACY = "levito_urgent"
     private const val NOTIFICATION_ID_COMPLETE = 1001
     private const val NOTIFICATION_ID_PROGRESS = 2000
@@ -39,6 +40,7 @@ object TimerHelper {
             // Delete legacy channels so stale (silent) config doesn't persist
             manager.deleteNotificationChannel(CHANNEL_ID_LEGACY)
             manager.deleteNotificationChannel(CHANNEL_PROGRESS_LEGACY)
+            manager.deleteNotificationChannel(CHANNEL_PROGRESS_LEGACY_V1)
             manager.deleteNotificationChannel(CHANNEL_URGENT_LEGACY)
 
             val completeChannel = NotificationChannel(
@@ -61,6 +63,7 @@ object TimerHelper {
             ).apply {
                 description = "Текущий прогресс выпечки"
                 enableVibration(false)
+                setSound(null, null) // Тихое обновление — без звука
                 setShowBadge(false)
             }
 

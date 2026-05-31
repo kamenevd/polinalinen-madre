@@ -186,16 +186,14 @@ fun LevitoApp(
             }
         }
     ) { padding ->
+    Box(modifier = Modifier.padding(padding)) {
     AnimatedContent(
         targetState = currentScreen,
         transitionSpec = {
             fadeIn(tween(300)) togetherWith fadeOut(tween(300))
         },
-        label = "screenTransition",
-        modifier = Modifier.padding(padding)
+        label = "screenTransition"
     ) { screen ->
-        // Force recomposition when theme changes without re-triggering transition
-        key(isDarkTheme) {
         when (screen) {
             is Screen.RecipeList -> {
                 Column(modifier = Modifier.fillMaxSize()) {
@@ -219,8 +217,6 @@ fun LevitoApp(
                             currentScreen = Screen.RecipeDetail(recipe)
                         },
                         onDiagnostics = { currentScreen = Screen.Diagnostics },
-                        onToggleTheme = onToggleTheme,
-                        isDarkTheme = isDarkTheme,
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -282,8 +278,22 @@ fun LevitoApp(
                 )
             }
         }
-        } // key(isDarkTheme)
+    } // AnimatedContent
+
+    // Theme toggle — OUTSIDE AnimatedContent so clicks are never swallowed
+    IconButton(
+        onClick = onToggleTheme,
+        modifier = Modifier
+            .align(Alignment.TopEnd)
+            .padding(top = 12.dp, end = 12.dp)
+            .statusBarsPadding()
+    ) {
+        Text(
+            text = if (isDarkTheme) "☀️" else "🌙",
+            style = MaterialTheme.typography.headlineSmall
+        )
     }
+    } // Box
     } // Scaffold
 }
 

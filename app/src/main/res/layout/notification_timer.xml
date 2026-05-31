@@ -28,7 +28,6 @@
             android:layout_weight="1"
             android:layout_marginStart="8dp"
             android:text="Levito Madre"
-            android:textColor="#D4C4B0"
             android:textSize="12sp"
             android:textStyle="bold" />
 
@@ -37,7 +36,6 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="сейчас"
-            android:textColor="#9A8A7A"
             android:textSize="11sp" />
     </LinearLayout>
 
@@ -47,7 +45,6 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:fontFamily="serif"
-        android:textColor="#D4C4B0"
         android:textSize="14sp"
         android:textStyle="bold"
         android:layout_marginBottom="4dp" />
@@ -79,7 +76,6 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:textColor="#D4C4B0"
             android:textSize="12sp" />
     </LinearLayout>
 
@@ -96,7 +92,6 @@
             android:id="@+id/notif_timer"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="#D4C4B0"
             android:textSize="28sp"
             android:textStyle="bold"
             android:fontFamily="sans-serif-medium" />
@@ -105,13 +100,12 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text=" осталось"
-            android:textColor="#9A8A7A"
             android:textSize="11sp"
             android:layout_marginStart="6dp"
             android:layout_marginBottom="3dp" />
     </LinearLayout>
 
-    <!-- Progress bar - full width with custom drawable -->
+    <!-- Progress bar — system style -->
     <ProgressBar
         android:id="@+id/notif_progress"
         style="?android:attr/progressBarStyleHorizontal"
@@ -120,14 +114,13 @@
         android:layout_marginBottom="6dp"
         android:max="100"
         android:progress="42"
-        android:progressDrawable="@drawable/notif_progress_gold" />
+        android:progressDrawable="@drawable/notif_progress_system" />
 
-    <!-- Step dots (text-based for RemoteViews compatibility) -->
+    <!-- Step dots -->
     <TextView
         android:id="@+id/notif_dots_text"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:textColor="#9A8A7A"
         android:textSize="10sp"
         android:layout_marginBottom="6dp" />
 
@@ -144,7 +137,6 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Далее: "
-            android:textColor="#9A8A7A"
             android:textSize="10sp" />
 
         <TextView
@@ -152,14 +144,12 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:textColor="#D4C4B0"
             android:textSize="11sp" />
 
         <TextView
             android:id="@+id/notif_next_time"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="#9A8A7A"
             android:textSize="10sp" />
     </LinearLayout>
 </LinearLayout>

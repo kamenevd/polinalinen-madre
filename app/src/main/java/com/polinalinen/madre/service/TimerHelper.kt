@@ -105,6 +105,22 @@ object TimerHelper {
     ): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.notification_timer)
 
+        // System colors — readable on all Android versions and OEM skins
+        val primaryColor = context.getColor(android.R.color.primary_text_dark)
+        val secondaryColor = context.getColor(android.R.color.secondary_text_dark)
+
+        // Primary text (titles, timer, recipe name)
+        views.setTextColor(R.id.notif_app_name, primaryColor)
+        views.setTextColor(R.id.notif_recipe, primaryColor)
+        views.setTextColor(R.id.notif_timer, primaryColor)
+
+        // Secondary text (subtitles, hints, time label)
+        views.setTextColor(R.id.notif_time, secondaryColor)
+        views.setTextColor(R.id.notif_step_name, secondaryColor)
+        views.setTextColor(R.id.notif_dots_text, secondaryColor)
+        views.setTextColor(R.id.notif_next_name, secondaryColor)
+        views.setTextColor(R.id.notif_next_time, secondaryColor)
+
         // Recipe name
         views.setTextViewText(R.id.notif_recipe, recipeName)
 
@@ -115,12 +131,8 @@ object TimerHelper {
         // Timer
         views.setTextViewText(R.id.notif_timer, timeText)
 
-        // Progress bar
+        // Progress bar — system drawable (gold fill, semi-transparent white bg)
         views.setProgressBar(R.id.notif_progress, 100, progress, false)
-
-        // Progress bar drawable — gold or urgent
-        val progressDrawable = if (isUrgent) R.drawable.notif_progress_urgent else R.drawable.notif_progress_gold
-        // Note: RemoteViews can't swap drawables at runtime easily, so we use a fixed layout
 
         // Step dots (text-based for RemoteViews compatibility)
         val dotsText = buildString {
@@ -141,12 +153,6 @@ object TimerHelper {
             views.setViewVisibility(R.id.notif_next_container, android.view.View.VISIBLE)
         } else {
             views.setViewVisibility(R.id.notif_next_container, android.view.View.GONE)
-        }
-
-        // Urgent tint — keep warm readable color
-        if (isUrgent) {
-            views.setTextColor(R.id.notif_timer, 0xFFD4C4B0.toInt())
-            views.setTextColor(R.id.notif_app_name, 0xFFD4C4B0.toInt())
         }
 
         return views

@@ -194,6 +194,8 @@ fun LevitoApp(
         label = "screenTransition",
         modifier = Modifier.padding(padding)
     ) { screen ->
+        // Force recomposition when theme changes without re-triggering transition
+        key(isDarkTheme) {
         when (screen) {
             is Screen.RecipeList -> {
                 Column(modifier = Modifier.fillMaxSize()) {
@@ -280,6 +282,7 @@ fun LevitoApp(
                 )
             }
         }
+        } // key(isDarkTheme)
     }
     } // Scaffold
 }

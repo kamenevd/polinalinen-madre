@@ -652,7 +652,7 @@ fun ServingTipsCard(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = tip.text,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onBackground,
                         fontSize = 14.sp,
                         lineHeight = 20.sp
                     )

@@ -27,6 +27,7 @@ fun RecipeListScreen(
     recipes: List<Recipe>,
     onRecipeClick: (Recipe) -> Unit,
     onDiagnostics: () -> Unit = {},
+    onSourdough: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -72,6 +73,43 @@ fun RecipeListScreen(
                     .fillMaxWidth()
                     .background(AppColors.accentGold.copy(alpha = 0.3f))
             )
+
+            // Sourdough card
+            Card(
+                onClick = onSourdough,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = AppColors.accentGold.copy(alpha = 0.1f)
+                ),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "🍶",
+                        style = MaterialTheme.typography.headlineMedium
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = "Моя закваска",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = AppColors.accentGold
+                        )
+                        Text(
+                            text = "Отслеживайте кормления",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
 
             // Recipe cards
             LazyColumn(

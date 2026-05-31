@@ -7,7 +7,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectVerticalDrag
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -37,6 +38,7 @@ import java.io.File
  * @param initialIndex  Starting photo index (default 0)
  * @param onClose  Callback when gallery is dismissed
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun FullScreenGallery(
     photos: List<String>,
@@ -59,11 +61,9 @@ fun FullScreenGallery(
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.95f))
             .pointerInput(Unit) {
-                detectVerticalDrag { _, dragAmount ->
+                detectVerticalDragGestures { _, dragAmount ->
                     dragOffset += dragAmount
-                    if (dragOffset > dismissThreshold) {
-                        onClose()
-                    } else if (dragOffset < -dismissThreshold) {
+                    if (dragOffset > dismissThreshold || dragOffset < -dismissThreshold) {
                         onClose()
                     }
                 }

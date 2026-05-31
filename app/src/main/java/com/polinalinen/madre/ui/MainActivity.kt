@@ -35,10 +35,12 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
+import com.polinalinen.madre.ui.theme.AppColors
 import com.polinalinen.madre.model.BakingSession
+import com.polinalinen.madre.R
 import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.service.TimerHelper
-import com.polinalinen.madre.ui.theme.*
+import com.polinalinen.madre.ui.theme.AppColors
 
 class MainActivity : ComponentActivity() {
 
@@ -178,8 +180,8 @@ fun LevitoApp(
             SnackbarHost(hostState = snackbarHostState) { data ->
                 Snackbar(
                     snackbarData = data,
-                    containerColor = BackgroundCard,
-                    contentColor = TextPrimary
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    contentColor = MaterialTheme.colorScheme.onBackground
                 )
             }
         }
@@ -290,7 +292,7 @@ fun ActiveSessionsBar(
     modifier: Modifier = Modifier
 ) {
     Surface(
-        color = BackgroundCard,
+        color = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(0.dp),
         modifier = modifier.fillMaxWidth()
     ) {
@@ -298,7 +300,7 @@ fun ActiveSessionsBar(
             Text(
                 text = "🔥 Активные готовки",
                 style = MaterialTheme.typography.labelLarge,
-                color = AccentGold,
+                color = AppColors.accentGold,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
 
@@ -344,7 +346,7 @@ fun ActiveSessionChip(
             .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
-            containerColor = if (isWait) BackgroundCardHover else BackgroundCard
+            containerColor = if (isWait) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface
         ),
         shape = RoundedCornerShape(12.dp)
     ) {
@@ -358,14 +360,14 @@ fun ActiveSessionChip(
                 Text(
                     text = session.name,
                     style = MaterialTheme.typography.labelLarge,
-                    color = TextPrimary,
+                    color = MaterialTheme.colorScheme.onBackground,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = session.currentStepTitle,
                     style = MaterialTheme.typography.labelSmall,
-                    color = TextSecondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -374,7 +376,7 @@ fun ActiveSessionChip(
                     Text(
                         text = "⏱ $remainingText",
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (session.remainingSeconds <= 60) TimerUrgent else AccentGold,
+                        color = if (session.remainingSeconds <= 60) AppColors.timerUrgent else AppColors.accentGold,
                         maxLines = 1,
                         modifier = Modifier.padding(top = 2.dp)
                     )
@@ -387,8 +389,8 @@ fun ActiveSessionChip(
                         .height(2.dp)
                         .padding(top = 4.dp)
                         .clip(RoundedCornerShape(1.dp)),
-                    color = if (isWait) StatusWait else StatusAction,
-                    trackColor = DividerColor
+                    color = if (isWait) AppColors.statusWait else AppColors.statusAction,
+                    trackColor = AppColors.dividerColor
                 )
             }
 
@@ -397,7 +399,7 @@ fun ActiveSessionChip(
                 onClick = onRemove,
                 modifier = Modifier.size(24.dp)
             ) {
-                Text("✕", color = TextSecondary, style = MaterialTheme.typography.labelSmall)
+                Text("✕", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
             }
         }
     }
@@ -414,7 +416,7 @@ fun DiagnosticsScreen(
 
     Surface(
         modifier = modifier.fillMaxSize(),
-        color = BackgroundDark
+        color = MaterialTheme.colorScheme.background
     ) {
         Column(
             modifier = Modifier
@@ -433,13 +435,13 @@ fun DiagnosticsScreen(
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Назад",
-                        tint = TextSecondary
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Text(
                     text = "\u2699\uFE0F Диагностика",
                     style = MaterialTheme.typography.titleLarge,
-                    color = AccentGold
+                    color = AppColors.accentGold
                 )
             }
 
@@ -450,7 +452,7 @@ fun DiagnosticsScreen(
                 items(diagnostics.entries.toList()) { entry ->
                     Card(
                         modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = BackgroundCard),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Row(
@@ -462,12 +464,12 @@ fun DiagnosticsScreen(
                             Text(
                                 text = entry.key,
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = TextSecondary
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
                                 text = entry.value,
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = TextPrimary
+                                color = MaterialTheme.colorScheme.onBackground
                             )
                         }
                     }

@@ -11,19 +11,19 @@ import androidx.compose.ui.graphics.Color
 // ═══ Dark theme colors (current aesthetic) ═══
 private val DarkColors = darkColorScheme(
     primary = AccentGold,
-    onPrimary = DarkBg,
+    onPrimary = Color(0xFF1A1209),
     primaryContainer = AccentBrown,
     onPrimaryContainer = AccentCream,
     secondary = AccentRose,
-    onSecondary = DarkBg,
+    onSecondary = Color(0xFF1A1209),
     secondaryContainer = StatusWait,
     onSecondaryContainer = Color(0xFFF5EDE4),
     tertiary = AccentCream,
-    background = DarkBg,
+    background = Color(0xFF1A1209),
     onBackground = Color(0xFFF5EDE4),
-    surface = DarkCard,
+    surface = Color(0xFF261C10),
     onSurface = Color(0xFFF5EDE4),
-    surfaceVariant = DarkCardHover,
+    surfaceVariant = Color(0xFF342818),
     onSurfaceVariant = Color(0xFFB5A597),
     outline = Color(0xFF3A302A),
     outlineVariant = AccentBrown,
@@ -40,11 +40,11 @@ private val LightColors = lightColorScheme(
     secondaryContainer = Color(0xFFD4EDED),
     onSecondaryContainer = Color(0xFF3A2A1A),
     tertiary = LightAccentCream,
-    background = LightBg,
+    background = Color(0xFFF5E6D3),
     onBackground = Color(0xFF3A2A1A),
-    surface = LightCard,
+    surface = Color(0xFFFDF5EB),
     onSurface = Color(0xFF3A2A1A),
-    surfaceVariant = LightCardHover,
+    surfaceVariant = Color(0xFFF2E4CC),
     onSurfaceVariant = Color(0xFF7A6A58),
     outline = Color(0xFFD9C9B0),
     outlineVariant = LightAccentBrown,
@@ -75,7 +75,7 @@ private val DarkExtended = ExtendedColors(
     statusAction = StatusAction,
     statusWait = StatusWait,
     statusCompleted = StatusCompleted,
-    timerBackground = Color(0xFF2A2420),
+    timerBackground = Color(0xFF342818),
     timerUrgent = TimerUrgent,
     dividerColor = Color(0xFF3A302A),
     difficultyEasy = DifficultyEasy,
@@ -100,6 +100,26 @@ private val LightExtended = ExtendedColors(
 )
 
 val LocalExtendedColors = staticCompositionLocalOf { DarkExtended }
+
+/**
+ * Convenience accessor for extended bakery colors inside @Composable functions.
+ * Usage: AppColors.accentGold, AppColors.dividerColor, etc.
+ */
+object AppColors {
+    val accentGold @Composable get() = LocalExtendedColors.current.accentGold
+    val accentRose @Composable get() = LocalExtendedColors.current.accentRose
+    val accentCream @Composable get() = LocalExtendedColors.current.accentCream
+    val accentBrown @Composable get() = LocalExtendedColors.current.accentBrown
+    val statusAction @Composable get() = LocalExtendedColors.current.statusAction
+    val statusWait @Composable get() = LocalExtendedColors.current.statusWait
+    val statusCompleted @Composable get() = LocalExtendedColors.current.statusCompleted
+    val timerBackground @Composable get() = LocalExtendedColors.current.timerBackground
+    val timerUrgent @Composable get() = LocalExtendedColors.current.timerUrgent
+    val dividerColor @Composable get() = LocalExtendedColors.current.dividerColor
+    val difficultyEasy @Composable get() = LocalExtendedColors.current.difficultyEasy
+    val difficultyMedium @Composable get() = LocalExtendedColors.current.difficultyMedium
+    val difficultyHard @Composable get() = LocalExtendedColors.current.difficultyHard
+}
 
 @Composable
 fun LevitoMadreTheme(

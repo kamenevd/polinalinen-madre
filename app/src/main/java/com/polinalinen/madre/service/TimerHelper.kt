@@ -111,9 +111,9 @@ object TimerHelper {
     ): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.notification_timer)
 
-        // System colors — readable on all Android versions and OEM skins
-        val primaryColor = context.getColor(android.R.color.primary_text_dark)
-        val secondaryColor = context.getColor(android.R.color.secondary_text_dark)
+        // Neutral gray — readable on both light and dark notification backgrounds
+        val primaryColor = 0xFF333333.toInt()       // Dark gray
+        val secondaryColor = 0xFF888888.toInt()     // Medium gray
 
         // Primary text (titles, timer, recipe name)
         views.setTextColor(R.id.notif_app_name, primaryColor)

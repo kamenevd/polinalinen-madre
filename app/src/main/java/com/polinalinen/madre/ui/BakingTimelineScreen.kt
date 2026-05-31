@@ -317,7 +317,7 @@ private fun CurrentStepCard(
                     Text(
                         text = tip,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = AppColors.accentCream,
+                        color = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.padding(12.dp),
                         textAlign = TextAlign.Center
                     )

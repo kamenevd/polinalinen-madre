@@ -186,39 +186,55 @@ fun LevitoApp(
             }
         }
     ) { padding ->
-    Box(modifier = Modifier.padding(padding)) {
     AnimatedContent(
         targetState = currentScreen,
         transitionSpec = {
             fadeIn(tween(300)) togetherWith fadeOut(tween(300))
         },
-        label = "screenTransition"
+        label = "screenTransition",
+        modifier = Modifier.padding(padding)
     ) { screen ->
         when (screen) {
             is Screen.RecipeList -> {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    // Active sessions bar at top
-                    if (sessions.isNotEmpty()) {
-                        ActiveSessionsBar(
-                            sessions = sessions,
-                            onResume = { sid ->
-                                viewModel.resumeSession(sid)
-                                currentScreen = Screen.Baking(sid)
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        // Active sessions bar at top
+                        if (sessions.isNotEmpty()) {
+                            ActiveSessionsBar(
+                                sessions = sessions,
+                                onResume = { sid ->
+                                    viewModel.resumeSession(sid)
+                                    currentScreen = Screen.Baking(sid)
+                                },
+                                onRemove = { sid ->
+                                    viewModel.removeSession(sid)
+                                }
+                            )
+                        }
+
+                        RecipeListScreen(
+                            recipes = recipes,
+                            onRecipeClick = { recipe ->
+                                currentScreen = Screen.RecipeDetail(recipe)
                             },
-                            onRemove = { sid ->
-                                viewModel.removeSession(sid)
-                            }
+                            onDiagnostics = { currentScreen = Screen.Diagnostics },
+                            modifier = Modifier.weight(1f)
                         )
                     }
 
-                    RecipeListScreen(
-                        recipes = recipes,
-                        onRecipeClick = { recipe ->
-                            currentScreen = Screen.RecipeDetail(recipe)
-                        },
-                        onDiagnostics = { currentScreen = Screen.Diagnostics },
-                        modifier = Modifier.weight(1f)
-                    )
+                    // Theme toggle — only visible on RecipeList screen
+                    IconButton(
+                        onClick = onToggleTheme,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 12.dp, end = 12.dp)
+                            .statusBarsPadding()
+                    ) {
+                        Text(
+                            text = if (isDarkTheme) "\u2600\uFE0F" else "\uD83C\uDF19",
+                            style = MaterialTheme.typography.headlineSmall
+                        )
+                    }
                 }
             }
 
@@ -279,21 +295,6 @@ fun LevitoApp(
             }
         }
     } // AnimatedContent
-
-    // Theme toggle — OUTSIDE AnimatedContent so clicks are never swallowed
-    IconButton(
-        onClick = onToggleTheme,
-        modifier = Modifier
-            .align(Alignment.TopEnd)
-            .padding(top = 12.dp, end = 12.dp)
-            .statusBarsPadding()
-    ) {
-        Text(
-            text = if (isDarkTheme) "☀️" else "🌙",
-            style = MaterialTheme.typography.headlineSmall
-        )
-    }
-    } // Box
     } // Scaffold
 }
 

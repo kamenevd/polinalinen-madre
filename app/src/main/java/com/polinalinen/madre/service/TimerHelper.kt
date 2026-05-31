@@ -4,6 +4,7 @@ import android.app.*
 import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
+import android.media.RingtoneManager
 import android.os.Build
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
@@ -11,15 +12,18 @@ import com.polinalinen.madre.R
 
 object TimerHelper {
 
-    private const val CHANNEL_ID = "levito_timer_v2"
-    private const val CHANNEL_PROGRESS = "levito_progress_v3"
-    private const val CHANNEL_URGENT = "levito_urgent_v2"
+    private const val CHANNEL_ID = "levito_timer_v4"
+    private const val CHANNEL_PROGRESS = "levito_progress_v4"
+    private const val CHANNEL_URGENT = "levito_urgent_v4"
 
     // Legacy channel IDs — delete on first launch so stale config doesn't persist
     private const val CHANNEL_ID_LEGACY = "levito_timer"
+    private const val CHANNEL_ID_LEGACY_V2 = "levito_timer_v2"
     private const val CHANNEL_PROGRESS_LEGACY = "levito_progress_v2"
     private const val CHANNEL_PROGRESS_LEGACY_V1 = "levito_progress"
+    private const val CHANNEL_PROGRESS_LEGACY_V3 = "levito_progress_v3"
     private const val CHANNEL_URGENT_LEGACY = "levito_urgent"
+    private const val CHANNEL_URGENT_LEGACY_V2 = "levito_urgent_v2"
     private const val NOTIFICATION_ID_COMPLETE = 1001
     private const val NOTIFICATION_ID_PROGRESS = 2000
     private const val NOTIFICATION_ID_ACTION = 3000
@@ -31,17 +35,19 @@ object TimerHelper {
 
     fun createChannel(context: Context) {
         try {
-            val packageName = context.packageName
-            val timerSoundUri = android.net.Uri.parse("android.resource://$packageName/${R.raw.notif_timer}")
-            val stepSoundUri = android.net.Uri.parse("android.resource://$packageName/${R.raw.notif_step}")
+            // System default notification sound — works on ALL devices including Huawei
+            val defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
 
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
             // Delete legacy channels so stale (silent) config doesn't persist
             manager.deleteNotificationChannel(CHANNEL_ID_LEGACY)
+            manager.deleteNotificationChannel(CHANNEL_ID_LEGACY_V2)
             manager.deleteNotificationChannel(CHANNEL_PROGRESS_LEGACY)
             manager.deleteNotificationChannel(CHANNEL_PROGRESS_LEGACY_V1)
+            manager.deleteNotificationChannel(CHANNEL_PROGRESS_LEGACY_V3)
             manager.deleteNotificationChannel(CHANNEL_URGENT_LEGACY)
+            manager.deleteNotificationChannel(CHANNEL_URGENT_LEGACY_V2)
 
             val completeChannel = NotificationChannel(
                 CHANNEL_ID,
@@ -51,7 +57,7 @@ object TimerHelper {
                 description = "Уведомления когда шаг завершён"
                 enableVibration(true)
                 setSound(
-                    stepSoundUri,
+                    defaultSoundUri,
                     AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION).build()
                 )
             }
@@ -75,7 +81,7 @@ object TimerHelper {
                 description = "Меньше 5 минут осталось!"
                 enableVibration(true)
                 setSound(
-                    timerSoundUri,
+                    defaultSoundUri,
                     AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION).build()
                 )
             }
@@ -189,7 +195,6 @@ object TimerHelper {
                 .setAutoCancel(true)
                 .setContentIntent(pendingIntent)
                 .setDefaults(NotificationCompat.DEFAULT_ALL)
-                .setSound(android.net.Uri.parse("android.resource://${context.packageName}/${R.raw.notif_step}"))
                 .setColor(0xFFC49A5C.toInt())
                 .build()
 

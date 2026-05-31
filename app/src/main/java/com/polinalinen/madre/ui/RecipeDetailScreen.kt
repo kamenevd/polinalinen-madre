@@ -51,21 +51,7 @@ import androidx.compose.ui.unit.sp
 import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.model.TasteReview
 import com.polinalinen.madre.model.ServingTip
-import com.polinalinen.madre.ui.theme.AccentBrown
-import com.polinalinen.madre.ui.theme.AccentCream
-import com.polinalinen.madre.ui.theme.AccentGold
-import com.polinalinen.madre.ui.theme.AccentRose
-import com.polinalinen.madre.ui.theme.BackgroundCard
-import com.polinalinen.madre.ui.theme.BackgroundCardHover
-import com.polinalinen.madre.ui.theme.BackgroundDark
-import com.polinalinen.madre.ui.theme.DividerColor
-import com.polinalinen.madre.ui.theme.DifficultyEasy
-import com.polinalinen.madre.ui.theme.DifficultyMedium
-import com.polinalinen.madre.ui.theme.DifficultyHard
-import com.polinalinen.madre.ui.theme.StatusCompleted
-import com.polinalinen.madre.ui.theme.TextAccent
-import com.polinalinen.madre.ui.theme.TextPrimary
-import com.polinalinen.madre.ui.theme.TextSecondary
+import com.polinalinen.madre.ui.theme.AppColors
 
 private fun lookupHeroResId(recipeId: String, packageName: String, resources: android.content.res.Resources): Int {
     val heroMap = mapOf(
@@ -116,8 +102,12 @@ fun RecipeDetailScreen(
         3 -> "Средне"
         else -> "—"
     }
+    val bgColor = MaterialTheme.colorScheme.background
+    val surfaceColor = MaterialTheme.colorScheme.surface
+    val onBgColor = MaterialTheme.colorScheme.onBackground
+    val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
 
-    Surface(color = BackgroundDark) {
+    Surface(color = bgColor) {
         Box(modifier = Modifier.fillMaxSize()) {
             LazyColumn(
                 contentPadding = PaddingValues(bottom = 96.dp),
@@ -133,7 +123,7 @@ fun RecipeDetailScreen(
                                 brush = Brush.linearGradient(
                                     colors = listOf(
                                         Color(0xFFD4B88C),
-                                        BackgroundCard,
+                                        surfaceColor,
                                         Color(0xFFC9A87C)
                                     )
                                 )
@@ -143,11 +133,10 @@ fun RecipeDetailScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(80.dp)
-                                .align(Alignment.TopCenter)
                                 .background(
                                     brush = Brush.verticalGradient(
                                         colors = listOf(
-                                            BackgroundDark.copy(alpha = 0.9f),
+                                            bgColor.copy(alpha = 0.9f),
                                             Color.Transparent
                                         )
                                     )
@@ -157,18 +146,16 @@ fun RecipeDetailScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(60.dp)
-                            .align(Alignment.BottomCenter)
                             .background(
                                 brush = Brush.verticalGradient(
                                     colors = listOf(
                                         Color.Transparent,
-                                        BackgroundDark.copy(alpha = 0.9f)
+                                        bgColor.copy(alpha = 0.9f)
                                     )
                                 )
                             )
                         )
                         // Hero image or emoji fallback
-                        // heroResId is remembered above
                         if (heroResId != 0) {
                             Image(
                                 painter = painterResource(id = heroResId),
@@ -176,7 +163,7 @@ fun RecipeDetailScreen(
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(280.dp) // taller than container to shift bottom watermark out of view
+                                    .height(280.dp)
                                     .align(Alignment.TopCenter)
                             )
                         } else {
@@ -198,13 +185,13 @@ fun RecipeDetailScreen(
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                     contentDescription = "Назад",
-                                    tint = AccentBrown
+                                    tint = AppColors.accentBrown
                                 )
                             }
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = recipe.name,
-                                color = AccentBrown,
+                                color = AppColors.accentBrown,
                                 fontSize = 20.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -215,14 +202,14 @@ fun RecipeDetailScreen(
                                     .align(Alignment.BottomEnd)
                                     .padding(end = 16.dp, bottom = 12.dp)
                                     .background(
-                                        color = AccentGold.copy(alpha = 0.3f),
+                                        color = AppColors.accentGold.copy(alpha = 0.3f),
                                         shape = RoundedCornerShape(12.dp)
                                     )
                                     .padding(horizontal = 10.dp, vertical = 4.dp)
                             ) {
                                 Text(
                                     text = "💬 ${recipe.tasteReviews.size}",
-                                    color = AccentBrown,
+                                    color = AppColors.accentBrown,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Medium
                                 )
@@ -241,7 +228,7 @@ fun RecipeDetailScreen(
                             Card(
                                 shape = RoundedCornerShape(16.dp),
                                 colors = CardDefaults.cardColors(
-                                    containerColor = AccentGold.copy(alpha = 0.1f)
+                                    containerColor = AppColors.accentGold.copy(alpha = 0.1f)
                                 ),
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -262,13 +249,13 @@ fun RecipeDetailScreen(
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             text = "Ваши результаты",
-                                            color = TextPrimary,
+                                            color = onBgColor,
                                             fontSize = 15.sp,
                                             fontWeight = FontWeight.SemiBold
                                         )
                                         Text(
                                             text = "${galleryPhotos.value.size} фото",
-                                            color = TextSecondary,
+                                            color = onSurfaceVariant,
                                             fontSize = 13.sp
                                         )
                                     }
@@ -307,12 +294,11 @@ fun RecipeDetailScreen(
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
                             text = recipe.description,
-                            color = TextSecondary,
+                            color = onSurfaceVariant,
                             fontSize = 15.sp,
                             lineHeight = 22.sp
                         )
                         Spacer(modifier = Modifier.height(16.dp))
-                        // 3 chips — fixed height 72dp each
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                             modifier = Modifier.fillMaxWidth()
@@ -331,10 +317,10 @@ fun RecipeDetailScreen(
                                 icon = "📊",
                                 label = difficultyLabel,
                                 iconColor = when (recipe.difficulty) {
-                                    1 -> DifficultyEasy
-                                    2 -> DifficultyMedium
-                                    3 -> DifficultyHard
-                                    else -> TextSecondary
+                                    1 -> AppColors.difficultyEasy
+                                    2 -> AppColors.difficultyMedium
+                                    3 -> AppColors.difficultyHard
+                                    else -> onSurfaceVariant
                                 },
                                 modifier = Modifier.weight(1f)
                             )
@@ -350,7 +336,7 @@ fun RecipeDetailScreen(
                     ) {
                         Text(
                             text = "📋 Ингредиенты",
-                            color = TextPrimary,
+                            color = onBgColor,
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -359,9 +345,9 @@ fun RecipeDetailScreen(
                         Text(
                             text = "✓ $checkedCount из ${allIngredients.size} есть",
                             color = if (checkedCount == allIngredients.size && allIngredients.isNotEmpty()) {
-                                StatusCompleted
+                                AppColors.statusCompleted
                             } else {
-                                TextSecondary
+                                onSurfaceVariant
                             },
                             fontSize = 14.sp
                         )
@@ -375,7 +361,7 @@ fun RecipeDetailScreen(
                         ) {
                             Text(
                                 text = sectionName,
-                                color = TextAccent,
+                                color = AppColors.accentCream,
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
@@ -404,18 +390,18 @@ fun RecipeDetailScreen(
                                     .size(20.dp)
                                     .clip(RoundedCornerShape(5.dp))
                                     .background(
-                                        color = if (isChecked) StatusCompleted else Color.Transparent
+                                        color = if (isChecked) AppColors.statusCompleted else Color.Transparent
                                     )
                                     .border(
                                         width = if (isChecked) 0.dp else 1.5.dp,
-                                        color = if (isChecked) StatusCompleted else DividerColor,
+                                        color = if (isChecked) AppColors.statusCompleted else AppColors.dividerColor,
                                         shape = RoundedCornerShape(5.dp)
                                     )
                             ) {
                                 if (isChecked) {
                                     Text(
                                         text = "✓",
-                                        color = BackgroundDark,
+                                        color = bgColor,
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold
                                     )
@@ -424,7 +410,7 @@ fun RecipeDetailScreen(
                             Spacer(modifier = Modifier.width(12.dp))
                             Text(
                                 text = ingredient,
-                                color = if (isChecked) TextSecondary else TextPrimary,
+                                color = if (isChecked) onSurfaceVariant else onBgColor,
                                 fontSize = 15.sp
                             )
                         }
@@ -466,7 +452,7 @@ fun RecipeDetailScreen(
                         ) {
                             Text(
                                 text = "💬 Как это на вкус",
-                                color = TextPrimary,
+                                color = onBgColor,
                                 fontSize = 20.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -494,8 +480,8 @@ fun RecipeDetailScreen(
                         brush = Brush.verticalGradient(
                             colors = listOf(
                                 Color.Transparent,
-                                BackgroundDark,
-                                BackgroundDark
+                                bgColor,
+                                bgColor
                             )
                         )
                     )
@@ -506,14 +492,14 @@ fun RecipeDetailScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp))
-                        .background(color = AccentBrown)
+                        .background(color = AppColors.accentBrown)
                         .clickable { onStartBaking() }
                         .padding(vertical = 16.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = "Всё есть. Начинаем ${recipe.emoji}",
-                        color = AccentCream,
+                        color = AppColors.accentCream,
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -527,12 +513,12 @@ fun RecipeDetailScreen(
 fun MetaChip(
     icon: String,
     label: String,
-    iconColor: Color = TextPrimary,
+    iconColor: Color = MaterialTheme.colorScheme.onBackground,
     modifier: Modifier = Modifier
 ) {
     Card(
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = BackgroundCard),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         modifier = modifier
     ) {
         Column(
@@ -551,7 +537,7 @@ fun MetaChip(
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = label,
-                color = TextPrimary,
+                color = MaterialTheme.colorScheme.onBackground,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium
             )
@@ -566,7 +552,7 @@ fun TasteReviewCard(
 ) {
     Card(
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = BackgroundCard),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         modifier = modifier
     ) {
         Column(
@@ -578,7 +564,7 @@ fun TasteReviewCard(
                     modifier = Modifier
                         .size(36.dp)
                         .clip(CircleShape)
-                        .background(color = BackgroundCardHover)
+                        .background(color = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
                     Text(
                         text = review.avatarEmoji,
@@ -589,7 +575,7 @@ fun TasteReviewCard(
                 Column {
                     Text(
                         text = review.author,
-                        color = TextAccent,
+                        color = AppColors.accentCream,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -600,7 +586,7 @@ fun TasteReviewCard(
                     }
                     Text(
                         text = stars,
-                        color = AccentGold,
+                        color = AppColors.accentGold,
                         fontSize = 14.sp
                     )
                 }
@@ -609,7 +595,7 @@ fun TasteReviewCard(
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = review.text,
-                    color = TextSecondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 14.sp,
                     lineHeight = 20.sp
                 )
@@ -627,7 +613,7 @@ fun ServingTipsCard(
     Card(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = AccentGold.copy(alpha = 0.08f)
+            containerColor = AppColors.accentGold.copy(alpha = 0.08f)
         ),
         modifier = modifier
     ) {
@@ -636,7 +622,7 @@ fun ServingTipsCard(
         ) {
             Text(
                 text = title,
-                color = TextPrimary,
+                color = MaterialTheme.colorScheme.onBackground,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -654,7 +640,7 @@ fun ServingTipsCard(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = tip.text,
-                        color = TextSecondary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 14.sp,
                         lineHeight = 20.sp
                     )

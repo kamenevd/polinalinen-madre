@@ -20,8 +20,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.polinalinen.madre.model.*
-import com.polinalinen.madre.ui.theme.*
-import kotlinx.coroutines.delay
+import com.polinalinen.madre.ui.theme.AppColors
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -43,7 +42,7 @@ fun BakingTimelineScreen(
 
     Surface(
         modifier = modifier.fillMaxSize(),
-        color = BackgroundDark
+        color = MaterialTheme.colorScheme.background
     ) {
         Column(
             modifier = Modifier
@@ -61,13 +60,13 @@ fun BakingTimelineScreen(
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Назад",
-                        tint = TextSecondary
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Text(
                     text = session.recipe.name,
                     style = MaterialTheme.typography.titleLarge,
-                    color = AccentGold,
+                    color = AppColors.accentGold,
                     modifier = Modifier
                         .weight(1f)
                         .combinedClickable(
@@ -77,7 +76,7 @@ fun BakingTimelineScreen(
                         ),
                     textAlign = TextAlign.Center
                 )
-                Spacer(modifier = Modifier.width(48.dp)) // balance back button
+                Spacer(modifier = Modifier.width(48.dp))
             }
 
             // Overall progress
@@ -87,14 +86,14 @@ fun BakingTimelineScreen(
                     .fillMaxWidth()
                     .height(3.dp)
                     .clip(RoundedCornerShape(2.dp)),
-                color = AccentGold,
-                trackColor = DividerColor
+                color = AppColors.accentGold,
+                trackColor = AppColors.dividerColor
             )
 
             Text(
                 text = "Шаг ${session.currentStepIndex + 1} из ${session.recipe.timeline.size}",
                 style = MaterialTheme.typography.labelSmall,
-                color = TextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 8.dp),
@@ -129,14 +128,14 @@ fun BakingTimelineScreen(
                     Text(
                         text = "⚡ DEV ×1000",
                         style = MaterialTheme.typography.labelSmall,
-                        color = AccentRose
+                        color = AppColors.accentRose
                     )
                     Spacer(modifier = Modifier.width(16.dp))
                     Button(
                         onClick = onSkipStep,
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = AccentRose,
-                            contentColor = BackgroundDark
+                            containerColor = AppColors.accentRose,
+                            contentColor = MaterialTheme.colorScheme.background
                         ),
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.height(36.dp)
@@ -150,7 +149,7 @@ fun BakingTimelineScreen(
             Text(
                 text = "Все шаги",
                 style = MaterialTheme.typography.titleMedium,
-                color = TextPrimary,
+                color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.padding(bottom = 12.dp)
             )
 
@@ -185,7 +184,7 @@ private fun CurrentStepCard(
     modifier: Modifier = Modifier
 ) {
     val isWait = step.type == StepType.WAIT
-    val accentColor = if (isWait) StatusWait else StatusAction
+    val accentColor = if (isWait) AppColors.statusWait else AppColors.statusAction
 
     // Pulse animation for active wait
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
@@ -202,7 +201,7 @@ private fun CurrentStepCard(
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = BackgroundCard
+            containerColor = MaterialTheme.colorScheme.surface
         ),
         shape = RoundedCornerShape(20.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
@@ -248,7 +247,7 @@ private fun CurrentStepCard(
             Text(
                 text = step.title,
                 style = MaterialTheme.typography.headlineMedium,
-                color = TextPrimary,
+                color = MaterialTheme.colorScheme.onBackground,
                 textAlign = TextAlign.Center
             )
 
@@ -258,7 +257,7 @@ private fun CurrentStepCard(
             Text(
                 text = step.description,
                 style = MaterialTheme.typography.bodyLarge,
-                color = TextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
 
@@ -275,19 +274,17 @@ private fun CurrentStepCard(
                 )
                 Spacer(modifier = Modifier.height(20.dp))
             } else if (isWait && remainingSeconds <= 0) {
-                // Timer finished — show "Time's up!"
                 Text(
                     text = "⏰ Время вышло!",
                     style = MaterialTheme.typography.headlineSmall,
-                    color = TimerUrgent
+                    color = AppColors.timerUrgent
                 )
                 Spacer(modifier = Modifier.height(20.dp))
             } else if (!isWait) {
-                // Show duration for action steps
                 Text(
                     text = "~${step.durationMinutes} мин",
                     style = MaterialTheme.typography.labelLarge,
-                    color = TextSecondary
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.height(20.dp))
             }
@@ -311,7 +308,7 @@ private fun CurrentStepCard(
                         "💡 Терпение — главный ингредиент хлеба 🍞"
                 }
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = BackgroundCardHover),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -320,7 +317,7 @@ private fun CurrentStepCard(
                     Text(
                         text = tip,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = AccentCream,
+                        color = AppColors.accentCream,
                         modifier = Modifier.padding(12.dp),
                         textAlign = TextAlign.Center
                     )
@@ -335,28 +332,26 @@ private fun CurrentStepCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (isWait) {
-                    // Pause/Resume button
                     IconButton(
                         onClick = onTogglePause,
                         modifier = Modifier
                             .size(48.dp)
-                            .background(DividerColor, CircleShape)
+                            .background(AppColors.dividerColor, CircleShape)
                     ) {
                         Icon(
                             imageVector = if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
                             contentDescription = if (isPaused) "Продолжить" else "Пауза",
-                            tint = TextPrimary
+                            tint = MaterialTheme.colorScheme.onBackground
                         )
                     }
                     Spacer(modifier = Modifier.width(16.dp))
                 }
 
-                // Advance button (main CTA)
                 Button(
                     onClick = onAdvance,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = accentColor,
-                        contentColor = BackgroundDark
+                        contentColor = MaterialTheme.colorScheme.background
                     ),
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier
@@ -396,42 +391,39 @@ private fun TimerCircle(
         else -> String.format("%02d:%02d", minutes, seconds)
     }
 
-    val isUrgent = remainingSeconds < 300 // < 5 min
-    val color = if (isUrgent) TimerUrgent else accentColor
+    val isUrgent = remainingSeconds < 300
+    val color = if (isUrgent) AppColors.timerUrgent else accentColor
 
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier.size(180.dp)
     ) {
-        // Background circle
         Box(
             modifier = Modifier
                 .size(180.dp)
                 .clip(CircleShape)
-                .background(TimerBackground)
+                .background(AppColors.timerBackground)
         )
 
-        // Progress arc
         CircularProgressIndicator(
             progress = progress,
             modifier = Modifier.size(168.dp),
             color = color,
             strokeWidth = 5.dp,
-            trackColor = DividerColor
+            trackColor = AppColors.dividerColor
         )
 
-        // Time text
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 text = timeText,
                 style = MaterialTheme.typography.displayMedium,
-                color = if (isPaused) TextSecondary else TextPrimary
+                color = if (isPaused) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onBackground
             )
             if (isPaused) {
                 Text(
                     text = "ПАУЗА",
                     style = MaterialTheme.typography.labelSmall,
-                    color = AccentRose
+                    color = AppColors.accentRose
                 )
             }
         }
@@ -449,15 +441,15 @@ private fun TimelineItem(
 ) {
     val isWait = step.type == StepType.WAIT
     val bgColor = when {
-        isCurrent -> BackgroundCardHover
-        isCompleted -> BackgroundCard.copy(alpha = 0.5f)
-        else -> BackgroundCard.copy(alpha = 0.3f)
+        isCurrent -> MaterialTheme.colorScheme.surfaceVariant
+        isCompleted -> MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
+        else -> MaterialTheme.colorScheme.surface.copy(alpha = 0.3f)
     }
 
     val dotColor = when {
-        isCompleted -> StatusCompleted
-        isCurrent -> if (isWait) StatusWait else StatusAction
-        else -> DividerColor
+        isCompleted -> AppColors.statusCompleted
+        isCurrent -> if (isWait) AppColors.statusWait else AppColors.statusAction
+        else -> AppColors.dividerColor
     }
 
     val textAlpha = when {
@@ -474,7 +466,6 @@ private fun TimelineItem(
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Status dot
         Box(
             modifier = Modifier
                 .size(10.dp)
@@ -484,7 +475,6 @@ private fun TimelineItem(
 
         Spacer(modifier = Modifier.width(12.dp))
 
-        // Icon
         val icon = when (step.type) {
             StepType.ACTION -> Icons.Default.Restaurant
             StepType.WAIT -> Icons.Default.HourglassTop
@@ -498,21 +488,19 @@ private fun TimelineItem(
 
         Spacer(modifier = Modifier.width(10.dp))
 
-        // Text
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = step.title,
                 style = MaterialTheme.typography.bodyMedium,
-                color = TextPrimary.copy(alpha = textAlpha)
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = textAlpha)
             )
         }
 
-        // Duration
         val durationText = formatDuration(step.durationMinutes)
         Text(
             text = durationText,
             style = MaterialTheme.typography.labelSmall,
-            color = TextSecondary.copy(alpha = textAlpha)
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = textAlpha)
         )
     }
 }

@@ -19,7 +19,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.polinalinen.madre.model.Recipe
-import com.polinalinen.madre.ui.theme.*
+import com.polinalinen.madre.ui.theme.AppColors
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -33,7 +33,7 @@ fun RecipeListScreen(
 ) {
     Surface(
         modifier = modifier.fillMaxSize(),
-        color = BackgroundDark
+        color = MaterialTheme.colorScheme.background
     ) {
         Column(
             modifier = Modifier
@@ -53,7 +53,7 @@ fun RecipeListScreen(
                 Text(
                     text = "Levito Madre",
                     style = MaterialTheme.typography.displayLarge,
-                    color = AccentGold,
+                    color = AppColors.accentGold,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.weight(1f)
                 )
@@ -67,7 +67,7 @@ fun RecipeListScreen(
             Text(
                 text = "Печём дома с любовью",
                 style = MaterialTheme.typography.bodyMedium,
-                color = TextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 6.dp),
@@ -80,7 +80,7 @@ fun RecipeListScreen(
                     .padding(horizontal = 80.dp, vertical = 16.dp)
                     .height(1.dp)
                     .fillMaxWidth()
-                    .background(AccentGold.copy(alpha = 0.3f))
+                    .background(AppColors.accentGold.copy(alpha = 0.3f))
             )
 
             // Recipe cards
@@ -126,7 +126,7 @@ private fun RecipeCard(
                 onLongClick = { /* diagnostics */ }
             ),
         colors = CardDefaults.cardColors(
-            containerColor = BackgroundCard
+            containerColor = MaterialTheme.colorScheme.surface
         ),
         shape = RoundedCornerShape(20.dp)
     ) {
@@ -141,7 +141,7 @@ private fun RecipeCard(
                 modifier = Modifier
                     .size(52.dp)
                     .clip(RoundedCornerShape(16.dp))
-                    .background(AccentGold.copy(alpha = 0.12f)),
+                    .background(AppColors.accentGold.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -157,12 +157,12 @@ private fun RecipeCard(
                 Text(
                     text = recipe.name,
                     style = MaterialTheme.typography.titleMedium,
-                    color = TextPrimary
+                    color = MaterialTheme.colorScheme.onBackground
                 )
                 Text(
                     text = recipe.description,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = TextSecondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 4.dp)
@@ -178,20 +178,20 @@ private fun RecipeCard(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
-                        .background(BackgroundCardHover)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Schedule,
                         contentDescription = null,
                         modifier = Modifier.size(14.dp),
-                        tint = AccentGold
+                        tint = AppColors.accentGold
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = timeText,
                         style = MaterialTheme.typography.labelSmall,
-                        color = AccentGold
+                        color = AppColors.accentGold
                     )
                 }
                 Spacer(modifier = Modifier.height(4.dp))
@@ -199,7 +199,7 @@ private fun RecipeCard(
                 Text(
                     text = "$stepsCount ${pluralSteps(stepsCount)}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = TextSecondary
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }

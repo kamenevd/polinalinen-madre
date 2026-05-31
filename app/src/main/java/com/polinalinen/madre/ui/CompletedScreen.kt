@@ -1,12 +1,16 @@
 package com.polinalinen.madre.ui
 
+import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -23,7 +27,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.polinalinen.madre.ui.theme.*
+import androidx.core.content.FileProvider
+import com.polinalinen.madre.ui.theme.AppColors
 import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
@@ -85,21 +90,77 @@ fun CompletedScreen(
     val context = LocalContext.current
     var galleryPhotos by remember { mutableStateOf(loadPhotosForRecipe(context, recipeId)) }
     var cameraImageUri by remember { mutableStateOf<Uri?>(null) }
+    var showFullScreenGallery by remember { mutableStateOf(false) }
+    var showPermissionRationale by remember { mutableStateOf(false) }
+    var pendingCameraLaunch by remember { mutableStateOf(false) }
 
+    // Camera result launcher
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { success: Boolean ->
         if (success && cameraImageUri != null) {
             saveCameraPhoto(context, cameraImageUri!!, recipeId)
-            // Delete temp file
             try { File(cameraImageUri!!.path!!).delete() } catch (_: Exception) {}
             galleryPhotos = loadPhotosForRecipe(context, recipeId)
         }
+        pendingCameraLaunch = false
+    }
+
+    // Permission launcher — requests Camera + Write External Storage
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val cameraGranted = permissions[Manifest.permission.CAMERA] ?: false
+        if (cameraGranted && pendingCameraLaunch) {
+            // Permissions granted — launch camera
+            val uri = cameraImageUri
+            if (uri != null) {
+                cameraLauncher.launch(uri)
+            }
+        } else {
+            showPermissionRationale = true
+            pendingCameraLaunch = false
+        }
+    }
+
+    // Full-screen gallery overlay
+    if (showFullScreenGallery && galleryPhotos.isNotEmpty()) {
+        FullScreenGallery(
+            photos = galleryPhotos,
+            initialIndex = 0,
+            onClose = { showFullScreenGallery = false }
+        )
+        return
+    }
+
+    // Permission denied dialog with link to Settings
+    if (showPermissionRationale) {
+        AlertDialog(
+            onDismissRequest = { showPermissionRationale = false },
+            title = { Text("Нужна камера") },
+            text = { Text("Нужна камера для фото результата выпечки") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showPermissionRationale = false
+                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.fromParts("package", context.packageName, null)
+                    }
+                    context.startActivity(intent)
+                }) {
+                    Text("Настройки")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPermissionRationale = false }) {
+                    Text("Отмена")
+                }
+            }
+        )
     }
 
     Surface(
         modifier = modifier.fillMaxSize(),
-        color = BackgroundDark
+        color = MaterialTheme.colorScheme.background
     ) {
         Column(
             modifier = Modifier
@@ -118,7 +179,7 @@ fun CompletedScreen(
             Text(
                 text = "Готово!",
                 style = MaterialTheme.typography.displayLarge,
-                color = AccentGold,
+                color = AppColors.accentGold,
                 textAlign = TextAlign.Center
             )
 
@@ -127,7 +188,7 @@ fun CompletedScreen(
             Text(
                 text = if (recipeName.isNotBlank()) "$recipeName готов(а)!\nПриятного аппетита! 🍞" else "Ваша выпечка готова.\nПриятного аппетита! 🍞",
                 style = MaterialTheme.typography.bodyLarge,
-                color = TextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
 
@@ -138,7 +199,7 @@ fun CompletedScreen(
                 Text(
                     text = "📸 Ваши результаты",
                     style = MaterialTheme.typography.titleMedium,
-                    color = TextPrimary
+                    color = MaterialTheme.colorScheme.onBackground
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -158,7 +219,10 @@ fun CompletedScreen(
                                 modifier = Modifier
                                     .size(80.dp)
                                     .clip(RoundedCornerShape(12.dp))
-                                    .border(1.dp, AccentGold.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                                    .border(1.dp, AppColors.accentGold.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                                    .clickable {
+                                        showFullScreenGallery = true
+                                    }
                             )
                         }
                     }
@@ -167,21 +231,27 @@ fun CompletedScreen(
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
-            // Camera button
+            // Camera button — requests permissions on first tap, then launches camera
             OutlinedButton(
                 onClick = {
                     val photoFile = File(context.cacheDir, "temp_camera_${System.currentTimeMillis()}.jpg")
-                    val uri = androidx.core.content.FileProvider.getUriForFile(
+                    val uri = FileProvider.getUriForFile(
                         context,
                         "${context.packageName}.fileprovider",
                         photoFile
                     )
                     cameraImageUri = uri
-                    cameraLauncher.launch(uri)
+                    pendingCameraLaunch = true
+                    permissionLauncher.launch(
+                        arrayOf(
+                            Manifest.permission.CAMERA,
+                            Manifest.permission.WRITE_EXTERNAL_STORAGE
+                        )
+                    )
                 },
-                border = androidx.compose.foundation.BorderStroke(1.dp, AccentGold.copy(alpha = 0.5f)),
+                border = BorderStroke(1.dp, AppColors.accentGold.copy(alpha = 0.5f)),
                 colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = AccentGold
+                    contentColor = AppColors.accentGold
                 ),
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier
@@ -199,8 +269,8 @@ fun CompletedScreen(
             Button(
                 onClick = onHome,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = AccentGold,
-                    contentColor = BackgroundDark
+                    containerColor = AppColors.accentGold,
+                    contentColor = MaterialTheme.colorScheme.background
                 ),
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier

@@ -36,11 +36,11 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 import com.polinalinen.madre.ui.theme.AppColors
+import com.polinalinen.madre.ui.theme.LevitoMadreTheme
 import com.polinalinen.madre.model.BakingSession
 import com.polinalinen.madre.R
 import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.service.TimerHelper
-import com.polinalinen.madre.ui.theme.AppColors
 
 class MainActivity : ComponentActivity() {
 

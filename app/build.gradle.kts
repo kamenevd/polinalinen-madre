@@ -11,8 +11,8 @@ android {
         applicationId = "com.polinalinen.madre"
         minSdk = 26
         targetSdk = 34
-        versionCode = 8
-        versionName = "1.6.2"
+        versionCode = 9
+        versionName = "1.6.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

@@ -17,9 +17,20 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+
+    signingConfigs {
+        create("release") {
+            storeFile = file("/root/.openclaw/workspace/levito-keystore/levito-madre.keystore")
+            storePassword = "kdnfx_levito_2026"
+            keyAlias = "levito"
+            keyPassword = "kdnfx_levito_2026"
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = true
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

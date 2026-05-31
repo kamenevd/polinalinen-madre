@@ -104,6 +104,7 @@ sealed class Screen {
     data class Baking(val sessionId: String) : Screen()
     data object Completed : Screen()
     data object Diagnostics : Screen()
+    data object Sourdough : Screen()
 }
 
 @Composable
@@ -154,7 +155,7 @@ fun LevitoApp(
     // Handle system back button — stay in app on inner screens
     BackHandler(enabled = currentScreen !is Screen.RecipeList) {
         when (currentScreen) {
-            is Screen.Baking, is Screen.Completed -> {
+            is Screen.Baking, is Screen.Completed, is Screen.Sourdough -> {
                 viewModel.exitSession()
                 currentScreen = Screen.RecipeList
             }
@@ -221,6 +222,16 @@ fun LevitoApp(
                             modifier = Modifier.weight(1f)
                         )
                     }
+
+                    RecipeListScreen(
+                        recipes = recipes,
+                        onRecipeClick = { recipe ->
+                            currentScreen = Screen.RecipeDetail(recipe)
+                        },
+                        onDiagnostics = { currentScreen = Screen.Diagnostics },
+                        onSourdough = { currentScreen = Screen.Sourdough },
+                        modifier = Modifier.fillMaxSize()
+                    )
 
                     // Theme toggle — only visible on RecipeList screen
                     IconButton(
@@ -291,6 +302,15 @@ fun LevitoApp(
                 DiagnosticsScreen(
                     viewModel = viewModel,
                     onBack = { currentScreen = Screen.RecipeList }
+                )
+            }
+
+            is Screen.Sourdough -> {
+                com.polinalinen.madre.sourdough.SourdoughScreen(
+                    onBack = { currentScreen = Screen.RecipeList },
+                    onOpenGallery = { photos, startIndex ->
+                        // TODO: integrate with FullScreenGallery
+                    }
                 )
             }
         }

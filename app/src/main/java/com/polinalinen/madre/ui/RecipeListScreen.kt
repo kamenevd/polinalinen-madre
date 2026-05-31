@@ -27,8 +27,6 @@ fun RecipeListScreen(
     recipes: List<Recipe>,
     onRecipeClick: (Recipe) -> Unit,
     onDiagnostics: () -> Unit = {},
-    onToggleTheme: () -> Unit = {},
-    isDarkTheme: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -41,28 +39,20 @@ fun RecipeListScreen(
                 .padding(horizontal = 20.dp)
                 .statusBarsPadding()
         ) {
-            // App header with theme toggle
+            // App header
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.Center
             ) {
-                Spacer(modifier = Modifier.width(40.dp))
                 Text(
                     text = "Levito Madre",
                     style = MaterialTheme.typography.displayLarge,
                     color = AppColors.accentGold,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.weight(1f)
+                    textAlign = TextAlign.Center
                 )
-                IconButton(onClick = onToggleTheme) {
-                    Text(
-                        text = if (isDarkTheme) "☀️" else "🌙",
-                        style = MaterialTheme.typography.headlineSmall
-                    )
-                }
             }
             Text(
                 text = "Печём дома с любовью",

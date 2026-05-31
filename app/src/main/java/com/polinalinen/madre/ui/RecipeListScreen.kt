@@ -197,7 +197,7 @@ private fun RecipeCard(
                 Spacer(modifier = Modifier.height(4.dp))
                 // Steps chip
                 Text(
-                    text = "$stepsCount шагов",
+                    text = "$stepsCount ${pluralSteps(stepsCount)}",
                     style = MaterialTheme.typography.labelSmall,
                     color = TextSecondary
                 )

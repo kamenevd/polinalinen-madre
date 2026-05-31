@@ -324,7 +324,7 @@ fun RecipeDetailScreen(
                             )
                             MetaChip(
                                 icon = "📝",
-                                label = "$stepCount шагов",
+                                label = "$stepCount ${pluralSteps(stepCount)}",
                                 modifier = Modifier.weight(1f)
                             )
                             MetaChip(

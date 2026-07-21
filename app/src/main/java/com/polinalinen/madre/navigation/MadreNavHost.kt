@@ -16,12 +16,13 @@ import androidx.navigation.compose.rememberNavController
 import com.polinalinen.madre.MadreApplication
 import com.polinalinen.madre.sourdough.GrowthPhase
 import com.polinalinen.madre.sourdough.MadreVoice
+import com.polinalinen.madre.sourdough.currentPhase
 import com.polinalinen.madre.sourdough.hoursSinceFeeding
 import com.polinalinen.madre.sourdough.profileForInterval
 import com.polinalinen.madre.ui.screens.BakingCompleteScreenPlaceholder
 import com.polinalinen.madre.ui.screens.BakingTimerScreen
 import com.polinalinen.madre.ui.screens.BookStatsScreen
-import com.polinalinen.madre.ui.screens.FeedingFormScreenPlaceholder
+import com.polinalinen.madre.ui.screens.FeedingFormScreen
 import com.polinalinen.madre.ui.screens.HomeScreen
 import com.polinalinen.madre.ui.screens.NotificationsScreenPlaceholder
 import com.polinalinen.madre.ui.screens.RecipeDetailScreen
@@ -29,20 +30,23 @@ import com.polinalinen.madre.ui.screens.SettingsScreen
 import com.polinalinen.madre.ui.screens.ShelfScreen
 import com.polinalinen.madre.ui.screens.StarterDiaryScreen
 import com.polinalinen.madre.viewmodel.BakingViewModel
+import com.polinalinen.madre.viewmodel.SourdoughViewModel
 
 /**
  * Cycle 1: Home, RecipeDetail, BakingTimer, StarterDiary, Settings, Полка,
- * BookStats — реальные («Живая книга»). Feeding/Complete/Notifications —
- * плейсхолдеры до согласования мокапов.
+ * BookStats — реальные («Живая книга»). Feeding — реальный с Cycle 3.
+ * Complete/Notifications — пока плейсхолдеры до согласования мокапов.
  *
- * BakingViewModel шарится между экранами через activity-scoped viewModel().
- * Sourdough-состояние здесь пока временное (без Room-подписки) — подключается
- * в Cycle 3 через SourdoughRepository.
+ * BakingViewModel и SourdoughViewModel шарятся между экранами через
+ * activity-scoped viewModel(). Sourdough-состояние — реальное, из Room
+ * (Cycle 3, 2026-07-21): SourdoughViewModel бутстрапит неявный User+Config
+ * и держит config/history реактивными через Flow.
  */
 @Composable
 fun MadreNavHost(navController: NavHostController = rememberNavController()) {
     val context = LocalContext.current
     val bakingViewModel: BakingViewModel = viewModel()
+    val sourdoughViewModel: SourdoughViewModel = viewModel()
     val app = context.applicationContext as MadreApplication
 
     // Избранное + имя: SharedPreferences как в v3 (простое и рабочее, Room не нужен)
@@ -65,10 +69,19 @@ fun MadreNavHost(navController: NavHostController = rememberNavController()) {
     val bakeRecords by app.bakeHistoryRepository.observeAll().collectAsState(initial = emptyList())
     val recipesForStats by bakingViewModel.recipes.collectAsState()
 
-    // Временный sourdough-стейт до Cycle 3 (нет ещё формы кормления):
-    val profile = remember { profileForInterval(24) }
-    val phase = GrowthPhase.EMPTY
-    val headline = MadreVoice.headline(null, profile)
+    // Реальное sourdough-состояние (Cycle 3): конфиг и история кормлений из Room,
+    // через SourdoughViewModel — реактивно, без ручного refetch после кормления.
+    val sourdoughConfig by sourdoughViewModel.config.collectAsState()
+    val feedingHistory by sourdoughViewModel.history.collectAsState()
+    val lastFeeding = feedingHistory.firstOrNull() // observeHistory сортирует DESC
+    val profile = profileForInterval(sourdoughConfig?.intervalHours ?: 24)
+    val phase = sourdoughConfig?.lastFeedingMillis?.let { currentPhase(hoursSinceFeeding(it), profile) }
+        ?: GrowthPhase.EMPTY
+    val headline = MadreVoice.headline(lastFeeding, profile)
+    // "День N" — календарные дни с первого кормления в этом дневнике (не число записей).
+    val dayNumber = feedingHistory.lastOrNull()?.let { oldest ->
+        ((System.currentTimeMillis() - oldest.timestampMillis) / 86_400_000L).toInt() + 1
+    } ?: 1
 
     NavHost(navController = navController, startDestination = MadreDestinations.HOME) {
         composable(MadreDestinations.HOME) {
@@ -114,16 +127,22 @@ fun MadreNavHost(navController: NavHostController = rememberNavController()) {
         }
         composable(MadreDestinations.STARTER_DETAIL) {
             StarterDiaryScreen(
-                dayNumber = 1,
+                dayNumber = dayNumber,
                 phase = phase,
-                entries = MadreVoice.entriesFor(null, profile),
-                history = emptyList(),
+                entries = MadreVoice.entriesFor(lastFeeding, profile),
+                history = feedingHistory,
                 onBack = { navController.popBackStack() },
                 onFeed = { navController.navigate(MadreDestinations.FEEDING_FORM) },
             )
         }
         composable(MadreDestinations.FEEDING_FORM) {
-            FeedingFormScreenPlaceholder(onSaved = { navController.popBackStack() })
+            FeedingFormScreen(
+                onSave = { flourGrams, waterGrams, location, note ->
+                    sourdoughViewModel.feed(flourGrams, waterGrams, location, note)
+                    navController.popBackStack()
+                },
+                onBack = { navController.popBackStack() },
+            )
         }
         composable(MadreDestinations.NOTIFICATIONS) {
             NotificationsScreenPlaceholder(onBack = { navController.popBackStack() })

@@ -44,6 +44,12 @@ interface SourdoughConfigDao {
 
     @Update
     suspend fun update(config: SourdoughConfigEntity)
+
+    // Точечный UPDATE вместо read-modify-write всей сущности — не рискуем
+    // затереть параллельные изменения name/intervalHours/remindersEnabled
+    // устаревшей копией конфига.
+    @Query("UPDATE sourdough_configs SET lastFeedingMillis = :millis WHERE id = :configId")
+    suspend fun updateLastFeeding(configId: Long, millis: Long)
 }
 
 @Dao

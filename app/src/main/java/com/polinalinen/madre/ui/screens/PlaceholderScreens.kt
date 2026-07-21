@@ -16,9 +16,10 @@ import androidx.compose.ui.unit.dp
 import com.polinalinen.madre.ui.theme.AppColors
 
 /**
- * Оставшиеся заглушки — Feeding/Complete/Notifications.
+ * Оставшиеся заглушки — Complete/Notifications.
  * Settings переехал в SettingsScreen.kt (реальный экран, 2026-07-21).
- * Заменяются после согласования мокапов «Живой книги» (DESIGN-V4.md экраны 5-7).
+ * Feeding переехал в FeedingFormScreen.kt (реальный экран, Cycle 3, 2026-07-21).
+ * Заменяются после согласования мокапов «Живой книги» (DESIGN-V4.md экраны 6-7).
  */
 
 @Composable
@@ -41,13 +42,6 @@ private fun PlaceholderScaffold(title: String, content: @Composable ColumnScope.
 fun BakingCompleteScreenPlaceholder(onHome: () -> Unit) {
     PlaceholderScaffold("Готово! (мокап на согласовании)") {
         Button(onClick = onHome) { Text("На главную") }
-    }
-}
-
-@Composable
-fun FeedingFormScreenPlaceholder(onSaved: () -> Unit) {
-    PlaceholderScaffold("Покормить закваску (мокап на согласовании)") {
-        Button(onClick = onSaved) { Text("Сохранить кормление") }
     }
 }
 

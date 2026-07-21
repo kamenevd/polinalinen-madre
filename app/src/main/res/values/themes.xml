@@ -1,6 +1,6 @@
 <resources>
     <!-- Bootstrap-тема для splash/до Compose. Реальная палитра — в ui/theme/Theme.kt (Compose). -->
-    <style name="Theme.Madre" parent="Theme.Material3.Light.NoActionBar">
+    <style name="Theme.Madre" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">true</item>
     </style>

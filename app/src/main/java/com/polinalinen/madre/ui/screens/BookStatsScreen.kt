@@ -174,9 +174,15 @@ fun BookStatsScreen(
     val opened = openedRecipe
     if (opened != null) {
         val attempts = records.filter { it.recipeId == opened.id }.sortedByDescending { it.completedAtMillis }
+        // Форма/цвет — не стандартный Material-попап (concept: "никакого material-дизайна",
+        // DESIGN-V4.md §Концепция): плоская карточка страницы, скругление ≤4dp.
         AlertDialog(
             onDismissRequest = { openedRecipe = null },
             confirmButton = {},
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
+            containerColor = colors.cream,
+            titleContentColor = colors.espresso,
+            textContentColor = colors.espresso,
             title = { Text(opened.name, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold) },
             text = {
                 Column {

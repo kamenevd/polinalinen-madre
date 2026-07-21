@@ -69,7 +69,7 @@
   печать** «ИСПЕЧЕНО · дата» (штамп: рамка 1.5dp, скругление 3-4dp, поворот
   2-4°, НЕ заливка), колофон со статистикой, приглашение вклеить фото. Мокап
   не согласован. → файл: `app/src/main/java/com/polinalinen/madre/ui/screens/BakingCompleteScreen.kt`
-- [ ] Задача 1.7: `NotificationsScreen.kt` vs §/7 «Записки на полях» — лента
+- [x] Задача 1.7: `NotificationsScreen.kt` vs §/7 «Записки на полях» — лента
   реальных данных вместо тумблеров (своего push ещё нет). Мокап не согласован.
   → файл: `app/src/main/java/com/polinalinen/madre/ui/screens/NotificationsScreen.kt`
 - [ ] Задача 1.8: `SettingsScreen.kt` + `ShelfScreen.kt`/`BookStatsScreen.kt`

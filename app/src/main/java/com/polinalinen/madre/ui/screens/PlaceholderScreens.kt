@@ -2,6 +2,7 @@ package com.polinalinen.madre.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
@@ -21,7 +22,7 @@ import com.polinalinen.madre.ui.theme.AppColors
  */
 
 @Composable
-private fun PlaceholderScaffold(title: String, content: @Composable Column.() -> Unit) {
+private fun PlaceholderScaffold(title: String, content: @Composable ColumnScope.() -> Unit) {
     Scaffold(containerColor = AppColors.current.paper) { padding ->
         Column(
             modifier = Modifier

@@ -200,7 +200,7 @@ private fun FullRecipeSection(recipe: Recipe, modifier: Modifier = Modifier) {
             fontStyle = FontStyle.Italic,
             fontSize = 11.sp,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp, horizontal = 22.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp).padding(top = 8.dp),
         )
         Column(Modifier.padding(horizontal = 22.dp, vertical = 18.dp)) {
             recipe.timeline.forEachIndexed { i, step ->

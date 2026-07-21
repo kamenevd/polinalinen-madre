@@ -141,7 +141,7 @@ fun BookStatsScreen(
                 fontFamily = FontFamily.Serif,
                 fontStyle = FontStyle.Italic,
                 fontSize = 13.sp,
-                modifier = Modifier.padding(horizontal = 22.dp, top = 8.dp),
+                modifier = Modifier.padding(horizontal = 22.dp).padding(top = 8.dp),
             )
 
             HairRule(Modifier.padding(horizontal = 22.dp, vertical = 16.dp))

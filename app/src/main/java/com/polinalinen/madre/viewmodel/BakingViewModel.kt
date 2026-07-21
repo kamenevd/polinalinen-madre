@@ -27,8 +27,9 @@ import kotlinx.coroutines.launch
  */
 class BakingViewModel(app: Application) : AndroidViewModel(app) {
 
-    private val recipeRepository = (app as MadreApplication).recipeRepository
-    private val bakeHistoryRepository = app.bakeHistoryRepository
+    private val madreApp = app as MadreApplication
+    private val recipeRepository = madreApp.recipeRepository
+    private val bakeHistoryRepository = madreApp.bakeHistoryRepository
 
     private val _recipes = MutableStateFlow<List<Recipe>>(emptyList())
     val recipes: StateFlow<List<Recipe>> = _recipes.asStateFlow()

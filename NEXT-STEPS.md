@@ -148,7 +148,7 @@ screenshot-тесты. Текущие `androidTest`-смоук-тесты
   `AndroidManifest.xml` → `android:allowBackup="false"` реально стоит.
 - [x] Задача 3.3: v3 #6 (blocking I/O) — grep по всем Repository на предмет
   файлового/БД-доступа вне `Dispatchers.IO`.
-- [ ] Задача 3.4: v3 #7 (job leak) — в `BakingViewModel` подтвердить отмену
+- [x] Задача 3.4: v3 #7 (job leak) — в `BakingViewModel` подтвердить отмену
   каждого `Job` из `timerJobs` (`onCleared()` и при завершении шага/сессии).
 - [ ] Задача 3.5: Восстановить смысл багов #2, #4, #5 (посмотреть `git log -p`
   вокруг коммитов, где # 1/3/6/7 появляются впервые, и соседние

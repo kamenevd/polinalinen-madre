@@ -171,7 +171,7 @@ screenshot-тесты. Текущие `androidTest`-смоук-тесты
 
 ## Этап 4: CI должен гонять unit-тесты, не только сборку
 
-- [ ] Задача 4.1: `.github/workflows/build-apk.yml` собирает только
+- [x] Задача 4.1: `.github/workflows/build-apk.yml` собирает только
   `assembleDebug`. Комментарий вверху файла про отсутствие `gradlew` устарел —
   wrapper сгенерирован 21.07.2026 (`./gradlew` есть в репозитории). Обновить
   workflow: использовать `./gradlew` вместо голого `gradle`, добавить шаг

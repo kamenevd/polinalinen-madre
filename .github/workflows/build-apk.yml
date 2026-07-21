@@ -1,9 +1,7 @@
 name: Build debug APK
 
-# Проект пока без gradlew/gradle-wrapper.jar (не хватало сети, чтобы их
-# сгенерировать локально) — раннер GitHub сам ставит нужный Gradle через
-# gradle/actions/setup-gradle и собирает напрямую командой `gradle`, без
-# обёртки. См. итоговый статус-отчёт от 2026-07-21.
+# gradlew/gradle-wrapper.jar сгенерированы и лежат в репозитории с
+# 2026-07-21 — собираем и тестируем через обёртку, не голым `gradle`.
 #
 # Предполагается, что этот файл лежит в madre-v4/.github/workflows/, то есть
 # madre-v4/ — корень git-репозитория. Если структура другая (например, весь
@@ -32,13 +30,11 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Set up Gradle 8.4 (репозиторий пока без wrapper'а)
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.4'
+      - name: Прогнать unit-тесты
+        run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
 
       - name: Собрать debug APK
-        run: gradle :app:assembleDebug --no-daemon --stacktrace
+        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
       - name: Загрузить APK как артефакт сборки
         uses: actions/upload-artifact@v4

@@ -102,6 +102,10 @@ fun SettingsScreen(
                 valueColor = if (remindersOn) colors.sage else colors.cocoa,
                 onClick = { remindersOn = !remindersOn },
             )
+            HairRule(Modifier.padding(horizontal = 22.dp))
+            SettingsRow(label = "Тираж", value = "одна семья", onClick = null)
+            HairRule(Modifier.padding(horizontal = 22.dp))
+            SettingsRow(label = "Версия", value = com.polinalinen.madre.BuildConfig.VERSION_NAME, onClick = null)
 
             Spacer(Modifier.height(24.dp))
             HeavyRule(Modifier.padding(horizontal = 22.dp))

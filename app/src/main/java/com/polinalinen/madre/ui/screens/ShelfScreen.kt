@@ -84,7 +84,7 @@ fun ShelfScreen(
 
 @Composable
 private fun Spine(label: String, color: androidx.compose.ui.graphics.Color, outlined: Boolean, onClick: () -> Unit) {
-    val ink = AppColors.current.espresso
+    val colors = AppColors.current
     Box(
         Modifier
             .width(40.dp)
@@ -93,13 +93,13 @@ private fun Spine(label: String, color: androidx.compose.ui.graphics.Color, outl
             .drawBehind {
                 drawRect(color)
                 // Обводка — «это твоя книга», как в мокапе (outline на своём корешке).
-                if (outlined) drawRect(ink, style = Stroke(width = 2.dp.toPx()))
+                if (outlined) drawRect(colors.espresso, style = Stroke(width = 2.dp.toPx()))
             },
         contentAlignment = Alignment.TopCenter,
     ) {
         Text(
             label,
-            color = androidx.compose.ui.graphics.Color(0xFFFAF6F0),
+            color = colors.paper,
             fontFamily = FontFamily.Serif,
             fontStyle = FontStyle.Italic,
             fontSize = 15.sp,

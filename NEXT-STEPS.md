@@ -72,7 +72,7 @@
 - [x] Задача 1.7: `NotificationsScreen.kt` vs §/7 «Записки на полях» — лента
   реальных данных вместо тумблеров (своего push ещё нет). Мокап не согласован.
   → файл: `app/src/main/java/com/polinalinen/madre/ui/screens/NotificationsScreen.kt`
-- [ ] Задача 1.8: `SettingsScreen.kt` + `ShelfScreen.kt`/`BookStatsScreen.kt`
+- [x] Задача 1.8: `SettingsScreen.kt` + `ShelfScreen.kt`/`BookStatsScreen.kt`
   vs §/8 — колофон книги (имя закваски, интервал кормления, «тираж: одна
   семья», версия); своя книга — реальные данные, книги друзей — осознанная
   заглушка (не путать с багом). → файлы:

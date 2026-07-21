@@ -144,7 +144,7 @@ screenshot-тесты. Текущие `androidTest`-смоук-тесты
 - [x] Задача 3.1: v3 #1 (db.close) — подтвердить в `MadreDatabase.kt` +
   `MadreApplication.kt`, что БД — синглтон на уровне Application, ни один
   ViewModel её не закрывает.
-- [ ] Задача 3.2: v3 #3 (allowBackup) — проверить
+- [x] Задача 3.2: v3 #3 (allowBackup) — проверить
   `AndroidManifest.xml` → `android:allowBackup="false"` реально стоит.
 - [ ] Задача 3.3: v3 #6 (blocking I/O) — grep по всем Repository на предмет
   файлового/БД-доступа вне `Dispatchers.IO`.

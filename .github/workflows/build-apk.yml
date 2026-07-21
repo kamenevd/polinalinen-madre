@@ -1,0 +1,48 @@
+name: Build debug APK
+
+# Проект пока без gradlew/gradle-wrapper.jar (не хватало сети, чтобы их
+# сгенерировать локально) — раннер GitHub сам ставит нужный Gradle через
+# gradle/actions/setup-gradle и собирает напрямую командой `gradle`, без
+# обёртки. См. итоговый статус-отчёт от 2026-07-21.
+#
+# Предполагается, что этот файл лежит в madre-v4/.github/workflows/, то есть
+# madre-v4/ — корень git-репозитория. Если структура другая (например, весь
+# Мадре/ — один репозиторий), поправь working-directory ниже.
+
+on:
+  push:
+    branches: [ main, master, v4-dev ]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle 8.4 (репозиторий пока без wrapper'а)
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.4'
+
+      - name: Собрать debug APK
+        run: gradle :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Загрузить APK как артефакт сборки
+        uses: actions/upload-artifact@v4
+        with:
+          name: madre-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error

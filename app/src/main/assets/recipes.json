@@ -1,0 +1,2053 @@
+{
+  "recipes": [
+    {
+      "id": "home_bread",
+      "name": "Хлебушек домашний",
+      "emoji": "🍞",
+      "description": "Домашний хлеб на закваске Левито Мадре — мягкий и ароматный",
+      "ingredients": {
+        "sponge": [
+          {
+            "name": "активной закваски",
+            "amount": 30,
+            "unit": "г",
+            "category": "starter",
+            "scalable": true
+          },
+          {
+            "name": "тёплой воды",
+            "amount": 95,
+            "unit": "г",
+            "category": "water",
+            "scalable": true
+          },
+          {
+            "name": "муки пшеничной в/с",
+            "amount": 95,
+            "unit": "г",
+            "category": "flour",
+            "scalable": true,
+            "is_flour": true
+          }
+        ],
+        "main": [
+          {
+            "name": "опара (из предыдущего этапа)",
+            "amount": 0,
+            "unit": "г",
+            "category": "ref",
+            "scalable": true,
+            "ref_type": "all_of_section",
+            "ref_section": "sponge"
+          },
+          {
+            "name": "тёплой воды",
+            "amount": 300,
+            "unit": "г",
+            "category": "water",
+            "scalable": true
+          },
+          {
+            "name": "пшеничной муки в/с",
+            "amount": 515,
+            "unit": "г",
+            "category": "flour",
+            "scalable": true,
+            "is_flour": true
+          },
+          {
+            "name": "сахара",
+            "amount": 25,
+            "unit": "г",
+            "category": "sugar",
+            "scalable": true
+          },
+          {
+            "name": "соли",
+            "amount": 10,
+            "unit": "г",
+            "category": "salt",
+            "scalable": true
+          },
+          {
+            "name": "мягкого сливочного масла",
+            "amount": 25,
+            "unit": "г",
+            "category": "fat",
+            "scalable": true,
+            "fat_type": "butter"
+          }
+        ]
+      },
+      "timeline": [
+        {
+          "type": "action",
+          "title": "Готовим опару (с вечера)",
+          "description": "Смешать закваску, воду, муку. Затянуть плёнкой, оставить на ночь на столе.",
+          "duration_minutes": 5,
+          "ingredient_stage": "sponge"
+        },
+        {
+          "type": "wait",
+          "title": "Опара подходит (ночь)",
+          "description": "8–12 часов. Утром опара должна увеличиться в 2–3 раза, с пузырьками.",
+          "duration_minutes": 600
+        },
+        {
+          "type": "action",
+          "title": "Замес (автолиз)",
+          "description": "Смешать всю опару с 300 г воды и 515 г муки. Оставить на 30 минут под плёнкой. Тесто будет липким.",
+          "duration_minutes": 10,
+          "ingredient_stage": "sponge"
+        },
+        {
+          "type": "wait",
+          "title": "Аутолиз",
+          "description": "30 минут при ~25°C.",
+          "duration_minutes": 30
+        },
+        {
+          "type": "action",
+          "title": "Замес с добавками",
+          "description": "Добавить сахар, месить 5 мин. Добавить соль. В конце — сливочное масло. Месить не менее 10 минут. Муку НЕ добавлять!",
+          "duration_minutes": 15,
+          "ingredient_stage": "main",
+          "requires_butter_prep": true
+        },
+        {
+          "type": "wait",
+          "title": "Брожение + складывания",
+          "description": "3 часа при 24–25°C. 2–3 складывания с интервалом, вытягивая тесто.",
+          "duration_minutes": 180
+        },
+        {
+          "type": "action",
+          "title": "Формовка",
+          "description": "Сформовать в форму (стеклянную смазать маслом). Накрыть.",
+          "duration_minutes": 5
+        },
+        {
+          "type": "wait",
+          "title": "Холодная ферментация",
+          "description": "В холодильник до вечера (~6–8 часов).",
+          "duration_minutes": 420
+        },
+        {
+          "type": "action",
+          "title": "Прогрев + духовка",
+          "description": "Дать немного согреться. Надрезать верх. Разогреть духовку до 240°.",
+          "duration_minutes": 15
+        },
+        {
+          "type": "wait",
+          "title": "Выпечка",
+          "description": "10 мин при 240°. Накрыть фольгой, снизить до 200°, ещё 30 мин. За 5 мин до конца — сбрызнуть водой.",
+          "duration_minutes": 40
+        },
+        {
+          "type": "wait",
+          "title": "Остывание",
+          "description": "Вынуть из формы, остудить на решётке или полотенце.",
+          "duration_minutes": 30
+        }
+      ],
+      "difficulty": 2,
+      "tasteReviews": [
+        {
+          "author": "Из книги Levito Madre",
+          "avatarEmoji": "👩‍🍳",
+          "rating": 5,
+          "text": "Простой и надёжный рецепт домашнего хлеба. Золотистая корочка, мякиш с мелкими порами, аромат который наполняет дом."
+        },
+        {
+          "author": "Пекари рекомендуют",
+          "avatarEmoji": "🧑‍🍳",
+          "rating": 5,
+          "text": "Лучший хлеб для начинающих. Не требует сложной формовки, всегда получается."
+        }
+      ],
+      "servingTips": [
+        {
+          "emoji": "🧈",
+          "text": "Тёплый, с хорошим сливочным маслом — просто и божественно"
+        },
+        {
+          "emoji": "🥣",
+          "text": "К тарелке супа или борща"
+        },
+        {
+          "emoji": "🧀",
+          "text": "Для тостов и бутербродов на весь день"
+        }
+      ],
+      "variations": [
+        {
+          "emoji": "🌾",
+          "text": "С зерном: добавить семена подсолнечника и льна"
+        },
+        {
+          "emoji": "🥕",
+          "text": "Отрубной: заменить часть муки на отруби"
+        },
+        {
+          "emoji": "🧄",
+          "text": "Чесночный: чесночное масло в тесто"
+        }
+      ]
+    },
+    {
+      "id": "family_bread",
+      "name": "Хлеб «Семейный»",
+      "emoji": "🍞",
+      "description": "Семейный хлеб с ржаной мукой и семенами на Левито Мадре",
+      "ingredients": {
+        "main": [
+          {
+            "name": "пшеничной муки",
+            "amount": 450,
+            "unit": "г",
+            "category": "flour",
+            "scalable": true,
+            "is_flour": true
+          },
+          {
+            "name": "ржаной муки",
+            "amount": 50,
+            "unit": "г",
+            "category": "flour",
+            "scalable": true,
+            "is_flour": true
+          },
+          {
+            "name": "Левито Мадре активной",
+            "amount": 130,
+            "unit": "г",
+            "category": "starter",
+            "scalable": true
+          },
+          {
+            "name": "соли",
+            "amount": 10,
+            "unit": "г",
+            "category": "salt",
+            "scalable": true
+          },
+          {
+            "name": "сахара",
+            "amount": 15,
+            "unit": "г",
+            "category": "sugar",
+            "scalable": true
+          },
+          {
+            "name": "растительного масла",
+            "amount": 15,
+            "unit": "г",
+            "category": "fat",
+            "scalable": true,
+            "fat_type": "oil"
+          },
+          {
+            "name": "воды",
+            "amount": 300,
+            "unit": "г",
+            "category": "water",
+            "scalable": true
+          },
+          {
+            "name": "семена (лён, подсолнечник, кунжут)",
+            "amount": 0,
+            "unit": "по вкусу",
+            "category": "topping",
+            "scalable": false
+          }
+        ]
+      },
+      "timeline": [
+        {
+          "type": "action",
+          "title": "Замес + автолиз",
+          "description": "Смешать 450 г пшеничной + 50 г ржаной муки + 300 мл воды. Замесить, оставить на автолиз.",
+          "duration_minutes": 10,
+          "ingredient_stage": "main"
+        },
+        {
+          "type": "wait",
+          "title": "Аутолиз",
+          "description": "30–60 минут при комнатной температуре.",
+          "duration_minutes": 45
+        },
+        {
+          "type": "action",
+          "title": "Добавки",
+          "description": "Добавить соль, сахар, масло, семена. Хорошо вымешать.",
+          "duration_minutes": 10,
+          "ingredient_stage": "main"
+        },
+        {
+          "type": "wait",
+          "title": "Отдых",
+          "description": "30–60 минут.",
+          "duration_minutes": 45
+        },
+        {
+          "type": "action",
+          "title": "Вмешиваем закваску",
+          "description": "Добавить 130 г Левито Мадре, тщательно вымесить до однородности.",
+          "duration_minutes": 10,
+          "ingredient_stage": "main"
+        },
+        {
+          "type": "wait",
+          "title": "Растирка + складывания",
+          "description": "2 часа при комнатной температуре. 4 складывания «конвертом» с интервалом ~30 минут.",
+          "duration_minutes": 120
+        },
+        {
+          "type": "action",
+          "title": "Формовка",
+          "description": "Сформировать заготовку, выложить в смазанную форму. Накрыть плёнкой.",
+          "duration_minutes": 5
+        },
+        {
+          "type": "wait",
+          "title": "Холодная ферментация",
+          "description": "В холодильник на ночь (8–12 часов). Тесто увеличится в 2–3 раза.",
+          "duration_minutes": 600
+        },
+        {
+          "type": "action",
+          "title": "Разогрев духовки",
+          "description": "Разогреть до 220°C.",
+          "duration_minutes": 10
+        },
+        {
+          "type": "wait",
+          "title": "Выпечка с паром",
+          "description": "220°C с паром 15 минут (ёмкость с водой на дно). Затем 180°C без пара ещё 15 минут.",
+          "duration_minutes": 30
+        },
+        {
+          "type": "wait",
+          "title": "Остывание",
+          "description": "Выложить на решётку, накрыть влажным льняным полотенцем.",
+          "duration_minutes": 30
+        }
+      ],
+      "difficulty": 3,
+      "tasteReviews": [
+        {
+          "author": "Из книги Levito Madre",
+          "avatarEmoji": "👩‍🍳",
+          "rating": 5,
+          "text": "Большой каравай для всей семьи. Двухдневный процесс, но результат — хлеб на весь день, который не крошится и не черствеет."
+        },
+        {
+          "author": "Пекари рекомендуют",
+          "avatarEmoji": "🧑‍🍳",
+          "rating": 5,
+          "text": "Крупные поры, насыщенный вкус. Для тех, кто уже освоил базовый хлеб и хочет большего."
+        }
+      ],
+      "servingTips": [
+        {
+          "emoji": "🍽️",
+          "text": "Нарезать толстыми ломтями — это семейный хлеб"
+        },
+        {
+          "emoji": "🧈",
+          "text": "С маслом и солью — лучшая закуска"
+        },
+        {
+          "emoji": "🫕",
+          "text": "К любому горячему блюду"
+        }
+      ],
+      "variations": [
+        {
+          "emoji": "🌾",
+          "text": "Цельнозерновой: смесь белой и цельнозерновой муки"
+        },
+        {
+          "emoji": "🌰",
+          "text": "С орехами: грецкие орехи в тесто"
+        },
+        {
+          "emoji": "🍇",
+          "text": "С сухофруктами: изюм + курага"
+        }
+      ]
+    },
+    {
+      "id": "pirozhki",
+      "name": "Пирожки",
+      "emoji": "🥟",
+      "description": "Тесто для пирожков на закваске Левито Мадре",
+      "ingredients": {
+        "sponge": [
+          {
+            "name": "активированной закваски",
+            "amount": 60,
+            "unit": "г",
+            "category": "starter",
+            "scalable": true
+          },
+          {
+            "name": "тёплого молока",
+            "amount": 110,
+            "unit": "г",
+            "category": "milk",
+            "scalable": true
+          },
+          {
+            "name": "муки",
+            "amount": 120,
+            "unit": "г",
+            "category": "flour",
+            "scalable": true,
+            "is_flour": true
+          },
+          {
+            "name": "мёда (или сахара)",
+            "amount": 7,
+            "unit": "г",
+            "category": "sugar",
+            "scalable": true
+          }
+        ],
+        "dough": [
+          {
+            "name": "опара (из предыдущего этапа)",
+            "amount": 0,
+            "unit": "г",
+            "category": "ref",
+            "scalable": true,
+            "ref_type": "all_of_section",
+            "ref_section": "sponge"
+          },
+          {
+            "name": "тёплого молока",
+            "amount": 400,
+            "unit": "г",
+            "category": "milk",
+            "scalable": true
+          },
+          {
+            "name": "яйцо",
+            "amount": 1,
+            "unit": "шт",
+            "category": "egg",
+            "scalable": true,
+            "egg_grams": 50
+          },
+          {
+            "name": "растительного масла",
+            "amount": 30,
+            "unit": "г",
+            "category": "fat",
+            "scalable": true,
+            "fat_type": "oil"
+          },
+          {
+            "name": "сахара",
+            "amount": 25,
+            "unit": "г",
+            "category": "sugar",
+            "scalable": true
+          },
+          {
+            "name": "соли",
+            "amount": 12,
+            "unit": "г",
+            "category": "salt",
+            "scalable": true
+          },
+          {
+            "name": "муки",
+            "amount": 700,
+            "unit": "г",
+            "category": "flour",
+            "scalable": true,
+            "is_flour": true
+          }
+        ]
+      },
+      "timeline": [
+        {
+          "type": "action",
+          "title": "Готовим опару",
+          "description": "В тёплое молоко добавляем закваску, перемешиваем. Добавляем мёд, перемешиваем. Добавляем муку, перемешиваем до однородности.",
+          "duration_minutes": 10,
+          "ingredient_stage": "sponge"
+        },
+        {
+          "type": "wait",
+          "title": "Опара подходит",
+          "description": "При комнатной температуре 8–12 часов",
+          "duration_minutes": 600
+        },
+        {
+          "type": "action",
+          "title": "Замешиваем тесто",
+          "description": "К тёплому молоку добавляем сахар и соль. Добавляем молоко в опару. Добавляем яйцо, растительное масло. Постепенно добавляем муку, замешиваем 5 минут.",
+          "duration_minutes": 15,
+          "ingredient_stage": "dough"
+        },
+        {
+          "type": "wait",
+          "title": "Брожение + обминки",
+          "description": "Накрыть плёнкой, 1.5 часа при комнатной температуре. Каждые 30 мин — растянуть и обмять (3 раза).",
+          "duration_minutes": 90
+        },
+        {
+          "type": "action",
+          "title": "Готовим начинку",
+          "description": "Подготавливаем любую начинку на ваш вкус.",
+          "duration_minutes": 15
+        },
+        {
+          "type": "action",
+          "title": "Формуем пирожки",
+          "description": "Делим тесто на кусочки. Накрываем плёнкой и полотенцем, оставляем на 10 минут. Формируем пирожки с начинкой.",
+          "duration_minutes": 20
+        },
+        {
+          "type": "wait",
+          "title": "Расстойка",
+          "description": "Выложить на противень с пергаментом. Оставить на 40–60 минут при комнатной температуре.",
+          "duration_minutes": 50
+        },
+        {
+          "type": "action",
+          "title": "Разогрев духовки + смазка",
+          "description": "Разогреть до 180–190°. Смазать пирожки яйцом.",
+          "duration_minutes": 10
+        },
+        {
+          "type": "wait",
+          "title": "Выпечка",
+          "description": "Выпекать ~30 минут. Ориентироваться по духовке.",
+          "duration_minutes": 30
+        }
+      ],
+      "difficulty": 2,
+      "tasteReviews": [
+        {
+          "author": "Из книги Levito Madre",
+          "avatarEmoji": "👩‍🍳",
+          "rating": 5,
+          "text": "Нежное воздушное тесто на закваске — не сравнить с дрожжевым. Лёгкая кислинка придаёт глубину вкуса."
+        },
+        {
+          "author": "Домашние пекари",
+          "avatarEmoji": "🧑‍🍳",
+          "rating": 5,
+          "text": "Пирожки получаются мягкие, не черствеют на следующий день. Начинку можно любую — картошка, мясо, капуста."
+        }
+      ],
+      "servingTips": [
+        {
+          "emoji": "🍽️",
+          "text": "Тёплые, с пылу с жару — вкуснее всего"
+        },
+        {
+          "emoji": "☕",
+          "text": "К чаю с вареньем или к бульону"
+        },
+        {
+          "emoji": "🧺",
+          "text": "Отлично подходят для пикника и дороги"
+        }
+      ],
+      "variations": [
+        {
+          "emoji": "🥔",
+          "text": "Картошка + грибы — классика"
+        },
+        {
+          "emoji": "🥩",
+          "text": "Мясной фарш с луком и специями"
+        },
+        {
+          "emoji": "🫐",
+          "text": "Сладкие: с ягодами, яблоками или творогом"
+        }
+      ]
+    },
+    {
+      "id": "belyashi",
+      "name": "Беляши",
+      "emoji": "🥟",
+      "description": "Тесто для беляшей на закваске Левито Мадре",
+      "ingredients": {
+        "main": [
+          {
+            "name": "активированной закваски",
+            "amount": 120,
+            "unit": "г",
+            "category": "starter",
+            "scalable": true
+          },
+          {
+            "name": "пшеничной муки",
+            "amount": 480,
+            "unit": "г",
+            "category": "flour",
+            "scalable": true,
+            "is_flour": true
+          },
+          {
+            "name": "соли",
+            "amount": 6,
+            "unit": "г",
+            "category": "salt",
+            "scalable": true
+          },
+          {
+            "name": "сахара",
+            "amount": 3,
+            "unit": "г",
+            "category": "sugar",
+            "scalable": true
+          },
+          {
+            "name": "сливочного масла",
+            "amount": 50,
+            "unit": "г",
+            "category": "fat",
+            "scalable": true,
+            "fat_type": "butter"
+          },
+          {
+            "name": "растительного масла",
+            "amount": 15,
+            "unit": "г",
+            "category": "fat",
+            "scalable": true,
+            "fat_type": "oil"
+          },
+          {
+            "name": "молока",
+            "amount": 320,
+            "unit": "г",
+            "category": "milk",
+            "scalable": true
+          },
+          {
+            "name": "воды",
+            "amount": 20,
+            "unit": "г",
+            "category": "water",
+            "scalable": true
+          },
+          {
+            "name": "начинки (мясо, лук)",
+            "amount": 450,
+            "unit": "г",
+            "category": "filling",
+            "scalable": true
+          }
+        ]
+      },
+      "timeline": [
+        {
+          "type": "action",
+          "title": "Замешиваем тесто",
+          "description": "Закваску смешать с водой и молоком. Добавить соль, сахар, растительное масло. Всыпать муку, добавить сливочное масло комнатной температуры. Замесить.",
+          "duration_minutes": 10,
+          "ingredient_stage": "main",
+          "requires_butter_prep": true
+        },
+        {
+          "type": "wait",
+          "title": "Отдых теста",
+          "description": "Оставить под полотенцем на 20 минут.",
+          "duration_minutes": 20
+        },
+        {
+          "type": "action",
+          "title": "Вымешиваем",
+          "description": "Вымесить тесто до гладкости. Накрыть полотенцем, поставить в тёплое место.",
+          "duration_minutes": 10
+        },
+        {
+          "type": "wait",
+          "title": "Подъём теста",
+          "description": "1–1.5 часа в тёплом месте.",
+          "duration_minutes": 90
+        },
+        {
+          "type": "action",
+          "title": "Обминка",
+          "description": "Обмять тесто от краёв к середине.",
+          "duration_minutes": 5
+        },
+        {
+          "type": "action",
+          "title": "Готовим начинку",
+          "description": "Пока тесто подходит — приготовить начинку по вкусу.",
+          "duration_minutes": 20
+        },
+        {
+          "type": "wait",
+          "title": "Финальный подъём",
+          "description": "Оставить ещё на 1 час после обминки.",
+          "duration_minutes": 60
+        },
+        {
+          "type": "action",
+          "title": "Формуем беляши",
+          "description": "Разделить тесто на равные кусочки. Раскатать толщиной до 1 см.",
+          "duration_minutes": 15
+        },
+        {
+          "type": "action",
+          "title": "Жарка/выпечка",
+          "description": "Жарить ~5 мин с каждой стороны на масле. Или в духовке.",
+          "duration_minutes": 15
+        }
+      ],
+      "difficulty": 2,
+      "tasteReviews": [
+        {
+          "author": "Из книги Levito Madre",
+          "avatarEmoji": "👩‍🍳",
+          "rating": 5,
+          "text": "Хрустящая золотистая корочка, сочная мясная начинка. Тесто на закваске делает их особенными."
+        },
+        {
+          "author": "Семейный рецепт",
+          "avatarEmoji": "👨‍👩‍👧",
+          "rating": 5,
+          "text": "Мужчины в семье в восторге! Съедают всё за вечер, просят ещё."
+        }
+      ],
+      "servingTips": [
+        {
+          "emoji": "🔥",
+          "text": "Горячие, сразу со сковороды — идеал"
+        },
+        {
+          "emoji": "🥛",
+          "text": "Стакан холодного молока или кефира"
+        },
+        {
+          "emoji": "🥗",
+          "text": "С салатом из свежих овощей"
+        }
+      ],
+      "variations": [
+        {
+          "emoji": "🧀",
+          "text": "С сыром: добавить тёртый сыр в начинку"
+        },
+        {
+          "emoji": "🌶️",
+          "text": "Острые: перец чили в фарш"
+        },
+        {
+          "emoji": "🍗",
+          "text": "С курицей: нежирная альтернатива"
+        }
+      ]
+    },
+    {
+      "id": "ciabatta",
+      "name": "Чиабатта",
+      "emoji": "🥖",
+      "description": "Чиабатта на Левито Мадре — воздушная итальянская выпечка",
+      "ingredients": {
+        "main": [
+          {
+            "name": "активной закваски",
+            "amount": 200,
+            "unit": "г",
+            "category": "starter",
+            "scalable": true
+          },
+          {
+            "name": "пшеничной муки",
+            "amount": 550,
+            "unit": "г",
+            "category": "flour",
+            "scalable": true,
+            "is_flour": true
+          },
+          {
+            "name": "воды",
+            "amount": 450,
+            "unit": "г",
+            "category": "water",
+            "scalable": true
+          },
+          {
+            "name": "оливкового масла",
+            "amount": 20,
+            "unit": "г",
+            "category": "fat",
+            "scalable": true,
+            "fat_type": "oil"
+          },
+          {
+            "name": "соли",
+            "amount": 12,
+            "unit": "г",
+            "category": "salt",
+            "scalable": true
+          }
+        ]
+      },
+      "timeline": [
+        {
+          "type": "action",
+          "title": "Начальный замес",
+          "description": "Смешать закваску, муку и 350 мл холодной воды. Накрыть плёнкой, убрать в прохладное место.",
+          "duration_minutes": 10,
+          "ingredient_stage": "main"
+        },
+        {
+          "type": "wait",
+          "title": "Аутолиз",
+          "description": "40 минут в прохладном месте.",
+          "duration_minutes": 40
+        },
+        {
+          "type": "action",
+          "title": "Замес + соль + вода",
+          "description": "Добавить соль и оставшуюся холодную воду. Месить с перерывами по 5–10 мин. Общее время ~30 минут. Тесто должно стать гладким и упругим.",
+          "duration_minutes": 30,
+          "ingredient_stage": "main"
+        },
+        {
+          "type": "action",
+          "title": "Добавляем масло",
+          "description": "Вмесить оливковое масло. Переложить в смазанную маслом ёмкость, накрыть.",
+          "duration_minutes": 5,
+          "ingredient_stage": "main"
+        },
+        {
+          "type": "wait",
+          "title": "Первый отдых",
+          "description": "30 минут.",
+          "duration_minutes": 30
+        },
+        {
+          "type": "action",
+          "title": "Складывание #1",
+          "description": "Вытянуть край вверх, соединить с противоположным. Со всех сторон.",
+          "duration_minutes": 5
+        },
+        {
+          "type": "wait",
+          "title": "Брожение со складываниями",
+          "description": "Повторять складывание каждые 30 минут на протяжении 4 часов. Тесто будет увеличиваться.",
+          "duration_minutes": 240
+        },
+        {
+          "type": "action",
+          "title": "Формовка",
+          "description": "Щедро присыпать стол мукой. Выложить тесто, растянуть в прямоугольник. Разрезать на 3 части. Присыпать мукой.",
+          "duration_minutes": 10
+        },
+        {
+          "type": "wait",
+          "title": "Расстойка на полотенце",
+          "description": "Переложить на присыпанное мукой льняное полотенце, разделяя складками. Накрыть вторым полотенцем. 1 час.",
+          "duration_minutes": 60
+        },
+        {
+          "type": "action",
+          "title": "Разогрев духовки",
+          "description": "Включить духовку с камнем/противнем на 250–260°.",
+          "duration_minutes": 5
+        },
+        {
+          "type": "wait",
+          "title": "Выпечка",
+          "description": "Переложить на пекарскую бумагу, в духовку. 20–30 минут. Остудить на решётке.",
+          "duration_minutes": 25
+        }
+      ],
+      "difficulty": 3,
+      "tasteReviews": [
+        {
+          "author": "Из книги Levito Madre",
+          "avatarEmoji": "👩‍🍳",
+          "rating": 5,
+          "text": "Настоящая итальянская чиабатта с крупными порами и хрустящей корочкой. Закваска придаёт неповторимый аромат."
+        },
+        {
+          "author": "Пекари рекомендуют",
+          "avatarEmoji": "🧑‍🍳",
+          "rating": 4,
+          "text": "Крупные поры — показатель мастерства. Влажное тесто требует терпения, но результат стоит того."
+        }
+      ],
+      "servingTips": [
+        {
+          "emoji": "🫒",
+          "text": "С оливковым маслом и бальзамиком — как в Италии"
+        },
+        {
+          "emoji": "🥪",
+          "text": "Идеальна для сэндвичей и брускетт"
+        },
+        {
+          "emoji": "🍷",
+          "text": "К бокалу вина и тарелке супа"
+        }
+      ],
+      "variations": [
+        {
+          "emoji": "🫒",
+          "text": "С оливками и розмарином"
+        },
+        {
+          "emoji": "🧄",
+          "text": "Чесночная: добавить чесночное масло"
+        },
+        {
+          "emoji": "🍅",
+          "text": "С вялеными томатами в тесто"
+        }
+      ]
+    },
+    {
+      "id": "focaccia",
+      "name": "Фокачча",
+      "emoji": "🫓",
+      "description": "Фокачча на Левито Мадре — итальянская лепёшка с травами",
+      "ingredients": {
+        "sponge": [
+          {
+            "name": "закваски",
+            "amount": 15,
+            "unit": "г",
+            "category": "starter",
+            "scalable": true
+          },
+          {
+            "name": "воды",
+            "amount": 120,
+            "unit": "г",
+            "category": "water",
+            "scalable": true
+          },
+          {
+            "name": "муки в/с",
+            "amount": 120,
+            "unit": "г",
+            "category": "flour",
+            "scalable": true,
+            "is_flour": true
+          }
+        ],
+        "main": [
+          {
+            "name": "опара (из предыдущего этапа)",
+            "amount": 0,
+            "unit": "г",
+            "category": "ref",
+            "scalable": true,
+            "ref_type": "all_of_section",
+            "ref_section": "sponge"
+          },
+          {
+            "name": "холодной воды",
+            "amount": 230,
+            "unit": "г",
+            "category": "water",
+            "scalable": true
+          },
+          {
+            "name": "муки в/с",
+            "amount": 310,
+            "unit": "г",
+            "category": "flour",
+            "scalable": true,
+            "is_flour": true
+          },
+          {
+            "name": "цельнозерновой муки",
+            "amount": 50,
+            "unit": "г",
+            "category": "flour",
+            "scalable": true,
+            "is_flour": true
+          },
+          {
+            "name": "соли",
+            "amount": 4,
+            "unit": "г",
+            "category": "salt",
+            "scalable": true
+          },
+          {
+            "name": "мёда",
+            "amount": 10,
+            "unit": "г",
+            "category": "sugar",
+            "scalable": true
+          },
+          {
+            "name": "оливкового масла",
+            "amount": 12,
+            "unit": "г",
+            "category": "fat",
+            "scalable": true,
+            "fat_type": "oil"
+          },
+          {
+            "name": "оливковое масло, травы, помидор",
+            "amount": 0,
+            "unit": "по вкусу",
+            "category": "topping",
+            "scalable": false
+          }
+        ]
+      },
+      "timeline": [
+        {
+          "type": "action",
+          "title": "Готовим опару (с вечера)",
+          "description": "К 1 ст.л. закваски добавить 120 мл воды и 120 г муки. Перемешать, накрыть плёнкой.",
+          "duration_minutes": 5,
+          "ingredient_stage": "sponge"
+        },
+        {
+          "type": "wait",
+          "title": "Опара подходит",
+          "description": "При комнатной температуре 10 часов (на ночь).",
+          "duration_minutes": 600
+        },
+        {
+          "type": "action",
+          "title": "Замес",
+          "description": "В миску влить воду, добавить опару, перемешать. Выложить всю муку, объединить. Не вымешивать.",
+          "duration_minutes": 5,
+          "ingredient_stage": "main"
+        },
+        {
+          "type": "wait",
+          "title": "Аутолиз",
+          "description": "Накрыть плёнкой на 20 минут.",
+          "duration_minutes": 20
+        },
+        {
+          "type": "action",
+          "title": "Замес с мёдом",
+          "description": "Замешивать тесто, добавить мёд, тщательно вымесить.",
+          "duration_minutes": 5,
+          "ingredient_stage": "main"
+        },
+        {
+          "type": "action",
+          "title": "Добавляем соль",
+          "description": "Добавить соль, вымешивать до растворения.",
+          "duration_minutes": 5,
+          "ingredient_stage": "main"
+        },
+        {
+          "type": "action",
+          "title": "Добавляем масло + вымешивание",
+          "description": "Влить оливковое масло. Вымешивать до гладкости 10–15 минут. Тесто будет липкое — это нормально.",
+          "duration_minutes": 15,
+          "ingredient_stage": "main"
+        },
+        {
+          "type": "wait",
+          "title": "Брожение",
+          "description": "Накрыть плёнкой, 3–3.5 часа при 24–25°C. Тесто должно подняться.",
+          "duration_minutes": 195
+        },
+        {
+          "type": "action",
+          "title": "Формовка",
+          "description": "Выложить тесто на стол. Собрать края к середине — НЕ обминать! Разделить на 2 части.",
+          "duration_minutes": 10
+        },
+        {
+          "type": "action",
+          "title": "Растягиваем + топпинг",
+          "description": "Выложить на пергамент, полить маслом, растягивать пальцами с углублениями. Посыпать солью, травами, помидорами.",
+          "duration_minutes": 10
+        },
+        {
+          "type": "wait",
+          "title": "Выпечка",
+          "description": "250°C, 15–20 минут без пара.",
+          "duration_minutes": 18
+        }
+      ],
+      "difficulty": 2,
+      "tasteReviews": [
+        {
+          "author": "Из книги Levito Madre",
+          "avatarEmoji": "👩‍🍳",
+          "rating": 5,
+          "text": "Мягкая, маслянистая, с ароматом розмарина. Один из самых благодарных рецептов для новичка."
+        },
+        {
+          "author": "Домашние пекари",
+          "avatarEmoji": "🧑‍🍳",
+          "rating": 5,
+          "text": "Фокачча на закваске — это другой уровень. Поры крупнее, вкус глубже, корочка тоньше."
+        }
+      ],
+      "servingTips": [
+        {
+          "emoji": "🫒",
+          "text": "Щедро полить оливковым маслом перед подачей"
+        },
+        {
+          "emoji": "🍷",
+          "text": "К итальянскому ужину: паста + фокачча + вино"
+        },
+        {
+          "emoji": "🧺",
+          "text": "Разломить руками за столом — вкуснее, чем резать"
+        }
+      ],
+      "variations": [
+        {
+          "emoji": "🌿",
+          "text": "Розмарин + морская соль — классика"
+        },
+        {
+          "emoji": "🍅",
+          "text": "С помидорами черри и чесноком"
+        },
+        {
+          "emoji": "🧀",
+          "text": "С сыром: пармезан или моцарелла сверху"
+        }
+      ]
+    },
+    {
+      "id": "pizza",
+      "name": "Пицца",
+      "emoji": "🍕",
+      "description": "Тесто для пиццы на закваске Левито Мадре",
+      "ingredients": {
+        "sponge": [
+          {
+            "name": "стартера (закваски)",
+            "amount": 15,
+            "unit": "г",
+            "category": "starter",
+            "scalable": true
+          },
+          {
+            "name": "воды",
+            "amount": 50,
+            "unit": "г",
+            "category": "water",
+            "scalable": true
+          },
+          {
+            "name": "муки",
+            "amount": 50,
+            "unit": "г",
+            "category": "flour",
+            "scalable": true,
+            "is_flour": true
+          }
+        ],
+        "main": [
+          {
+            "name": "опары (из предыдущего этапа)",
+            "amount": 100,
+            "unit": "г",
+            "category": "ref",
+            "scalable": true,
+            "ref_type": "portion_of_section",
+            "ref_section": "sponge"
+          },
+          {
+            "name": "воды",
+            "amount": 150,
+            "unit": "г",
+            "category": "water",
+            "scalable": true
+          },
+          {
+            "name": "муки",
+            "amount": 250,
+            "unit": "г",
+            "category": "flour",
+            "scalable": true,
+            "is_flour": true
+          },
+          {
+            "name": "соли",
+            "amount": 3,
+            "unit": "г",
+            "category": "salt",
+            "scalable": true
+          },
+          {
+            "name": "оливкового масла",
+            "amount": 8,
+            "unit": "г",
+            "category": "fat",
+            "scalable": true,
+            "fat_type": "oil"
+          }
+        ]
+      },
+      "timeline": [
+        {
+          "type": "action",
+          "title": "Готовим опару",
+          "description": "Смешать ингредиенты для опары.",
+          "duration_minutes": 5,
+          "ingredient_stage": "sponge"
+        },
+        {
+          "type": "wait",
+          "title": "Опара подходит",
+          "description": "8–9 часов.",
+          "duration_minutes": 510
+        },
+        {
+          "type": "action",
+          "title": "Замес",
+          "description": "Соединить опару, муку и 150 мл воды. Оставить на 30 мин. Не выливать всю воду сразу.",
+          "duration_minutes": 10,
+          "ingredient_stage": "main"
+        },
+        {
+          "type": "wait",
+          "title": "Аутолиз",
+          "description": "30 минут.",
+          "duration_minutes": 30
+        },
+        {
+          "type": "action",
+          "title": "Замес + масло",
+          "description": "Добавить оставшуюся воду если нужно. Влить масло, вымесить до гладкости.",
+          "duration_minutes": 10,
+          "ingredient_stage": "main"
+        },
+        {
+          "type": "wait",
+          "title": "Брожение + обминки",
+          "description": "3–3.5 часа с 3–4 обминками.",
+          "duration_minutes": 200
+        },
+        {
+          "type": "action",
+          "title": "Формовка",
+          "description": "Выложить на стол, скатать в шар. Дать отлежаться 10 минут, приступить к формовке.",
+          "duration_minutes": 15
+        },
+        {
+          "type": "wait",
+          "title": "Выпечка",
+          "description": "230°C, 10–15 минут.",
+          "duration_minutes": 13
+        }
+      ],
+      "difficulty": 2,
+      "tasteReviews": [
+        {
+          "author": "Из книги Levito Madre",
+          "avatarEmoji": "👩‍🍳",
+          "rating": 5,
+          "text": "Тесто на закваске даёт пицце характер — лёгкая кислинка, хрустящие края, мягкий центр. Неаполь дома!"
+        },
+        {
+          "author": "Семейный рецепт",
+          "avatarEmoji": "👨‍👩‍👧",
+          "rating": 5,
+          "text": "Дети обожают сами раскладывать начинку. Пицца-вечеринка каждую пятницу!"
+        }
+      ],
+      "servingTips": [
+        {
+          "emoji": "🔥",
+          "text": "Прямо из духовки — через 2 минуты уже не то"
+        },
+        {
+          "emoji": "🌿",
+          "text": "Свежий базилик и капля масла — после духовки"
+        },
+        {
+          "emoji": "🍕",
+          "text": "Разрезать и подавать на деревянной доске"
+        }
+      ],
+      "variations": [
+        {
+          "emoji": "🍅",
+          "text": "Маргарита: томаты + моцарелла + базилик"
+        },
+        {
+          "emoji": "🧀",
+          "text": "4 сыра: моцарелла + горгонзола + пармезан + рикотта"
+        },
+        {
+          "emoji": "🥬",
+          "text": "Белая пицца: без томатов, с крем-фреш и зеленью"
+        }
+      ]
+    },
+    {
+      "id": "waffles",
+      "name": "Вафли",
+      "emoji": "🧇",
+      "description": "Вафли на закваске Левито — хрустящие и воздушные",
+      "ingredients": {
+        "main": [
+          {
+            "name": "активной закваски",
+            "amount": 200,
+            "unit": "г",
+            "category": "starter",
+            "scalable": true
+          },
+          {
+            "name": "пшеничной муки",
+            "amount": 300,
+            "unit": "г",
+            "category": "flour",
+            "scalable": true,
+            "is_flour": true
+          },
+          {
+            "name": "молока",
+            "amount": 400,
+            "unit": "г",
+            "category": "milk",
+            "scalable": true
+          },
+          {
+            "name": "сливочного масла",
+            "amount": 100,
+            "unit": "г",
+            "category": "fat",
+            "scalable": true,
+            "fat_type": "butter"
+          },
+          {
+            "name": "сахара",
+            "amount": 45,
+            "unit": "г",
+            "category": "sugar",
+            "scalable": true
+          },
+          {
+            "name": "соли",
+            "amount": 1,
+            "unit": "г",
+            "category": "salt",
+            "scalable": true
+          },
+          {
+            "name": "яйца",
+            "amount": 2,
+            "unit": "шт",
+            "category": "egg",
+            "scalable": true,
+            "egg_grams": 100
+          },
+          {
+            "name": "соды",
+            "amount": 3,
+            "unit": "г",
+            "category": "leavening",
+            "scalable": true
+          }
+        ]
+      },
+      "timeline": [
+        {
+          "type": "action",
+          "title": "Готовим тесто",
+          "description": "Растопить и остудить масло. Смешать муку, соду, соль, сахар. Влить закваску, добавить яйца, перемешать. Добавить молоко в несколько приёмов. В конце — тёплое масло.",
+          "duration_minutes": 15,
+          "ingredient_stage": "main"
+        },
+        {
+          "type": "wait",
+          "title": "Холодная ферментация",
+          "description": "В холодильник на 8 часов, накрыв плёнкой или крышкой.",
+          "duration_minutes": 480
+        },
+        {
+          "type": "action",
+          "title": "Достаём тесто",
+          "description": "На тесте много пузырьков — это хорошо! Перемешать.",
+          "duration_minutes": 5
+        },
+        {
+          "type": "action",
+          "title": "Выпекаем вафли",
+          "description": "Выпекать в вафельнице как обычно.",
+          "duration_minutes": 20
+        }
+      ],
+      "difficulty": 1,
+      "tasteReviews": [
+        {
+          "author": "Из книги Levito Madre",
+          "avatarEmoji": "👩‍🍳",
+          "rating": 5,
+          "text": "Хрустящие снаружи, воздушные внутри. Тесто на закваске делает их невероятно нежными."
+        },
+        {
+          "author": "Семейный рецепт",
+          "avatarEmoji": "👨‍👩‍👧",
+          "rating": 5,
+          "text": "Утро выходного дня = вафли! Дети ждут с нетерпением каждую неделю."
+        }
+      ],
+      "servingTips": [
+        {
+          "emoji": "🍯",
+          "text": "Мёд, кленовый сироп или сгущёнка — выбирай"
+        },
+        {
+          "emoji": "🍓",
+          "text": "Свежие ягоды + взбитые сливки"
+        },
+        {
+          "emoji": "☕",
+          "text": "К кофе или горячему шоколаду"
+        }
+      ],
+      "variations": [
+        {
+          "emoji": "🍫",
+          "text": "Шоколадные: какао в тесто + шоколадный соус"
+        },
+        {
+          "emoji": "🫐",
+          "text": "Ягодные: черника или малина в тесто"
+        },
+        {
+          "emoji": "🧂",
+          "text": "Солёные: сыр + зелень в тесто"
+        }
+      ]
+    },
+    {
+      "id": "pancakes",
+      "name": "Оладьи",
+      "emoji": "🥞",
+      "description": "Оладьи на закваске Левито — пышные и нежные",
+      "ingredients": {
+        "main": [
+          {
+            "name": "активной закваски",
+            "amount": 100,
+            "unit": "г",
+            "category": "starter",
+            "scalable": true
+          },
+          {
+            "name": "пшеничной муки",
+            "amount": 450,
+            "unit": "г",
+            "category": "flour",
+            "scalable": true,
+            "is_flour": true
+          },
+          {
+            "name": "сахара",
+            "amount": 25,
+            "unit": "г",
+            "category": "sugar",
+            "scalable": true
+          },
+          {
+            "name": "молока",
+            "amount": 500,
+            "unit": "г",
+            "category": "milk",
+            "scalable": true
+          },
+          {
+            "name": "яйца",
+            "amount": 2,
+            "unit": "шт",
+            "category": "egg",
+            "scalable": true,
+            "egg_grams": 100
+          },
+          {
+            "name": "соды",
+            "amount": 5,
+            "unit": "г",
+            "category": "leavening",
+            "scalable": true
+          },
+          {
+            "name": "соли",
+            "amount": 6,
+            "unit": "г",
+            "category": "salt",
+            "scalable": true
+          },
+          {
+            "name": "растительного масла (в тесто)",
+            "amount": 50,
+            "unit": "г",
+            "category": "fat",
+            "scalable": true,
+            "fat_type": "oil"
+          }
+        ]
+      },
+      "timeline": [
+        {
+          "type": "action",
+          "title": "Подкормка закваски",
+          "description": "За 2 часа достать закваску из холодильника и подкормить. Дождаться пузырьков.",
+          "duration_minutes": 5
+        },
+        {
+          "type": "wait",
+          "title": "Активация закваски",
+          "description": "2 часа до пика активности.",
+          "duration_minutes": 120
+        },
+        {
+          "type": "action",
+          "title": "Замешиваем тесто",
+          "description": "К закваске влить молоко, добавить сахар, перемешать. Добавить муку, перемешать без комочков.",
+          "duration_minutes": 10,
+          "ingredient_stage": "main"
+        },
+        {
+          "type": "wait",
+          "title": "Ферментация",
+          "description": "Накрыть тесто, оставить на 8–12 часов или на ночь.",
+          "duration_minutes": 600
+        },
+        {
+          "type": "action",
+          "title": "Финальный замес",
+          "description": "Добавить соль, соду, яйца. Перемешать.",
+          "duration_minutes": 5,
+          "ingredient_stage": "main"
+        },
+        {
+          "type": "action",
+          "title": "Жарка оладий",
+          "description": "Разогреть масло на сковороде. Ложкой вливать тесто, жарить ~5 минут на небольшом огне.",
+          "duration_minutes": 25
+        }
+      ],
+      "difficulty": 1,
+      "tasteReviews": [
+        {
+          "author": "Из книги Levito Madre",
+          "avatarEmoji": "👩‍🍳",
+          "rating": 5,
+          "text": "Пышные, нежные, с лёгким ароматом закваски. Не резиновые, не плоские — идеальные оладьи."
+        },
+        {
+          "author": "Домашние пекари",
+          "avatarEmoji": "🧑‍🍳",
+          "rating": 4,
+          "text": "Отличный способ использовать излишки закваски. Быстро и вкусно!"
+        }
+      ],
+      "servingTips": [
+        {
+          "emoji": "🍯",
+          "text": "Сметана + мёд — русская классика"
+        },
+        {
+          "emoji": "🍎",
+          "text": "Яблочное пюре или варенье"
+        },
+        {
+          "emoji": "☕",
+          "text": "К утреннему чаю или кофе"
+        }
+      ],
+      "variations": [
+        {
+          "emoji": "🍎",
+          "text": "Яблочные: тёртое яблоко в тесто"
+        },
+        {
+          "emoji": "🎃",
+          "text": "Тыквенные: тыквенное пюре + корица"
+        },
+        {
+          "emoji": "🍌",
+          "text": "Банановые: размятый банан вместо сахара"
+        }
+      ]
+    },
+    {
+      "id": "cinnamon_buns",
+      "name": "Синнабоны",
+      "emoji": "🍥",
+      "description": "Синнабоны на закваске — нежные булочки с корицей и кремом",
+      "ingredients": {
+        "sponge1": [
+          {
+            "name": "закваски Левито Мадре",
+            "amount": 37.5,
+            "unit": "г",
+            "category": "starter",
+            "scalable": true
+          },
+          {
+            "name": "муки",
+            "amount": 100,
+            "unit": "г",
+            "category": "flour",
+            "scalable": true,
+            "is_flour": true
+          },
+          {
+            "name": "воды",
+            "amount": 113,
+            "unit": "г",
+            "category": "water",
+            "scalable": true
+          }
+        ],
+        "sponge2": [
+          {
+            "name": "муки",
+            "amount": 250,
+            "unit": "г",
+            "category": "flour",
+            "scalable": true,
+            "is_flour": true
+          },
+          {
+            "name": "молока",
+            "amount": 250,
+            "unit": "г",
+            "category": "milk",
+            "scalable": true
+          }
+        ],
+        "dough": [
+          {
+            "name": "опара 1 (из предыдущего этапа)",
+            "amount": 0,
+            "unit": "г",
+            "category": "ref",
+            "scalable": true,
+            "ref_type": "all_of_section",
+            "ref_section": "sponge1"
+          },
+          {
+            "name": "опара 2 (из предыдущего этапа)",
+            "amount": 0,
+            "unit": "г",
+            "category": "ref",
+            "scalable": true,
+            "ref_type": "all_of_section",
+            "ref_section": "sponge2"
+          },
+          {
+            "name": "яйца",
+            "amount": 2,
+            "unit": "шт",
+            "category": "egg",
+            "scalable": true,
+            "egg_grams": 100
+          },
+          {
+            "name": "сливочного масла",
+            "amount": 70,
+            "unit": "г",
+            "category": "fat",
+            "scalable": true,
+            "fat_type": "butter"
+          },
+          {
+            "name": "сахара",
+            "amount": 50,
+            "unit": "г",
+            "category": "sugar",
+            "scalable": true
+          },
+          {
+            "name": "соли",
+            "amount": 10,
+            "unit": "г",
+            "category": "salt",
+            "scalable": true
+          },
+          {
+            "name": "ваниль",
+            "amount": 0,
+            "unit": "по вкусу",
+            "category": "flavor",
+            "scalable": false
+          },
+          {
+            "name": "просеянной муки",
+            "amount": 300,
+            "unit": "г",
+            "category": "flour",
+            "scalable": true,
+            "is_flour": true
+          }
+        ],
+        "filling": [
+          {
+            "name": "растопленного сливочного масла",
+            "amount": 70,
+            "unit": "г",
+            "category": "fat",
+            "scalable": true,
+            "fat_type": "butter"
+          },
+          {
+            "name": "сахара (лучше тростникового)",
+            "amount": 100,
+            "unit": "г",
+            "category": "sugar",
+            "scalable": true
+          },
+          {
+            "name": "корицы",
+            "amount": 10,
+            "unit": "г",
+            "category": "flavor",
+            "scalable": true
+          }
+        ],
+        "cream": [
+          {
+            "name": "маскарпоне (или сметана 25%)",
+            "amount": 150,
+            "unit": "г",
+            "category": "other",
+            "scalable": true
+          },
+          {
+            "name": "сахарной пудры",
+            "amount": 50,
+            "unit": "г",
+            "category": "sugar",
+            "scalable": true
+          },
+          {
+            "name": "ванильный экстракт",
+            "amount": 0,
+            "unit": "по вкусу",
+            "category": "flavor",
+            "scalable": false
+          }
+        ]
+      },
+      "timeline": [
+        {
+          "type": "action",
+          "title": "Опара 1 (с вечера)",
+          "description": "Смешать 37.5 г закваски, 100 г муки, 113 г воды.",
+          "duration_minutes": 5,
+          "ingredient_stage": "sponge1"
+        },
+        {
+          "type": "wait",
+          "title": "Опара 1 подходит",
+          "description": "6–8 часов (или на ночь).",
+          "duration_minutes": 420
+        },
+        {
+          "type": "action",
+          "title": "Опара 2",
+          "description": "Добавить 250 г муки и 250 г молока к опаре 1.",
+          "duration_minutes": 5,
+          "ingredient_stage": "sponge2"
+        },
+        {
+          "type": "wait",
+          "title": "Опара 2 подходит",
+          "description": "2–3 часа, должна увеличиться в 2 раза.",
+          "duration_minutes": 150
+        },
+        {
+          "type": "action",
+          "title": "Замешиваем тесто",
+          "description": "Смешать яйца, масло, сахар, соль, ваниль, 300 г муки с опарой. Замесить.",
+          "duration_minutes": 15,
+          "ingredient_stage": "dough",
+          "requires_butter_prep": true
+        },
+        {
+          "type": "wait",
+          "title": "Подъём теста",
+          "description": "В смазанной форме, накрыть плёнкой. 3 часа (объём ×2).",
+          "duration_minutes": 180
+        },
+        {
+          "type": "action",
+          "title": "Раскатка + начинка",
+          "description": "Раскатать в пласт ~40×60 см. Смазать маслом, посыпать корицей с сахаром. Свернуть в рулет.",
+          "duration_minutes": 15,
+          "ingredient_stage": "filling"
+        },
+        {
+          "type": "action",
+          "title": "Нарезка + форма",
+          "description": "Нарезать ровными порциями. Выложить в смазанную форму срезом вверх.",
+          "duration_minutes": 10
+        },
+        {
+          "type": "wait",
+          "title": "Расстойка",
+          "description": "Накрыть плёнкой, оставить на 1–1.5 часа.",
+          "duration_minutes": 90
+        },
+        {
+          "type": "action",
+          "title": "Разогрев духовки",
+          "description": "180°C, разогреть за 20–30 мин до выпечки.",
+          "duration_minutes": 5
+        },
+        {
+          "type": "wait",
+          "title": "Выпечка",
+          "description": "~40 минут при 180°C.",
+          "duration_minutes": 40
+        },
+        {
+          "type": "action",
+          "title": "Крем + подача",
+          "description": "Смешать маскарпоне с пудрой и ванилью. Щедро смазать горячие синнабоны!",
+          "duration_minutes": 5,
+          "ingredient_stage": "cream"
+        }
+      ],
+      "difficulty": 3,
+      "tasteReviews": [
+        {
+          "author": "Из книги Levito Madre",
+          "avatarEmoji": "👩‍🍳",
+          "rating": 5,
+          "text": "Мягкие, маслянистые синнабоны с корицей и сливочной глазурью. Аромат корицы наполняет дом — соседи приходят на чай."
+        },
+        {
+          "author": "Семейный рецепт",
+          "avatarEmoji": "👨‍👩‍👧",
+          "rating": 5,
+          "text": "Дети помогают сворачивать рулет — семейное занятие. Глазурь лижут прямо с ложки!"
+        }
+      ],
+      "servingTips": [
+        {
+          "emoji": "☕",
+          "text": "К кофе или чай латте — бранч мечты"
+        },
+        {
+          "emoji": "🔥",
+          "text": "Тёплые, глазурь подтаяла — идеальный момент"
+        },
+        {
+          "emoji": "📸",
+          "text": "Фото готовых синнабонов = 100 лайков гарантировано"
+        }
+      ],
+      "variations": [
+        {
+          "emoji": "🍫",
+          "text": "Шоколадные: Nutella вместо коричной начинки"
+        },
+        {
+          "emoji": "🧀",
+          "text": "Сливочные: двойная глазурь с крем-чизом"
+        },
+        {
+          "emoji": "🫐",
+          "text": "Ягодные: черника в начинку"
+        }
+      ]
+    },
+    {
+      "id": "garlic_buns",
+      "name": "Пампушки с чесноком",
+      "emoji": "🧄",
+      "description": "Ароматные пампушки с чесноком и укропом на закваске",
+      "ingredients": {
+        "main": [
+          {
+            "name": "Левито Мадре на пике активности",
+            "amount": 150,
+            "unit": "г",
+            "category": "starter",
+            "scalable": true
+          },
+          {
+            "name": "воды",
+            "amount": 110,
+            "unit": "г",
+            "category": "water",
+            "scalable": true
+          },
+          {
+            "name": "муки пшеничной в/с",
+            "amount": 250,
+            "unit": "г",
+            "category": "flour",
+            "scalable": true,
+            "is_flour": true
+          },
+          {
+            "name": "подсолнечного масла",
+            "amount": 25,
+            "unit": "г",
+            "category": "fat",
+            "scalable": true,
+            "fat_type": "oil"
+          },
+          {
+            "name": "соли",
+            "amount": 7,
+            "unit": "г",
+            "category": "salt",
+            "scalable": true
+          },
+          {
+            "name": "сахара",
+            "amount": 11,
+            "unit": "г",
+            "category": "sugar",
+            "scalable": true
+          },
+          {
+            "name": "сливочного масла",
+            "amount": 15,
+            "unit": "г",
+            "category": "fat",
+            "scalable": true,
+            "fat_type": "butter"
+          },
+          {
+            "name": "чеснок и укроп",
+            "amount": 0,
+            "unit": "по вкусу",
+            "category": "topping",
+            "scalable": false
+          }
+        ]
+      },
+      "timeline": [
+        {
+          "type": "action",
+          "title": "Замешиваем тесто",
+          "description": "Смешать закваску с водой. Добавить муку, подсолнечное масло, соль, сахар. Тщательно перемешать. Ввести мягкое сливочное масло. По желанию — зубчик чеснока или чесночный порошок.",
+          "duration_minutes": 15,
+          "ingredient_stage": "main",
+          "requires_butter_prep": true
+        },
+        {
+          "type": "action",
+          "title": "Вымешиваем",
+          "description": "Месить до эластичности. Сформировать колобок.",
+          "duration_minutes": 10
+        },
+        {
+          "type": "wait",
+          "title": "Расстойка",
+          "description": "1.5 часа в смазанной маслом миске, накрыть полотенцем.",
+          "duration_minutes": 90
+        },
+        {
+          "type": "action",
+          "title": "Обминка",
+          "description": "Через 1.5 часа после начала — одна обминка.",
+          "duration_minutes": 5
+        },
+        {
+          "type": "wait",
+          "title": "Продолжение расстойки",
+          "description": "Ещё 2 часа.",
+          "duration_minutes": 120
+        },
+        {
+          "type": "action",
+          "title": "Готовим помазку",
+          "description": "Соединить укроп с солью, чесноком и подсолнечным маслом.",
+          "duration_minutes": 5
+        },
+        {
+          "type": "action",
+          "title": "Формовка пампушек",
+          "description": "Разделить на ~10 частей, сформировать колобки. Выложить в форму на расстоянии друг от друга. Накрыть плёнкой.",
+          "duration_minutes": 15
+        },
+        {
+          "type": "wait",
+          "title": "Финальная расстойка",
+          "description": "1.5 часа для увеличения в объёме.",
+          "duration_minutes": 90
+        },
+        {
+          "type": "action",
+          "title": "Смазка + духовка",
+          "description": "Смазать яйцом. Разогреть духовку до 180–200°C.",
+          "duration_minutes": 10
+        },
+        {
+          "type": "wait",
+          "title": "Выпечка",
+          "description": "40–45 минут.",
+          "duration_minutes": 43
+        },
+        {
+          "type": "action",
+          "title": "Помазка + остывание",
+          "description": "Горячие булочки смазать чесночной помазкой.",
+          "duration_minutes": 5
+        }
+      ],
+      "difficulty": 2,
+      "tasteReviews": [
+        {
+          "author": "Из книги Levito Madre",
+          "avatarEmoji": "👩‍🍳",
+          "rating": 5,
+          "text": "Мягкие пампушки с чесночным маслом и укропом. Украинская классика на закваске — к борщу самое то."
+        },
+        {
+          "author": "Домашние пекари",
+          "avatarEmoji": "🧑‍🍳",
+          "rating": 5,
+          "text": "Аромат чеснока и укропа из духовки — и все уже на кухне. Съедаются быстрее, чем остывают."
+        }
+      ],
+      "servingTips": [
+        {
+          "emoji": "🥣",
+          "text": "К борщу, солянке или любому супу — обязательно!"
+        },
+        {
+          "emoji": "🧈",
+          "text": "Разломить пополам, намазать маслом"
+        },
+        {
+          "emoji": "🥗",
+          "text": "К салату из свежих овощей и зелени"
+        }
+      ],
+      "variations": [
+        {
+          "emoji": "🧀",
+          "text": "С сыром: тёртый пармезан сверху"
+        },
+        {
+          "emoji": "🌶️",
+          "text": "Острые: хлопья чили в чесночное масло"
+        },
+        {
+          "emoji": "🌿",
+          "text": "Прованские травы: тимьян + орегано + базилик"
+        }
+      ]
+    }
+  ]
+}

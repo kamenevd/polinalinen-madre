@@ -1,0 +1,24 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Bread loaf silhouette - no frame, clean shape -->
+    <path
+        android:fillColor="#D4A574"
+        android:pathData="M12,3C9.8,3 8,4.8 8,7c0,0.4 0.1,0.8 0.2,1.2C6.8,9.2 6,10.8 6,12.5C6,15.5 8.5,18 12,18s6,-2.5 6,-5.5c0,-1.7 -0.8,-3.3 -2.2,-4.3C15.9,7.8 16,7.4 16,7C16,4.8 14.2,3 12,3z"/>
+    <!-- Scoring lines on top -->
+    <path
+        android:fillColor="#B8875A"
+        android:pathData="M9.7,8.5 L9.7,10.2 L10.3,10.2 L10.3,8.5Z M11.7,8 L11.7,10.7 L12.3,10.7 L12.3,8Z M13.7,8.5 L13.7,10.2 L14.3,10.2 L14.3,8.5Z"/>
+    <!-- Eyes -->
+    <path
+        android:fillColor="#8B6F4E"
+        android:pathData="M9.7,12.5a0.6,0.6,0,1,0,1.2,0a0.6,0.6,0,1,0,-1.2,0 M13.1,12.5a0.6,0.6,0,1,0,1.2,0a0.6,0.6,0,1,0,-1.2,0"/>
+    <!-- Smile -->
+    <path
+        android:strokeColor="#8B6F4E"
+        android:strokeWidth="0.6"
+        android:fillColor="#D4A574"
+        android:pathData="M10.8,14.5 Q12,15.8 13.2,14.5"/>
+</vector>

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Foreground адаптивной иконки. minSdk=26 — ровно версия, с которой появились
+    adaptive icons, поэтому XML-only решение без PNG валидно для всех поддерживаемых
+    устройств (см. README-CYCLE0.md / MEMORY: mipmap-папки в проекте не было вовсе).
+
+    Форма — 1-в-1 пути из ic_bread.xml (не трогаем координаты руками, чтобы не
+    сломать смешанные abs/relative path-команды); просто оборачиваем в <group>
+    с scale/translate, чтобы вписать исходный 24x24 рисунок в safe zone 66dp
+    по центру канвы 108x108dp.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="2.75"
+        android:scaleY="2.75"
+        android:translateX="21"
+        android:translateY="21">
+        <path
+            android:fillColor="#D4A574"
+            android:pathData="M12,3C9.8,3 8,4.8 8,7c0,0.4 0.1,0.8 0.2,1.2C6.8,9.2 6,10.8 6,12.5C6,15.5 8.5,18 12,18s6,-2.5 6,-5.5c0,-1.7 -0.8,-3.3 -2.2,-4.3C15.9,7.8 16,7.4 16,7C16,4.8 14.2,3 12,3z"/>
+        <path
+            android:fillColor="#B8875A"
+            android:pathData="M9.7,8.5 L9.7,10.2 L10.3,10.2 L10.3,8.5Z M11.7,8 L11.7,10.7 L12.3,10.7 L12.3,8Z M13.7,8.5 L13.7,10.2 L14.3,10.2 L14.3,8.5Z"/>
+        <path
+            android:fillColor="#8B6F4E"
+            android:pathData="M9.7,12.5a0.6,0.6,0,1,0,1.2,0a0.6,0.6,0,1,0,-1.2,0 M13.1,12.5a0.6,0.6,0,1,0,1.2,0a0.6,0.6,0,1,0,-1.2,0"/>
+        <path
+            android:strokeColor="#8B6F4E"
+            android:strokeWidth="0.6"
+            android:fillColor="#D4A574"
+            android:pathData="M10.8,14.5 Q12,15.8 13.2,14.5"/>
+    </group>
+</vector>

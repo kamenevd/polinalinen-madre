@@ -49,7 +49,7 @@
   вклеенная фотокарточка, **ингредиенты с отточиями** (пунктир до значения,
   значение — Crust и жирным), пересчёт через RecipeScaler. → файл:
   `app/src/main/java/com/polinalinen/madre/ui/screens/RecipeDetailScreen.kt`
-- [ ] Задача 1.3: `BakingTimerScreen.kt` vs §/3 — ярлык ШАГ N ИЗ M, цифры
+- [x] Задача 1.3: `BakingTimerScreen.kt` vs §/3 — ярлык ШАГ N ИЗ M, цифры
   88sp по центру, формат `hh:mm:ss` (часы обязательны), масло-алерт рамкой
   Terracotta за 30 минут до конца, кнопки Пауза(outline)/Дальше(filled). →
   файл: `app/src/main/java/com/polinalinen/madre/ui/screens/BakingTimerScreen.kt`

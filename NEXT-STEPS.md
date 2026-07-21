@@ -60,7 +60,7 @@
   именно цифры периода, не только факт наличия анимации). → файл:
   `app/src/main/java/com/polinalinen/madre/ui/screens/StarterDiaryScreen.kt`
   (модель фаз: `app/src/main/java/com/polinalinen/madre/sourdough/SourdoughProfile.kt`)
-- [ ] Задача 1.5: `FeedingFormScreen.kt` vs §/5 — линовка, поля мука/вода
+- [x] Задача 1.5: `FeedingFormScreen.kt` vs §/5 — линовка, поля мука/вода
   «как пропись», фото как вклеиваемая фотокарточка с уголками-держателями,
   штамп КУХНЯ/ХОЛОД. Мокап не согласован — сверяй строго с текстом доки,
   расхождения = баг, отсебятину сверх текста в «Открытые вопросы». → файл:

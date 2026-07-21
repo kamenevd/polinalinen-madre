@@ -26,7 +26,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -122,6 +122,21 @@ fun FeedingFormScreen(
                                 pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 5f)),
                             ),
                         )
+                        // Уголки-держатели — как в бумажном фотоальбоме, DESIGN-V4.md §/5.
+                        val corner = 14.dp.toPx()
+                        fun holder(x: Float, y: Float, dx: Float, dy: Float) {
+                            val path = Path().apply {
+                                moveTo(x, y)
+                                lineTo(x + dx * corner, y)
+                                lineTo(x, y + dy * corner)
+                                close()
+                            }
+                            drawPath(path, colors.cocoa.copy(alpha = 0.55f))
+                        }
+                        holder(0f, 0f, 1f, 1f)
+                        holder(size.width, 0f, -1f, 1f)
+                        holder(0f, size.height, 1f, -1f)
+                        holder(size.width, size.height, -1f, -1f)
                     }
                     .padding(vertical = 18.dp),
                 contentAlignment = Alignment.Center,
@@ -226,18 +241,22 @@ private fun GramField(label: String, value: String, onChange: (String) -> Unit, 
     }
 }
 
+/**
+ * Штамп-переключатель места хранения. Как и другие штампы в книге (Stamp
+ * в BookComponents.kt) — рамка 1.5dp, лёгкий поворот, НИКОГДА заливка
+ * (DESIGN-V4.md §«Графический язык»/Штампы). Активное состояние отличается
+ * насыщенностью рамки/текста, не подложкой.
+ */
 @Composable
 private fun LocationChip(text: String, active: Boolean, rotation: Float, onClick: () -> Unit) {
     val colors = AppColors.current
-    val bg = if (active) colors.espresso else Color.Transparent
     val border = if (active) colors.espresso else colors.flour
-    val ink = if (active) colors.paper else colors.cocoa
+    val ink = if (active) colors.espresso else colors.cocoa
     Box(
         Modifier
             .rotate(rotation)
             .clickable { onClick() }
             .drawBehind {
-                drawRoundRect(bg, cornerRadius = CornerRadius(3.dp.toPx()))
                 drawRoundRect(border, style = Stroke(width = 1.5.dp.toPx()), cornerRadius = CornerRadius(3.dp.toPx()))
             }
             .padding(horizontal = 12.dp, vertical = 6.dp)

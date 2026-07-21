@@ -137,7 +137,11 @@ fun BakingCompleteScreen(
     }
 }
 
-/** Круглая сургучная печать — центральный мотив экрана, в отличие от прямоугольного Stamp. */
+/**
+ * Круглая сургучная печать — центральный мотив экрана. Как и остальные
+ * штампы книги (DESIGN-V4.md §«Графический язык»/Штампы): рамка 1.5dp,
+ * лёгкий поворот 2-4°, НИКОГДА заливка, цвет по смыслу — «ИСПЕЧЕНО» это Sage.
+ */
 @Composable
 private fun WaxSeal(dateLabel: String, modifier: Modifier = Modifier) {
     val colors = AppColors.current
@@ -146,15 +150,16 @@ private fun WaxSeal(dateLabel: String, modifier: Modifier = Modifier) {
             .size(128.dp)
             .rotate(-3f)
             .drawBehind {
-                drawCircle(colors.crust)
-                drawCircle(colors.amberDeep, radius = size.minDimension / 2 - 6.dp.toPx(), style = Stroke(1.dp.toPx()))
+                val stroke = 1.5.dp.toPx()
+                drawCircle(colors.sage, style = Stroke(stroke))
+                drawCircle(colors.sage, radius = size.minDimension / 2 - 10.dp.toPx(), style = Stroke(1.dp.toPx()))
             },
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 "ИСПЕЧЕНО",
-                color = colors.cream,
+                color = colors.sage,
                 fontFamily = FontFamily.SansSerif,
                 fontWeight = FontWeight.Bold,
                 fontSize = 14.sp,
@@ -162,7 +167,7 @@ private fun WaxSeal(dateLabel: String, modifier: Modifier = Modifier) {
             )
             Text(
                 dateLabel,
-                color = colors.cream,
+                color = colors.sage,
                 fontFamily = FontFamily.Serif,
                 fontStyle = FontStyle.Italic,
                 fontSize = 13.sp,

@@ -65,7 +65,7 @@
   штамп КУХНЯ/ХОЛОД. Мокап не согласован — сверяй строго с текстом доки,
   расхождения = баг, отсебятину сверх текста в «Открытые вопросы». → файл:
   `app/src/main/java/com/polinalinen/madre/ui/screens/FeedingFormScreen.kt`
-- [ ] Задача 1.6: `BakingCompleteScreen.kt` vs §/6 — круглая **сургучная
+- [x] Задача 1.6: `BakingCompleteScreen.kt` vs §/6 — круглая **сургучная
   печать** «ИСПЕЧЕНО · дата» (штамп: рамка 1.5dp, скругление 3-4dp, поворот
   2-4°, НЕ заливка), колофон со статистикой, приглашение вклеить фото. Мокап
   не согласован. → файл: `app/src/main/java/com/polinalinen/madre/ui/screens/BakingCompleteScreen.kt`

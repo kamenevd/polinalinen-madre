@@ -193,6 +193,47 @@ screenshot-тесты. Текущие `androidTest`-смоук-тесты
      докам/истории git без решения Димы/Полины. Формат: дата, задача, в чём
      неоднозначность, какие варианты есть. -->
 
+### 2026-07-21, Задача 2.1: Paparazzi блокирован средой, не продуктом
+
+Это не продуктовая неоднозначность, а инструментальный блокер — фиксирую
+здесь по аналогии с сетевым блокером, который явно разрешено не добивать
+часами (см. правила автономного агента выше).
+
+Подключил `app.cash.paparazzi` (плагин резолвится, `recordPaparazziDebug`/
+`verifyPaparazziDebug` появляются в `./gradlew :app:tasks`). Понадобилась
+version 1.3.3 (не 1.3.5 — та тянет AGP 8.4.2, которому нужен Gradle ≥8.6,
+у нас wrapper 8.4); 1.3.3 тянет AGP 8.2.2 и транзитивно Kotlin Gradle Plugin
+1.9.22 (у нас пин 1.9.20 → compileDebugKotlin падал с "Compose Compiler
+1.5.5 requires Kotlin 1.9.20" — поднял kotlinCompilerExtensionVersion до
+1.5.8, это уже собиралось).
+
+Дальше застрял на рантайме: любой `paparazzi.snapshot {}` (проверял на
+одном маленьком компоненте, Stamp) падает с
+`java.lang.IllegalAccessError: class com.android.resources.ResourceType
+tried to access method 'Collector Sets.toImmutableEnumSet()'
+(ResourceType and Sets are in unnamed module of loader 'app')` в
+`DynamicResourceIdManager.<init>` при старте. Guava в графе зависимостей
+резолвится единообразно в 33.0.0-jre (сверял `dependencies` для
+`debugUnitTestRuntimeClasspath`, дублей layoutlib-api/sdk-common тоже нет)
+— принудительный `resolutionStrategy.force("com.google.guava:guava:33.0.0-jre")`
+не помог, `--rerun-tasks` после `rm -rf app/build` тоже. Похоже на
+конфликт версии Guava именно в рантайме тестового JVM-воркера Gradle
+(JDK Temurin 17.0.19, сборка 2026-04-21) с той, под которую скомпилирован
+бандл `layoutlib-api:31.2.2`/`sdk-common:31.2.2` внутри Paparazzi 1.3.3 —
+дальше это уже не про DESIGN-V4.md и не про архитектуру Мадре, а про
+совместимость версий JDK/AGP/Paparazzi именно на этой машине.
+
+Отменил все правки (плагин, версию Compose Compiler, resolutionStrategy) —
+рабочее дерево обратно чистое, `testDebugUnitTest` зелёный без Paparazzi.
+Варианты на будущее: (а) попробовать более новый Paparazzi (1.3.4/2.0.0-*)
+вместе с bump'ом Gradle wrapper до 8.6+ и AGP до 8.4+ разом (это уже выходит
+за рамки «не менять versionCode» но небезобидно для остального проекта —
+нужно решение Димы, стоит ли поднимать AGP только ради скриншот-тестов);
+(б) попробовать другой JDK (напр. Temurin 17.0.9, без апрельского 2026
+патча) в CI/локально; (в) Roborazzi вместо Paparazzi (другой рендер-стек,
+могло бы обойти этот конкретный конфликт). Этапы 2.2–2.6 зависят от
+рабочего Paparazzi/Roborazzi — не выполнялись.
+
 ### 2026-07-21, Задача 1.2: заголовок `RecipeDetailScreen` без «СТР. N»
 
 DESIGN-V4.md §«Экраны»/2 описывает заголовок разворота как

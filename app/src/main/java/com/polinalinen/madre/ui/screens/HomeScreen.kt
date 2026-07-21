@@ -55,6 +55,7 @@ fun HomeScreen(
     onOpenTimer: (sessionId: Long) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenShelf: () -> Unit,
+    onOpenNotifications: () -> Unit,
     viewModel: BakingViewModel = viewModel(),
 ) {
     val colors = AppColors.current
@@ -67,7 +68,7 @@ fun HomeScreen(
     Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
         Box {
             LazyColumn(modifier = Modifier.statusBarsPadding()) {
-                item { Masthead(onOpenSettings, onOpenShelf) }
+                item { Masthead(onOpenSettings, onOpenShelf, onOpenNotifications) }
                 item { MadreLine(madreHeadline, onOpenStarter) }
                 // Талон на каждую активную выпечку разом — печей в доме может
                 // готовиться несколько одновременно (2026-07-21).
@@ -125,14 +126,17 @@ fun HomeScreen(
 }
 
 @Composable
-private fun Masthead(onOpenSettings: () -> Unit, onOpenShelf: () -> Unit) {
+private fun Masthead(onOpenSettings: () -> Unit, onOpenShelf: () -> Unit, onOpenNotifications: () -> Unit) {
     val colors = AppColors.current
     val date = SimpleDateFormat("EEEE · d MMMM", Locale("ru")).format(Date())
     Column(
         Modifier.fillMaxWidth().padding(top = 22.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        PageLabel("Домашняя пекарня Полины", modifier = Modifier.clickable { onOpenShelf() })
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            PageLabel("Домашняя пекарня Полины", modifier = Modifier.clickable { onOpenShelf() })
+            PageLabel(" · Записки", modifier = Modifier.clickable { onOpenNotifications() })
+        }
         Text(
             "МАДРЕ",
             color = colors.espresso,

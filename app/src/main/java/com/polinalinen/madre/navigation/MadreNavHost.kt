@@ -19,12 +19,12 @@ import com.polinalinen.madre.sourdough.MadreVoice
 import com.polinalinen.madre.sourdough.currentPhase
 import com.polinalinen.madre.sourdough.hoursSinceFeeding
 import com.polinalinen.madre.sourdough.profileForInterval
-import com.polinalinen.madre.ui.screens.BakingCompleteScreenPlaceholder
+import com.polinalinen.madre.ui.screens.BakingCompleteScreen
 import com.polinalinen.madre.ui.screens.BakingTimerScreen
 import com.polinalinen.madre.ui.screens.BookStatsScreen
 import com.polinalinen.madre.ui.screens.FeedingFormScreen
 import com.polinalinen.madre.ui.screens.HomeScreen
-import com.polinalinen.madre.ui.screens.NotificationsScreenPlaceholder
+import com.polinalinen.madre.ui.screens.NotificationsScreen
 import com.polinalinen.madre.ui.screens.RecipeDetailScreen
 import com.polinalinen.madre.ui.screens.SettingsScreen
 import com.polinalinen.madre.ui.screens.ShelfScreen
@@ -33,9 +33,10 @@ import com.polinalinen.madre.viewmodel.BakingViewModel
 import com.polinalinen.madre.viewmodel.SourdoughViewModel
 
 /**
- * Cycle 1: Home, RecipeDetail, BakingTimer, StarterDiary, Settings, Полка,
- * BookStats — реальные («Живая книга»). Feeding — реальный с Cycle 3.
- * Complete/Notifications — пока плейсхолдеры до согласования мокапов.
+ * Home, RecipeDetail, BakingTimer, StarterDiary, Settings, Полка, BookStats,
+ * Feeding — реальные («Живая книга»). Complete/Notifications тоже реальные
+ * (2026-07-21), но их визуальная композиция ещё не согласована с Димой/Полиной
+ * (мокапы 6/7 в DESIGN-V4.md отмечены как черновые) — данные настоящие.
  *
  * BakingViewModel и SourdoughViewModel шарятся между экранами через
  * activity-scoped viewModel(). Sourdough-состояние — реальное, из Room
@@ -94,6 +95,7 @@ fun MadreNavHost(navController: NavHostController = rememberNavController()) {
                 onOpenTimer = { sessionId -> navController.navigate(MadreDestinations.bakingTimer(sessionId.toString())) },
                 onOpenSettings = { navController.navigate(MadreDestinations.SETTINGS) },
                 onOpenShelf = { navController.navigate(MadreDestinations.SHELF) },
+                onOpenNotifications = { navController.navigate(MadreDestinations.NOTIFICATIONS) },
                 viewModel = bakingViewModel,
             )
         }
@@ -117,12 +119,14 @@ fun MadreNavHost(navController: NavHostController = rememberNavController()) {
         }
         composable(MadreDestinations.BAKING_COMPLETE) { backStackEntry ->
             val sessionId = backStackEntry.arguments?.getString("sessionId")?.toLongOrNull()
-            BakingCompleteScreenPlaceholder(
+            BakingCompleteScreen(
+                sessionId = sessionId,
                 onHome = {
                     // Убирает только ЭТУ сессию — если печётся что-то ещё, оно продолжает идти.
                     sessionId?.let { bakingViewModel.exitSession(it) }
                     navController.popBackStack(MadreDestinations.HOME, inclusive = false)
                 },
+                viewModel = bakingViewModel,
             )
         }
         composable(MadreDestinations.STARTER_DETAIL) {
@@ -145,7 +149,15 @@ fun MadreNavHost(navController: NavHostController = rememberNavController()) {
             )
         }
         composable(MadreDestinations.NOTIFICATIONS) {
-            NotificationsScreenPlaceholder(onBack = { navController.popBackStack() })
+            NotificationsScreen(
+                phase = phase,
+                starterHeadline = headline,
+                recentBakes = bakeRecords,
+                onBack = { navController.popBackStack() },
+                onOpenStarter = { navController.navigate(MadreDestinations.STARTER_DETAIL) },
+                onOpenTimer = { sessionId -> navController.navigate(MadreDestinations.bakingTimer(sessionId.toString())) },
+                viewModel = bakingViewModel,
+            )
         }
         composable(MadreDestinations.SETTINGS) {
             SettingsScreen(

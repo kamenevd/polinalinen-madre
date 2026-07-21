@@ -1,6 +1,5 @@
 package com.polinalinen.madre.ui.screens
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -36,7 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil.compose.rememberAsyncImagePainter
+import coil.compose.AsyncImage
 import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.model.RecipeScaler
 import com.polinalinen.madre.ui.components.DottedLeaderRow
@@ -350,8 +349,11 @@ private fun PastedPhoto(recipe: Recipe, modifier: Modifier = Modifier) {
             .drawBehind { drawRect(colors.cream) }
             .padding(8.dp)
     ) {
-        Image(
-            painter = rememberAsyncImagePainter(resId),
+        // AsyncImage (не rememberAsyncImagePainter+Image) — размер запроса Coil
+        // берёт из реальных constraints этого блока (170dp), а не из исходного
+        // разрешения hero_*.webp; perf-правка 2026-07-21, жалоба Димы на лаги.
+        AsyncImage(
+            model = resId,
             contentDescription = "Фото: ${recipe.name}",
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxWidth().height(170.dp),

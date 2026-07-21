@@ -23,12 +23,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -152,30 +154,52 @@ fun Stamp(text: String, color: Color, modifier: Modifier = Modifier, rotation: F
 
 /**
  * Ляссе — красная ленточка-закладка. Рисуется поверх страницы (в Box),
- * пока идёт выпечка. Тап обрабатывает родитель.
+ * пока идёт выпечка. Тап обрабатывает родитель (через clickable в modifier).
+ *
+ * Touch target (2026-07-21, a11y-правка): визуальная ширина ленты — 22dp,
+ * заметно меньше рекомендованных 48dp. Раздуваем только invisible hit-area
+ * через внешний Box, сама лента (Canvas) рисуется в исходном размере и
+ * остаётся прижатой к тому же правому краю — на вид ничего не меняется.
  */
 @Composable
-fun RibbonBookmark(modifier: Modifier = Modifier, width: Dp = 22.dp, length: Dp = 92.dp) {
+fun RibbonBookmark(
+    modifier: Modifier = Modifier,
+    width: Dp = 22.dp,
+    length: Dp = 92.dp,
+    description: String = "Открыть таймер активной выпечки",
+) {
     val terracotta = AppColors.current.terracotta
-    Canvas(modifier = modifier.width(width).height(length)) {
-        val w = size.width
-        val h = size.height
-        val notch = w * 0.45f
-        val path = Path().apply {
-            moveTo(0f, 0f)
-            lineTo(w, 0f)
-            lineTo(w, h)
-            lineTo(w / 2f, h - notch)
-            lineTo(0f, h)
-            close()
+    Box(
+        modifier
+            .width(maxOf(width, 48.dp))
+            .height(length)
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.TopEnd,
+    ) {
+        Canvas(Modifier.width(width).height(length)) {
+            val w = size.width
+            val h = size.height
+            val notch = w * 0.45f
+            val path = Path().apply {
+                moveTo(0f, 0f)
+                lineTo(w, 0f)
+                lineTo(w, h)
+                lineTo(w / 2f, h - notch)
+                lineTo(0f, h)
+                close()
+            }
+            drawPath(path, terracotta)
         }
-        drawPath(path, terracotta)
     }
 }
 
 /**
  * Загнутый уголок страницы = избранное. favoriteProgress 0..1 (анимируется).
  * Рисуется в правом верхнем углу строки оглавления.
+ *
+ * Touch target (2026-07-21, a11y-правка): визуальный уголок — 26dp, меньше
+ * рекомендованных 48dp. Как и в RibbonBookmark, раздуваем только invisible
+ * hit-area через внешний Box — Canvas остаётся исходного размера в том же углу.
  */
 @Composable
 fun DogEar(isFavorite: Boolean, modifier: Modifier = Modifier, size: Dp = 26.dp) {
@@ -185,18 +209,26 @@ fun DogEar(isFavorite: Boolean, modifier: Modifier = Modifier, size: Dp = 26.dp)
         animationSpec = spring(dampingRatio = 0.6f),
         label = "dogEar",
     )
-    Canvas(modifier = modifier.size(size)) {
-        if (progress > 0.01f) {
-            val s = this.size.width * progress
-            val fold = Path().apply {
-                moveTo(this@Canvas.size.width - s, 0f)
-                lineTo(this@Canvas.size.width, 0f)
-                lineTo(this@Canvas.size.width, s)
-                close()
+    val description = if (isFavorite) "В избранном — нажмите, чтобы убрать" else "Добавить в избранное"
+    Box(
+        modifier
+            .size(maxOf(size, 48.dp))
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.TopEnd,
+    ) {
+        Canvas(Modifier.size(size)) {
+            if (progress > 0.01f) {
+                val s = this.size.width * progress
+                val fold = Path().apply {
+                    moveTo(this@Canvas.size.width - s, 0f)
+                    lineTo(this@Canvas.size.width, 0f)
+                    lineTo(this@Canvas.size.width, s)
+                    close()
+                }
+                // Тень сгиба + сам загиб (чуть темнее бумаги)
+                drawPath(fold, colors.parchment)
+                drawPath(fold, colors.flour, style = Stroke(width = 1f))
             }
-            // Тень сгиба + сам загиб (чуть темнее бумаги)
-            drawPath(fold, colors.parchment)
-            drawPath(fold, colors.flour, style = Stroke(width = 1f))
         }
     }
 }
@@ -263,6 +295,13 @@ fun BubbleVignette(phase: GrowthPhase, modifier: Modifier = Modifier) {
  * «Дышащая страница»: почти невидимое scale-дыхание всего контента.
  * Период — по фазе закваски (пик быстрее, голодная — тревожнее).
  * Применять к корню страницы дневника.
+ *
+ * Perf (2026-07-21, жалоба Димы на лаги): раньше `scale` читался через `by`
+ * прямо в теле composable-функции и передавался в eager Modifier.scale(Float) —
+ * это форсировало полную рекомпозицию всего дерева StarterDiaryScreen на
+ * каждый кадр анимации (~60fps, бесконечно, всё время просмотра экрана).
+ * graphicsLayer{} с лямбдой читает State<Float> только на фазе отрисовки —
+ * рекомпозиции не происходит вообще, дерево просто перерисовывается.
  */
 @Composable
 fun Modifier.breathingPage(phase: GrowthPhase): Modifier {
@@ -272,11 +311,14 @@ fun Modifier.breathingPage(phase: GrowthPhase): Modifier {
         else -> 4000
     }
     val transition = rememberInfiniteTransition(label = "page")
-    val scale by transition.animateFloat(
+    val scale = transition.animateFloat(
         initialValue = 1f,
         targetValue = 1.004f,
         animationSpec = infiniteRepeatable(tween(duration, easing = LinearEasing), RepeatMode.Reverse),
         label = "pageScale",
     )
-    return this.scale(scale)
+    return this.graphicsLayer {
+        scaleX = scale.value
+        scaleY = scale.value
+    }
 }

@@ -146,7 +146,7 @@ screenshot-тесты. Текущие `androidTest`-смоук-тесты
   ViewModel её не закрывает.
 - [x] Задача 3.2: v3 #3 (allowBackup) — проверить
   `AndroidManifest.xml` → `android:allowBackup="false"` реально стоит.
-- [ ] Задача 3.3: v3 #6 (blocking I/O) — grep по всем Repository на предмет
+- [x] Задача 3.3: v3 #6 (blocking I/O) — grep по всем Repository на предмет
   файлового/БД-доступа вне `Dispatchers.IO`.
 - [ ] Задача 3.4: v3 #7 (job leak) — в `BakingViewModel` подтвердить отмену
   каждого `Job` из `timerJobs` (`onCleared()` и при завершении шага/сессии).

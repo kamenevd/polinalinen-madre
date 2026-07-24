@@ -26,6 +26,7 @@ import kotlinx.coroutines.launch
 class SourdoughViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repository = (app as MadreApplication).sourdoughRepository
+    private val syncRepository = (app as MadreApplication).syncRepository
 
     private val _config = MutableStateFlow<SourdoughConfigEntity?>(null)
     val config: StateFlow<SourdoughConfigEntity?> = _config.asStateFlow()
@@ -54,15 +55,17 @@ class SourdoughViewModel(app: Application) : AndroidViewModel(app) {
     fun feed(flourGrams: Int, waterGrams: Int, location: StorageLocation, note: String?) {
         val configId = _config.value?.id ?: return
         viewModelScope.launch {
-            repository.addFeeding(
-                FeedingEntity(
-                    sourdoughConfigId = configId,
-                    flourGrams = flourGrams,
-                    waterGrams = waterGrams,
-                    storageLocation = location,
-                    notes = note,
-                )
+            val feeding = FeedingEntity(
+                sourdoughConfigId = configId,
+                flourGrams = flourGrams,
+                waterGrams = waterGrams,
+                storageLocation = location,
+                notes = note,
             )
+            val feedingId = repository.addFeeding(feeding)
+            // Cycle 5: кормление уходит в общую книгу фоном (retry без сети).
+            // Заметка и место хранения — личное, наружу только мука/вода/время.
+            syncRepository.shareFeedingStat(feedingId, flourGrams, waterGrams, feeding.timestampMillis)
         }
     }
 }

@@ -12,10 +12,15 @@ import kotlinx.coroutines.launch
 class MarginNoteViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repository = (app as MadreApplication).marginNoteRepository
+    private val syncRepository = (app as MadreApplication).syncRepository
 
     fun notesFor(recipeId: String): Flow<List<MarginNoteEntity>> = repository.observeForRecipe(recipeId)
 
     fun addNote(recipeId: String, text: String) {
-        viewModelScope.launch { repository.addNote(recipeId, text) }
+        viewModelScope.launch {
+            val noteId = repository.addNote(recipeId, text)
+            // Cycle 5: заметка синхронизируется в margin_notes_sync фоном.
+            syncRepository.shareMarginNote(noteId, recipeId, text, System.currentTimeMillis())
+        }
     }
 }

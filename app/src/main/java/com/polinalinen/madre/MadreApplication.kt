@@ -8,6 +8,9 @@ import com.polinalinen.madre.data.repository.MarginNoteRepository
 import com.polinalinen.madre.data.repository.RecipeRepository
 import com.polinalinen.madre.data.repository.SealedNoteRepository
 import com.polinalinen.madre.data.repository.SourdoughRepository
+import com.polinalinen.madre.data.remote.MadreApi
+import com.polinalinen.madre.data.remote.MadreApiFactory
+import com.polinalinen.madre.sync.SyncRepository
 
 /**
  * Единая точка создания Room/repository — синглтоны живут в Application,
@@ -23,4 +26,7 @@ class MadreApplication : Application() {
     val marginNoteRepository: MarginNoteRepository by lazy { MarginNoteRepository(database) }
     val sealedNoteRepository: SealedNoteRepository by lazy { SealedNoteRepository(database) }
     val familySettingsRepository: FamilySettingsRepository by lazy { FamilySettingsRepository(database) }
+    // Cycle 5: общая книга на PocketBase — клиент и очередь фоновой отправки.
+    val madreApi: MadreApi by lazy { MadreApiFactory.create() }
+    val syncRepository: SyncRepository by lazy { SyncRepository(this) }
 }

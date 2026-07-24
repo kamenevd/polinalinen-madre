@@ -33,6 +33,7 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
     private val madreApp = app as MadreApplication
     private val recipeRepository = madreApp.recipeRepository
     private val bakeHistoryRepository = madreApp.bakeHistoryRepository
+    private val syncRepository = madreApp.syncRepository
 
     private val _recipes = MutableStateFlow<List<Recipe>>(emptyList())
     val recipes: StateFlow<List<Recipe>> = _recipes.asStateFlow()
@@ -86,9 +87,30 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
             viewModelScope.launch {
                 bakeHistoryRepository.record(s.recipe.id, s.recipe.name, s.scaleFactor.toInt().coerceAtLeast(1))
             }
+            // Cycle 5: та же выпечка уходит в общую книгу (PocketBase) через
+            // WorkManager — без сети долетит позже, дубликаты гасятся unique
+            // work name по id сессии (кнопка «Поделиться» на Complete-экране
+            // использует тот же ключ).
+            shareBakeStats(id)
         } else {
             restartTimer(id)
         }
+    }
+
+    /**
+     * Отправить статистику этой выпечки в общую книгу (Cycle 5). Идемпотентно:
+     * unique work name «sync-bake-<sessionId>» + KEEP — повторный вызов, пока
+     * запись ещё в очереди, второй записи на сервере не создаст.
+     */
+    fun shareBakeStats(id: Long) {
+        val s = session(id) ?: return
+        syncRepository.shareBakeStat(
+            sessionKey = id,
+            recipeId = s.recipe.id,
+            recipeName = s.recipe.name,
+            portions = s.scaleFactor.toInt().coerceAtLeast(1),
+            bakedAtMillis = System.currentTimeMillis(),
+        )
     }
 
     fun stepBack(id: Long) {

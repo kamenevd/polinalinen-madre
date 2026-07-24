@@ -121,6 +121,22 @@ fun BakingCompleteScreen(
             Spacer(Modifier.weight(1f))
             Spacer(Modifier.height(24.dp))
 
+            // Cycle 5: явная отправка в общую книгу. Статистика и так уходит
+            // фоном при завершении (BakingViewModel.advanceStep), но кнопка
+            // делает это видимым — повторное нажатие безопасно, очередь
+            // дедуплицируется по id сессии (unique work + KEEP).
+            if (sessionId != null && session != null) {
+                var shared by remember { mutableStateOf(false) }
+                ShareStatsButton(
+                    shared = shared,
+                    onShare = {
+                        viewModel.shareBakeStats(sessionId)
+                        shared = true
+                    },
+                )
+                Spacer(Modifier.height(10.dp))
+            }
+
             Box(
                 Modifier
                     .fillMaxWidth()
@@ -146,6 +162,51 @@ fun BakingCompleteScreen(
 @Composable
 private fun WaxSeal(dateLabel: String, modifier: Modifier = Modifier) {
     WaxSealStamp(title = "ИСПЕЧЕНО", caption = dateLabel, color = AppColors.current.sage, modifier = modifier)
+}
+
+/**
+ * «Поделиться статистикой» — вторичная кнопка: outline-рамка Espresso 1.5dp,
+ * скругление 4dp (DESIGN-V4.md: бумага, не пластик), без заливки — заливка
+ * только у главной CTA «На главную». После нажатия превращается в тихую
+ * курсивную строку-подтверждение.
+ */
+@Composable
+private fun ShareStatsButton(shared: Boolean, onShare: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = AppColors.current
+    if (shared) {
+        Text(
+            "статистика отправлена в общую книгу",
+            color = colors.sage,
+            fontFamily = FontFamily.Serif,
+            fontStyle = FontStyle.Italic,
+            fontSize = 13.sp,
+            textAlign = TextAlign.Center,
+            modifier = modifier.fillMaxWidth().padding(vertical = 14.dp),
+        )
+    } else {
+        Box(
+            modifier
+                .fillMaxWidth()
+                .clickable { onShare() }
+                .drawBehind {
+                    drawRoundRect(
+                        color = colors.espresso,
+                        cornerRadius = CornerRadius(4.dp.toPx()),
+                        style = Stroke(width = 1.5.dp.toPx()),
+                    )
+                }
+                .padding(vertical = 13.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                "Поделиться статистикой",
+                color = colors.espresso,
+                fontFamily = FontFamily.Serif,
+                fontSize = 15.sp,
+                letterSpacing = 1.sp,
+            )
+        }
+    }
 }
 
 @Composable

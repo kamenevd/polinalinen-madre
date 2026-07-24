@@ -55,6 +55,7 @@ import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.HeavyRule
 import com.polinalinen.madre.ui.components.PageLabel
 import com.polinalinen.madre.ui.components.WaxSealStamp
+import com.polinalinen.madre.ui.components.wornPage
 import com.polinalinen.madre.ui.theme.AppColors
 import com.polinalinen.madre.utils.heroResFor
 import com.polinalinen.madre.viewmodel.BakingViewModel
@@ -92,6 +93,10 @@ fun RecipeDetailScreen(
         .collectAsState(initial = 0)
 
     Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
+        // «Затёртая страница» (Cycle 4, WornPages) — износ висит на «листе»
+        // (viewport-Box), а не на скроллящемся Column: край темнеет у кромки
+        // экрана и не уезжает вместе с текстом.
+        Box(Modifier.fillMaxSize().wornPage(bakeCount, seed = recipeId.hashCode().toLong())) {
         Column(
             Modifier
                 .statusBarsPadding()
@@ -215,6 +220,7 @@ fun RecipeDetailScreen(
             // Источник текста — recipe.timeline, тот же, что видит таймер: так
             // книжная версия не может разойтись с шагами или показать не те цифры.
             FullRecipeSection(recipe, Modifier.padding(top = 32.dp))
+        }
         }
     }
 }

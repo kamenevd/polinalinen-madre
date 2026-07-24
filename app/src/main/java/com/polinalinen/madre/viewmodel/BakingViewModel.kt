@@ -9,8 +9,11 @@ import com.polinalinen.madre.model.Recipe
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -47,6 +50,14 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
     // «след сегодняшней спешки» и не должна пережидать перезапуск приложения.
     private val _cancelledCount = MutableStateFlow(0)
     val cancelledCount: StateFlow<Int> = _cancelledCount.asStateFlow()
+
+    // Сколько раз испечён каждый рецепт — питает «затёртость» страниц и строк
+    // оглавления (DESIGN-V4.md Cycle 4, WornPages). Ноль новых таблиц: это
+    // просто иной разрез той же bake_records, что кормит формуляр.
+    val bakeCounts: StateFlow<Map<String, Int>> =
+        bakeHistoryRepository.observeAll()
+            .map { records -> records.groupingBy { it.recipeId }.eachCount() }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     private val timerJobs = mutableMapOf<Long, Job>()
     private var nextSessionId = 1L

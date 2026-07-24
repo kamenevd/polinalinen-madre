@@ -22,6 +22,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -41,6 +42,7 @@ import com.polinalinen.madre.ui.components.PageLabel
 import com.polinalinen.madre.ui.components.RibbonBookmark
 import com.polinalinen.madre.ui.components.Stamp
 import com.polinalinen.madre.ui.components.TicketFrame
+import com.polinalinen.madre.ui.components.WornPage
 import com.polinalinen.madre.ui.theme.AppColors
 import com.polinalinen.madre.viewmodel.BakingViewModel
 import java.text.SimpleDateFormat
@@ -71,6 +73,8 @@ fun HomeScreen(
     val recipes by viewModel.recipes.collectAsState()
     val sessions by viewModel.sessions.collectAsState()
     val remaining by viewModel.remainingSeconds.collectAsState()
+    // «Затёртая страница» (Cycle 4, WornPages) — часто печёные главы темнеют.
+    val bakeCounts by viewModel.bakeCounts.collectAsState()
     // Ляссе ведёт к той выпечке, что ближе всего к следующему шагу.
     val nearestSessionId = sessions.minByOrNull { remaining[it.id] ?: Long.MAX_VALUE }?.id
     // «Мадре советует» — рецепт попроще, пока закваска на пике и время дорого.
@@ -121,6 +125,7 @@ fun HomeScreen(
                         recipe = recipe,
                         isFavorite = recipe.id in favoriteIds,
                         isSeasonal = recipe.id == seasonalRecipeId,
+                        bakeCount = bakeCounts[recipe.id] ?: 0,
                         onClick = { onOpenRecipe(recipe.id) },
                         onToggleFavorite = { onToggleFavorite(recipe.id) },
                     )
@@ -278,6 +283,7 @@ private fun ChapterRow(
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit,
     isSeasonal: Boolean = false,
+    bakeCount: Int = 0,
 ) {
     val colors = AppColors.current
     val difficultyLabel = when {
@@ -286,7 +292,15 @@ private fun ChapterRow(
         else -> "сложно" to colors.terracotta
     }
     val hours = recipe.timeline.sumOf { it.durationMinutes } / 60
-    Box(Modifier.fillMaxWidth().clickable { onClick() }) {
+    // «Затёртая страница» (Cycle 4, WornPages): строку часто печёной главы
+    // едва заметно тонирует Espresso — как засаленную страницу оглавления.
+    val wornAlpha = WornPage.tocAlpha(bakeCount)
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .drawBehind { if (wornAlpha > 0f) drawRect(colors.espresso.copy(alpha = wornAlpha)) }
+    ) {
         Row(
             Modifier.padding(horizontal = 22.dp, vertical = 11.dp),
             verticalAlignment = Alignment.Bottom,

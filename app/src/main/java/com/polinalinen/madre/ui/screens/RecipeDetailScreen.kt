@@ -45,6 +45,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.polinalinen.madre.data.db.entities.MarginNoteEntity
+import com.polinalinen.madre.family.FamilyHand
+import com.polinalinen.madre.family.style
 import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.model.RecipeScaler
 import com.polinalinen.madre.ui.components.DottedLeaderRow
@@ -152,6 +154,7 @@ fun RecipeDetailScreen(
             }
 
             MarginNotesSection(
+                recipeId = recipeId,
                 notes = marginNotes,
                 onAddNote = { text -> marginNoteViewModel.addNote(recipeId, text) },
                 modifier = Modifier.padding(top = 14.dp),
@@ -211,12 +214,14 @@ fun RecipeDetailScreen(
  */
 @Composable
 private fun MarginNotesSection(
+    recipeId: String,
     notes: List<MarginNoteEntity>,
     onAddNote: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = AppColors.current
     var draft by remember { mutableStateOf("") }
+    val recipeFallbackKey = remember(recipeId) { recipeId.hashCode().toLong() }
 
     Column(modifier.fillMaxWidth().padding(horizontal = 22.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -228,15 +233,18 @@ private fun MarginNotesSection(
         if (notes.isNotEmpty()) {
             Column(Modifier.padding(top = 12.dp)) {
                 notes.forEach { note ->
+                    // Своя рука на заметку — DESIGN-V4.md Cycle 2, фича FamilyHand.
+                    val hand = FamilyHand.forUser(note.userId, recipeFallbackKey).style()
                     Text(
                         note.text,
-                        color = colors.espresso,
+                        color = hand.ink,
                         fontFamily = FontFamily.Cursive,
+                        fontWeight = hand.fontWeight,
                         fontSize = 16.sp,
                         lineHeight = 22.sp,
                         modifier = Modifier
                             .padding(vertical = 4.dp)
-                            .rotate(-1f),
+                            .rotate(hand.rotationDeg),
                     )
                 }
             }

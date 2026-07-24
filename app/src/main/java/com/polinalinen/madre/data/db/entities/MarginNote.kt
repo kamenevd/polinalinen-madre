@@ -13,4 +13,8 @@ data class MarginNoteEntity(
     val recipeId: String,
     val text: String,
     val timestampMillis: Long = System.currentTimeMillis(),
+    // Cycle 2, фича «Голоса семьи» (FamilyHand): автор заметки, если известен.
+    // Null пока не появился реальный UI выбора пользователя (v4 decision #13) —
+    // FamilyHand.forUser в этом случае берёт детерминированный fallback по recipeId.
+    val userId: Long? = null,
 )

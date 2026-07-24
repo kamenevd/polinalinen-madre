@@ -111,6 +111,14 @@ private val MIGRATION_1_2 = object : Migration(1, 2) {
     }
 }
 
+// v2 → v3 (Cycle 2, 24.07.2026): margin_notes.userId для фичи «Голоса семьи»
+// (FamilyHand) — nullable, старые записи остаются без автора (fallback на recipeId).
+private val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `margin_notes` ADD COLUMN `userId` INTEGER DEFAULT NULL")
+    }
+}
+
 @Database(
     entities = [
         UserEntity::class,
@@ -119,7 +127,7 @@ private val MIGRATION_1_2 = object : Migration(1, 2) {
         BakeRecordEntity::class,
         MarginNoteEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -136,7 +144,7 @@ abstract class MadreDatabase : RoomDatabase() {
         // (db.close() в onCleared() → crash при повторном входе).
         fun build(context: Context): MadreDatabase =
             Room.databaseBuilder(context.applicationContext, MadreDatabase::class.java, "madre.db")
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
     }
 }

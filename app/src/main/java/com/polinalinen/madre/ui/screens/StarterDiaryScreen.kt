@@ -23,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -30,6 +31,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.polinalinen.madre.data.db.entities.FeedingEntity
+import com.polinalinen.madre.family.FamilyHand
+import com.polinalinen.madre.family.style
 import com.polinalinen.madre.sourdough.DiaryEntry
 import com.polinalinen.madre.sourdough.GrowthPhase
 import com.polinalinen.madre.sourdough.MadreVoice
@@ -94,6 +97,10 @@ fun StarterDiaryScreen(
                     .padding(start = 14.dp)
             ) {
                 entries.forEach { entry ->
+                    // Своя рука на запись дневника — DESIGN-V4.md Cycle 2, фича FamilyHand.
+                    // userId у записи нет (DiaryEntry — не привязана к автору), поэтому
+                    // fallback-ключ — стабильный хеш содержимого самой записи.
+                    val hand = FamilyHand.forUser(null, (entry.timeLabel + entry.text).hashCode().toLong()).style()
                     Row(Modifier.padding(vertical = 5.dp), verticalAlignment = Alignment.Top) {
                         Text(
                             "${entry.timeLabel} —",
@@ -105,11 +112,12 @@ fun StarterDiaryScreen(
                         )
                         Text(
                             entry.text,
-                            color = colors.espresso,
+                            color = hand.ink,
                             fontFamily = FontFamily.Cursive,
-                            fontWeight = if (entry.isHighlight) FontWeight.Bold else FontWeight.Normal,
+                            fontWeight = if (entry.isHighlight) FontWeight.Bold else hand.fontWeight,
                             fontSize = 16.sp,
                             lineHeight = 24.sp,
+                            modifier = Modifier.rotate(hand.rotationDeg),
                         )
                     }
                 }
@@ -210,6 +218,9 @@ private fun DiaryArchiveSection(
             pastFeedings.forEachIndexed { i, feeding ->
                 val nextFeedingMillis = history[i].timestampMillis
                 val expanded = expandedId == feeding.id
+                // Своя рука на прошлую главу — FamilyHand, fallback-ключ = id кормления
+                // (у FeedingEntity нет userId, но каждая запись всё же выглядит по-своему).
+                val hand = FamilyHand.forUser(null, feeding.id).style()
                 Column(
                     Modifier
                         .fillMaxWidth()
@@ -227,12 +238,13 @@ private fun DiaryArchiveSection(
                         )
                         Text(
                             MadreVoice.archiveFirstLine(feeding),
-                            color = colors.espresso,
+                            color = hand.ink,
                             fontFamily = FontFamily.Cursive,
+                            fontWeight = hand.fontWeight,
                             fontSize = 16.sp,
                             maxLines = if (expanded) Int.MAX_VALUE else 1,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.weight(1f).rotate(hand.rotationDeg),
                         )
                     }
                     AnimatedVisibility(visible = expanded) {

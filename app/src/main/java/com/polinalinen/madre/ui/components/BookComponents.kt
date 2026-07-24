@@ -166,9 +166,9 @@ fun RibbonBookmark(
     modifier: Modifier = Modifier,
     width: Dp = 22.dp,
     length: Dp = 92.dp,
+    color: Color = AppColors.current.terracotta,
     description: String = "Открыть таймер активной выпечки",
 ) {
-    val terracotta = AppColors.current.terracotta
     Box(
         modifier
             .width(maxOf(width, 48.dp))
@@ -188,7 +188,7 @@ fun RibbonBookmark(
                 lineTo(0f, h)
                 close()
             }
-            drawPath(path, terracotta)
+            drawPath(path, color)
         }
     }
 }

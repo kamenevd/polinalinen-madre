@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Surface
@@ -21,13 +22,16 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.polinalinen.madre.model.Recipe
+import com.polinalinen.madre.sourdough.GrowthPhase
 import com.polinalinen.madre.ui.components.DogEar
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.HeavyRule
@@ -48,11 +52,13 @@ import java.util.Locale
 @Composable
 fun HomeScreen(
     madreHeadline: String,
+    phase: GrowthPhase,
     favoriteIds: Set<String>,
     onToggleFavorite: (String) -> Unit,
     onOpenRecipe: (String) -> Unit,
     onOpenStarter: () -> Unit,
     onOpenTimer: (sessionId: Long) -> Unit,
+    onOpenFeeding: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenShelf: () -> Unit,
     onOpenNotifications: () -> Unit,
@@ -64,6 +70,8 @@ fun HomeScreen(
     val remaining by viewModel.remainingSeconds.collectAsState()
     // Ляссе ведёт к той выпечке, что ближе всего к следующему шагу.
     val nearestSessionId = sessions.minByOrNull { remaining[it.id] ?: Long.MAX_VALUE }?.id
+    // «Мадре советует» — рецепт попроще, пока закваска на пике и время дорого.
+    val recommendedRecipeId = recipes.minByOrNull { if (it.difficulty > 0) it.difficulty else Int.MAX_VALUE }?.id
 
     Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
         Box {
@@ -112,7 +120,9 @@ fun HomeScreen(
                 }
                 item { Colophon() }
             }
-            // Ляссе поверх страницы — только пока идёт хотя бы одна выпечка
+            // Ляссе поверх страницы — только пока идёт хотя бы одна выпечка.
+            // Если выпечки нет — вместо неё mood-ляссе «Мадре советует» (приоритет
+            // у baking-ляссе, они никогда не показываются вместе).
             if (nearestSessionId != null) {
                 RibbonBookmark(
                     Modifier
@@ -120,6 +130,22 @@ fun HomeScreen(
                         .padding(end = 34.dp)
                         .clickable { onOpenTimer(nearestSessionId) }
                 )
+            } else {
+                moodBookmarkSpec(phase)?.let { spec ->
+                    MoodBookmark(
+                        spec = spec,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(end = 34.dp)
+                            .clickable {
+                                if (phase == GrowthPhase.PEAK) {
+                                    recommendedRecipeId?.let(onOpenRecipe)
+                                } else {
+                                    onOpenFeeding()
+                                }
+                            },
+                    )
+                }
             }
         }
     }
@@ -282,6 +308,49 @@ private fun ChapterRow(
                 .padding(6.dp),
         )
         HairRule(Modifier.align(Alignment.BottomCenter).padding(horizontal = 22.dp))
+    }
+}
+
+/**
+ * «Мадре советует» (DESIGN-V4.md Cycle 1, фича MoodBookmark) — вторая ляссе
+ * на главной, цвет и текст зависят от фазы закваски. Показывается только
+ * пока не идёт активная выпечка (см. HomeScreen — baking-ляссе в приоритете).
+ */
+private data class MoodBookmarkSpec(val color: Color, val label: String, val description: String)
+
+@Composable
+private fun moodBookmarkSpec(phase: GrowthPhase): MoodBookmarkSpec? {
+    val colors = AppColors.current
+    return when (phase) {
+        GrowthPhase.PEAK -> MoodBookmarkSpec(
+            colors.sage, "Мадре советует: пеките сейчас!",
+            "Закваска на пике — открыть рецепт",
+        )
+        GrowthPhase.DECLINING -> MoodBookmarkSpec(
+            colors.crust, "Покормите меня сначала…",
+            "Закваска просит еды — покормить",
+        )
+        GrowthPhase.HUNGRY -> MoodBookmarkSpec(
+            colors.terracotta, "Я проголодалась…",
+            "Закваска давно не кормлена — покормить",
+        )
+        else -> null
+    }
+}
+
+@Composable
+private fun MoodBookmark(spec: MoodBookmarkSpec, modifier: Modifier = Modifier) {
+    Column(modifier, horizontalAlignment = Alignment.End) {
+        RibbonBookmark(color = spec.color, description = spec.description)
+        Text(
+            spec.label,
+            color = spec.color,
+            fontFamily = FontFamily.Serif,
+            fontStyle = FontStyle.Italic,
+            fontSize = 11.sp,
+            textAlign = TextAlign.End,
+            modifier = Modifier.widthIn(max = 130.dp).padding(top = 4.dp, end = 4.dp),
+        )
     }
 }
 

@@ -88,11 +88,13 @@ fun MadreNavHost(navController: NavHostController = rememberNavController()) {
         composable(MadreDestinations.HOME) {
             HomeScreen(
                 madreHeadline = headline,
+                phase = phase,
                 favoriteIds = favoriteIds,
                 onToggleFavorite = toggleFavorite,
                 onOpenRecipe = { id -> navController.navigate(MadreDestinations.recipeDetail(id)) },
                 onOpenStarter = { navController.navigate(MadreDestinations.STARTER_DETAIL) },
                 onOpenTimer = { sessionId -> navController.navigate(MadreDestinations.bakingTimer(sessionId.toString())) },
+                onOpenFeeding = { navController.navigate(MadreDestinations.FEEDING_FORM) },
                 onOpenSettings = { navController.navigate(MadreDestinations.SETTINGS) },
                 onOpenShelf = { navController.navigate(MadreDestinations.SHELF) },
                 onOpenNotifications = { navController.navigate(MadreDestinations.NOTIFICATIONS) },

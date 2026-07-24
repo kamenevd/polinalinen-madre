@@ -14,8 +14,8 @@ android {
         targetSdk = 35
         // v4.0.0 ground-up rewrite — versionCode/versionName перепроверить с Гесом
         // перед первым реальным коммитом в репозиторий (см. CLAUDE.md hard rule).
-        versionCode = 1
-        versionName = "4.0.0-dev"
+        versionCode = 2
+        versionName = "4.1.0-cycle1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

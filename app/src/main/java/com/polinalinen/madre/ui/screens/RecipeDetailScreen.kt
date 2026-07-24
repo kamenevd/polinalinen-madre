@@ -13,6 +13,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -20,22 +23,28 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.polinalinen.madre.data.db.entities.MarginNoteEntity
 import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.model.RecipeScaler
 import com.polinalinen.madre.ui.components.DottedLeaderRow
@@ -45,6 +54,7 @@ import com.polinalinen.madre.ui.components.PageLabel
 import com.polinalinen.madre.ui.theme.AppColors
 import com.polinalinen.madre.utils.heroResFor
 import com.polinalinen.madre.viewmodel.BakingViewModel
+import com.polinalinen.madre.viewmodel.MarginNoteViewModel
 
 /**
  * Рецепт — «Разворот» (DESIGN-V4.md, экран 2).
@@ -58,6 +68,7 @@ fun RecipeDetailScreen(
     onBack: () -> Unit,
     onStartBaking: (sessionId: Long) -> Unit,
     viewModel: BakingViewModel = viewModel(),
+    marginNoteViewModel: MarginNoteViewModel = viewModel(),
 ) {
     val colors = AppColors.current
     val recipes by viewModel.recipes.collectAsState()
@@ -66,6 +77,9 @@ fun RecipeDetailScreen(
 
     var portions by remember { mutableIntStateOf(1) }
     val scaleFactor = portions.toDouble()
+
+    val marginNotes by remember(recipeId) { marginNoteViewModel.notesFor(recipeId) }
+        .collectAsState(initial = emptyList())
 
     Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
         Column(
@@ -137,6 +151,12 @@ fun RecipeDetailScreen(
                 }
             }
 
+            MarginNotesSection(
+                notes = marginNotes,
+                onAddNote = { text -> marginNoteViewModel.addNote(recipeId, text) },
+                modifier = Modifier.padding(top = 14.dp),
+            )
+
             Spacer(Modifier.height(14.dp))
             Box(
                 Modifier
@@ -176,6 +196,103 @@ fun RecipeDetailScreen(
             // Источник текста — recipe.timeline, тот же, что видит таймер: так
             // книжная версия не может разойтись с шагами или показать не те цифры.
             FullRecipeSection(recipe, Modifier.padding(top = 32.dp))
+        }
+    }
+}
+
+/**
+ * «На полях» — семейные заметки поверх рецепта, привязанные к recipeId
+ * (Room, MarginNoteEntity). Существующие — как помарки пером: Cursive,
+ * Espresso, лёгкий поворот -1°. DESIGN-V4.md Cycle 1, фича MarginNotes.
+ *
+ * Поле ввода — BasicTextField с волосяной линейкой снизу (тот же приём,
+ * что «Отметка на полях» в FeedingFormScreen), а не Material-овый
+ * OutlinedTextField — иначе сломался бы принцип «никакого Material-дизайна».
+ */
+@Composable
+private fun MarginNotesSection(
+    notes: List<MarginNoteEntity>,
+    onAddNote: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = AppColors.current
+    var draft by remember { mutableStateOf("") }
+
+    Column(modifier.fillMaxWidth().padding(horizontal = 22.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            HairRule(Modifier.weight(1f))
+            PageLabel("На полях", color = colors.espresso, modifier = Modifier.padding(horizontal = 10.dp))
+            HairRule(Modifier.weight(1f))
+        }
+
+        if (notes.isNotEmpty()) {
+            Column(Modifier.padding(top = 12.dp)) {
+                notes.forEach { note ->
+                    Text(
+                        note.text,
+                        color = colors.espresso,
+                        fontFamily = FontFamily.Cursive,
+                        fontSize = 16.sp,
+                        lineHeight = 22.sp,
+                        modifier = Modifier
+                            .padding(vertical = 4.dp)
+                            .rotate(-1f),
+                    )
+                }
+            }
+        }
+
+        fun submit() {
+            val trimmed = draft.trim()
+            if (trimmed.isNotEmpty()) {
+                onAddNote(trimmed)
+                draft = ""
+            }
+        }
+
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp)
+                .drawBehind {
+                    drawLine(
+                        color = colors.flour,
+                        start = Offset(0f, size.height),
+                        end = Offset(size.width, size.height),
+                        strokeWidth = 0.5.dp.toPx(),
+                    )
+                }
+                .padding(bottom = 6.dp)
+        ) {
+            if (draft.isEmpty()) {
+                Text(
+                    "черкните пару слов на полях…",
+                    color = colors.flour,
+                    fontFamily = FontFamily.Cursive,
+                    fontSize = 16.sp,
+                )
+            }
+            BasicTextField(
+                value = draft,
+                onValueChange = { draft = it },
+                textStyle = TextStyle(color = colors.espresso, fontFamily = FontFamily.Cursive, fontSize = 16.sp),
+                cursorBrush = SolidColor(colors.crust),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { submit() }),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        if (draft.isNotBlank()) {
+            Text(
+                "записать на полях",
+                color = colors.crust,
+                fontFamily = FontFamily.SansSerif,
+                fontSize = 10.sp,
+                letterSpacing = 2.sp,
+                modifier = Modifier
+                    .padding(top = 8.dp)
+                    .clickable { submit() },
+            )
         }
     }
 }

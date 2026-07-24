@@ -12,8 +12,11 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverter
 import androidx.room.TypeConverters
 import androidx.room.Update
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.polinalinen.madre.data.db.entities.BakeRecordEntity
 import com.polinalinen.madre.data.db.entities.FeedingEntity
+import com.polinalinen.madre.data.db.entities.MarginNoteEntity
 import com.polinalinen.madre.data.db.entities.SourdoughConfigEntity
 import com.polinalinen.madre.data.db.entities.StorageLocation
 import com.polinalinen.madre.data.db.entities.UserEntity
@@ -76,6 +79,15 @@ interface BakeRecordDao {
     suspend fun insert(record: BakeRecordEntity): Long
 }
 
+@Dao
+interface MarginNoteDao {
+    @Query("SELECT * FROM margin_notes WHERE recipeId = :recipeId ORDER BY timestampMillis ASC")
+    fun observeForRecipe(recipeId: String): Flow<List<MarginNoteEntity>>
+
+    @Insert
+    suspend fun insert(note: MarginNoteEntity): Long
+}
+
 class Converters {
     @TypeConverter
     fun fromStorageLocation(value: StorageLocation): String = value.name
@@ -84,9 +96,30 @@ class Converters {
     fun toStorageLocation(value: String): StorageLocation = StorageLocation.valueOf(value)
 }
 
+// v1 → v2 (Cycle 1, 24.07.2026): новая таблица margin_notes для фичи «Пометы
+// на полях». Настоящая миграция, а не fallbackToDestructiveMigration — на
+// устройствах уже есть реальная история кормлений/выпечек, терять её нельзя.
+private val MIGRATION_1_2 = object : Migration(1, 2) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `margin_notes` (" +
+                "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "`recipeId` TEXT NOT NULL, " +
+                "`text` TEXT NOT NULL, " +
+                "`timestampMillis` INTEGER NOT NULL)"
+        )
+    }
+}
+
 @Database(
-    entities = [UserEntity::class, SourdoughConfigEntity::class, FeedingEntity::class, BakeRecordEntity::class],
-    version = 1,
+    entities = [
+        UserEntity::class,
+        SourdoughConfigEntity::class,
+        FeedingEntity::class,
+        BakeRecordEntity::class,
+        MarginNoteEntity::class,
+    ],
+    version = 2,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -95,6 +128,7 @@ abstract class MadreDatabase : RoomDatabase() {
     abstract fun sourdoughConfigDao(): SourdoughConfigDao
     abstract fun feedingDao(): FeedingDao
     abstract fun bakeRecordDao(): BakeRecordDao
+    abstract fun marginNoteDao(): MarginNoteDao
 
     companion object {
         // Room создаётся один раз через Application (см. MadreApplication.kt),
@@ -102,6 +136,7 @@ abstract class MadreDatabase : RoomDatabase() {
         // (db.close() в onCleared() → crash при повторном входе).
         fun build(context: Context): MadreDatabase =
             Room.databaseBuilder(context.applicationContext, MadreDatabase::class.java, "madre.db")
+                .addMigrations(MIGRATION_1_2)
                 .build()
     }
 }

@@ -30,6 +30,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.polinalinen.madre.ui.components.BookSpine
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.HeavyRule
 import com.polinalinen.madre.ui.components.PageLabel
@@ -51,6 +52,8 @@ fun SettingsScreen(
     myName: String,
     onMyNameChange: (String) -> Unit,
     onBack: () -> Unit,
+    bakeCount: Int = 0,
+    feedingCount: Int = 0,
 ) {
     val colors = AppColors.current
     var intervalIdx by remember { mutableIntStateOf(1) }
@@ -107,6 +110,9 @@ fun SettingsScreen(
             HairRule(Modifier.padding(horizontal = 22.dp))
             SettingsRow(label = "Версия", value = com.polinalinen.madre.BuildConfig.VERSION_NAME, onClick = null)
 
+            HairRule(Modifier.padding(horizontal = 22.dp))
+            BookSpineSection(bakeCount = bakeCount, feedingCount = feedingCount)
+
             Spacer(Modifier.height(24.dp))
             HeavyRule(Modifier.padding(horizontal = 22.dp))
             Text(
@@ -117,6 +123,38 @@ fun SettingsScreen(
                 fontSize = 11.5.sp,
                 modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
             )
+        }
+    }
+}
+
+/**
+ * «Состояние книги» — DESIGN-V4.md Cycle 2, фича «Растущий корешок» (SpineGrowth).
+ * Корешок сбоку толстеет и «трётся» вместе с историей — bakeCount + feedingCount.
+ */
+@Composable
+private fun BookSpineSection(bakeCount: Int, feedingCount: Int) {
+    val colors = AppColors.current
+    Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp)) {
+        PageLabel("Состояние книги", color = colors.espresso)
+        Row(Modifier.padding(top = 14.dp), verticalAlignment = Alignment.Bottom) {
+            BookSpine(bakeCount = bakeCount, feedingCount = feedingCount, height = 140.dp)
+            Column(Modifier.padding(start = 16.dp).height(140.dp), verticalArrangement = androidx.compose.foundation.layout.Arrangement.Bottom) {
+                Text(
+                    "$bakeCount выпечек · $feedingCount кормлений",
+                    color = colors.espresso,
+                    fontFamily = FontFamily.Serif,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                )
+                Text(
+                    "корешок растёт и обтрёпывается вместе с историей семьи",
+                    color = colors.cocoa,
+                    fontFamily = FontFamily.Serif,
+                    fontStyle = FontStyle.Italic,
+                    fontSize = 11.5.sp,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
         }
     }
 }

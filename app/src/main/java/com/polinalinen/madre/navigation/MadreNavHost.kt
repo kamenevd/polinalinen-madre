@@ -167,6 +167,8 @@ fun MadreNavHost(navController: NavHostController = rememberNavController()) {
                 myName = myName,
                 onMyNameChange = setMyName,
                 onBack = { navController.popBackStack() },
+                bakeCount = bakeRecords.size,
+                feedingCount = feedingHistory.size,
             )
         }
         composable(MadreDestinations.SHELF) {

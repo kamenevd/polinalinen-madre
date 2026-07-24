@@ -36,6 +36,7 @@ import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.model.Season
 import com.polinalinen.madre.model.SeasonalEdition
 import com.polinalinen.madre.sourdough.GrowthPhase
+import com.polinalinen.madre.ui.components.BookBreath
 import com.polinalinen.madre.ui.components.DogEar
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.HeavyRule
@@ -44,6 +45,7 @@ import com.polinalinen.madre.ui.components.RibbonBookmark
 import com.polinalinen.madre.ui.components.Stamp
 import com.polinalinen.madre.ui.components.TicketFrame
 import com.polinalinen.madre.ui.components.WornPage
+import com.polinalinen.madre.ui.components.breathingPage
 import com.polinalinen.madre.ui.theme.AppColors
 import com.polinalinen.madre.viewmodel.BakingViewModel
 import com.polinalinen.madre.viewmodel.CommunityStatsViewModel
@@ -89,7 +91,9 @@ fun HomeScreen(
     val seasonalRecipeId = SeasonalEdition.recipeIdFor(season)
 
     Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
-        Box {
+        // «Дыхание книги» (Cycle 6, BookBreath): первая полоса дышит целиком —
+        // вместе с ляссе — но вдвое тише дневника (scale 1.000→1.002).
+        Box(Modifier.breathingPage(phase, amplitude = BookBreath.HOME_AMPLITUDE)) {
             LazyColumn(modifier = Modifier.statusBarsPadding()) {
                 item { Masthead(season, onOpenSettings, onOpenShelf, onOpenNotifications) }
                 item { MadreLine(madreHeadline, onOpenStarter) }

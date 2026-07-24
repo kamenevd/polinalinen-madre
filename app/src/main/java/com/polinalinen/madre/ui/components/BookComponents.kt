@@ -340,8 +340,9 @@ fun BubbleVignette(phase: GrowthPhase, modifier: Modifier = Modifier) {
 
 /**
  * «Дышащая страница»: почти невидимое scale-дыхание всего контента.
- * Период — по фазе закваски (пик быстрее, голодная — тревожнее).
- * Применять к корню страницы дневника.
+ * Период — по фазе закваски (пик быстрее, голодная — тревожнее), значения —
+ * BookBreath (Cycle 6 расширил механику #5 на HomeScreen: там амплитуда
+ * тише — [BookBreath.HOME_AMPLITUDE]).
  *
  * Perf (2026-07-21, жалоба Димы на лаги): раньше `scale` читался через `by`
  * прямо в теле composable-функции и передавался в eager Modifier.scale(Float) —
@@ -351,16 +352,12 @@ fun BubbleVignette(phase: GrowthPhase, modifier: Modifier = Modifier) {
  * рекомпозиции не происходит вообще, дерево просто перерисовывается.
  */
 @Composable
-fun Modifier.breathingPage(phase: GrowthPhase): Modifier {
-    val duration = when (phase) {
-        GrowthPhase.PEAK -> 2000
-        GrowthPhase.HUNGRY -> 1500
-        else -> 4000
-    }
+fun Modifier.breathingPage(phase: GrowthPhase, amplitude: Float = BookBreath.DIARY_AMPLITUDE): Modifier {
+    val duration = BookBreath.periodMillisFor(phase)
     val transition = rememberInfiniteTransition(label = "page")
     val scale = transition.animateFloat(
         initialValue = 1f,
-        targetValue = 1.004f,
+        targetValue = amplitude,
         animationSpec = infiniteRepeatable(tween(duration, easing = LinearEasing), RepeatMode.Reverse),
         label = "pageScale",
     )

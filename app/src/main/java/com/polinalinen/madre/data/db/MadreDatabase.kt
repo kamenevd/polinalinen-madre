@@ -79,6 +79,11 @@ interface BakeRecordDao {
 
     @Insert
     suspend fun insert(record: BakeRecordEntity): Long
+
+    // «Старое фото» (Cycle 6, AgedPhoto): точечный UPDATE — фотокарточка
+    // вклеивается позже, когда запись формуляра уже создана.
+    @Query("UPDATE bake_records SET photoPath = :path WHERE id = :recordId")
+    suspend fun attachPhoto(recordId: Long, path: String)
 }
 
 @Dao
@@ -169,6 +174,14 @@ private val MIGRATION_4_5 = object : Migration(4, 5) {
     }
 }
 
+// v5 → v6 (Cycle 6, 25.07.2026): bake_records.photoPath для фичи «Старое фото»
+// (AgedPhoto) — nullable, старые выпечки остаются без фотокарточки.
+private val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `bake_records` ADD COLUMN `photoPath` TEXT DEFAULT NULL")
+    }
+}
+
 @Database(
     entities = [
         UserEntity::class,
@@ -179,7 +192,7 @@ private val MIGRATION_4_5 = object : Migration(4, 5) {
         SealedNoteEntity::class,
         FamilySettingEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -198,7 +211,7 @@ abstract class MadreDatabase : RoomDatabase() {
         // (db.close() в onCleared() → crash при повторном входе).
         fun build(context: Context): MadreDatabase =
             Room.databaseBuilder(context.applicationContext, MadreDatabase::class.java, "madre.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .build()
     }
 }

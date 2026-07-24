@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.polinalinen.madre.data.db.entities.BakeRecordEntity
 import com.polinalinen.madre.model.Recipe
+import com.polinalinen.madre.ui.components.AgedPhoto
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.HeavyRule
 import com.polinalinen.madre.ui.components.PageLabel
@@ -185,10 +186,20 @@ fun BookStatsScreen(
             textContentColor = colors.espresso,
             title = { Text(opened.name, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold) },
             text = {
-                Column {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
                     attempts.forEach { a ->
                         val d = Instant.ofEpochMilli(a.completedAtMillis).atZone(ZoneId.systemDefault()).toLocalDate()
                         Text("${formatRuDate(d)} · ×${a.portions}", fontFamily = FontFamily.Serif, fontSize = 14.sp)
+                        // «Старое фото» (Cycle 6, AgedPhoto): вклеенная фотокарточка
+                        // стареет вместе с записью — цвет, сепия, выцветание.
+                        if (a.photoPath != null) {
+                            AgedPhoto(
+                                photoPath = a.photoPath,
+                                takenAtMillis = a.completedAtMillis,
+                                height = 110.dp,
+                                modifier = Modifier.padding(vertical = 6.dp),
+                            )
+                        }
                     }
                 }
             },

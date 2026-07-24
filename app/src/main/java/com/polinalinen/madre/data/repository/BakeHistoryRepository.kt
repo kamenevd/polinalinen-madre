@@ -19,4 +19,9 @@ class BakeHistoryRepository(db: MadreDatabase) {
     suspend fun record(recipeId: String, recipeName: String, portions: Int) = withContext(Dispatchers.IO) {
         dao.insert(BakeRecordEntity(recipeId = recipeId, recipeName = recipeName, portions = portions))
     }
+
+    /** «Старое фото» (Cycle 6): вклеить фотокарточку в уже созданную запись формуляра. */
+    suspend fun attachPhoto(recordId: Long, path: String) = withContext(Dispatchers.IO) {
+        dao.attachPhoto(recordId, path)
+    }
 }

@@ -1,5 +1,8 @@
 package com.polinalinen.madre.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -39,8 +42,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.polinalinen.madre.R
+import com.polinalinen.madre.ui.components.AgedPhoto
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.WaxSealStamp
+import com.polinalinen.madre.ui.components.drawPhotoHolders
 import com.polinalinen.madre.ui.theme.AppColors
 import com.polinalinen.madre.viewmodel.BakingViewModel
 
@@ -50,8 +55,9 @@ import com.polinalinen.madre.viewmodel.BakingViewModel
  * (рецепт, порции, время) настоящие, читаются из BakingSession, которую
  * BakingViewModel ещё не убрал (exitSession зовётся только из onHome).
  *
- * Фотокарточка — декоративный тоггл без реального файла, один в один как
- * в FeedingFormScreen (там это тоже пока не настоящее вложение).
+ * Фотокарточка — настоящая (Cycle 6, AgedPhoto): PhotoPicker → копия в
+ * internal storage → путь в BakeRecord.photoPath. Только что вклеенная —
+ * цветная; в формуляре книги она будет стареть вместе с записью.
  */
 @Composable
 fun BakingCompleteScreen(
@@ -62,6 +68,11 @@ fun BakingCompleteScreen(
     val colors = AppColors.current
     val sessions by viewModel.sessions.collectAsState()
     val session = sessionId?.let { id -> sessions.find { it.id == id } }
+    val photoPaths by viewModel.bakePhotoPaths.collectAsState()
+    val photoPath = sessionId?.let { photoPaths[it] }
+    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null && sessionId != null) viewModel.attachBakePhoto(sessionId, uri)
+    }
 
     Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
         Column(
@@ -106,7 +117,15 @@ fun BakingCompleteScreen(
                 Spacer(Modifier.height(22.dp))
             }
 
-            PastedPhotoPrompt()
+            if (photoPath != null) {
+                AgedPhoto(photoPath = photoPath, takenAtMillis = System.currentTimeMillis())
+            } else {
+                PastedPhotoPrompt(
+                    onPick = {
+                        photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    },
+                )
+            }
 
             Text(
                 "формуляр книги пополнен — испечено с любовью",
@@ -224,22 +243,23 @@ private fun CompletedStat(value: String, label: String) {
     }
 }
 
+/** Пустой слот фотокарточки: пунктирная рамка + уголки-держатели, тап открывает PhotoPicker. */
 @Composable
-private fun PastedPhotoPrompt() {
+private fun PastedPhotoPrompt(onPick: () -> Unit) {
     val colors = AppColors.current
-    var photoAttached by remember { mutableStateOf(false) }
     Column(
         Modifier
             .fillMaxWidth()
             .rotate(-1f)
             .drawBehind { drawRect(colors.cream) }
             .padding(10.dp)
-            .clickable { photoAttached = !photoAttached }
+            .clickable { onPick() }
             .drawBehind {
                 drawRoundRect(
                     color = colors.flour,
                     style = Stroke(width = 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 5f))),
                 )
+                drawPhotoHolders(colors.cocoa.copy(alpha = 0.55f), 14.dp.toPx())
             }
             .padding(vertical = 18.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -250,7 +270,7 @@ private fun PastedPhotoPrompt() {
             modifier = Modifier.size(28.dp),
         )
         Text(
-            if (photoAttached) "фотокарточка вклеена ✦" else "вклеить фотокарточку",
+            "вклеить фотокарточку",
             color = colors.cocoa,
             fontFamily = FontFamily.Serif,
             fontStyle = FontStyle.Italic,

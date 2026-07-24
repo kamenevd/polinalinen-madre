@@ -1,12 +1,16 @@
 package com.polinalinen.madre.viewmodel
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.polinalinen.madre.MadreApplication
 import com.polinalinen.madre.model.BakingSession
 import com.polinalinen.madre.model.Recipe
+import com.polinalinen.madre.utils.PhotoStore
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -60,6 +64,15 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
             .map { records -> records.groupingBy { it.recipeId }.eachCount() }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
+    // «Старое фото» (Cycle 6, AgedPhoto): вклеенные фотокарточки этой сессии
+    // приложения — Complete-экран показывает свежее фото сразу после выбора.
+    private val _bakePhotoPaths = MutableStateFlow<Map<Long, String>>(emptyMap())
+    val bakePhotoPaths: StateFlow<Map<Long, String>> = _bakePhotoPaths.asStateFlow()
+
+    // sessionId → id записи формуляра: нужен, чтобы фотокарточка, выбранная на
+    // Complete-экране, легла именно в свою строку bake_records.
+    private val bakeRecordIds = mutableMapOf<Long, Long>()
+
     private val timerJobs = mutableMapOf<Long, Job>()
     private var nextSessionId = 1L
 
@@ -85,7 +98,8 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
             // Формуляр книги и хитмэп на Полке читают именно эту таблицу — пишем
             // один раз, ровно в момент завершения (не раньше, не задним числом).
             viewModelScope.launch {
-                bakeHistoryRepository.record(s.recipe.id, s.recipe.name, s.scaleFactor.toInt().coerceAtLeast(1))
+                bakeRecordIds[id] =
+                    bakeHistoryRepository.record(s.recipe.id, s.recipe.name, s.scaleFactor.toInt().coerceAtLeast(1))
             }
             // Cycle 5: та же выпечка уходит в общую книгу (PocketBase) через
             // WorkManager — без сети долетит позже, дубликаты гасятся unique
@@ -111,6 +125,22 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
             portions = s.scaleFactor.toInt().coerceAtLeast(1),
             bakedAtMillis = System.currentTimeMillis(),
         )
+    }
+
+    /**
+     * «Старое фото» (Cycle 6): скопировать выбранный в PhotoPicker снимок в
+     * internal storage и вклеить путь в запись формуляра этой выпечки.
+     * Запись создаётся асинхронно в advanceStep, но к моменту, когда человек
+     * успел выбрать фото, insert давно завершён — bakeRecordIds уже заполнен.
+     */
+    fun attachBakePhoto(sessionId: Long, source: Uri) {
+        viewModelScope.launch {
+            val path = withContext(Dispatchers.IO) {
+                PhotoStore.saveBakePhoto(getApplication(), source, sessionId)
+            } ?: return@launch
+            _bakePhotoPaths.update { it + (sessionId to path) }
+            bakeRecordIds[sessionId]?.let { recordId -> bakeHistoryRepository.attachPhoto(recordId, path) }
+        }
     }
 
     fun stepBack(id: Long) {

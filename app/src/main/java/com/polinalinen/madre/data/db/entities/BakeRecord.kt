@@ -18,4 +18,7 @@ data class BakeRecordEntity(
     val recipeName: String,
     val portions: Int,
     val completedAtMillis: Long = System.currentTimeMillis(),
+    // «Старое фото» (Cycle 6, AgedPhoto): абсолютный путь вклеенной фотокарточки
+    // в internal storage (files/bake_photos). null — карточку не вклеивали.
+    val photoPath: String? = null,
 )

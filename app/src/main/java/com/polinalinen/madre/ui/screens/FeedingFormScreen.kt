@@ -26,7 +26,6 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -39,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.polinalinen.madre.data.db.entities.StorageLocation
 import com.polinalinen.madre.ui.components.PageLabel
+import com.polinalinen.madre.ui.components.drawPhotoHolders
 import com.polinalinen.madre.ui.theme.AppColors
 
 /**
@@ -123,20 +123,8 @@ fun FeedingFormScreen(
                             ),
                         )
                         // Уголки-держатели — как в бумажном фотоальбоме, DESIGN-V4.md §/5.
-                        val corner = 14.dp.toPx()
-                        fun holder(x: Float, y: Float, dx: Float, dy: Float) {
-                            val path = Path().apply {
-                                moveTo(x, y)
-                                lineTo(x + dx * corner, y)
-                                lineTo(x, y + dy * corner)
-                                close()
-                            }
-                            drawPath(path, colors.cocoa.copy(alpha = 0.55f))
-                        }
-                        holder(0f, 0f, 1f, 1f)
-                        holder(size.width, 0f, -1f, 1f)
-                        holder(0f, size.height, 1f, -1f)
-                        holder(size.width, size.height, -1f, -1f)
+                        // Рисунок общий с AgedPhoto (Cycle 6) — см. ui/components/AgedPhoto.kt.
+                        drawPhotoHolders(colors.cocoa.copy(alpha = 0.55f), 14.dp.toPx())
                     }
                     .padding(vertical = 18.dp),
                 contentAlignment = Alignment.Center,

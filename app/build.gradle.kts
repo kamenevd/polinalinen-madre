@@ -18,6 +18,10 @@ android {
         versionName = "4.4.0-cycle4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Cycle 5: PocketBase на домашнем сервере (LXC). Адрес меняется только
+        // здесь — код берёт его исключительно из BuildConfig.MADRE_API_URL.
+        buildConfigField("String", "MADRE_API_URL", "\"http://192.168.3.59:8091\"")
     }
 
     signingConfigs {
@@ -104,6 +108,11 @@ dependencies {
 
     // WorkManager — sourdough напоминания (закрывает баг v3 #2: CoroutineScope в BroadcastReceiver)
     implementation("androidx.work:work-runtime-ktx:2.9.0")
+
+    // Retrofit — MadreApi поверх PocketBase (Cycle 5). Конвертер — Gson,
+    // потому что Gson уже используется для recipes.json (не тянем второй JSON-стек).
+    implementation("com.squareup.retrofit2:retrofit:2.11.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.11.0")
 
     // Coil — замена ручному BitmapFactory (закрывает баг v3 #4: OOM/jank на UI thread)
     implementation("io.coil-kt:coil-compose:2.6.0")

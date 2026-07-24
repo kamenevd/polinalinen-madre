@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- PocketBase живёт в домашней сети по http (Cycle 5) — cleartext разрешён
+     ТОЛЬКО для этого хоста, остальной трафик остаётся под дефолтным запретом. -->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">192.168.3.59</domain>
+    </domain-config>
+</network-security-config>

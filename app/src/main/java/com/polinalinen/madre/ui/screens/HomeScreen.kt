@@ -31,6 +31,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.polinalinen.madre.model.Recipe
+import com.polinalinen.madre.model.Season
+import com.polinalinen.madre.model.SeasonalEdition
 import com.polinalinen.madre.sourdough.GrowthPhase
 import com.polinalinen.madre.ui.components.DogEar
 import com.polinalinen.madre.ui.components.HairRule
@@ -42,6 +44,7 @@ import com.polinalinen.madre.ui.components.TicketFrame
 import com.polinalinen.madre.ui.theme.AppColors
 import com.polinalinen.madre.viewmodel.BakingViewModel
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -72,11 +75,14 @@ fun HomeScreen(
     val nearestSessionId = sessions.minByOrNull { remaining[it.id] ?: Long.MAX_VALUE }?.id
     // «Мадре советует» — рецепт попроще, пока закваска на пике и время дорого.
     val recommendedRecipeId = recipes.minByOrNull { if (it.difficulty > 0) it.difficulty else Int.MAX_VALUE }?.id
+    // «Сезонная глава» (Cycle 3) — ярлык у даты + отметка на одном рецепте оглавления.
+    val season = SeasonalEdition.seasonForMonth(Calendar.getInstance().get(Calendar.MONTH) + 1)
+    val seasonalRecipeId = SeasonalEdition.recipeIdFor(season)
 
     Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
         Box {
             LazyColumn(modifier = Modifier.statusBarsPadding()) {
-                item { Masthead(onOpenSettings, onOpenShelf, onOpenNotifications) }
+                item { Masthead(season, onOpenSettings, onOpenShelf, onOpenNotifications) }
                 item { MadreLine(madreHeadline, onOpenStarter) }
                 // Талон на каждую активную выпечку разом — печей в доме может
                 // готовиться несколько одновременно (2026-07-21).
@@ -114,6 +120,7 @@ fun HomeScreen(
                         index = recipes.indexOf(recipe) + 1,
                         recipe = recipe,
                         isFavorite = recipe.id in favoriteIds,
+                        isSeasonal = recipe.id == seasonalRecipeId,
                         onClick = { onOpenRecipe(recipe.id) },
                         onToggleFavorite = { onToggleFavorite(recipe.id) },
                     )
@@ -152,7 +159,12 @@ fun HomeScreen(
 }
 
 @Composable
-private fun Masthead(onOpenSettings: () -> Unit, onOpenShelf: () -> Unit, onOpenNotifications: () -> Unit) {
+private fun Masthead(
+    season: Season,
+    onOpenSettings: () -> Unit,
+    onOpenShelf: () -> Unit,
+    onOpenNotifications: () -> Unit,
+) {
     val colors = AppColors.current
     val date = SimpleDateFormat("EEEE · d MMMM", Locale("ru")).format(Date())
     Column(
@@ -178,7 +190,8 @@ private fun Masthead(onOpenSettings: () -> Unit, onOpenShelf: () -> Unit, onOpen
         ) {
             HeavyRule(Modifier.weight(1f))
             Text(
-                date.uppercase(),
+                // «Сезонная глава» (Cycle 3) — ярлык рядом с датой выпуска.
+                "${date.uppercase()} · ${SeasonalEdition.labelFor(season).uppercase()}",
                 color = colors.cocoa,
                 fontFamily = FontFamily.SansSerif,
                 fontSize = 10.sp,
@@ -264,6 +277,7 @@ private fun ChapterRow(
     isFavorite: Boolean,
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit,
+    isSeasonal: Boolean = false,
 ) {
     val colors = AppColors.current
     val difficultyLabel = when {
@@ -296,6 +310,16 @@ private fun ChapterRow(
                         difficultyLabel.first,
                         color = difficultyLabel.second, fontFamily = FontFamily.SansSerif, fontSize = 11.sp,
                     )
+                    // «Глава сезона» (Cycle 3, SeasonalEdition) — отметка на одном рецепте.
+                    if (isSeasonal) {
+                        Text(
+                            " · глава сезона",
+                            color = colors.crust,
+                            fontFamily = FontFamily.Serif,
+                            fontStyle = FontStyle.Italic,
+                            fontSize = 11.sp,
+                        )
+                    }
                 }
             }
         }

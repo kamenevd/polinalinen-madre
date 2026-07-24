@@ -133,6 +133,7 @@ fun MadreNavHost(navController: NavHostController = rememberNavController()) {
             StarterDiaryScreen(
                 dayNumber = dayNumber,
                 phase = phase,
+                profile = profile,
                 entries = MadreVoice.entriesFor(lastFeeding, profile),
                 history = feedingHistory,
                 onBack = { navController.popBackStack() },

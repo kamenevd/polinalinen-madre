@@ -76,6 +76,30 @@ object MadreVoice {
         return "меня покормили: ${feeding.flourGrams}г муки, ${feeding.waterGrams}г воды. $place"
     }
 
+    /**
+     * «Архив глав» (Cycle 1, StarterDiaryScreen) — первая строка прошлой
+     * записи в оглавлении второго тома. Та же строчка, что открывала бы
+     * дневник в момент кормления.
+     */
+    fun archiveFirstLine(feeding: FeedingEntity): String = feedingLine(feeding)
+
+    /**
+     * Чем закончилась эта глава — судя по тому, сколько часов прожила закваска
+     * до СЛЕДУЮЩЕГО кормления (nextFeedingMillis). Дописывается к первой строке
+     * при развороте записи в архиве.
+     */
+    fun archiveFate(feeding: FeedingEntity, nextFeedingMillis: Long, profile: SourdoughProfile): String {
+        val livedHours = (nextFeedingMillis - feeding.timestampMillis) / 3_600_000f
+        val peak = profile.peakHours
+        val cycle = profile.cycleHours
+        return when {
+            livedHours < peak * 0.85f -> "не успела дорасти до пика — покормили раньше времени"
+            livedHours <= peak * 1.3f -> "покормили ровно на пике. идеальный момент"
+            livedHours <= cycle -> "я опала, прежде чем меня покормили снова"
+            else -> "прождала долго и совсем проголодалась, пока не покормили"
+        }
+    }
+
     private fun timeOf(millis: Long): String {
         val cal = Calendar.getInstance().apply { timeInMillis = millis }
         val h = cal.get(Calendar.HOUR_OF_DAY)

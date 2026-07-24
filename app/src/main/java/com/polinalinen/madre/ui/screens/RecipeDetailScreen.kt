@@ -52,6 +52,7 @@ import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.model.RecipeScaler
 import com.polinalinen.madre.ui.components.DottedLeaderRow
 import com.polinalinen.madre.ui.components.HairRule
+import com.polinalinen.madre.ui.components.HandwrittenEditSurface
 import com.polinalinen.madre.ui.components.HeavyRule
 import com.polinalinen.madre.ui.components.PageLabel
 import com.polinalinen.madre.ui.components.WaxSealStamp
@@ -228,7 +229,11 @@ fun RecipeDetailScreen(
             // для тех, кто печёт по памяти рецепта, а не по шагам таймера.
             // Источник текста — recipe.timeline, тот же, что видит таймер: так
             // книжная версия не может разойтись с шагами или показать не те цифры.
-            FullRecipeSection(recipe, Modifier.padding(top = 32.dp))
+            // «Правка от руки» (Cycle 4, HandwrittenEdit) — рукописные правки
+            // поверх книжного текста; bitmap в internal storage, ключ — recipeId.
+            HandwrittenEditSurface(recipeId = recipeId, modifier = Modifier.padding(top = 32.dp)) {
+                FullRecipeSection(recipe)
+            }
         }
         }
     }

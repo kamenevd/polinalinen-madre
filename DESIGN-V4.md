@@ -144,3 +144,28 @@ StarterDiaryScreen показывает только последнюю запи
 - Если пик давно прошёл → Terracotta ляссе «Я проголодалась...» → FeedingForm.
 - Две ляссе не конфликтуют: baking-ляссе всегда Terracotta (как сейчас),
   mood-ляссе меняет цвет по фазе. Если baking активен — mood скрыт.
+
+## Cycle 2 — новые фичи (24.07.2026)
+
+### Фича 4: «Голоса семьи» (FamilyHand)
+У каждого автора заметок на полях и записей дневника своя «рука»: лёгкая вариация
+наклона Cursive-шрифта (-1 до -3 град) и оттенка чернил (Espresso, Cocoa, Caramel)
+детерминированно выведенная из userId. Без новых экранов — только рендер.
+- Файлы: MarginNoteEntity, RecipeDetailScreen margin notes, StarterDiary
+- Коммит: feat: family hand — своя рука у каждого члена семьи
+
+### Фича 5: «Конверт на будущее» (TimeCapsule)
+Пользователь запечатывает записку — она открывается только после N-й выпечки
+или конкретной даты. До срока — конверт с надписью.
+- Данные: table sealed_notes (id, recipeId, text, unlockAfterBakes, createdAt, unlockedAt)
+- UI: кнопка запечатать на RecipeDetailScreen рядом с пометками на полях
+- Wax seal механика уже есть в BakingCompleteScreen — переиспользовать
+- Коммит: feat: time capsule — запечатанная записка на будущее
+
+### Фича 6: «Растущий корешок» (SpineGrowth)
+Иллюстрация корешка книги, которая визуально толстеет и приобретает потёртости.
+- Thickness = bakeRecords count + feedingRecords count
+- Canvas DrawScope рисование корешка сбоку
+- Показывать на SettingsScreen как Состояние книги
+- Коммит: feat: spine growth — корешок книги растёт с историей
+

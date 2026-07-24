@@ -44,6 +44,7 @@ import com.polinalinen.madre.ui.components.InkBlot
 import com.polinalinen.madre.ui.components.InkBlotSpot
 import com.polinalinen.madre.ui.components.PageLabel
 import com.polinalinen.madre.ui.components.breathingPage
+import com.polinalinen.madre.ui.components.lightPage
 import com.polinalinen.madre.ui.theme.AppColors
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -70,6 +71,10 @@ fun StarterDiaryScreen(
     val inkEventId = history.firstOrNull()?.id ?: 0L
 
     Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
+        // «Страница на просвет» (Cycle 4, LightPage): наклон телефона ловит
+        // свет — блик по бумаге и водяной знак живой культуры. Висит на
+        // «листе», не на скроллящемся Column. Без датчика — молчит.
+        Box(Modifier.fillMaxSize().lightPage(watermark = "MADRE · ЖИВАЯ КУЛЬТУРА · ДЕНЬ $dayNumber")) {
         Column(
             Modifier
                 .statusBarsPadding()
@@ -219,6 +224,7 @@ fun StarterDiaryScreen(
             ) {
                 Text("Покормить", color = colors.paper, fontFamily = FontFamily.Serif, fontSize = 16.sp, letterSpacing = 1.sp)
             }
+        }
         }
     }
 }

@@ -55,6 +55,7 @@ import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.HeavyRule
 import com.polinalinen.madre.ui.components.PageLabel
 import com.polinalinen.madre.ui.components.WaxSealStamp
+import com.polinalinen.madre.ui.components.lightPage
 import com.polinalinen.madre.ui.components.wornPage
 import com.polinalinen.madre.ui.theme.AppColors
 import com.polinalinen.madre.utils.heroResFor
@@ -81,6 +82,9 @@ fun RecipeDetailScreen(
     val recipes by viewModel.recipes.collectAsState()
     val recipe = recipes.find { it.id == recipeId } ?: return
     val chapterIndex = recipes.indexOf(recipe) + 1
+    // «Страница на просвет» (Cycle 4, LightPage): сквозь бумагу разворота
+    // зеркально просвечивает заголовок следующего рецепта книги.
+    val nextRecipeName = recipes.getOrNull(chapterIndex)?.name
 
     var portions by remember { mutableIntStateOf(1) }
     val scaleFactor = portions.toDouble()
@@ -96,7 +100,12 @@ fun RecipeDetailScreen(
         // «Затёртая страница» (Cycle 4, WornPages) — износ висит на «листе»
         // (viewport-Box), а не на скроллящемся Column: край темнеет у кромки
         // экрана и не уезжает вместе с текстом.
-        Box(Modifier.fillMaxSize().wornPage(bakeCount, seed = recipeId.hashCode().toLong())) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .wornPage(bakeCount, seed = recipeId.hashCode().toLong())
+                .lightPage(watermark = nextRecipeName, mirrored = true)
+        ) {
         Column(
             Modifier
                 .statusBarsPadding()

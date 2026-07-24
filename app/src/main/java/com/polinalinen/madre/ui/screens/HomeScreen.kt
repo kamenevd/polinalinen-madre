@@ -31,6 +31,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.polinalinen.madre.model.CommunityStats
 import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.model.Season
 import com.polinalinen.madre.model.SeasonalEdition
@@ -45,6 +46,7 @@ import com.polinalinen.madre.ui.components.TicketFrame
 import com.polinalinen.madre.ui.components.WornPage
 import com.polinalinen.madre.ui.theme.AppColors
 import com.polinalinen.madre.viewmodel.BakingViewModel
+import com.polinalinen.madre.viewmodel.CommunityStatsViewModel
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -68,9 +70,12 @@ fun HomeScreen(
     onOpenShelf: () -> Unit,
     onOpenNotifications: () -> Unit,
     viewModel: BakingViewModel = viewModel(),
+    communityViewModel: CommunityStatsViewModel = viewModel(),
 ) {
     val colors = AppColors.current
     val recipes by viewModel.recipes.collectAsState()
+    // «Общая статистика» (Cycle 5) — сводка bake_stats других семей из PocketBase.
+    val communityStats by communityViewModel.stats.collectAsState()
     val sessions by viewModel.sessions.collectAsState()
     val remaining by viewModel.remainingSeconds.collectAsState()
     // «Затёртая страница» (Cycle 4, WornPages) — часто печёные главы темнеют.
@@ -130,6 +135,7 @@ fun HomeScreen(
                         onToggleFavorite = { onToggleFavorite(recipe.id) },
                     )
                 }
+                item { CommunitySection(communityStats) }
                 item { Colophon() }
             }
             // Ляссе поверх страницы — только пока идёт хотя бы одна выпечка.
@@ -390,6 +396,82 @@ private fun MoodBookmark(spec: MoodBookmarkSpec, modifier: Modifier = Modifier) 
             modifier = Modifier.widthIn(max = 130.dp).padding(top = 4.dp, end = 4.dp),
         )
     }
+}
+
+/**
+ * «Общая статистика» (DESIGN-V4.md Cycle 5) — газетный подвал перед колофоном:
+ * сколько семей ведут такую же книгу и что пекли на этой неделе. Данные —
+ * bake_stats других устройств (CommunityStatsViewModel); без сети секция
+ * не исчезает, а честно говорит, что общая книга сейчас не видна.
+ */
+@Composable
+private fun CommunitySection(stats: CommunityStats?) {
+    val colors = AppColors.current
+    Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp)) {
+        PageLabel("Общая статистика", color = colors.espresso)
+        Spacer(Modifier.height(10.dp))
+        when {
+            stats == null -> Text(
+                "общая книга откроется, когда появится сеть",
+                color = colors.cocoa,
+                fontFamily = FontFamily.Serif,
+                fontStyle = FontStyle.Italic,
+                fontSize = 12.sp,
+            )
+            stats.familiesBaking == 0 -> Text(
+                "пока только ваша семья ведёт эту книгу — первая запись за вами",
+                color = colors.cocoa,
+                fontFamily = FontFamily.Serif,
+                fontStyle = FontStyle.Italic,
+                fontSize = 12.sp,
+            )
+            else -> Column {
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text(
+                        "${stats.familiesBaking}",
+                        color = colors.crust,
+                        fontFamily = FontFamily.Serif,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 26.sp,
+                    )
+                    Text(
+                        "  ${familiesBakeWord(stats.familiesBaking)} ещё ${vedutWord(stats.familiesBaking)} такую же книгу",
+                        color = colors.espresso,
+                        fontFamily = FontFamily.Serif,
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(bottom = 3.dp),
+                    )
+                }
+                if (stats.popularRecipeOfWeek != null) {
+                    Text(
+                        "рецепт недели — «${stats.popularRecipeOfWeek}», " +
+                            "${stats.bakesThisWeek} ${bakeWord(stats.bakesThisWeek)} за семь дней",
+                        color = colors.cocoa,
+                        fontFamily = FontFamily.Serif,
+                        fontStyle = FontStyle.Italic,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun familiesBakeWord(n: Int) = when {
+    n % 100 in 11..14 -> "семей"
+    n % 10 == 1 -> "семья"
+    n % 10 in 2..4 -> "семьи"
+    else -> "семей"
+}
+
+private fun vedutWord(n: Int) = if (n % 10 == 1 && n % 100 !in 11..14) "ведёт" else "ведут"
+
+private fun bakeWord(n: Int) = when {
+    n % 100 in 11..14 -> "выпечек"
+    n % 10 == 1 -> "выпечка"
+    n % 10 in 2..4 -> "выпечки"
+    else -> "выпечек"
 }
 
 @Composable

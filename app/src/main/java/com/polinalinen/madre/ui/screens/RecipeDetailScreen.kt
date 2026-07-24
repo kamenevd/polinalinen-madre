@@ -20,6 +20,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -48,6 +49,7 @@ import com.polinalinen.madre.data.db.entities.MarginNoteEntity
 import com.polinalinen.madre.data.db.entities.SealedNoteEntity
 import com.polinalinen.madre.family.FamilyHand
 import com.polinalinen.madre.family.style
+import com.polinalinen.madre.model.LibraryNote
 import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.model.RecipeScaler
 import com.polinalinen.madre.ui.components.DottedLeaderRow
@@ -61,6 +63,7 @@ import com.polinalinen.madre.ui.components.wornPage
 import com.polinalinen.madre.ui.theme.AppColors
 import com.polinalinen.madre.utils.heroResFor
 import com.polinalinen.madre.viewmodel.BakingViewModel
+import com.polinalinen.madre.viewmodel.LibraryNotesViewModel
 import com.polinalinen.madre.viewmodel.MarginNoteViewModel
 import com.polinalinen.madre.viewmodel.SealedNoteViewModel
 
@@ -78,6 +81,7 @@ fun RecipeDetailScreen(
     viewModel: BakingViewModel = viewModel(),
     marginNoteViewModel: MarginNoteViewModel = viewModel(),
     sealedNoteViewModel: SealedNoteViewModel = viewModel(),
+    libraryNotesViewModel: LibraryNotesViewModel = viewModel(),
 ) {
     val colors = AppColors.current
     val recipes by viewModel.recipes.collectAsState()
@@ -96,6 +100,9 @@ fun RecipeDetailScreen(
         .collectAsState(initial = emptyList())
     val bakeCount by remember(recipeId) { sealedNoteViewModel.bakeCountFor(recipeId) }
         .collectAsState(initial = 0)
+    // «Библиотечная книга» (Cycle 6, LibraryNotes) — чужие заметки на полях.
+    val libraryNotes by libraryNotesViewModel.notes.collectAsState()
+    LaunchedEffect(recipeId) { libraryNotesViewModel.load(recipeId) }
 
     Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
         // «Затёртая страница» (Cycle 4, WornPages) — износ висит на «листе»
@@ -179,6 +186,7 @@ fun RecipeDetailScreen(
             MarginNotesSection(
                 recipeId = recipeId,
                 notes = marginNotes,
+                libraryNotes = libraryNotes,
                 onAddNote = { text -> marginNoteViewModel.addNote(recipeId, text) },
                 modifier = Modifier.padding(top = 14.dp),
             )
@@ -252,6 +260,7 @@ fun RecipeDetailScreen(
 private fun MarginNotesSection(
     recipeId: String,
     notes: List<MarginNoteEntity>,
+    libraryNotes: List<LibraryNote>,
     onAddNote: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -282,6 +291,33 @@ private fun MarginNotesSection(
                             .padding(vertical = 4.dp)
                             .rotate(hand.rotationDeg),
                     )
+                }
+            }
+        }
+
+        // «Библиотечная книга» (DESIGN-V4.md Cycle 6, фича LibraryNotes): под
+        // своими пометками проступают чужие — бледные (альфа 0.4), с наклоном
+        // в другую сторону, будто книгу до нас читали в другой семье.
+        // Без сети список пуст и блок молчит полностью.
+        if (libraryNotes.isNotEmpty()) {
+            Column(Modifier.padding(top = 12.dp)) {
+                libraryNotes.forEach { note ->
+                    Column(Modifier.padding(vertical = 4.dp).rotate(note.slantDeg)) {
+                        Text(
+                            note.text,
+                            color = colors.espresso.copy(alpha = 0.4f),
+                            fontFamily = FontFamily.Cursive,
+                            fontSize = 16.sp,
+                            lineHeight = 22.sp,
+                        )
+                        Text(
+                            "— ${note.familyLabel}",
+                            color = colors.cocoa.copy(alpha = 0.4f),
+                            fontFamily = FontFamily.SansSerif,
+                            fontSize = 9.sp,
+                            letterSpacing = 1.5.sp,
+                        )
+                    }
                 }
             }
         }

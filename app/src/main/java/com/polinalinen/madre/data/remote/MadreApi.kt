@@ -37,6 +37,17 @@ interface MadreApi {
 
     @POST("api/collections/margin_notes_sync/records")
     suspend fun postMarginNote(@Body record: MarginNoteSyncRecord): MarginNoteSyncRecord
+
+    /**
+     * «Библиотечная книга» (Cycle 6): заметки ДРУГИХ семей на полях рецепта —
+     * вызывающий передаёт [PocketBaseFilter.recipeExcludingDevice].
+     */
+    @GET("api/collections/margin_notes_sync/records")
+    suspend fun listMarginNotes(
+        @Query("filter") filter: String,
+        @Query("sort") sort: String = "-written_at",
+        @Query("perPage") perPage: Int = 100,
+    ): RecordsPage<MarginNoteSyncRecord>
 }
 
 object MadreApiFactory {

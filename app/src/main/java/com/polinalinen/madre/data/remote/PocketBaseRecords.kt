@@ -54,7 +54,14 @@ data class RecordsPage<T>(
  */
 object PocketBaseFilter {
     fun excludeDevice(deviceId: String): String =
-        "(device_id!=\"${deviceId.replace("\\", "\\\\").replace("\"", "\\\"")}\")"
+        "(device_id!=\"${escape(deviceId)}\")"
+
+    /** «Библиотечная книга» (Cycle 6): чужие заметки на полях одного рецепта. */
+    fun recipeExcludingDevice(recipeId: String, deviceId: String): String =
+        "(recipe_id=\"${escape(recipeId)}\" && device_id!=\"${escape(deviceId)}\")"
+
+    private fun escape(value: String): String =
+        value.replace("\\", "\\\\").replace("\"", "\\\"")
 }
 
 /**

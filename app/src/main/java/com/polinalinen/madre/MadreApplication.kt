@@ -5,6 +5,7 @@ import com.polinalinen.madre.data.db.MadreDatabase
 import com.polinalinen.madre.data.repository.BakeHistoryRepository
 import com.polinalinen.madre.data.repository.MarginNoteRepository
 import com.polinalinen.madre.data.repository.RecipeRepository
+import com.polinalinen.madre.data.repository.SealedNoteRepository
 import com.polinalinen.madre.data.repository.SourdoughRepository
 
 /**
@@ -19,4 +20,5 @@ class MadreApplication : Application() {
     val sourdoughRepository: SourdoughRepository by lazy { SourdoughRepository(database) }
     val bakeHistoryRepository: BakeHistoryRepository by lazy { BakeHistoryRepository(database) }
     val marginNoteRepository: MarginNoteRepository by lazy { MarginNoteRepository(database) }
+    val sealedNoteRepository: SealedNoteRepository by lazy { SealedNoteRepository(database) }
 }

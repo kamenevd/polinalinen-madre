@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.polinalinen.madre.data.db.entities.MarginNoteEntity
+import com.polinalinen.madre.data.db.entities.SealedNoteEntity
 import com.polinalinen.madre.family.FamilyHand
 import com.polinalinen.madre.family.style
 import com.polinalinen.madre.model.Recipe
@@ -53,10 +54,12 @@ import com.polinalinen.madre.ui.components.DottedLeaderRow
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.HeavyRule
 import com.polinalinen.madre.ui.components.PageLabel
+import com.polinalinen.madre.ui.components.WaxSealStamp
 import com.polinalinen.madre.ui.theme.AppColors
 import com.polinalinen.madre.utils.heroResFor
 import com.polinalinen.madre.viewmodel.BakingViewModel
 import com.polinalinen.madre.viewmodel.MarginNoteViewModel
+import com.polinalinen.madre.viewmodel.SealedNoteViewModel
 
 /**
  * Рецепт — «Разворот» (DESIGN-V4.md, экран 2).
@@ -71,6 +74,7 @@ fun RecipeDetailScreen(
     onStartBaking: (sessionId: Long) -> Unit,
     viewModel: BakingViewModel = viewModel(),
     marginNoteViewModel: MarginNoteViewModel = viewModel(),
+    sealedNoteViewModel: SealedNoteViewModel = viewModel(),
 ) {
     val colors = AppColors.current
     val recipes by viewModel.recipes.collectAsState()
@@ -82,6 +86,10 @@ fun RecipeDetailScreen(
 
     val marginNotes by remember(recipeId) { marginNoteViewModel.notesFor(recipeId) }
         .collectAsState(initial = emptyList())
+    val sealedNotes by remember(recipeId) { sealedNoteViewModel.notesFor(recipeId) }
+        .collectAsState(initial = emptyList())
+    val bakeCount by remember(recipeId) { sealedNoteViewModel.bakeCountFor(recipeId) }
+        .collectAsState(initial = 0)
 
     Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
         Column(
@@ -158,6 +166,14 @@ fun RecipeDetailScreen(
                 notes = marginNotes,
                 onAddNote = { text -> marginNoteViewModel.addNote(recipeId, text) },
                 modifier = Modifier.padding(top = 14.dp),
+            )
+
+            TimeCapsuleSection(
+                notes = sealedNotes,
+                bakeCount = bakeCount,
+                onSeal = { text, unlockAfterBakes -> sealedNoteViewModel.seal(recipeId, text, unlockAfterBakes) },
+                onUnlock = { noteId -> sealedNoteViewModel.unlock(noteId) },
+                modifier = Modifier.padding(top = 18.dp),
             )
 
             Spacer(Modifier.height(14.dp))
@@ -303,6 +319,209 @@ private fun MarginNotesSection(
             )
         }
     }
+}
+
+/**
+ * «Конверт на будущее» — DESIGN-V4.md Cycle 2, фича TimeCapsule. Рядом с «На
+ * полях»: семья запечатывает записку, которая ждёт своего часа, а не тут же
+ * читается — вскрыть можно только когда bakeCount этого рецепта догонит
+ * unlockAfterBakes. Мотив сургучной печати переиспользован из
+ * BakingCompleteScreen (WaxSealStamp, ui/components/BookComponents.kt).
+ */
+@Composable
+private fun TimeCapsuleSection(
+    notes: List<SealedNoteEntity>,
+    bakeCount: Int,
+    onSeal: (text: String, unlockAfterBakes: Int) -> Unit,
+    onUnlock: (noteId: Long) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = AppColors.current
+    var composing by remember { mutableStateOf(false) }
+    var draft by remember { mutableStateOf("") }
+    var unlockAfter by remember { mutableIntStateOf(3) }
+
+    Column(modifier.fillMaxWidth().padding(horizontal = 22.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            HairRule(Modifier.weight(1f))
+            PageLabel("Конверт на будущее", color = colors.espresso, modifier = Modifier.padding(horizontal = 10.dp))
+            HairRule(Modifier.weight(1f))
+        }
+
+        if (notes.isNotEmpty()) {
+            Column(
+                Modifier.fillMaxWidth().padding(top = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                notes.forEach { note ->
+                    SealedNoteEnvelope(note = note, bakeCount = bakeCount, onUnlock = { onUnlock(note.id) })
+                    Spacer(Modifier.height(16.dp))
+                }
+            }
+        }
+
+        Text(
+            if (composing) "передумали — убрать конверт" else "запечатать записку",
+            color = colors.crust,
+            fontFamily = FontFamily.SansSerif,
+            fontSize = 10.sp,
+            letterSpacing = 2.sp,
+            modifier = Modifier
+                .padding(top = if (notes.isEmpty()) 12.dp else 0.dp)
+                .clickable { composing = !composing },
+        )
+
+        if (composing) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp)
+                    .drawBehind {
+                        drawLine(
+                            color = colors.flour,
+                            start = Offset(0f, size.height),
+                            end = Offset(size.width, size.height),
+                            strokeWidth = 0.5.dp.toPx(),
+                        )
+                    }
+                    .padding(bottom = 6.dp)
+            ) {
+                if (draft.isEmpty()) {
+                    Text(
+                        "что оставите для будущего пекаря…",
+                        color = colors.flour,
+                        fontFamily = FontFamily.Cursive,
+                        fontSize = 16.sp,
+                    )
+                }
+                BasicTextField(
+                    value = draft,
+                    onValueChange = { draft = it },
+                    textStyle = TextStyle(color = colors.espresso, fontFamily = FontFamily.Cursive, fontSize = 16.sp),
+                    cursorBrush = SolidColor(colors.crust),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
+            PageLabel("Открыть после выпечки №", color = colors.cocoa, modifier = Modifier.padding(top = 12.dp))
+            Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
+                listOf(1, 3, 5, 10).forEach { n ->
+                    val active = n == unlockAfter
+                    Box(
+                        Modifier
+                            .padding(end = 8.dp)
+                            .clickable { unlockAfter = n }
+                            .drawBehind {
+                                drawRoundRect(
+                                    color = colors.espresso,
+                                    style = if (active) androidx.compose.ui.graphics.drawscope.Fill else Stroke(1.5.dp.toPx()),
+                                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx()),
+                                )
+                            }
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                    ) {
+                        Text(
+                            "$n",
+                            color = if (active) colors.paper else colors.espresso,
+                            fontFamily = FontFamily.Serif,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                        )
+                    }
+                }
+            }
+
+            if (draft.isNotBlank()) {
+                Text(
+                    "запечатать",
+                    color = colors.crust,
+                    fontFamily = FontFamily.SansSerif,
+                    fontSize = 10.sp,
+                    letterSpacing = 2.sp,
+                    modifier = Modifier
+                        .padding(top = 12.dp)
+                        .clickable {
+                            onSeal(draft.trim(), unlockAfter)
+                            draft = ""
+                            composing = false
+                        },
+                )
+            }
+        }
+    }
+}
+
+/** Один конверт: запечатан / готов ко вскрытию / вскрыт — состояние решает bakeCount. */
+@Composable
+private fun SealedNoteEnvelope(
+    note: SealedNoteEntity,
+    bakeCount: Int,
+    onUnlock: () -> Unit,
+) {
+    val colors = AppColors.current
+    val unlockable = note.isUnlockable(bakeCount)
+    val opened = note.unlockedAtMillis != null
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .fillMaxWidth()
+            .let { if (unlockable) it.clickable { onUnlock() } else it },
+    ) {
+        when {
+            opened -> {
+                WaxSealStamp(
+                    title = "Вскрыто",
+                    caption = romanDate(note.unlockedAtMillis!!),
+                    color = colors.sage,
+                    stampSize = 96.dp,
+                    rotationDeg = -2f,
+                )
+                Text(
+                    note.text,
+                    color = colors.espresso,
+                    fontFamily = FontFamily.Cursive,
+                    fontSize = 16.sp,
+                    lineHeight = 22.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.padding(top = 10.dp, start = 12.dp, end = 12.dp),
+                )
+            }
+            unlockable -> {
+                WaxSealStamp(
+                    title = "Можно открыть",
+                    caption = "тронуть печать",
+                    color = colors.crust,
+                    stampSize = 96.dp,
+                    rotationDeg = -2f,
+                )
+            }
+            else -> {
+                WaxSealStamp(
+                    title = "Запечатано",
+                    caption = "после выпечки № ${note.unlockAfterBakes}",
+                    color = colors.terracotta,
+                    stampSize = 96.dp,
+                    rotationDeg = 3f,
+                )
+                Text(
+                    "испечено $bakeCount из ${note.unlockAfterBakes}",
+                    color = colors.cocoa,
+                    fontFamily = FontFamily.Serif,
+                    fontStyle = FontStyle.Italic,
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            }
+        }
+    }
+}
+
+/** «20.VII» — день + месяц римскими, как в формуляре (см. StarterDiaryScreen.romanDate). */
+private fun romanDate(millis: Long): String {
+    val roman = listOf("I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII")
+    val cal = java.util.Calendar.getInstance().apply { timeInMillis = millis }
+    return "${cal.get(java.util.Calendar.DAY_OF_MONTH)}.${roman[cal.get(java.util.Calendar.MONTH)]}"
 }
 
 @Composable

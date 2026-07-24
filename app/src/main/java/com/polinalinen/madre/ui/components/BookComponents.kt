@@ -265,6 +265,53 @@ fun TicketFrame(
 }
 
 /**
+ * Круглая сургучная печать — переиспользуемый штамп (DESIGN-V4.md §«Графический
+ * язык»/Штампы: рамка 1.5dp, лёгкий поворот, НИКОГДА заливка). Изначально жил
+ * только в BakingCompleteScreen («ИСПЕЧЕНО»); Cycle 2 переиспользует его же для
+ * конвертов TimeCapsule на RecipeDetailScreen — тот же мотив книги, разный смысл.
+ */
+@Composable
+fun WaxSealStamp(
+    title: String,
+    caption: String,
+    modifier: Modifier = Modifier,
+    color: Color = AppColors.current.sage,
+    stampSize: Dp = 128.dp,
+    rotationDeg: Float = -3f,
+) {
+    Box(
+        modifier
+            .size(stampSize)
+            .rotate(rotationDeg)
+            .drawBehind {
+                val stroke = 1.5.dp.toPx()
+                drawCircle(color, style = Stroke(stroke))
+                drawCircle(color, radius = size.minDimension / 2 - 10.dp.toPx(), style = Stroke(1.dp.toPx()))
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                title.uppercase(),
+                color = color,
+                fontFamily = FontFamily.SansSerif,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                letterSpacing = 2.sp,
+            )
+            Text(
+                caption,
+                color = color,
+                fontFamily = FontFamily.Serif,
+                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                fontSize = 13.sp,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+    }
+}
+
+/**
  * Пузырьковая виньетка-разделитель — маленький след живой закваски
  * между разделами страницы. Цвет — по фазе.
  */

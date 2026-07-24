@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.polinalinen.madre.R
 import com.polinalinen.madre.ui.components.HairRule
+import com.polinalinen.madre.ui.components.WaxSealStamp
 import com.polinalinen.madre.ui.theme.AppColors
 import com.polinalinen.madre.viewmodel.BakingViewModel
 
@@ -138,43 +139,13 @@ fun BakingCompleteScreen(
 }
 
 /**
- * Круглая сургучная печать — центральный мотив экрана. Как и остальные
- * штампы книги (DESIGN-V4.md §«Графический язык»/Штампы): рамка 1.5dp,
- * лёгкий поворот 2-4°, НИКОГДА заливка, цвет по смыслу — «ИСПЕЧЕНО» это Sage.
+ * Круглая сургучная печать — центральный мотив экрана. Общая механика штампа
+ * (DESIGN-V4.md §«Графический язык»/Штампы) вынесена в WaxSealStamp
+ * (ui/components/BookComponents.kt, Cycle 2) — переиспользуется в TimeCapsule.
  */
 @Composable
 private fun WaxSeal(dateLabel: String, modifier: Modifier = Modifier) {
-    val colors = AppColors.current
-    Box(
-        modifier
-            .size(128.dp)
-            .rotate(-3f)
-            .drawBehind {
-                val stroke = 1.5.dp.toPx()
-                drawCircle(colors.sage, style = Stroke(stroke))
-                drawCircle(colors.sage, radius = size.minDimension / 2 - 10.dp.toPx(), style = Stroke(1.dp.toPx()))
-            },
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                "ИСПЕЧЕНО",
-                color = colors.sage,
-                fontFamily = FontFamily.SansSerif,
-                fontWeight = FontWeight.Bold,
-                fontSize = 14.sp,
-                letterSpacing = 2.sp,
-            )
-            Text(
-                dateLabel,
-                color = colors.sage,
-                fontFamily = FontFamily.Serif,
-                fontStyle = FontStyle.Italic,
-                fontSize = 13.sp,
-                modifier = Modifier.padding(top = 2.dp),
-            )
-        }
-    }
+    WaxSealStamp(title = "ИСПЕЧЕНО", caption = dateLabel, color = AppColors.current.sage, modifier = modifier)
 }
 
 @Composable

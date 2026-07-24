@@ -17,6 +17,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.polinalinen.madre.data.db.entities.BakeRecordEntity
 import com.polinalinen.madre.data.db.entities.FeedingEntity
 import com.polinalinen.madre.data.db.entities.MarginNoteEntity
+import com.polinalinen.madre.data.db.entities.SealedNoteEntity
 import com.polinalinen.madre.data.db.entities.SourdoughConfigEntity
 import com.polinalinen.madre.data.db.entities.StorageLocation
 import com.polinalinen.madre.data.db.entities.UserEntity
@@ -88,6 +89,18 @@ interface MarginNoteDao {
     suspend fun insert(note: MarginNoteEntity): Long
 }
 
+@Dao
+interface SealedNoteDao {
+    @Query("SELECT * FROM sealed_notes WHERE recipeId = :recipeId ORDER BY createdAtMillis ASC")
+    fun observeForRecipe(recipeId: String): Flow<List<SealedNoteEntity>>
+
+    @Insert
+    suspend fun insert(note: SealedNoteEntity): Long
+
+    @Query("UPDATE sealed_notes SET unlockedAtMillis = :millis WHERE id = :noteId")
+    suspend fun markUnlocked(noteId: Long, millis: Long)
+}
+
 class Converters {
     @TypeConverter
     fun fromStorageLocation(value: StorageLocation): String = value.name
@@ -119,6 +132,22 @@ private val MIGRATION_2_3 = object : Migration(2, 3) {
     }
 }
 
+// v3 → v4 (Cycle 2, 24.07.2026): новая таблица sealed_notes для фичи «Конверт
+// на будущее» (TimeCapsule).
+private val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `sealed_notes` (" +
+                "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "`recipeId` TEXT NOT NULL, " +
+                "`text` TEXT NOT NULL, " +
+                "`unlockAfterBakes` INTEGER NOT NULL, " +
+                "`createdAtMillis` INTEGER NOT NULL, " +
+                "`unlockedAtMillis` INTEGER)"
+        )
+    }
+}
+
 @Database(
     entities = [
         UserEntity::class,
@@ -126,8 +155,9 @@ private val MIGRATION_2_3 = object : Migration(2, 3) {
         FeedingEntity::class,
         BakeRecordEntity::class,
         MarginNoteEntity::class,
+        SealedNoteEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -137,6 +167,7 @@ abstract class MadreDatabase : RoomDatabase() {
     abstract fun feedingDao(): FeedingDao
     abstract fun bakeRecordDao(): BakeRecordDao
     abstract fun marginNoteDao(): MarginNoteDao
+    abstract fun sealedNoteDao(): SealedNoteDao
 
     companion object {
         // Room создаётся один раз через Application (см. MadreApplication.kt),
@@ -144,7 +175,7 @@ abstract class MadreDatabase : RoomDatabase() {
         // (db.close() в onCleared() → crash при повторном входе).
         fun build(context: Context): MadreDatabase =
             Room.databaseBuilder(context.applicationContext, MadreDatabase::class.java, "madre.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build()
     }
 }

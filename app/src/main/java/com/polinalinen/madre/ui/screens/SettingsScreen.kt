@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -30,11 +31,14 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.polinalinen.madre.ui.components.Bookplate
 import com.polinalinen.madre.ui.components.BookSpine
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.HeavyRule
 import com.polinalinen.madre.ui.components.PageLabel
 import com.polinalinen.madre.ui.theme.AppColors
+import com.polinalinen.madre.viewmodel.FamilySettingsViewModel
 
 /**
  * Настройки — «Выходные данные» (колофон книги, DESIGN-V4.md экран 8).
@@ -54,8 +58,10 @@ fun SettingsScreen(
     onBack: () -> Unit,
     bakeCount: Int = 0,
     feedingCount: Int = 0,
+    familySettingsViewModel: FamilySettingsViewModel = viewModel(),
 ) {
     val colors = AppColors.current
+    val familyName by familySettingsViewModel.familyName.collectAsState()
     var intervalIdx by remember { mutableIntStateOf(1) }
     var remindersOn by remember { mutableStateOf(true) }
     val intervals = listOf("раз в 12 часов", "раз в 24 часа", "раз в 48 часов", "раз в 72 часа", "раз в неделю")
@@ -82,6 +88,15 @@ fun SettingsScreen(
             )
             Spacer(Modifier.height(14.dp))
             HeavyRule(Modifier.padding(horizontal = 22.dp))
+
+            // Экслибрис — DESIGN-V4.md Cycle 3, фича Bookplate. Поверх остального
+            // колофона, отдельным орнаментальным блоком в самом начале страницы.
+            Bookplate(
+                familyName = familyName,
+                onSetName = familySettingsViewModel::setFamilyName,
+                modifier = Modifier.padding(horizontal = 22.dp, vertical = 18.dp),
+            )
+            HairRule(Modifier.padding(horizontal = 22.dp))
 
             SettingsField(
                 label = "Ваше имя",

@@ -3,6 +3,7 @@ package com.polinalinen.madre
 import android.app.Application
 import com.polinalinen.madre.data.db.MadreDatabase
 import com.polinalinen.madre.data.repository.BakeHistoryRepository
+import com.polinalinen.madre.data.repository.FamilySettingsRepository
 import com.polinalinen.madre.data.repository.MarginNoteRepository
 import com.polinalinen.madre.data.repository.RecipeRepository
 import com.polinalinen.madre.data.repository.SealedNoteRepository
@@ -21,4 +22,5 @@ class MadreApplication : Application() {
     val bakeHistoryRepository: BakeHistoryRepository by lazy { BakeHistoryRepository(database) }
     val marginNoteRepository: MarginNoteRepository by lazy { MarginNoteRepository(database) }
     val sealedNoteRepository: SealedNoteRepository by lazy { SealedNoteRepository(database) }
+    val familySettingsRepository: FamilySettingsRepository by lazy { FamilySettingsRepository(database) }
 }

@@ -15,6 +15,7 @@ import androidx.room.Update
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.polinalinen.madre.data.db.entities.BakeRecordEntity
+import com.polinalinen.madre.data.db.entities.FamilySettingEntity
 import com.polinalinen.madre.data.db.entities.FeedingEntity
 import com.polinalinen.madre.data.db.entities.MarginNoteEntity
 import com.polinalinen.madre.data.db.entities.SealedNoteEntity
@@ -101,6 +102,15 @@ interface SealedNoteDao {
     suspend fun markUnlocked(noteId: Long, millis: Long)
 }
 
+@Dao
+interface FamilySettingDao {
+    @Query("SELECT * FROM family_settings WHERE `key` = :key LIMIT 1")
+    fun observe(key: String): Flow<FamilySettingEntity?>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(setting: FamilySettingEntity)
+}
+
 class Converters {
     @TypeConverter
     fun fromStorageLocation(value: StorageLocation): String = value.name
@@ -148,6 +158,17 @@ private val MIGRATION_3_4 = object : Migration(3, 4) {
     }
 }
 
+// v4 → v5 (Cycle 3, 25.07.2026): новая key-value таблица family_settings для
+// фичи «Экслибрис» (Bookplate) — пока хранит только family_name.
+private val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `family_settings` (" +
+                "`key` TEXT NOT NULL, `value` TEXT NOT NULL, PRIMARY KEY(`key`))"
+        )
+    }
+}
+
 @Database(
     entities = [
         UserEntity::class,
@@ -156,8 +177,9 @@ private val MIGRATION_3_4 = object : Migration(3, 4) {
         BakeRecordEntity::class,
         MarginNoteEntity::class,
         SealedNoteEntity::class,
+        FamilySettingEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -168,6 +190,7 @@ abstract class MadreDatabase : RoomDatabase() {
     abstract fun bakeRecordDao(): BakeRecordDao
     abstract fun marginNoteDao(): MarginNoteDao
     abstract fun sealedNoteDao(): SealedNoteDao
+    abstract fun familySettingDao(): FamilySettingDao
 
     companion object {
         // Room создаётся один раз через Application (см. MadreApplication.kt),
@@ -175,7 +198,7 @@ abstract class MadreDatabase : RoomDatabase() {
         // (db.close() в onCleared() → crash при повторном входе).
         fun build(context: Context): MadreDatabase =
             Room.databaseBuilder(context.applicationContext, MadreDatabase::class.java, "madre.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .build()
     }
 }

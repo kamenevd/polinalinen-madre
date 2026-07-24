@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -39,6 +40,8 @@ import com.polinalinen.madre.sourdough.MadreVoice
 import com.polinalinen.madre.sourdough.SourdoughProfile
 import com.polinalinen.madre.ui.components.BubbleVignette
 import com.polinalinen.madre.ui.components.HairRule
+import com.polinalinen.madre.ui.components.InkBlot
+import com.polinalinen.madre.ui.components.InkBlotSpot
 import com.polinalinen.madre.ui.components.PageLabel
 import com.polinalinen.madre.ui.components.breathingPage
 import com.polinalinen.madre.ui.theme.AppColors
@@ -59,8 +62,12 @@ fun StarterDiaryScreen(
     history: List<FeedingEntity>,
     onBack: () -> Unit,
     onFeed: () -> Unit,
+    cancelledBakeCount: Int = 0,
 ) {
     val colors = AppColors.current
+    // «Клякса» — DESIGN-V4.md Cycle 3, фича InkBlot. Событие для seed — самое
+    // свежее кормление (id), т.к. отдельного id у DiaryEntry/фазы нет.
+    val inkEventId = history.firstOrNull()?.id ?: 0L
 
     Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
         Column(
@@ -87,16 +94,18 @@ fun StarterDiaryScreen(
                 modifier = Modifier.padding(horizontal = 22.dp),
             )
 
-            // Дневник — рукописный шрифт, вертикальная линия полей слева
-            Column(
-                Modifier
-                    .padding(horizontal = 22.dp, vertical = 12.dp)
-                    .drawBehind {
-                        drawRect(colors.flour, size = androidx.compose.ui.geometry.Size(2.dp.toPx(), size.height))
-                    }
-                    .padding(start = 14.dp)
-            ) {
-                entries.forEach { entry ->
+            // Дневник — рукописный шрифт, вертикальная линия полей слева.
+            // Поверх — кляксы (InkBlot, Cycle 3): отменённая выпечка и голодная
+            // фаза оставляют детерминированный след прямо на странице дневника.
+            Box(Modifier.padding(horizontal = 22.dp, vertical = 12.dp)) {
+                Column(
+                    Modifier
+                        .drawBehind {
+                            drawRect(colors.flour, size = androidx.compose.ui.geometry.Size(2.dp.toPx(), size.height))
+                        }
+                        .padding(start = 14.dp)
+                ) {
+                    entries.forEach { entry ->
                     // Своя рука на запись дневника — DESIGN-V4.md Cycle 2, фича FamilyHand.
                     // userId у записи нет (DiaryEntry — не привязана к автору), поэтому
                     // fallback-ключ — стабильный хеш содержимого самой записи.
@@ -120,6 +129,24 @@ fun StarterDiaryScreen(
                             modifier = Modifier.rotate(hand.rotationDeg),
                         )
                     }
+                    }
+                }
+                // Отменённая выпечка — клякса у самой свежей записи (не размытая).
+                if (cancelledBakeCount > 0) {
+                    InkBlotSpot(
+                        seed = InkBlot.seedFor(inkEventId, cancelledBakeCount),
+                        color = colors.espresso,
+                        modifier = Modifier.align(Alignment.TopEnd).size(40.dp),
+                    )
+                }
+                // Голодная фаза — размытое пятно, «будто дневник вели в спешке».
+                if (phase == GrowthPhase.HUNGRY) {
+                    InkBlotSpot(
+                        seed = InkBlot.seedFor(inkEventId, HUNGRY_BLOT_OFFSET),
+                        blurred = true,
+                        color = colors.cocoa,
+                        modifier = Modifier.align(Alignment.BottomStart).size(56.dp),
+                    )
                 }
             }
 
@@ -129,9 +156,9 @@ fun StarterDiaryScreen(
 
             // Формуляр выпечки — механика #4
             PageLabel("Формуляр кормлений", Modifier.padding(start = 22.dp, top = 10.dp), color = colors.espresso)
+            Box(Modifier.padding(horizontal = 22.dp, vertical = 8.dp)) {
             Column(
                 Modifier
-                    .padding(horizontal = 22.dp, vertical = 8.dp)
                     .drawBehind { drawRect(colors.cream) }
                     .padding(12.dp)
             ) {
@@ -166,6 +193,16 @@ fun StarterDiaryScreen(
                         )
                     }
                     HairRule()
+                }
+            }
+                // Та же отменённая выпечка — вторая, отдельная клякса в формуляре
+                // (другой offset seed'а — форма не совпадает с той, что в дневнике).
+                if (cancelledBakeCount > 0) {
+                    InkBlotSpot(
+                        seed = InkBlot.seedFor(inkEventId, FORMULARY_BLOT_OFFSET + cancelledBakeCount),
+                        color = colors.cocoa,
+                        modifier = Modifier.align(Alignment.TopEnd).size(32.dp),
+                    )
                 }
             }
 
@@ -263,6 +300,11 @@ private fun DiaryArchiveSection(
         }
     }
 }
+
+// Разные offset'ы у одного и того же inkEventId — клякса в дневнике и клякса
+// в формуляре не совпадают по форме, хоть и рождены одним событием (InkBlot).
+private const val HUNGRY_BLOT_OFFSET = 97
+private const val FORMULARY_BLOT_OFFSET = 211
 
 @Composable
 private fun androidx.compose.foundation.layout.RowScope.FormHeader(text: String, weight: Float, alignEnd: Boolean = false) {

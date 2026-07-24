@@ -41,6 +41,13 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
     private val _remainingSeconds = MutableStateFlow<Map<Long, Long>>(emptyMap())
     val remainingSeconds: StateFlow<Map<Long, Long>> = _remainingSeconds.asStateFlow()
 
+    // Сколько выпечек бросили незавершёнными в этой сессии приложения — источник
+    // триггера «отменённая выпечка» для клякс (DESIGN-V4.md Cycle 3, InkBlot).
+    // В памяти, не в Room: фича явно не требует новой таблицы, а клякса как
+    // «след сегодняшней спешки» и не должна пережидать перезапуск приложения.
+    private val _cancelledCount = MutableStateFlow(0)
+    val cancelledCount: StateFlow<Int> = _cancelledCount.asStateFlow()
+
     private val timerJobs = mutableMapOf<Long, Job>()
     private var nextSessionId = 1L
 
@@ -87,6 +94,12 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
         stopTimer(id)
         _sessions.update { list -> list.filterNot { it.id == id } }
         _remainingSeconds.update { it - id }
+    }
+
+    /** Бросить выпечку до готовности — учитывается в [cancelledCount] (см. InkBlot). */
+    fun cancelSession(id: Long) {
+        if (session(id)?.isCompleted == false) _cancelledCount.update { it + 1 }
+        exitSession(id)
     }
 
     private fun restartTimer(id: Long) {

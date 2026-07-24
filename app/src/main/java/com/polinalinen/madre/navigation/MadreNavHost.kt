@@ -132,6 +132,7 @@ fun MadreNavHost(navController: NavHostController = rememberNavController()) {
             )
         }
         composable(MadreDestinations.STARTER_DETAIL) {
+            val cancelledBakeCount by bakingViewModel.cancelledCount.collectAsState()
             StarterDiaryScreen(
                 dayNumber = dayNumber,
                 phase = phase,
@@ -140,6 +141,7 @@ fun MadreNavHost(navController: NavHostController = rememberNavController()) {
                 history = feedingHistory,
                 onBack = { navController.popBackStack() },
                 onFeed = { navController.navigate(MadreDestinations.FEEDING_FORM) },
+                cancelledBakeCount = cancelledBakeCount,
             )
         }
         composable(MadreDestinations.FEEDING_FORM) {

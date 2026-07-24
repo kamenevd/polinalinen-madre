@@ -189,6 +189,24 @@ fun BakingTimerScreen(
                     )
                 }
             }
+
+            // Бросить выпечку до готовности — остаётся кляксой в дневнике (InkBlot,
+            // DESIGN-V4.md Cycle 3). Текстовая ссылка, не кнопка — редкое действие.
+            Text(
+                "оставить эту страницу — отменить выпечку",
+                color = colors.cocoa,
+                fontFamily = FontFamily.Serif,
+                fontStyle = FontStyle.Italic,
+                fontSize = 12.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 22.dp, end = 22.dp, top = 4.dp)
+                    .clickable {
+                        viewModel.cancelSession(s.id)
+                        onBack()
+                    },
+            )
         }
     }
 }

@@ -95,12 +95,12 @@ android {
     }
 }
 
+val verifyReleaseSigning by tasks.registering(Exec::class) {
+    commandLine("python3", rootProject.file("scripts/check_release_signing.py"))
+}
+
 tasks.matching { it.name == "packageRelease" || it.name == "signReleaseBundle" }.configureEach {
-    doFirst {
-        if (!hasCompleteReleaseSigning) {
-            throw GradleException("Release packaging requires complete signing inputs")
-        }
-    }
+    dependsOn(verifyReleaseSigning)
 }
 
 roborazzi {

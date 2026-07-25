@@ -23,6 +23,7 @@ class WorkflowContractTests(unittest.TestCase):
             "python3 scripts/cycle.py validate",
             "testDebugUnitTest",
             "lintDebug",
+            "verifyRoborazziDebug",
             "assembleDebug",
             "connectedDebugAndroidTest",
             "retention-days:",

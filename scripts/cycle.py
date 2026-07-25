@@ -10,8 +10,10 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import sys
 import tempfile
+import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -79,6 +81,46 @@ def initialize_runtime_state(
         "last_safe_checkpoint": "initialized",
     }
     return state
+
+
+def released_run_candidates(
+    runtime_root: Path, keep: int = 20, min_age_days: int = 30, now_epoch: float | None = None
+) -> list[Path]:
+    if keep < 0 or min_age_days < 0:
+        raise CycleError("retention values must be non-negative")
+    runs_root = (runtime_root / "runs").resolve()
+    if not runs_root.exists():
+        return []
+    now_value = time.time() if now_epoch is None else now_epoch
+    released: list[tuple[float, Path]] = []
+    for run_dir in runs_root.iterdir():
+        if not run_dir.is_dir() or run_dir.is_symlink() or not RUN_ID_PATTERN.fullmatch(run_dir.name):
+            continue
+        state_path = run_dir / "state.json"
+        if not state_path.is_file():
+            continue
+        try:
+            state = load_state(state_path)
+        except (CycleError, OSError, json.JSONDecodeError):
+            continue
+        if state.get("cycle", {}).get("stage") == "released":
+            released.append((state_path.stat().st_mtime, run_dir))
+    released.sort(key=lambda item: item[0], reverse=True)
+    cutoff = now_value - min_age_days * 86400
+    return [run_dir for mtime, run_dir in released[keep:] if mtime <= cutoff]
+
+
+def prune_released_runs(candidates: list[Path], runtime_root: Path) -> None:
+    runs_root = (runtime_root / "runs").resolve()
+    for run_dir in candidates:
+        resolved = run_dir.resolve()
+        try:
+            resolved.relative_to(runs_root)
+        except ValueError as exc:
+            raise CycleError(f"refusing to prune path outside runtime runs: {run_dir}") from exc
+        if resolved.parent != runs_root or resolved.is_symlink():
+            raise CycleError(f"refusing to prune unsafe run path: {run_dir}")
+        shutil.rmtree(resolved)
 
 
 def append_event(journal: Path, action: str, details: dict[str, Any]) -> None:
@@ -280,8 +322,9 @@ def validate_state(state: dict[str, Any]) -> list[str]:
                 errors.append("runtime.manifest_sha256 is invalid")
             if not isinstance(runtime.get("operation_keys"), dict):
                 errors.append("runtime.operation_keys must be an object")
-            if not isinstance(runtime.get("last_safe_checkpoint"), str):
-                errors.append("runtime.last_safe_checkpoint must be a string")
+            checkpoint = runtime.get("last_safe_checkpoint")
+            if not isinstance(checkpoint, str) or not checkpoint.strip():
+                errors.append("runtime.last_safe_checkpoint must be a non-empty string")
     return errors
 
 
@@ -367,6 +410,10 @@ def build_parser() -> argparse.ArgumentParser:
     stage.add_argument("stage", choices=STAGE_ORDER)
     blocker = sub.add_parser("add-blocker")
     blocker.add_argument("text")
+    prune = sub.add_parser("prune-runs")
+    prune.add_argument("--keep", type=int, default=20)
+    prune.add_argument("--min-age-days", type=int, default=30)
+    prune.add_argument("--apply", action="store_true", help="delete candidates; default is dry-run")
     return parser
 
 
@@ -401,6 +448,16 @@ def main(argv: list[str] | None = None) -> int:
                 },
             )
         print(state_path)
+        return 0
+
+    if args.command == "prune-runs":
+        with workflow_lock(lock_path, blocking=False):
+            candidates = released_run_candidates(args.runtime_root, args.keep, args.min_age_days)
+            for candidate in candidates:
+                print(candidate)
+            if args.apply:
+                prune_released_runs(candidates, args.runtime_root)
+        print(f"PRUNE {'APPLIED' if args.apply else 'DRY-RUN'} {len(candidates)}")
         return 0
 
     state_path = args.state or args.manifest

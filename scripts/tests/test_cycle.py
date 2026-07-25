@@ -1,4 +1,5 @@
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -56,6 +57,18 @@ class CycleStateTests(unittest.TestCase):
         errors = cycle.validate_state(state)
         self.assertIn("unknown root field: typo", errors)
         self.assertIn("unknown cycle field: stgae", errors)
+
+    def test_runtime_checkpoint_must_be_non_empty(self):
+        state = cycle.initialize_runtime_state(
+            self.valid_state(),
+            run_id="cycle-11-empty-checkpoint",
+            base_sha="a" * 40,
+        )
+        state["runtime"]["last_safe_checkpoint"] = ""
+        self.assertIn(
+            "runtime.last_safe_checkpoint must be a non-empty string",
+            cycle.validate_state(state),
+        )
 
     def test_duplicate_feature_ids_are_rejected(self):
         state = self.valid_state()
@@ -128,6 +141,32 @@ class CycleStateTests(unittest.TestCase):
             events = [json.loads(line) for line in journal.read_text().splitlines()]
             self.assertEqual(["init", "advance"], [event["action"] for event in events])
             self.assertTrue(all(event["timestamp"].endswith("Z") for event in events))
+
+    def test_retention_prunes_only_old_released_runs_beyond_keep(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime_root = Path(tmp)
+            now = 2_000_000_000.0
+            for index, stage in ((1, "released"), (2, "released"), (3, "released"), (4, "backlog")):
+                state = self.valid_state()
+                state["cycle"]["stage"] = stage
+                if stage == "released":
+                    state["features"] = [
+                        {"id": "C11-F1", "title": "Feature", "acceptance": ["observable outcome"]}
+                    ]
+                    for gate in cycle.GATE_ORDER:
+                        state["gates"][gate] = {"status": "pass", "evidence": ["evidence.txt"]}
+                state = cycle.initialize_runtime_state(state, f"run-{index}", "a" * 40)
+                state_path = cycle.runtime_state_path(f"run-{index}", runtime_root)
+                cycle.save_state(state_path, state)
+                age_days = {1: 90, 2: 60, 3: 1, 4: 120}[index]
+                os.utime(state_path, (now - age_days * 86400, now - age_days * 86400))
+
+            candidates = cycle.released_run_candidates(runtime_root, keep=1, min_age_days=30, now_epoch=now)
+            self.assertEqual(["run-2", "run-1"], [path.name for path in candidates])
+            cycle.prune_released_runs(candidates, runtime_root)
+            self.assertFalse((runtime_root / "runs" / "run-1").exists())
+            self.assertTrue((runtime_root / "runs" / "run-3").exists())
+            self.assertTrue((runtime_root / "runs" / "run-4").exists())
 
     def test_lock_is_exclusive(self):
         with tempfile.TemporaryDirectory() as tmp:

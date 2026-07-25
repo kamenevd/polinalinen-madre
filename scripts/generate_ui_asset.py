@@ -8,6 +8,7 @@ import base64
 import hashlib
 import json
 import os
+import re
 import tempfile
 import urllib.error
 import urllib.request
@@ -22,6 +23,7 @@ FALLBACK_MODELS = (
     "google/gemini-2.5-flash-image",
 )
 ASPECT_RATIOS = {"landscape": "16:9", "portrait": "9:16", "square": "1:1"}
+SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 
 class ImageGenerationError(RuntimeError):
@@ -86,6 +88,33 @@ def make_provenance(
         "response_id": response_id,
         "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
     }
+
+
+def validate_provenance(payload: dict[str, Any]) -> list[str]:
+    required = {
+        "schema_version", "provider", "model", "prompt_sha256", "aspect_ratio",
+        "image_size", "output", "output_sha256", "response_id", "generated_at",
+    }
+    errors = [f"unknown provenance field: {field}" for field in sorted(set(payload) - required)]
+    errors.extend(f"missing provenance field: {field}" for field in sorted(required - set(payload)))
+    if payload.get("schema_version") != 1:
+        errors.append("provenance.schema_version must be 1")
+    if payload.get("provider") != "openrouter":
+        errors.append("provenance.provider must be openrouter")
+    for field in ("model", "aspect_ratio", "image_size", "output", "generated_at"):
+        value = payload.get(field)
+        if not isinstance(value, str) or not value.strip():
+            errors.append(f"provenance.{field} must be a non-empty string")
+    for field in ("prompt_sha256", "output_sha256"):
+        value = payload.get(field)
+        if not isinstance(value, str) or not SHA256_PATTERN.fullmatch(value):
+            errors.append(f"provenance.{field} must be a SHA-256 hex digest")
+    if payload.get("response_id") is not None and not isinstance(payload.get("response_id"), str):
+        errors.append("provenance.response_id must be a string or null")
+    output = payload.get("output")
+    if isinstance(output, str) and Path(output).name != output:
+        errors.append("provenance.output must be a filename")
+    return errors
 
 
 def _opener(proxy: str | None) -> urllib.request.OpenerDirector:
@@ -173,6 +202,9 @@ def generate(
         output=output,
         response_id=response.get("id"),
     )
+    provenance_errors = validate_provenance(provenance)
+    if provenance_errors:
+        raise ImageGenerationError("invalid provenance: " + "; ".join(provenance_errors))
     provenance_path = output.with_suffix(output.suffix + ".provenance.json")
     _atomic_json(provenance_path, provenance)
     return output, provenance_path

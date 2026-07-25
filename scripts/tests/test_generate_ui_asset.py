@@ -61,6 +61,13 @@ class UiAssetTests(unittest.TestCase):
             self.assertNotIn("warm paper texture", encoded)
             self.assertEqual(64, len(provenance["prompt_sha256"]))
             self.assertEqual(64, len(provenance["output_sha256"]))
+            self.assertEqual([], generate_ui_asset.validate_provenance(provenance))
+
+            provenance["output_sha256"] = "tampered"
+            provenance["unexpected"] = True
+            errors = generate_ui_asset.validate_provenance(provenance)
+            self.assertIn("provenance.output_sha256 must be a SHA-256 hex digest", errors)
+            self.assertIn("unknown provenance field: unexpected", errors)
 
     def test_extracts_image_from_openrouter_shape(self):
         payload = {

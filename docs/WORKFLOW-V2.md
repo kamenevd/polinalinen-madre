@@ -27,7 +27,7 @@
 - **TDD:** для каждого поведения сохранено RED и GREEN evidence. Документация и CI также тестируются контрактами.
 - **BUILD:** Python contracts, Gradle unit tests, strict lint и APK build зелёные.
 - **REVIEW:** четыре независимых направления — code/lifecycle, design/UX, backend/security, regression/test coverage. Блокирующие замечания закрыты повторным diff-review.
-- **VISUAL:** golden или emulator screenshots, line-by-line сравнение со спецификацией. Сгенерированные изображения имеют provenance и два независимых vision-review.
+- **VISUAL:** Roborazzi `verifyRoborazziDebug` проверяет versioned golden baselines на PR; emulator screenshots покрывают runtime-сцены. Baseline меняется только отдельным осознанным `recordRoborazziDebug`. Сгенерированные изображения имеют provenance и два независимых vision-review.
 - **RUNTIME:** KVM emulator, clean install, smoke/E2E, отсутствие crash/ANR; эмулятор после проверки выключен.
 - **RELEASE:** версия и tag совпадают, signing inputs полны, APK/source/SBOM/manifest имеют SHA-256, GitHub Release доступен и проверен скачиванием.
 
@@ -59,7 +59,7 @@ OpenRouter используется только если у фичи стоит
 
 Primary: `google/gemini-3-pro-image-preview`. Fallback выбирается только из
 `scripts/generate_ui_asset.py`. Raw prompt не хранится в provenance — только
-SHA-256; ключ никогда не пишется в репозиторий или лог.
+SHA-256; ключ никогда не пишется в репозиторий или лог. Каждый provenance-файл валидируется генератором по fail-closed контракту `workflow/provenance.schema.json` перед atomic write.
 
 Canvas, Compose layout, типографика и обычные иконки не заменяются картинками
 «для красоты». Генерация оправдана только для текстур, фотографий или
@@ -89,6 +89,7 @@ Canvas, Compose layout, типографика и обычные иконки н
 - Release с существующим tag/manifest не повторяется автоматически.
 - Timeout агента означает «неизвестное состояние»: сначала diff/process/artifacts, потом продолжение.
 - При несовпадении state и Git работа блокируется, создаётся blocker; состояние не угадывается.
+- Runtime retention безопасен по умолчанию: `cycle.py prune-runs` показывает dry-run; `--apply` удаляет только завершённые `released` runs старше 30 дней сверх 20 последних. Активные, повреждённые и неизвестные runs не удаляются.
 
 ## Ритм и долг
 

@@ -57,6 +57,7 @@ import com.polinalinen.madre.ui.components.DottedLeaderRow
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.HandwrittenEditSurface
 import com.polinalinen.madre.ui.components.HeavyRule
+import com.polinalinen.madre.ui.components.HerbariumSection
 import com.polinalinen.madre.ui.components.PageLabel
 import com.polinalinen.madre.ui.components.WaxSealStamp
 import com.polinalinen.madre.ui.components.DustLayer
@@ -234,6 +235,12 @@ fun RecipeDetailScreen(
 
             GuestNotesSection(
                 notes = guestNotes,
+                modifier = Modifier.padding(top = 18.dp),
+            )
+
+            // «Гербарий» (Cycle 8, Herbarium) — сезонная находка между страниц.
+            HerbariumSection(
+                recipeId = recipeId,
                 modifier = Modifier.padding(top = 18.dp),
             )
 

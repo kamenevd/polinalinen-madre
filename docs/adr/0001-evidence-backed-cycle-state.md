@@ -1,0 +1,28 @@
+# ADR-0001: Evidence-backed cycle state
+
+- **Status:** Accepted
+- **Date:** 2026-07-25
+
+## Context
+
+`NEXT-STEPS.md`, сообщения, Git и `DESIGN-V4.md` одновременно претендовали на
+роль текущего состояния. После Cycle 10 автономный процесс не запустил Cycle 11,
+а документация получила пропущенный Cycle 5 и дублированный Cycle 6.
+
+## Decision
+
+`workflow/CYCLE.yaml` хранит versioned manifest/checkpoint. Изменяемый runtime
+state хранится вне Git-worktree в `/var/lib/madre-workflow/runs/<run-id>/state.json`
+и изменяется только `scripts/cycle.py` под exclusive `flock`. Рядом ведётся
+append-only `events.ndjson`. Gates упорядочены и требуют evidence; запись
+атомарна; переход назад запрещён. GitHub CI проверяет тот же контракт.
+
+Файл содержит JSON, совместимый с YAML 1.2, чтобы runner не зависел от PyYAML.
+
+## Consequences
+
+- Рестарт агента не теряет позицию.
+- Narrative-отчёт больше не может сам объявить задачу выполненной.
+- Для каждого PASS нужно создать стабильное evidence.
+- Runtime state не конфликтует с git checkout/rebase и переживает замену worktree.
+- Ручная правка state не является штатным recovery; journal и hashes обнаружат рассинхронизацию.

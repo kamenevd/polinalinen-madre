@@ -2,6 +2,23 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.kapt")
+    id("io.github.takahirom.roborazzi")
+}
+
+val keystorePath = System.getenv("KEYSTORE_PATH")
+val keystorePassword = System.getenv("KEYSTORE_PASSWORD")
+val releaseKeyAlias = System.getenv("KEY_ALIAS")
+val releaseKeyPassword = System.getenv("KEY_PASSWORD")
+val releaseSigningInputs = listOf(
+    keystorePath,
+    keystorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+)
+val hasCompleteReleaseSigning = releaseSigningInputs.all { !it.isNullOrBlank() }
+val hasAnyReleaseSigning = releaseSigningInputs.any { !it.isNullOrBlank() }
+if (hasAnyReleaseSigning && !hasCompleteReleaseSigning) {
+    throw GradleException("Release signing inputs are incomplete")
 }
 
 android {
@@ -12,10 +29,9 @@ android {
         applicationId = "com.polinalinen.madre"
         minSdk = 26
         targetSdk = 35
-        // v4.0.0 ground-up rewrite — versionCode/versionName перепроверить с Гесом
-        // перед первым реальным коммитом в репозиторий (см. CLAUDE.md hard rule).
-        versionCode = 11
-        versionName = "5.0.0-cycle10"
+        // versionCode is monotonic over the latest published release; release_cycle.py enforces it.
+        versionCode = 14
+        versionName = "5.1.0-cycle11"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -25,13 +41,12 @@ android {
     }
 
     signingConfigs {
-        create("release") {
-            val keystorePath = System.getenv("KEYSTORE_PATH")
-            if (keystorePath != null) {
-                storeFile = file(keystorePath)
-                storePassword = System.getenv("KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("KEY_ALIAS")
-                keyPassword = System.getenv("KEY_PASSWORD")
+        if (hasCompleteReleaseSigning) {
+            create("release") {
+                storeFile = file(requireNotNull(keystorePath))
+                storePassword = keystorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
             }
         }
     }
@@ -39,11 +54,7 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = if (signingConfigs.getByName("release").storeFile?.exists() == true) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
-            }
+            signingConfigs.findByName("release")?.let { signingConfig = it }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -61,8 +72,9 @@ android {
     }
 
     lint {
-        abortOnError = false
-        checkReleaseBuilds = false
+        abortOnError = true
+        checkReleaseBuilds = true
+        warningsAsErrors = false
     }
 
     buildFeatures {
@@ -73,6 +85,25 @@ android {
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.5"
     }
+
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+        unitTests.all {
+            it.maxHeapSize = "2048m"
+        }
+    }
+}
+
+val verifyReleaseSigning by tasks.registering(Exec::class) {
+    commandLine("python3", rootProject.file("scripts/check_release_signing.py"))
+}
+
+tasks.matching { it.name == "packageRelease" || it.name == "signReleaseBundle" }.configureEach {
+    dependsOn(verifyReleaseSigning)
+}
+
+roborazzi {
+    outputDir.set(file("src/test/snapshots"))
 }
 
 dependencies {
@@ -125,6 +156,10 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("com.google.truth:truth:1.2.0")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.0")
+    testImplementation("androidx.test.ext:junit:1.1.5")
+    testImplementation("org.robolectric:robolectric:4.16.1")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.47.0")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.47.0")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test:runner:1.5.2")

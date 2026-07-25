@@ -1,9 +1,12 @@
 package com.polinalinen.madre.viewmodel
 
+import android.Manifest
 import android.app.Application
 import android.content.Context
+import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationManager
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.polinalinen.madre.data.remote.WeatherApiFactory
@@ -49,6 +52,14 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
      * отозвали на лету) ловит runCatching выше.
      */
     private fun lastKnownLocation(context: Context): Location? {
+        if (
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.ACCESS_COARSE_LOCATION,
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            return null
+        }
         val manager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return null
         return listOf(
             LocationManager.NETWORK_PROVIDER,

@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/kamenevd/polinalinen-madre/workflow/provenance.schema.json",
+  "title": "Madre generated UI asset provenance",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "provider",
+    "model",
+    "prompt_sha256",
+    "aspect_ratio",
+    "image_size",
+    "output",
+    "output_sha256",
+    "response_id",
+    "generated_at"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "provider": {"const": "openrouter"},
+    "model": {"type": "string", "minLength": 1},
+    "prompt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "aspect_ratio": {"enum": ["16:9", "9:16", "1:1"]},
+    "image_size": {"enum": ["1K", "2K", "4K"]},
+    "output": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^/\\\\]+$"
+    },
+    "output_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "response_id": {"type": ["string", "null"]},
+    "generated_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    }
+  }
+}

@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/kamenevd/polinalinen-madre/workflow/cycle.schema.json",
+  "title": "Madre autonomous development cycle",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "cycle", "features", "gates", "reviews", "artifacts", "blockers", "decisions"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "cycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["number", "kind", "version", "branch", "stage", "created_at", "updated_at"],
+      "properties": {
+        "number": {"type": "integer", "minimum": 1},
+        "kind": {"enum": ["feature", "maintenance"]},
+        "version": {"type": "string", "pattern": "^[0-9A-Za-z][0-9A-Za-z._-]*$"},
+        "branch": {"type": "string", "pattern": "^(cycle|maintenance)/[0-9]+$"},
+        "stage": {"enum": ["backlog", "planning", "implementing", "reviewing", "validating", "releasable", "released"]},
+        "created_at": {"type": "string", "format": "date-time"},
+        "updated_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "features": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "title", "acceptance"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "title": {"type": "string", "minLength": 1},
+          "acceptance": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+          "needs_generated_asset": {"type": "boolean"}
+        }
+      }
+    },
+    "gates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["plan", "tdd", "build", "review", "visual", "runtime", "release"],
+      "properties": {
+        "plan": {"$ref": "#/$defs/gate"},
+        "tdd": {"$ref": "#/$defs/gate"},
+        "build": {"$ref": "#/$defs/gate"},
+        "review": {"$ref": "#/$defs/gate"},
+        "visual": {"$ref": "#/$defs/gate"},
+        "runtime": {"$ref": "#/$defs/gate"},
+        "release": {"$ref": "#/$defs/gate"}
+      }
+    },
+    "reviews": {"type": "array", "items": {"type": "object"}},
+    "artifacts": {
+      "type": "object",
+      "required": ["apk", "source_archive", "sha256", "release_url"],
+      "properties": {
+        "apk": {"type": ["string", "null"]},
+        "source_archive": {"type": ["string", "null"]},
+        "sha256": {"type": ["string", "null"]},
+        "release_url": {"type": ["string", "null"]}
+      }
+    },
+    "blockers": {"type": "array", "items": {"type": "object"}},
+    "decisions": {"type": "array", "items": {"type": "object"}},
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "base_sha", "manifest_sha256", "operation_keys", "last_safe_checkpoint"],
+      "properties": {
+        "run_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"},
+        "base_sha": {"type": "string", "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$"},
+        "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "operation_keys": {"type": "object"},
+        "last_safe_checkpoint": {"type": "string", "minLength": 1}
+      }
+    }
+  },
+  "$defs": {
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "evidence"],
+      "properties": {
+        "status": {"enum": ["pending", "pass", "fail"]},
+        "evidence": {"type": "array", "items": {"type": "string", "minLength": 1}}
+      }
+    }
+  }
+}

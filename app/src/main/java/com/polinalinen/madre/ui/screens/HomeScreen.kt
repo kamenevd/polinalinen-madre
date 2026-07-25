@@ -1,5 +1,9 @@
 package com.polinalinen.madre.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,12 +22,18 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -35,6 +45,7 @@ import com.polinalinen.madre.model.CommunityStats
 import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.model.Season
 import com.polinalinen.madre.model.SeasonalEdition
+import com.polinalinen.madre.model.WeatherNote
 import com.polinalinen.madre.sourdough.GrowthPhase
 import com.polinalinen.madre.ui.components.BookBreath
 import com.polinalinen.madre.ui.components.DogEar
@@ -46,9 +57,11 @@ import com.polinalinen.madre.ui.components.Stamp
 import com.polinalinen.madre.ui.components.TicketFrame
 import com.polinalinen.madre.ui.components.WornPage
 import com.polinalinen.madre.ui.components.breathingPage
+import com.polinalinen.madre.ui.components.dampPaper
 import com.polinalinen.madre.ui.theme.AppColors
 import com.polinalinen.madre.viewmodel.BakingViewModel
 import com.polinalinen.madre.viewmodel.CommunityStatsViewModel
+import com.polinalinen.madre.viewmodel.WeatherViewModel
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -73,9 +86,27 @@ fun HomeScreen(
     onOpenNotifications: () -> Unit,
     viewModel: BakingViewModel = viewModel(),
     communityViewModel: CommunityStatsViewModel = viewModel(),
+    weatherViewModel: WeatherViewModel = viewModel(),
 ) {
     val colors = AppColors.current
     val recipes by viewModel.recipes.collectAsState()
+    // «Погода за окном» (Cycle 7, WeatherPage): заметка Мадре на полях +
+    // отсыревшая бумага в дождь. Без разрешения на геолокацию — тихое
+    // приглашение; без сети/локации — молчание (ViewModel не ругается).
+    val context = LocalContext.current
+    var hasLocationPermission by remember {
+        mutableStateOf(
+            context.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) ==
+                PackageManager.PERMISSION_GRANTED
+        )
+    }
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted -> hasLocationPermission = granted }
+    LaunchedEffect(hasLocationPermission) {
+        if (hasLocationPermission) weatherViewModel.load()
+    }
+    val weatherNote by weatherViewModel.note.collectAsState()
     // «Общая статистика» (Cycle 5) — сводка bake_stats других семей из PocketBase.
     val communityStats by communityViewModel.stats.collectAsState()
     val sessions by viewModel.sessions.collectAsState()
@@ -93,10 +124,23 @@ fun HomeScreen(
     Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
         // «Дыхание книги» (Cycle 6, BookBreath): первая полоса дышит целиком —
         // вместе с ляссе — но вдвое тише дневника (scale 1.000→1.002).
-        Box(Modifier.breathingPage(phase, amplitude = BookBreath.HOME_AMPLITUDE)) {
+        Box(
+            Modifier
+                .breathingPage(phase, amplitude = BookBreath.HOME_AMPLITUDE)
+                .dampPaper(weatherNote?.dampAlpha ?: 0f)
+        ) {
             LazyColumn(modifier = Modifier.statusBarsPadding()) {
                 item { Masthead(season, onOpenSettings, onOpenShelf, onOpenNotifications) }
                 item { MadreLine(madreHeadline, onOpenStarter) }
+                item {
+                    WeatherMargin(
+                        note = weatherNote,
+                        showInvite = !hasLocationPermission,
+                        onInvite = {
+                            locationPermissionLauncher.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
+                        },
+                    )
+                }
                 // Талон на каждую активную выпечку разом — печей в доме может
                 // готовиться несколько одновременно (2026-07-21).
                 items(sessions, key = { it.id }) { s ->
@@ -230,6 +274,39 @@ private fun MadreLine(headline: String, onOpenStarter: () -> Unit) {
             fontStyle = FontStyle.Italic,
             fontSize = 18.sp,
             modifier = Modifier.padding(top = 2.dp),
+        )
+    }
+}
+
+/**
+ * «Погода за окном» (DESIGN-V4.md Cycle 7, фича WeatherPage) — заметка Мадре
+ * на полях первой полосы: рукописная (Cursive), с лёгким поворотом, как
+ * пометки MarginNotes. Пока разрешения на геолокацию нет — тихая строка-
+ * приглашение; в мягкую погоду и без разрешения-отказа блок молчит совсем.
+ */
+@Composable
+private fun WeatherMargin(note: WeatherNote?, showInvite: Boolean, onInvite: () -> Unit) {
+    val colors = AppColors.current
+    when {
+        note != null -> Text(
+            note.text,
+            color = colors.cocoa,
+            fontFamily = FontFamily.Cursive,
+            fontSize = 15.sp,
+            lineHeight = 21.sp,
+            modifier = Modifier
+                .padding(horizontal = 22.dp, vertical = 4.dp)
+                .rotate(-1.2f),
+        )
+        showInvite -> Text(
+            "впустить погоду за окном",
+            color = colors.crust,
+            fontFamily = FontFamily.SansSerif,
+            fontSize = 10.sp,
+            letterSpacing = 2.sp,
+            modifier = Modifier
+                .padding(horizontal = 22.dp, vertical = 4.dp)
+                .clickable { onInvite() },
         )
     }
 }

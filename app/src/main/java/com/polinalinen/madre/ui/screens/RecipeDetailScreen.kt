@@ -59,6 +59,8 @@ import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.HandwrittenEditSurface
 import com.polinalinen.madre.ui.components.HeavyRule
 import com.polinalinen.madre.ui.components.HerbariumSection
+import com.polinalinen.madre.ui.components.InkMirror
+import com.polinalinen.madre.ui.components.InkMirrorImprint
 import com.polinalinen.madre.ui.components.PageLabel
 import com.polinalinen.madre.ui.components.StuckPagesOverlay
 import com.polinalinen.madre.ui.components.WaxSealStamp
@@ -346,6 +348,22 @@ private fun MarginNotesSection(
             HairRule(Modifier.weight(1f))
             PageLabel("На полях", color = colors.espresso, modifier = Modifier.padding(horizontal = 10.dp))
             HairRule(Modifier.weight(1f))
+        }
+
+        // «Зеркальный отпечаток» (DESIGN-V4.md Cycle 10, InkMirror): самая
+        // свежая помета не высохла и при закрытии разворота отпечаталась на
+        // соседней странице — бледный зеркальный след у противоположного
+        // поля. За двое суток выцветает, и секция возвращается к прежнему виду.
+        val imprintNow = remember(notes) { System.currentTimeMillis() }
+        val wetIndex = remember(notes, imprintNow) {
+            InkMirror.freshestWetIndex(imprintNow, notes.map { it.timestampMillis })
+        }
+        if (wetIndex != null) {
+            InkMirrorImprint(
+                text = notes[wetIndex].text,
+                ageMillis = imprintNow - notes[wetIndex].timestampMillis,
+                modifier = Modifier.align(Alignment.End).padding(top = 10.dp),
+            )
         }
 
         if (notes.isNotEmpty()) {

@@ -47,6 +47,9 @@ class WorkflowContractTests(unittest.TestCase):
         text = self.read("app/build.gradle.kts")
         release_block = text[text.index("release {") : text.index("compileOptions")]
         self.assertNotIn('signingConfigs.getByName("debug")', release_block)
+        self.assertIn('it.name == "packageRelease"', text)
+        self.assertIn("Release packaging requires complete signing inputs", text)
+        self.assertIn("Release signing inputs are incomplete", text)
 
     def test_dependabot_covers_gradle_and_actions(self):
         text = self.read(".github/dependabot.yml")

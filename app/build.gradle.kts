@@ -5,6 +5,22 @@ plugins {
     id("io.github.takahirom.roborazzi")
 }
 
+val keystorePath = System.getenv("KEYSTORE_PATH")
+val keystorePassword = System.getenv("KEYSTORE_PASSWORD")
+val releaseKeyAlias = System.getenv("KEY_ALIAS")
+val releaseKeyPassword = System.getenv("KEY_PASSWORD")
+val releaseSigningInputs = listOf(
+    keystorePath,
+    keystorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+)
+val hasCompleteReleaseSigning = releaseSigningInputs.all { !it.isNullOrBlank() }
+val hasAnyReleaseSigning = releaseSigningInputs.any { !it.isNullOrBlank() }
+if (hasAnyReleaseSigning && !hasCompleteReleaseSigning) {
+    throw GradleException("Release signing inputs are incomplete")
+}
+
 android {
     namespace = "com.polinalinen.madre"
     compileSdk = 35
@@ -15,8 +31,8 @@ android {
         targetSdk = 35
         // v4.0.0 ground-up rewrite — versionCode/versionName перепроверить с Гесом
         // перед первым реальным коммитом в репозиторий (см. CLAUDE.md hard rule).
-        versionCode = 11
-        versionName = "5.0.0-cycle10"
+        versionCode = 12
+        versionName = "5.1.0-cycle11"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -26,17 +42,6 @@ android {
     }
 
     signingConfigs {
-        val keystorePath = System.getenv("KEYSTORE_PATH")
-        val keystorePassword = System.getenv("KEYSTORE_PASSWORD")
-        val releaseKeyAlias = System.getenv("KEY_ALIAS")
-        val releaseKeyPassword = System.getenv("KEY_PASSWORD")
-        val hasCompleteReleaseSigning = listOf(
-            keystorePath,
-            keystorePassword,
-            releaseKeyAlias,
-            releaseKeyPassword,
-        ).all { !it.isNullOrBlank() }
-
         if (hasCompleteReleaseSigning) {
             create("release") {
                 storeFile = file(requireNotNull(keystorePath))
@@ -86,6 +91,14 @@ android {
         unitTests.isIncludeAndroidResources = true
         unitTests.all {
             it.maxHeapSize = "2048m"
+        }
+    }
+}
+
+tasks.matching { it.name == "packageRelease" || it.name == "signReleaseBundle" }.configureEach {
+    doFirst {
+        if (!hasCompleteReleaseSigning) {
+            throw GradleException("Release packaging requires complete signing inputs")
         }
     }
 }

@@ -14,7 +14,7 @@ import org.robolectric.annotation.GraphicsMode
 
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [35], qualifiers = "w360dp-h240dp-xhdpi-ru")
+@Config(sdk = [35], qualifiers = "ru-w360dp-h240dp-xhdpi")
 class BookplateGoldenTest {
     @Test
     fun familyName() {

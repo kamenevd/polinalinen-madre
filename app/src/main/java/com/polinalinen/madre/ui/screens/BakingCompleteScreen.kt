@@ -47,6 +47,8 @@ import com.polinalinen.madre.model.GuestPage
 import com.polinalinen.madre.ui.components.AgedPhoto
 import com.polinalinen.madre.ui.components.QrCode
 import com.polinalinen.madre.ui.components.HairRule
+import com.polinalinen.madre.ui.components.TracingPaper
+import com.polinalinen.madre.ui.components.TracingPaperOverlay
 import com.polinalinen.madre.ui.components.WaxSealStamp
 import com.polinalinen.madre.ui.components.drawPhotoHolders
 import com.polinalinen.madre.ui.theme.AppColors
@@ -76,8 +78,14 @@ fun BakingCompleteScreen(
     val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null && sessionId != null) viewModel.attachBakePhoto(sessionId, uri)
     }
+    // «Калька» (Cycle 9, TracingPaper): юбилейную страницу прокладывает
+    // полупрозрачный лист с припиской Мадре карандашом. Номер выпечки —
+    // общее число записей формуляра (эта выпечка уже вписана в advanceStep).
+    val bakeCounts by viewModel.bakeCounts.collectAsState()
+    val totalBakes = bakeCounts.values.sum()
 
     Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize()) {
         Column(
             Modifier
                 .statusBarsPadding()
@@ -179,6 +187,12 @@ fun BakingCompleteScreen(
             ) {
                 Text("На главную", color = colors.paper, fontFamily = FontFamily.Serif, fontSize = 16.sp, letterSpacing = 1.sp)
             }
+        }
+
+        // Калька лежит поверх всей страницы, пока её не отвернут свайпом.
+        TracingPaper.noteFor(totalBakes)?.let { note ->
+            TracingPaperOverlay(note = note, modifier = Modifier.matchParentSize())
+        }
         }
     }
 }

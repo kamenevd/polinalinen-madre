@@ -39,6 +39,19 @@ data class MarginNoteSyncRecord(
     @SerializedName("written_at") val writtenAt: String,
 )
 
+/**
+ * «Гостевая страница» (Cycle 7): отзыв гостя. Пишется НЕ из приложения, а с
+ * телефона гостя через публичную форму server/pb_public/guest.html —
+ * приложение эти записи только читает.
+ */
+data class GuestNoteRecord(
+    @SerializedName("id") val id: String? = null,
+    @SerializedName("recipe_id") val recipeId: String,
+    @SerializedName("author") val author: String,
+    @SerializedName("text") val text: String,
+    @SerializedName("created_at") val createdAt: String,
+)
+
 /** Ответ листинга PocketBase: GET /api/collections/{name}/records. */
 data class RecordsPage<T>(
     @SerializedName("page") val page: Int,
@@ -59,6 +72,10 @@ object PocketBaseFilter {
     /** «Библиотечная книга» (Cycle 6): чужие заметки на полях одного рецепта. */
     fun recipeExcludingDevice(recipeId: String, deviceId: String): String =
         "(recipe_id=\"${escape(recipeId)}\" && device_id!=\"${escape(deviceId)}\")"
+
+    /** «Гостевая страница» (Cycle 7): все отзывы гостей одного рецепта. */
+    fun forRecipe(recipeId: String): String =
+        "(recipe_id=\"${escape(recipeId)}\")"
 
     private fun escape(value: String): String =
         value.replace("\\", "\\\\").replace("\"", "\\\"")

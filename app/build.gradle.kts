@@ -117,6 +117,10 @@ dependencies {
     // Coil — замена ручному BitmapFactory (закрывает баг v3 #4: OOM/jank на UI thread)
     implementation("io.coil-kt:coil-compose:2.6.0")
 
+    // ZXing core — QR гостевой страницы (Cycle 7, GuestPage). Только кодер
+    // (чистая Java, без камеры/сканера) — рисуем BitMatrix сами на Canvas.
+    implementation("com.google.zxing:core:3.5.3")
+
     // Testing
     testImplementation("junit:junit:4.13.2")
     testImplementation("com.google.truth:truth:1.2.0")

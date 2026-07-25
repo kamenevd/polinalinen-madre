@@ -1,0 +1,134 @@
+<!doctype html>
+<!-- «Гостевая страница» (DESIGN-V4.md Cycle 7, фича GuestPage).
+     Лежит в pb_public PocketBase (192.168.3.59:8091) и открывается по QR
+     с BakingCompleteScreen. Палитра — Warm Paper из DESIGN-V4.md, углы <=4px,
+     без эмодзи. Пишет в коллекцию guest_notes через открытый create-rule. -->
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Мадре — гостевая страница</title>
+<style>
+  :root {
+    --paper: #FAF6F0; --cream: #FFFCF6; --crust: #C8763A;
+    --espresso: #2D1F14; --cocoa: #6B5544; --flour: #D9CFC2; --sage: #7A9159;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    background: var(--paper); color: var(--espresso);
+    font-family: Georgia, 'Times New Roman', serif;
+    display: flex; justify-content: center; min-height: 100vh;
+  }
+  .page { width: 100%; max-width: 420px; padding: 36px 24px 28px; }
+  .label {
+    font-family: system-ui, sans-serif; font-size: 10px;
+    letter-spacing: 3px; color: var(--cocoa); text-align: center;
+  }
+  h1 {
+    font-size: 44px; font-weight: bold; letter-spacing: 1px;
+    text-align: center; margin-top: 6px;
+  }
+  .heavy { border: none; border-top: 2px solid var(--espresso); margin: 14px 0 18px; }
+  .hair  { border: none; border-top: 0.5px solid var(--flour); margin: 18px 0; }
+  .recipe { font-size: 22px; font-weight: bold; text-align: center; }
+  .mood {
+    font-style: italic; font-size: 13px; color: var(--cocoa);
+    text-align: center; margin-top: 8px; line-height: 1.5;
+  }
+  form { margin-top: 22px; }
+  .field-label {
+    font-family: system-ui, sans-serif; font-size: 10px;
+    letter-spacing: 2px; color: var(--cocoa); text-transform: uppercase;
+    display: block; margin-top: 16px;
+  }
+  input, textarea {
+    width: 100%; background: transparent; color: var(--espresso);
+    border: none; border-bottom: 0.5px solid var(--flour);
+    font-family: 'Segoe Script', 'Comic Sans MS', cursive;
+    font-size: 17px; padding: 8px 0 6px; outline: none; resize: vertical;
+  }
+  input:focus, textarea:focus { border-bottom-color: var(--crust); }
+  textarea { min-height: 88px; line-height: 1.45; }
+  button {
+    width: 100%; margin-top: 24px; padding: 13px;
+    background: var(--espresso); color: var(--paper);
+    border: none; border-radius: 4px;
+    font-family: Georgia, serif; font-size: 16px; letter-spacing: 1px;
+  }
+  button:disabled { opacity: 0.6; }
+  .quiet {
+    font-style: italic; font-size: 13px; text-align: center;
+    margin-top: 22px; line-height: 1.5;
+  }
+  #done { color: var(--sage); }
+  #error { color: var(--crust); }
+  .colophon {
+    font-style: italic; font-size: 11px; color: var(--cocoa);
+    text-align: center; margin-top: 34px;
+  }
+  [hidden] { display: none; }
+</style>
+</head>
+<body>
+<main class="page">
+  <p class="label">ДОМАШНЯЯ ПЕКАРНЯ · ГОСТЕВАЯ СТРАНИЦА</p>
+  <h1>МАДРЕ</h1>
+  <hr class="heavy">
+  <p class="recipe" id="recipeName"></p>
+  <p class="mood">вы попробовали этот хлеб — черкните пару слов,<br>
+     страница вклеится в семейную книгу рецептов</p>
+
+  <form id="guestForm">
+    <label class="field-label" for="author">как вас зовут</label>
+    <input id="author" name="author" maxlength="40" autocomplete="name">
+    <label class="field-label" for="text">пара слов о хлебе</label>
+    <textarea id="text" name="text" maxlength="500" required></textarea>
+    <button id="submit" type="submit">записать в книгу</button>
+  </form>
+
+  <p id="done" class="quiet" hidden>записано — спасибо, что были в гостях.<br>
+     ваши слова уже проступают на полях книги</p>
+  <p id="error" class="quiet" hidden>книга сейчас не отвечает — попробуйте ещё раз</p>
+
+  <hr class="hair">
+  <p class="colophon">— тираж: одна семья · печатается с любовью —</p>
+</main>
+<script>
+  const params = new URLSearchParams(location.search);
+  const recipeId = params.get('recipe') || '';
+  const recipeName = params.get('name') || '';
+  if (recipeName) {
+    document.getElementById('recipeName').textContent = '«' + recipeName + '»';
+  }
+
+  const form = document.getElementById('guestForm');
+  const errorLine = document.getElementById('error');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errorLine.hidden = true;
+    const button = document.getElementById('submit');
+    button.disabled = true;
+    try {
+      // Формат даты PocketBase: "yyyy-MM-dd HH:mm:ss.SSSZ" (UTC).
+      const createdAt = new Date().toISOString().replace('T', ' ');
+      const response = await fetch('/api/collections/guest_notes/records', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recipe_id: recipeId,
+          author: document.getElementById('author').value.trim(),
+          text: document.getElementById('text').value.trim(),
+          created_at: createdAt,
+        }),
+      });
+      if (!response.ok) throw new Error('pocketbase ' + response.status);
+      form.hidden = true;
+      document.getElementById('done').hidden = false;
+    } catch (err) {
+      errorLine.hidden = false;
+      button.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>

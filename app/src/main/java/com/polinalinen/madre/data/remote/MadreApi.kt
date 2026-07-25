@@ -48,6 +48,19 @@ interface MadreApi {
         @Query("sort") sort: String = "-written_at",
         @Query("perPage") perPage: Int = 100,
     ): RecordsPage<MarginNoteSyncRecord>
+
+    /**
+     * «Гостевая страница» (Cycle 7): отзывы гостей рецепта — вызывающий
+     * передаёт [PocketBaseFilter.forRecipe]. POST-а тут нет сознательно:
+     * гости пишут через публичную HTML-форму на самом PocketBase
+     * (server/pb_public/guest.html), приложение только читает.
+     */
+    @GET("api/collections/guest_notes/records")
+    suspend fun listGuestNotes(
+        @Query("filter") filter: String,
+        @Query("sort") sort: String = "-created_at",
+        @Query("perPage") perPage: Int = 100,
+    ): RecordsPage<GuestNoteRecord>
 }
 
 object MadreApiFactory {

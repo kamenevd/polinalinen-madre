@@ -41,8 +41,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.polinalinen.madre.BuildConfig
 import com.polinalinen.madre.R
+import com.polinalinen.madre.model.GuestPage
 import com.polinalinen.madre.ui.components.AgedPhoto
+import com.polinalinen.madre.ui.components.QrCode
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.WaxSealStamp
 import com.polinalinen.madre.ui.components.drawPhotoHolders
@@ -154,6 +157,13 @@ fun BakingCompleteScreen(
                     },
                 )
                 Spacer(Modifier.height(10.dp))
+                // «Гостевая страница» (Cycle 7, GuestPage): QR для гостей за
+                // столом — отзыв с их телефона, без установки приложения.
+                GuestPageSection(
+                    recipeId = session.recipe.id,
+                    recipeName = session.recipe.name,
+                )
+                Spacer(Modifier.height(10.dp))
             }
 
             Box(
@@ -223,6 +233,75 @@ private fun ShareStatsButton(shared: Boolean, onShare: () -> Unit, modifier: Mod
                 fontFamily = FontFamily.Serif,
                 fontSize = 15.sp,
                 letterSpacing = 1.sp,
+            )
+        }
+    }
+}
+
+/**
+ * «Гостевая страница» (DESIGN-V4.md Cycle 7, фича GuestPage): вторичная
+ * outline-кнопка, по нажатию разворачивается в QR — гость сканирует и
+ * попадает на публичную форму PocketBase (server/pb_public/guest.html).
+ * Отзыв потом проступит чужим почерком на гостевой странице рецепта.
+ */
+@Composable
+private fun GuestPageSection(recipeId: String, recipeName: String, modifier: Modifier = Modifier) {
+    val colors = AppColors.current
+    var showQr by remember { mutableStateOf(false) }
+    val url = GuestPage.guestUrl(BuildConfig.MADRE_API_URL, recipeId, recipeName)
+
+    if (!showQr) {
+        Box(
+            modifier
+                .fillMaxWidth()
+                .clickable { showQr = true }
+                .drawBehind {
+                    drawRoundRect(
+                        color = colors.espresso,
+                        cornerRadius = CornerRadius(4.dp.toPx()),
+                        style = Stroke(width = 1.5.dp.toPx()),
+                    )
+                }
+                .padding(vertical = 13.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                "Позвать гостей в книгу",
+                color = colors.espresso,
+                fontFamily = FontFamily.Serif,
+                fontSize = 15.sp,
+                letterSpacing = 1.sp,
+            )
+        }
+    } else {
+        Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+            // QR — как вклеенная карточка: подложка Cream с лёгким поворотом,
+            // тот же мотив, что фотокарточки. Поля подложки = тихая зона кода.
+            Box(
+                Modifier
+                    .rotate(1f)
+                    .drawBehind { drawRect(colors.cream) }
+                    .padding(14.dp),
+            ) {
+                QrCode(content = url)
+            }
+            Text(
+                "гости сканируют с телефона и оставляют пару слов —\nотзыв вклеится в гостевую страницу рецепта",
+                color = colors.cocoa,
+                fontFamily = FontFamily.Serif,
+                fontStyle = FontStyle.Italic,
+                fontSize = 11.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            Text(
+                url,
+                color = colors.flour,
+                fontFamily = FontFamily.SansSerif,
+                fontSize = 9.sp,
+                letterSpacing = 0.5.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 4.dp),
             )
         }
     }

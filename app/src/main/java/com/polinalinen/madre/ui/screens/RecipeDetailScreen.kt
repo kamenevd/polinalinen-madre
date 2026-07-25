@@ -59,7 +59,9 @@ import com.polinalinen.madre.ui.components.HandwrittenEditSurface
 import com.polinalinen.madre.ui.components.HeavyRule
 import com.polinalinen.madre.ui.components.PageLabel
 import com.polinalinen.madre.ui.components.WaxSealStamp
+import com.polinalinen.madre.ui.components.DustLayer
 import com.polinalinen.madre.ui.components.crumbs
+import com.polinalinen.madre.ui.components.dustLayer
 import com.polinalinen.madre.ui.components.lightPage
 import com.polinalinen.madre.ui.components.wornPage
 import com.polinalinen.madre.ui.theme.AppColors
@@ -104,6 +106,20 @@ fun RecipeDetailScreen(
         .collectAsState(initial = emptyList())
     val bakeCount by remember(recipeId) { sealedNoteViewModel.bakeCountFor(recipeId) }
         .collectAsState(initial = 0)
+    // «Пыль на страницах» (Cycle 8, DustLayer): сколько дней главу не открывали —
+    // разница между СЕЙЧАС и прошлым визитом из SharedPreferences. Читаем прошлую
+    // дату один раз до перезаписи (remember), новую пишем в LaunchedEffect ниже.
+    val context = LocalContext.current
+    val prefs = remember {
+        context.getSharedPreferences("madre_prefs", android.content.Context.MODE_PRIVATE)
+    }
+    val daysSinceOpened = remember(recipeId) {
+        DustLayer.daysSince(prefs.getLong("last_opened_$recipeId", 0L), System.currentTimeMillis())
+    }
+    LaunchedEffect(recipeId) {
+        prefs.edit().putLong("last_opened_$recipeId", System.currentTimeMillis()).apply()
+    }
+
     // «Библиотечная книга» (Cycle 6, LibraryNotes) — чужие заметки на полях.
     val libraryNotes by libraryNotesViewModel.notes.collectAsState()
     // «Гостевая страница» (Cycle 7, GuestPage) — отзывы гостей из guest_notes.
@@ -117,12 +133,16 @@ fun RecipeDetailScreen(
         // «Затёртая страница» (Cycle 4, WornPages) — износ висит на «листе»
         // (viewport-Box), а не на скроллящемся Column: край темнеет у кромки
         // экрана и не уезжает вместе с текстом.
-        // «Крошки между страниц» (Cycle 7, Crumbs) — первым в цепочке, т.е.
-        // внешним слоем: крошки лежат ПОВЕРХ износа и блика, как в настоящей
-        // книге. Свайп-смахивание не мешает вертикальному скроллу.
+        // «Крошки между страниц» (Cycle 7, Crumbs) — крошки лежат ПОВЕРХ износа
+        // и блика, как в настоящей книге. Свайп-смахивание не мешает
+        // вертикальному скроллу.
+        // «Пыль на страницах» (Cycle 8, DustLayer) — самый внешний слой: пыль
+        // осела последней и лежит поверх всего, включая крошки. Жест при этом
+        // первым забирает внутренний обработчик крошек — см. коммент dustLayer.
         Box(
             Modifier
                 .fillMaxSize()
+                .dustLayer(daysSinceOpened, seed = recipeId.hashCode().toLong())
                 .crumbs(bakeCount, seed = recipeId.hashCode().toLong())
                 .wornPage(bakeCount, seed = recipeId.hashCode().toLong())
                 .lightPage(watermark = nextRecipeName, mirrored = true)

@@ -54,6 +54,8 @@ import com.polinalinen.madre.model.LibraryNote
 import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.model.RecipeScaler
 import com.polinalinen.madre.ui.components.BookWormOverlay
+import com.polinalinen.madre.ui.components.Candlelight
+import com.polinalinen.madre.ui.components.candlelight
 import com.polinalinen.madre.ui.components.DottedLeaderRow
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.HandwrittenEditSurface
@@ -153,9 +155,18 @@ fun RecipeDetailScreen(
         // первым забирает внутренний обработчик крошек — см. коммент dustLayer.
         // «След от кружки» (Cycle 9, CoffeeRing) — между крошками и износом:
         // кофе пролит поверх печати, но крошки и пыль легли позже.
+        // «Чтение при свече» (Cycle 10, Candlelight) — самый верхний слой:
+        // после заката свет и полумрак ложатся поверх всей бумаги; палец
+        // модификатор только слушает, жесты нижних слоёв не трогает.
+        val candlelit = remember {
+            Candlelight.isCandleTime(
+                java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+            )
+        }
         Box(
             Modifier
                 .fillMaxSize()
+                .candlelight(candlelit)
                 .dustLayer(daysSinceOpened, seed = recipeId.hashCode().toLong())
                 .crumbs(bakeCount, seed = recipeId.hashCode().toLong())
                 .coffeeRings(coffeeRingCount, seed = recipeId.hashCode().toLong())

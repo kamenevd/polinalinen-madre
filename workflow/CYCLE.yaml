@@ -9,15 +9,70 @@
     "created_at": "2026-07-25T00:00:00Z",
     "updated_at": "2026-07-25T00:00:00Z"
   },
-  "features": [],
+  "features": [
+    {
+      "id": "family-book",
+      "title": "Семейная книга",
+      "needs_generated_asset": false,
+      "acceptance": [
+        "Пользователь может зарегистрироваться/войти и создать семейную книгу либо присоединиться по криптографически стойкому коду приглашения.",
+        "Auth token хранится через Android Keystore; без входа локальная книга полностью работает offline, а сетевые действия показывают явное состояние.",
+        "PocketBase API rules запрещают публичный CRUD и изолируют данные по family; custom join route требует auth и не раскрывает существование семьи по неверному коду.",
+        "Production API доступен только по HTTPS madre-api.kdnfx.space; Android cleartext exception удалён."
+      ]
+    },
+    {
+      "id": "shared-statistics",
+      "title": "Общая статистика семьи",
+      "needs_generated_asset": false,
+      "acceptance": [
+        "Завершённая выпечка синхронизируется в backend с owner, family и стабильным client_event_id; повторная доставка не создаёт дубль.",
+        "Поля Android DTO и PocketBase schema совпадают; существующая статистика на устройстве остаётся локально и может быть дозагружена после входа.",
+        "На Полке видны книги участников семьи; BookStatsScreen показывает реальные серверные записи выбранного участника и корректные empty/offline/error состояния.",
+        "Пользователь видит только статистику своей family; create/update/delete разрешены только владельцу записи."
+      ]
+    },
+    {
+      "id": "family-gallery",
+      "title": "Семейная галерея выпечки",
+      "needs_generated_asset": false,
+      "acceptance": [
+        "Фото выпечки перед upload пере-кодируется в JPEG без EXIF/GPS, не более 1600 px по длинной стороне и не более 5 MB.",
+        "Фото связано с bake record, хранится в защищённом file field PocketBase и доступно только участникам той же family по короткоживущему file token.",
+        "Галерея показывает thumbnails, автора, рецепт и дату; работает с локальным cache и понятными loading/offline/empty/error состояниями.",
+        "Владелец может удалить своё фото; другой участник семьи может только просматривать."
+      ]
+    }
+  ],
   "gates": {
-    "plan": {"status": "pending", "evidence": []},
-    "tdd": {"status": "pending", "evidence": []},
-    "build": {"status": "pending", "evidence": []},
-    "review": {"status": "pending", "evidence": []},
-    "visual": {"status": "pending", "evidence": []},
-    "runtime": {"status": "pending", "evidence": []},
-    "release": {"status": "pending", "evidence": []}
+    "plan": {
+      "status": "pending",
+      "evidence": []
+    },
+    "tdd": {
+      "status": "pending",
+      "evidence": []
+    },
+    "build": {
+      "status": "pending",
+      "evidence": []
+    },
+    "review": {
+      "status": "pending",
+      "evidence": []
+    },
+    "visual": {
+      "status": "pending",
+      "evidence": []
+    },
+    "runtime": {
+      "status": "pending",
+      "evidence": []
+    },
+    "release": {
+      "status": "pending",
+      "evidence": []
+    }
   },
   "reviews": [],
   "artifacts": {
@@ -27,5 +82,10 @@
     "release_url": null
   },
   "blockers": [],
-  "decisions": []
+  "decisions": [
+    "PocketBase 0.39.7 остаётся backend; schema/hooks/migrations версионируются в repository.",
+    "Room остаётся offline-first источником локального UX; backend используется для identity и sharing.",
+    "Все shared records family-scoped; публичный CRUD и public-by-default gallery запрещены.",
+    "Production endpoint только HTTPS madre-api.kdnfx.space; AI-generated assets не требуются."
+  ]
 }

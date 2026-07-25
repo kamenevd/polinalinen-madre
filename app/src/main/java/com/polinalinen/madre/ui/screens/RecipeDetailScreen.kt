@@ -53,6 +53,7 @@ import com.polinalinen.madre.model.GuestNote
 import com.polinalinen.madre.model.LibraryNote
 import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.model.RecipeScaler
+import com.polinalinen.madre.ui.components.BookWormOverlay
 import com.polinalinen.madre.ui.components.DottedLeaderRow
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.HandwrittenEditSurface
@@ -288,6 +289,14 @@ fun RecipeDetailScreen(
                 FullRecipeSection(recipe)
             }
         }
+
+        // «Книжный жучок» (Cycle 8, BookWorm) — редкий гость на левом поле;
+        // живёт на «стекле» viewport-а, поверх текста, но тапы забирает только
+        // маленькая мишень самого жучка. Чаще там, где пыльно (daysSinceOpened).
+        BookWormOverlay(
+            daysSinceOpened = daysSinceOpened,
+            modifier = Modifier.matchParentSize(),
+        )
         }
     }
 }

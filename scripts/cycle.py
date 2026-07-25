@@ -463,6 +463,10 @@ def main(argv: list[str] | None = None) -> int:
     state_path = args.state or args.manifest
     state = load_state(state_path)
     if args.command == "status":
+        errors = validate_state(state)
+        if errors:
+            print("\n".join(f"ERROR: {error}" for error in errors), file=sys.stderr)
+            return 1
         print(json.dumps({"cycle": state["cycle"], "gates": state["gates"], "blockers": state["blockers"]}, ensure_ascii=False, indent=2))
         return 0
     if args.command == "validate":

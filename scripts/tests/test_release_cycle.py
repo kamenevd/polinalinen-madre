@@ -105,7 +105,10 @@ class ReleaseCycleTests(unittest.TestCase):
             subprocess.run(["git", "init", "-q"], cwd=root, check=True)
             (root / "b.txt").write_text("b", encoding="utf-8")
             (root / "a.txt").write_text("a", encoding="utf-8")
-            subprocess.run(["git", "add", "a.txt", "b.txt"], cwd=root, check=True)
+            executable = root / "run.sh"
+            executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            executable.chmod(0o755)
+            subprocess.run(["git", "add", "a.txt", "b.txt", "run.sh"], cwd=root, check=True)
             first = root / "first.tar.gz"
             second = root / "second.tar.gz"
             release_cycle.create_reproducible_source_archive(root, first)
@@ -113,7 +116,11 @@ class ReleaseCycleTests(unittest.TestCase):
             self.assertEqual(release_cycle.sha256_file(first), release_cycle.sha256_file(second))
             with tarfile.open(first, "r:gz") as archive:
                 members = archive.getmembers()
-            self.assertEqual(["madre/a.txt", "madre/b.txt"], [item.name for item in members])
+            self.assertEqual(
+                ["madre/a.txt", "madre/b.txt", "madre/run.sh"],
+                [item.name for item in members],
+            )
+            self.assertEqual([0o644, 0o644, 0o755], [item.mode for item in members])
             self.assertTrue(all(item.mtime == 0 for item in members))
 
 

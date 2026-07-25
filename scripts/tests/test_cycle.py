@@ -1,7 +1,9 @@
+import io
 import json
 import os
 import tempfile
 import unittest
+from contextlib import redirect_stderr
 from pathlib import Path
 
 from scripts import cycle
@@ -108,6 +110,16 @@ class CycleStateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaisesRegex(cycle.CycleError, "evidence does not exist"):
                 cycle.mark_gate(state, "plan", "pass", ["missing.md"], Path(tmp))
+
+    def test_status_rejects_structurally_corrupt_state_without_keyerror(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            state_path = Path(tmp) / "state.json"
+            state_path.write_text('{"cycle": {}}', encoding="utf-8")
+            stderr = io.StringIO()
+            with redirect_stderr(stderr):
+                result = cycle.main(["--state", str(state_path), "status"])
+            self.assertEqual(1, result)
+            self.assertIn("ERROR:", stderr.getvalue())
 
     def test_atomic_save_round_trip(self):
         state = self.valid_state()

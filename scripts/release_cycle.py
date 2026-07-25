@@ -166,11 +166,19 @@ def ensure_git_repo_root(path: Path) -> Path:
     return resolved
 
 
-def _tracked_files(repo_root: Path) -> list[Path]:
+def _tracked_files(repo_root: Path) -> list[tuple[Path, int]]:
     result = subprocess.run(
-        ["git", "ls-files", "-z"], cwd=repo_root, check=True, capture_output=True
+        ["git", "ls-files", "--stage", "-z"], cwd=repo_root, check=True, capture_output=True
     )
-    return [Path(item.decode("utf-8")) for item in result.stdout.split(b"\0") if item]
+    tracked: list[tuple[Path, int]] = []
+    for item in result.stdout.split(b"\0"):
+        if not item:
+            continue
+        metadata, raw_path = item.split(b"\t", 1)
+        git_mode = metadata.split(b" ", 1)[0]
+        archive_mode = 0o755 if git_mode == b"100755" else 0o644
+        tracked.append((Path(raw_path.decode("utf-8")), archive_mode))
+    return tracked
 
 
 def safe_archive_relative(relative: Path) -> Path:
@@ -187,7 +195,9 @@ def create_reproducible_source_archive(repo_root: Path, output: Path) -> None:
         with open(tmp_name, "wb") as raw:
             with gzip.GzipFile(filename="", mode="wb", fileobj=raw, mtime=0) as compressed:
                 with tarfile.open(fileobj=compressed, mode="w") as archive:
-                    for relative in sorted(_tracked_files(repo_root), key=lambda p: p.as_posix()):
+                    for relative, archive_mode in sorted(
+                        _tracked_files(repo_root), key=lambda item: item[0].as_posix()
+                    ):
                         relative = safe_archive_relative(relative)
                         source = repo_root / relative
                         try:
@@ -202,9 +212,17 @@ def create_reproducible_source_archive(repo_root: Path, output: Path) -> None:
                         info.uid = info.gid = 0
                         info.uname = info.gname = ""
                         info.mtime = 0
+                        info.mode = archive_mode
                         with source.open("rb") as handle:
                             archive.addfile(info, handle)
+            raw.flush()
+            os.fsync(raw.fileno())
         os.replace(tmp_name, output)
+        directory_fd = os.open(output.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
     except BaseException:
         try:
             os.unlink(tmp_name)

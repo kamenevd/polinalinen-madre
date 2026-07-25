@@ -27,6 +27,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
@@ -160,6 +161,11 @@ fun Stamp(text: String, color: Color, modifier: Modifier = Modifier, rotation: F
  * заметно меньше рекомендованных 48dp. Раздуваем только invisible hit-area
  * через внешний Box, сама лента (Canvas) рисуется в исходном размере и
  * остаётся прижатой к тому же правому краю — на вид ничего не меняется.
+ *
+ * «Ветхое ляссе» (DESIGN-V4.md Cycle 9, AgedRibbon): [totalBakes] — возраст
+ * книги в выпечках; шёлк выцветает к пергаментному, нижний край
+ * обтрёпывается зазубринами, у зачитанной книги свисают нити. Все числа —
+ * чистые функции в [AgedRibbon].
  */
 @Composable
 fun RibbonBookmark(
@@ -168,7 +174,9 @@ fun RibbonBookmark(
     length: Dp = 92.dp,
     color: Color = AppColors.current.terracotta,
     description: String = "Открыть таймер активной выпечки",
+    totalBakes: Int = 0,
 ) {
+    val parchment = AppColors.current.parchment
     Box(
         modifier
             .width(maxOf(width, 48.dp))
@@ -180,15 +188,59 @@ fun RibbonBookmark(
             val w = size.width
             val h = size.height
             val notch = w * 0.45f
+            val tone = lerp(color, parchment, AgedRibbon.fadeFraction(totalBakes))
+            // Бахрома меняется с каждой выпечкой (seed от totalBakes) — край живёт.
+            val bites = AgedRibbon.notches(0x1A55EL * 31 + totalBakes, AgedRibbon.notchCount(totalBakes))
+                .sortedBy { it.position }
+
+            // Нижний край как путь t: 0 — правый угол, 0.5 — кончик V, 1 — левый.
+            fun edgePoint(t: Float): Offset = if (t < 0.5f) {
+                val f = t * 2f
+                Offset(w + (w / 2f - w) * f, h + (h - notch - h) * f)
+            } else {
+                val f = (t - 0.5f) * 2f
+                Offset(w / 2f * (1f - f), (h - notch) + notch * f)
+            }
+
             val path = Path().apply {
                 moveTo(0f, 0f)
                 lineTo(w, 0f)
                 lineTo(w, h)
-                lineTo(w / 2f, h - notch)
+                var tipPassed = false
+                bites.forEach { n ->
+                    if (!tipPassed && n.position >= 0.5f) {
+                        lineTo(w / 2f, h - notch)
+                        tipPassed = true
+                    }
+                    val t0 = (n.position - n.halfWidth).coerceIn(0f, 1f)
+                    val t1 = (n.position + n.halfWidth).coerceIn(0f, 1f)
+                    // Сам кончик V не выгрызаем — он и так остриё.
+                    if (t0 < 0.5f && t1 > 0.5f) return@forEach
+                    val p0 = edgePoint(t0)
+                    val bite = edgePoint(n.position)
+                    val p1 = edgePoint(t1)
+                    lineTo(p0.x, p0.y)
+                    lineTo(bite.x, bite.y - n.depth * w)
+                    lineTo(p1.x, p1.y)
+                }
+                if (!tipPassed) lineTo(w / 2f, h - notch)
                 lineTo(0f, h)
                 close()
             }
-            drawPath(path, color)
+            drawPath(path, tone)
+
+            // Нити с обтрёпанного края — тонкие, чуть изогнутые.
+            AgedRibbon.threads(0x1A55EL, AgedRibbon.threadCount(totalBakes)).forEach { t ->
+                val from = edgePoint(t.position)
+                val thread = Path().apply {
+                    moveTo(from.x, from.y)
+                    quadraticBezierTo(
+                        from.x + t.sway * 0.2f * w, from.y + t.length * 0.3f * w,
+                        from.x + t.sway * 0.35f * w, from.y + t.length * 0.6f * w,
+                    )
+                }
+                drawPath(thread, tone.copy(alpha = 0.8f), style = Stroke(width = 1.dp.toPx() * 0.8f))
+            }
         }
     }
 }

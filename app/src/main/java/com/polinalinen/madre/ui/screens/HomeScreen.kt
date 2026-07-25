@@ -113,6 +113,9 @@ fun HomeScreen(
     val remaining by viewModel.remainingSeconds.collectAsState()
     // «Затёртая страница» (Cycle 4, WornPages) — часто печёные главы темнеют.
     val bakeCounts by viewModel.bakeCounts.collectAsState()
+    // «Ветхое ляссе» (Cycle 9, AgedRibbon): лента стареет со всей книгой —
+    // возраст считаем по общему числу выпечек всех глав.
+    val totalBakes = bakeCounts.values.sum()
     // Ляссе ведёт к той выпечке, что ближе всего к следующему шагу.
     val nearestSessionId = sessions.minByOrNull { remaining[it.id] ?: Long.MAX_VALUE }?.id
     // «Мадре советует» — рецепт попроще, пока закваска на пике и время дорого.
@@ -194,12 +197,14 @@ fun HomeScreen(
                     Modifier
                         .align(Alignment.TopEnd)
                         .padding(end = 34.dp)
-                        .clickable { onOpenTimer(nearestSessionId) }
+                        .clickable { onOpenTimer(nearestSessionId) },
+                    totalBakes = totalBakes,
                 )
             } else {
                 moodBookmarkSpec(phase)?.let { spec ->
                     MoodBookmark(
                         spec = spec,
+                        totalBakes = totalBakes,
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .padding(end = 34.dp)
@@ -464,9 +469,9 @@ private fun moodBookmarkSpec(phase: GrowthPhase): MoodBookmarkSpec? {
 }
 
 @Composable
-private fun MoodBookmark(spec: MoodBookmarkSpec, modifier: Modifier = Modifier) {
+private fun MoodBookmark(spec: MoodBookmarkSpec, totalBakes: Int = 0, modifier: Modifier = Modifier) {
     Column(modifier, horizontalAlignment = Alignment.End) {
-        RibbonBookmark(color = spec.color, description = spec.description)
+        RibbonBookmark(color = spec.color, description = spec.description, totalBakes = totalBakes)
         Text(
             spec.label,
             color = spec.color,

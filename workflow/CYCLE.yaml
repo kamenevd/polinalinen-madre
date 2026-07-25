@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "cycle": {
+    "number": 11,
+    "kind": "feature",
+    "version": "5.1.0-cycle11",
+    "branch": "cycle/11",
+    "stage": "backlog",
+    "created_at": "2026-07-25T00:00:00Z",
+    "updated_at": "2026-07-25T00:00:00Z"
+  },
+  "features": [],
+  "gates": {
+    "plan": {"status": "pending", "evidence": []},
+    "tdd": {"status": "pending", "evidence": []},
+    "build": {"status": "pending", "evidence": []},
+    "review": {"status": "pending", "evidence": []},
+    "visual": {"status": "pending", "evidence": []},
+    "runtime": {"status": "pending", "evidence": []},
+    "release": {"status": "pending", "evidence": []}
+  },
+  "reviews": [],
+  "artifacts": {
+    "apk": null,
+    "source_archive": null,
+    "sha256": null,
+    "release_url": null
+  },
+  "blockers": [],
+  "decisions": []
+}

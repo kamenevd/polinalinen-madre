@@ -1,0 +1,74 @@
+name: Signed release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish signed release
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      KEYSTORE_PATH: ${{ github.workspace }}/release-keystore.jks
+      KEYSTORE_PASSWORD: ${{ secrets.MADRE_KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.MADRE_KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.MADRE_KEY_PASSWORD }}
+      MADRE_KEYSTORE_BASE64: ${{ secrets.MADRE_KEYSTORE_BASE64 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Verify tag, state and signing inputs
+        run: |
+          python3 scripts/cycle.py validate
+          python3 scripts/release_cycle.py plan
+          VERSION=$(python3 -c 'import json; print(json.load(open("workflow/CYCLE.yaml"))["cycle"]["version"])')
+          test "v${VERSION}" = "${GITHUB_REF_NAME}"
+          test -n "${MADRE_KEYSTORE_BASE64}"
+          test -n "${KEYSTORE_PASSWORD}"
+          test -n "${KEY_ALIAS}"
+          test -n "${KEY_PASSWORD}"
+
+      - name: Materialize release keystore
+        run: printf '%s' "${MADRE_KEYSTORE_BASE64}" | base64 --decode > "${KEYSTORE_PATH}"
+
+      - name: Test and build signed release
+        run: ./gradlew testDebugUnitTest lintRelease assembleRelease --no-daemon --stacktrace
+
+      - name: Package and verify release artifacts
+        run: |
+          APK=$(find app/build/outputs/apk/release -name '*.apk' -type f -print -quit)
+          test -n "${APK}"
+          python3 scripts/release_cycle.py package --apk "${APK}" --output dist
+          MANIFEST=$(find dist -name '*-manifest.json' -type f -print -quit)
+          python3 scripts/release_cycle.py verify "${MANIFEST}"
+
+      - name: Generate source and APK SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          artifact-name: madre-sbom.spdx.json
+          output-file: dist/madre-sbom.spdx.json
+          format: spdx-json
+
+      - name: Publish immutable GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+          make_latest: true

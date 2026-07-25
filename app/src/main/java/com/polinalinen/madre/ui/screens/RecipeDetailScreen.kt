@@ -61,7 +61,9 @@ import com.polinalinen.madre.ui.components.HeavyRule
 import com.polinalinen.madre.ui.components.HerbariumSection
 import com.polinalinen.madre.ui.components.PageLabel
 import com.polinalinen.madre.ui.components.WaxSealStamp
+import com.polinalinen.madre.ui.components.CoffeeRing
 import com.polinalinen.madre.ui.components.DustLayer
+import com.polinalinen.madre.ui.components.coffeeRings
 import com.polinalinen.madre.ui.components.crumbs
 import com.polinalinen.madre.ui.components.dustLayer
 import com.polinalinen.madre.ui.components.lightPage
@@ -121,6 +123,11 @@ fun RecipeDetailScreen(
     LaunchedEffect(recipeId) {
         prefs.edit().putLong("last_opened_$recipeId", System.currentTimeMillis()).apply()
     }
+    // «След от кружки» (Cycle 9, CoffeeRing): сколько раз выпечку этой главы
+    // прерывали — пишет BakingViewModel.cancelSession в те же madre_prefs.
+    val coffeeRingCount = remember(recipeId) {
+        prefs.getInt(CoffeeRing.prefsKey(recipeId), 0)
+    }
 
     // «Библиотечная книга» (Cycle 6, LibraryNotes) — чужие заметки на полях.
     val libraryNotes by libraryNotesViewModel.notes.collectAsState()
@@ -141,11 +148,14 @@ fun RecipeDetailScreen(
         // «Пыль на страницах» (Cycle 8, DustLayer) — самый внешний слой: пыль
         // осела последней и лежит поверх всего, включая крошки. Жест при этом
         // первым забирает внутренний обработчик крошек — см. коммент dustLayer.
+        // «След от кружки» (Cycle 9, CoffeeRing) — между крошками и износом:
+        // кофе пролит поверх печати, но крошки и пыль легли позже.
         Box(
             Modifier
                 .fillMaxSize()
                 .dustLayer(daysSinceOpened, seed = recipeId.hashCode().toLong())
                 .crumbs(bakeCount, seed = recipeId.hashCode().toLong())
+                .coffeeRings(coffeeRingCount, seed = recipeId.hashCode().toLong())
                 .wornPage(bakeCount, seed = recipeId.hashCode().toLong())
                 .lightPage(watermark = nextRecipeName, mirrored = true)
         ) {

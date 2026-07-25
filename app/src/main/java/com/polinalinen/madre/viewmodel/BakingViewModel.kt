@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.polinalinen.madre.MadreApplication
 import com.polinalinen.madre.model.BakingSession
 import com.polinalinen.madre.model.Recipe
+import com.polinalinen.madre.ui.components.CoffeeRing
 import com.polinalinen.madre.utils.PhotoStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -159,9 +160,22 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
         _remainingSeconds.update { it - id }
     }
 
-    /** Бросить выпечку до готовности — учитывается в [cancelledCount] (см. InkBlot). */
+    /**
+     * Бросить выпечку до готовности — учитывается в [cancelledCount] (см.
+     * InkBlot) и оставляет «След от кружки» на развороте этого рецепта
+     * (DESIGN-V4.md Cycle 9, CoffeeRing): счётчик прерываний пишется в
+     * madre_prefs и, в отличие от клякс, переживает перезапуск — высохший
+     * кофейный круг со страницы уже не смыть.
+     */
     fun cancelSession(id: Long) {
-        if (session(id)?.isCompleted == false) _cancelledCount.update { it + 1 }
+        val s = session(id)
+        if (s?.isCompleted == false) {
+            _cancelledCount.update { it + 1 }
+            val prefs = getApplication<Application>()
+                .getSharedPreferences("madre_prefs", android.content.Context.MODE_PRIVATE)
+            val key = CoffeeRing.prefsKey(s.recipe.id)
+            prefs.edit().putInt(key, prefs.getInt(key, 0) + 1).apply()
+        }
         exitSession(id)
     }
 

@@ -126,7 +126,7 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     // Navigation Compose — заменяет ручной Screen sealed class из v3
-    implementation("androidx.navigation:navigation-compose:2.7.7")
+    implementation("androidx.navigation:navigation-compose:2.9.8")
 
     // Serialization (recipes.json)
     implementation("com.google.code.gson:gson:2.10.1")

@@ -29,9 +29,8 @@ android {
         applicationId = "com.polinalinen.madre"
         minSdk = 26
         targetSdk = 35
-        // v4.0.0 ground-up rewrite — versionCode/versionName перепроверить с Гесом
-        // перед первым реальным коммитом в репозиторий (см. CLAUDE.md hard rule).
-        versionCode = 12
+        // versionCode is monotonic over the latest published release; release_cycle.py enforces it.
+        versionCode = 14
         versionName = "5.1.0-cycle11"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

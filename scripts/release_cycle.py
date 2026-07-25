@@ -73,6 +73,43 @@ def ensure_releasable(state: dict[str, Any]) -> None:
             raise ReleaseError(f"{gate} gate must pass before packaging")
 
 
+def ensure_version_code_increases(current: int, previous: int | None) -> None:
+    if previous is None:
+        if current != 1:
+            raise ReleaseError("previous release tag is required when versionCode is greater than 1")
+        return
+    if current <= previous:
+        raise ReleaseError(f"versionCode {current} must be greater than previous release {previous}")
+
+
+def previous_release_version_code(repo_root: Path) -> int | None:
+    latest = subprocess.run(
+        [
+            "git",
+            "for-each-ref",
+            "--sort=-creatordate",
+            "--format=%(refname:short)",
+            "--count=1",
+            "refs/tags",
+        ],
+        cwd=repo_root,
+        text=True,
+        check=True,
+        capture_output=True,
+    )
+    tag = latest.stdout.strip()
+    if not tag:
+        return None
+    shown = subprocess.run(
+        ["git", "show", f"{tag}:app/build.gradle.kts"],
+        cwd=repo_root,
+        text=True,
+        check=True,
+        capture_output=True,
+    )
+    return parse_gradle_version(shown.stdout)[0]
+
+
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -114,6 +151,19 @@ def verify_manifest(manifest: dict[str, Any], root: Path) -> list[str]:
         if sha256_file(path) != record.get("sha256"):
             errors.append(f"{kind}: sha256 mismatch")
     return errors
+
+
+def ensure_git_repo_root(path: Path) -> Path:
+    resolved = path.resolve()
+    result = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        cwd=resolved,
+        text=True,
+        capture_output=True,
+    )
+    if result.returncode != 0 or Path(result.stdout.strip()).resolve() != resolved:
+        raise ReleaseError(f"not a Git repository root: {path}")
+    return resolved
 
 
 def _tracked_files(repo_root: Path) -> list[Path]:
@@ -190,6 +240,7 @@ def package(repo_root: Path, state_path: Path, apk_path: Path, output_dir: Path)
     version_code, gradle_version = parse_gradle_version(gradle_path.read_text(encoding="utf-8"))
     if gradle_version != version:
         raise ReleaseError(f"Gradle version {gradle_version} does not match cycle {version}")
+    ensure_version_code_increases(version_code, previous_release_version_code(repo_root))
     if not apk_path.is_file():
         raise ReleaseError(f"APK does not exist: {apk_path}")
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -216,6 +267,7 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--state", type=Path, default=Path("workflow/CYCLE.yaml"))
     pack = sub.add_parser("package")
     pack.add_argument("--state", type=Path, default=Path("workflow/CYCLE.yaml"))
+    pack.add_argument("--repo-root", type=Path, default=Path.cwd())
     pack.add_argument("--apk", type=Path, required=True)
     pack.add_argument("--output", type=Path, default=Path("dist"))
     verify = sub.add_parser("verify")
@@ -237,7 +289,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(artifact_names(state["cycle"]["version"]), indent=2))
         return 0
     if args.command == "package":
-        repo_root = args.state.resolve().parent.parent
+        repo_root = ensure_git_repo_root(args.repo_root)
         manifest = package(repo_root, args.state.resolve(), args.apk.resolve(), args.output.resolve())
         print(manifest)
         return 0

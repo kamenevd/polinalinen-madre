@@ -35,6 +35,16 @@ class ReleaseCycleTests(unittest.TestCase):
         self.assertIn("versionCode = 12", updated)
         self.assertIn('versionName = "5.1.0-cycle11"', updated)
 
+    def test_version_code_must_increase_over_previous_release(self):
+        release_cycle.ensure_version_code_increases(12, 11)
+        with self.assertRaisesRegex(release_cycle.ReleaseError, "must be greater"):
+            release_cycle.ensure_version_code_increases(11, 11)
+        with self.assertRaisesRegex(release_cycle.ReleaseError, "must be greater"):
+            release_cycle.ensure_version_code_increases(10, 11)
+        release_cycle.ensure_version_code_increases(1, None)
+        with self.assertRaisesRegex(release_cycle.ReleaseError, "previous release tag"):
+            release_cycle.ensure_version_code_increases(14, None)
+
     def test_incomplete_gate_blocks_release(self):
         state = self.releasable_state()
         state["gates"]["runtime"]["status"] = "pending"

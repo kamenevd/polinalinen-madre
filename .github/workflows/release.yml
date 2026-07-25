@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  checks: read
 
 concurrency:
   group: release-${{ github.ref }}
@@ -19,6 +20,15 @@ jobs:
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Verify tagged commit passed protected checks
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "${GITHUB_SHA}" origin/main
+          python3 scripts/verify_github_release_context.py
       - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
         with:
           distribution: temurin
@@ -32,6 +42,7 @@ jobs:
           KEY_ALIAS: ${{ secrets.MADRE_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.MADRE_KEY_PASSWORD }}
           MADRE_KEYSTORE_BASE64: ${{ secrets.MADRE_KEYSTORE_BASE64 }}
+          MADRE_SIGNING_CERT_SHA256: ${{ secrets.MADRE_SIGNING_CERT_SHA256 }}
         run: |
           python3 scripts/cycle.py validate
           python3 scripts/release_cycle.py plan
@@ -40,6 +51,7 @@ jobs:
           test -n "${KEYSTORE_PASSWORD}"
           test -n "${KEY_ALIAS}"
           test -n "${KEY_PASSWORD}"
+          test -n "${MADRE_SIGNING_CERT_SHA256}"
 
       - name: Materialize release keystore
         env:
@@ -60,10 +72,13 @@ jobs:
         run: rm -f "${{ github.workspace }}/release-keystore.jks"
 
       - name: Package and verify release artifacts
+        env:
+          MADRE_SIGNING_CERT_SHA256: ${{ secrets.MADRE_SIGNING_CERT_SHA256 }}
         run: |
-          APK=$(find app/build/outputs/apk/release -name '*.apk' -type f -print -quit)
+          APK=$(python3 -c 'from pathlib import Path; files=list(Path("app/build/outputs/apk/release").glob("*.apk")); print(files[0] if len(files) == 1 else "")')
           test -n "${APK}"
-          python3 scripts/release_cycle.py package --apk "${APK}" --output dist
+          python3 scripts/verify_apk_signature.py "${APK}"
+          python3 scripts/release_cycle.py package --repo-root . --apk "${APK}" --output dist
           MANIFEST=$(find dist -name '*-manifest.json' -type f -print -quit)
           python3 scripts/release_cycle.py verify "${MANIFEST}"
 

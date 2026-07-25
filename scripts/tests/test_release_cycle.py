@@ -1,4 +1,6 @@
 import json
+import subprocess
+import tarfile
 import tempfile
 import unittest
 from pathlib import Path
@@ -82,6 +84,27 @@ class ReleaseCycleTests(unittest.TestCase):
             manifest = release_cycle.make_manifest("5.1.0-cycle11", 12, apk, source)
             encoded = json.dumps(manifest)
             self.assertEqual(manifest, json.loads(encoded))
+
+    def test_archive_path_guard_rejects_traversal(self):
+        with self.assertRaisesRegex(release_cycle.ReleaseError, "unsafe path"):
+            release_cycle.safe_archive_relative(Path("../escape"))
+
+    def test_source_archive_is_reproducible(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            (root / "b.txt").write_text("b", encoding="utf-8")
+            (root / "a.txt").write_text("a", encoding="utf-8")
+            subprocess.run(["git", "add", "a.txt", "b.txt"], cwd=root, check=True)
+            first = root / "first.tar.gz"
+            second = root / "second.tar.gz"
+            release_cycle.create_reproducible_source_archive(root, first)
+            release_cycle.create_reproducible_source_archive(root, second)
+            self.assertEqual(release_cycle.sha256_file(first), release_cycle.sha256_file(second))
+            with tarfile.open(first, "r:gz") as archive:
+                members = archive.getmembers()
+            self.assertEqual(["madre/a.txt", "madre/b.txt"], [item.name for item in members])
+            self.assertTrue(all(item.mtime == 0 for item in members))
 
 
 if __name__ == "__main__":

@@ -123,6 +123,12 @@ def _tracked_files(repo_root: Path) -> list[Path]:
     return [Path(item.decode("utf-8")) for item in result.stdout.split(b"\0") if item]
 
 
+def safe_archive_relative(relative: Path) -> Path:
+    if relative.is_absolute() or not relative.parts or any(part in {"", ".", ".."} for part in relative.parts):
+        raise ReleaseError(f"unsafe path in tracked files: {relative}")
+    return relative
+
+
 def create_reproducible_source_archive(repo_root: Path, output: Path) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_name = tempfile.mkstemp(prefix=f".{output.name}.", suffix=".tmp", dir=output.parent)
@@ -132,7 +138,14 @@ def create_reproducible_source_archive(repo_root: Path, output: Path) -> None:
             with gzip.GzipFile(filename="", mode="wb", fileobj=raw, mtime=0) as compressed:
                 with tarfile.open(fileobj=compressed, mode="w") as archive:
                     for relative in sorted(_tracked_files(repo_root), key=lambda p: p.as_posix()):
+                        relative = safe_archive_relative(relative)
                         source = repo_root / relative
+                        try:
+                            source.resolve(strict=True).relative_to(repo_root.resolve(strict=True))
+                        except (OSError, ValueError) as exc:
+                            raise ReleaseError(f"tracked file escapes repository: {relative}") from exc
+                        if source.is_symlink():
+                            raise ReleaseError(f"tracked symlinks are not allowed in source archive: {relative}")
                         if not source.is_file():
                             continue
                         info = archive.gettarinfo(str(source), arcname=f"madre/{relative.as_posix()}")

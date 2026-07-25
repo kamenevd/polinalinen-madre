@@ -33,10 +33,13 @@ class DocumentationContractTests(unittest.TestCase):
             "OpenRouter",
             "gpt-5.6-sol",
             "gpt-5.6-terra",
-            "Claude Sonnet 5",
+            "Claude Opus 5",
             "GLM 5.2",
             "MiniMax M3",
             "DeepSeek V4 Pro",
+            "/var/lib/madre-workflow",
+            "events.ndjson",
+            "flock",
         ):
             self.assertIn(required, text)
 

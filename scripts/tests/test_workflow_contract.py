@@ -1,3 +1,4 @@
+import re
 import unittest
 from pathlib import Path
 
@@ -56,6 +57,14 @@ class WorkflowContractTests(unittest.TestCase):
         for gate in ("PLAN", "TDD", "BUILD", "REVIEW", "VISUAL", "RUNTIME"):
             self.assertIn(gate, text)
         self.assertIn("workflow/CYCLE.yaml", text)
+
+    def test_all_github_actions_are_pinned_to_commit_sha(self):
+        for workflow in ("quality-gates.yml", "release.yml"):
+            text = self.read(f".github/workflows/{workflow}")
+            uses = re.findall(r"^\s*-?\s*uses:\s*([^\s#]+)", text, re.MULTILINE)
+            self.assertTrue(uses, workflow)
+            for action in uses:
+                self.assertRegex(action, r"^[^@]+@[0-9a-f]{40}$", f"unpinned action: {action}")
 
 
 if __name__ == "__main__":

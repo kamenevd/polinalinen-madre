@@ -3,11 +3,13 @@
 С 25.07.2026 этот файл больше не является очередью автономного агента.
 История старого чеклиста остаётся в Git.
 
-Единственный источник текущего состояния:
+Источники без раздвоения ролей:
 
-- `workflow/CYCLE.yaml` — цикл, версия, фичи, стадии, gates и blockers;
+- `workflow/CYCLE.yaml` — versioned manifest/checkpoint цикла;
+- `/var/lib/madre-workflow/runs/<run-id>/state.json` — текущее runtime-состояние;
+- соседний `events.ndjson` — append-only аудит переходов;
 - `docs/WORKFLOW-V2.md` — правила выполнения;
-- `python3 scripts/cycle.py status` — человекочитаемый статус;
+- `python3 scripts/cycle.py --state <path> status` — человекочитаемый статус;
 - `python3 scripts/cycle.py validate` — fail-closed проверка контракта.
 
 Следующий цикл — **Cycle 11**, стадия `backlog`. Его фичи нельзя начинать до

@@ -14,8 +14,8 @@
       "properties": {
         "number": {"type": "integer", "minimum": 1},
         "kind": {"enum": ["feature", "maintenance"]},
-        "version": {"type": "string", "minLength": 1},
-        "branch": {"type": "string", "pattern": "^cycle/[0-9]+$"},
+        "version": {"type": "string", "pattern": "^[0-9A-Za-z][0-9A-Za-z._-]*$"},
+        "branch": {"type": "string", "pattern": "^(cycle|maintenance)/[0-9]+$"},
         "stage": {"enum": ["backlog", "planning", "implementing", "reviewing", "validating", "releasable", "released"]},
         "created_at": {"type": "string", "format": "date-time"},
         "updated_at": {"type": "string", "format": "date-time"}
@@ -61,7 +61,19 @@
       }
     },
     "blockers": {"type": "array", "items": {"type": "object"}},
-    "decisions": {"type": "array", "items": {"type": "object"}}
+    "decisions": {"type": "array", "items": {"type": "object"}},
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "base_sha", "manifest_sha256", "operation_keys", "last_safe_checkpoint"],
+      "properties": {
+        "run_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"},
+        "base_sha": {"type": "string", "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$"},
+        "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "operation_keys": {"type": "object"},
+        "last_safe_checkpoint": {"type": "string", "minLength": 1}
+      }
+    }
   },
   "$defs": {
     "gate": {

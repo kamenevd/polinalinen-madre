@@ -5,10 +5,14 @@ from __future__ import annotations
 
 import argparse
 import copy
+import fcntl
+import hashlib
 import json
 import os
+import re
 import sys
 import tempfile
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -25,6 +29,10 @@ REQUIRED_GATES = {
     "released": GATE_ORDER,
 }
 VALID_GATE_STATUSES = {"pending", "pass", "fail"}
+DEFAULT_RUNTIME_ROOT = Path(os.environ.get("MADRE_WORKFLOW_HOME", "/var/lib/madre-workflow"))
+RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+GIT_SHA_PATTERN = re.compile(r"^[0-9a-f]{40}([0-9a-f]{24})?$")
+SAFE_VERSION_PATTERN = re.compile(r"^[0-9A-Za-z][0-9A-Za-z._-]*$")
 
 
 class CycleError(ValueError):
@@ -33,6 +41,76 @@ class CycleError(ValueError):
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def state_sha256(state: dict[str, Any]) -> str:
+    payload = json.dumps(state, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def runtime_state_path(run_id: str, runtime_root: Path = DEFAULT_RUNTIME_ROOT) -> Path:
+    if not RUN_ID_PATTERN.fullmatch(run_id):
+        raise CycleError("invalid run id")
+    root = runtime_root.resolve()
+    path = (root / "runs" / run_id / "state.json").resolve()
+    try:
+        path.relative_to(root)
+    except ValueError as exc:
+        raise CycleError("runtime state escapes runtime root") from exc
+    return path
+
+
+def initialize_runtime_state(
+    manifest: dict[str, Any], run_id: str, base_sha: str
+) -> dict[str, Any]:
+    errors = validate_state(manifest)
+    if errors:
+        raise CycleError("invalid manifest: " + "; ".join(errors))
+    if not RUN_ID_PATTERN.fullmatch(run_id):
+        raise CycleError("invalid run id")
+    if not GIT_SHA_PATTERN.fullmatch(base_sha):
+        raise CycleError("base SHA must be a 40 or 64 character lowercase hex digest")
+    state = copy.deepcopy(manifest)
+    state["runtime"] = {
+        "run_id": run_id,
+        "base_sha": base_sha,
+        "manifest_sha256": state_sha256(manifest),
+        "operation_keys": {},
+        "last_safe_checkpoint": "initialized",
+    }
+    return state
+
+
+def append_event(journal: Path, action: str, details: dict[str, Any]) -> None:
+    if not action.strip():
+        raise CycleError("event action must not be empty")
+    journal.parent.mkdir(parents=True, exist_ok=True)
+    event = {"timestamp": utc_now(), "action": action, "details": details}
+    payload = (json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n").encode("utf-8")
+    fd = os.open(journal, os.O_APPEND | os.O_CREAT | os.O_WRONLY, 0o600)
+    try:
+        os.write(fd, payload)
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+@contextmanager
+def workflow_lock(path: Path, blocking: bool = True):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handle = path.open("a+", encoding="utf-8")
+    try:
+        flags = fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB)
+        try:
+            fcntl.flock(handle.fileno(), flags)
+        except BlockingIOError as exc:
+            raise CycleError(f"workflow is already locked: {path}") from exc
+        yield
+    finally:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        finally:
+            handle.close()
 
 
 def load_state(path: Path) -> dict[str, Any]:
@@ -56,6 +134,11 @@ def save_state(path: Path, state: dict[str, Any]) -> None:
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(tmp_name, path)
+        dir_fd = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
     except BaseException:
         try:
             os.unlink(tmp_name)
@@ -71,6 +154,8 @@ def _has_evidence(item: Any) -> bool:
 def validate_state(state: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     required = {"schema_version", "cycle", "features", "gates", "reviews", "artifacts", "blockers", "decisions"}
+    allowed_root = required | {"runtime"}
+    errors.extend(f"unknown root field: {field}" for field in sorted(set(state) - allowed_root))
     missing = sorted(required - set(state))
     errors.extend(f"missing root field: {field}" for field in missing)
     if missing:
@@ -83,18 +168,26 @@ def validate_state(state: dict[str, Any]) -> list[str]:
     if not isinstance(meta, dict):
         errors.append("cycle must be an object")
         return errors
+    allowed_cycle = {"number", "kind", "version", "branch", "stage", "created_at", "updated_at"}
+    errors.extend(f"unknown cycle field: {field}" for field in sorted(set(meta) - allowed_cycle))
     number = meta.get("number")
+    kind = meta.get("kind")
     if not isinstance(number, int) or number < 1:
         errors.append("cycle.number must be a positive integer")
-    elif meta.get("branch") != f"cycle/{number}":
-        errors.append(f"cycle.branch must be cycle/{number}")
-    if meta.get("kind") not in {"feature", "maintenance"}:
+    elif kind in {"feature", "maintenance"}:
+        prefix = "cycle" if kind == "feature" else "maintenance"
+        if meta.get("branch") != f"{prefix}/{number}":
+            errors.append(f"cycle.branch must be {prefix}/{number}")
+    if kind not in {"feature", "maintenance"}:
         errors.append("cycle.kind must be feature or maintenance")
     if meta.get("stage") not in STAGE_ORDER:
         errors.append(f"cycle.stage must be one of: {', '.join(STAGE_ORDER)}")
     for field in ("version", "created_at", "updated_at"):
         if not isinstance(meta.get(field), str) or not meta[field].strip():
             errors.append(f"cycle.{field} must be a non-empty string")
+    version = meta.get("version")
+    if isinstance(version, str) and not SAFE_VERSION_PATTERN.fullmatch(version):
+        errors.append("cycle.version contains unsafe characters")
 
     features = state.get("features")
     if not isinstance(features, list):
@@ -105,6 +198,10 @@ def validate_state(state: dict[str, Any]) -> list[str]:
         if not isinstance(feature, dict):
             errors.append(f"feature {index}: must be an object")
             continue
+        allowed_feature = {"id", "title", "acceptance", "needs_generated_asset"}
+        errors.extend(
+            f"feature {index}: unknown field: {field}" for field in sorted(set(feature) - allowed_feature)
+        )
         feature_id = feature.get("id")
         if not isinstance(feature_id, str) or not feature_id:
             errors.append(f"feature {index}: id is required")
@@ -122,11 +219,16 @@ def validate_state(state: dict[str, Any]) -> list[str]:
     if not isinstance(gates, dict):
         errors.append("gates must be an object")
         return errors
+    errors.extend(f"unknown gate: {field}" for field in sorted(set(gates) - set(GATE_ORDER)))
     for index, name in enumerate(GATE_ORDER):
         gate = gates.get(name)
         if not isinstance(gate, dict):
             errors.append(f"missing gate: {name}")
             continue
+        errors.extend(
+            f"gate {name}: unknown field: {field}"
+            for field in sorted(set(gate) - {"status", "evidence"})
+        )
         status = gate.get("status")
         evidence = gate.get("evidence")
         if status not in VALID_GATE_STATUSES:
@@ -150,6 +252,36 @@ def validate_state(state: dict[str, Any]) -> list[str]:
             errors.append(f"{list_name} must be an array")
     if not isinstance(state.get("artifacts"), dict):
         errors.append("artifacts must be an object")
+    else:
+        allowed_artifacts = {"apk", "source_archive", "sha256", "release_url"}
+        errors.extend(
+            f"unknown artifacts field: {field}"
+            for field in sorted(set(state["artifacts"]) - allowed_artifacts)
+        )
+    runtime = state.get("runtime")
+    if runtime is not None:
+        if not isinstance(runtime, dict):
+            errors.append("runtime must be an object")
+        else:
+            allowed_runtime = {
+                "run_id", "base_sha", "manifest_sha256", "operation_keys", "last_safe_checkpoint"
+            }
+            errors.extend(
+                f"unknown runtime field: {field}" for field in sorted(set(runtime) - allowed_runtime)
+            )
+            run_id = runtime.get("run_id")
+            if not isinstance(run_id, str) or not RUN_ID_PATTERN.fullmatch(run_id):
+                errors.append("runtime.run_id is invalid")
+            base_sha = runtime.get("base_sha")
+            if not isinstance(base_sha, str) or not GIT_SHA_PATTERN.fullmatch(base_sha):
+                errors.append("runtime.base_sha is invalid")
+            manifest_hash = runtime.get("manifest_sha256")
+            if not isinstance(manifest_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", manifest_hash):
+                errors.append("runtime.manifest_sha256 is invalid")
+            if not isinstance(runtime.get("operation_keys"), dict):
+                errors.append("runtime.operation_keys must be an object")
+            if not isinstance(runtime.get("last_safe_checkpoint"), str):
+                errors.append("runtime.last_safe_checkpoint must be a string")
     return errors
 
 
@@ -218,8 +350,13 @@ def add_blocker(state: dict[str, Any], text: str) -> dict[str, Any]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--state", type=Path, default=Path("workflow/CYCLE.yaml"))
+    parser.add_argument("--state", type=Path, help="external runtime state path")
+    parser.add_argument("--manifest", type=Path, default=Path("workflow/CYCLE.yaml"))
+    parser.add_argument("--runtime-root", type=Path, default=DEFAULT_RUNTIME_ROOT)
     sub = parser.add_subparsers(dest="command", required=True)
+    init = sub.add_parser("init")
+    init.add_argument("--run-id", required=True)
+    init.add_argument("--base-sha", required=True)
     sub.add_parser("status")
     sub.add_parser("validate")
     gate = sub.add_parser("mark-gate")
@@ -233,10 +370,41 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _is_within(path: Path, parent: Path) -> bool:
+    try:
+        path.resolve().relative_to(parent.resolve())
+        return True
+    except ValueError:
+        return False
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    state = load_state(args.state)
-    repo_root = args.state.resolve().parent.parent
+    repo_root = Path.cwd().resolve()
+    lock_path = args.runtime_root / "locks" / "madre-workflow.lock"
+
+    if args.command == "init":
+        manifest = load_state(args.manifest)
+        state = initialize_runtime_state(manifest, args.run_id, args.base_sha)
+        state_path = runtime_state_path(args.run_id, args.runtime_root)
+        with workflow_lock(lock_path, blocking=False):
+            if state_path.exists():
+                raise CycleError(f"run already exists: {args.run_id}")
+            save_state(state_path, state)
+            append_event(
+                state_path.parent / "events.ndjson",
+                "init",
+                {
+                    "base_sha": args.base_sha,
+                    "manifest_sha256": state["runtime"]["manifest_sha256"],
+                    "state_sha256": state_sha256(state),
+                },
+            )
+        print(state_path)
+        return 0
+
+    state_path = args.state or args.manifest
+    state = load_state(state_path)
     if args.command == "status":
         print(json.dumps({"cycle": state["cycle"], "gates": state["gates"], "blockers": state["blockers"]}, ensure_ascii=False, indent=2))
         return 0
@@ -247,14 +415,31 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         print("CYCLE VALID")
         return 0
-    if args.command == "mark-gate":
-        state = mark_gate(state, args.gate, args.status, args.evidence, repo_root)
-    elif args.command == "advance":
-        state = advance(state, args.stage)
-    elif args.command == "add-blocker":
-        state = add_blocker(state, args.text)
-    save_state(args.state, state)
-    print(f"UPDATED {args.state}")
+
+    if args.state is None:
+        raise CycleError("mutating commands require --state outside the Git worktree")
+    if _is_within(state_path, repo_root):
+        raise CycleError("runtime state must be outside the Git worktree")
+
+    with workflow_lock(lock_path, blocking=False):
+        before = state_sha256(state)
+        if args.command == "mark-gate":
+            state = mark_gate(state, args.gate, args.status, args.evidence, repo_root)
+        elif args.command == "advance":
+            state = advance(state, args.stage)
+        elif args.command == "add-blocker":
+            state = add_blocker(state, args.text)
+        save_state(state_path, state)
+        append_event(
+            state_path.parent / "events.ndjson",
+            args.command,
+            {
+                "before_sha256": before,
+                "after_sha256": state_sha256(state),
+                "stage": state["cycle"]["stage"],
+            },
+        )
+    print(f"UPDATED {state_path}")
     return 0
 
 

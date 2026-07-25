@@ -3,7 +3,8 @@
 ## Неподвижные правила
 
 - `main` защищён; разработка идёт только в `cycle/N` или `maintenance/N`.
-- `workflow/CYCLE.yaml` — единственный источник текущего состояния.
+- `workflow/CYCLE.yaml` — versioned cycle manifest и подписываемый checkpoint.
+- Канонический runtime state живёт вне worktree: `/var/lib/madre-workflow/runs/<run-id>/state.json`.
 - JSON внутри `CYCLE.yaml` намеренный: JSON является валидным YAML 1.2 и читается Python stdlib без скрытой зависимости.
 - Ни модель, ни человек не объявляют PASS без проверяемого evidence.
 - Автор изменения не является единственным reviewer.
@@ -15,7 +16,8 @@
 `backlog → planning → implementing → reviewing → validating → releasable → released`
 
 Переходы монотонны. `scripts/cycle.py` запрещает возврат назад и переход, для
-которого не прошли обязательные gates. Обновление состояния атомарное.
+которого не прошли обязательные gates. Обновление состояния атомарное; один
+оркестратор удерживает `flock` на `/var/lib/madre-workflow/locks/madre-workflow.lock`.
 
 ## Quality gates
 
@@ -29,8 +31,9 @@
 - **RUNTIME:** KVM emulator, clean install, smoke/E2E, отсутствие crash/ANR; эмулятор после проверки выключен.
 - **RELEASE:** версия и tag совпадают, signing inputs полны, APK/source/SBOM/manifest имеют SHA-256, GitHub Release доступен и проверен скачиванием.
 
-Evidence хранится в `workflow/evidence/cycle-N/` либо как HTTPS-ссылка на
-неизменяемый CI run/release. Локальные временные файлы не считаются evidence.
+Evidence хранится рядом с external state либо как HTTPS-ссылка на неизменяемый
+CI run/release. `events.ndjson` — append-only журнал переходов и хешей. В Git
+попадает только проверенный checkpoint/release manifest, не редактируемая рабочая копия.
 
 ## Команда моделей
 
@@ -40,7 +43,7 @@ Evidence хранится в `workflow/evidence/cycle-N/` либо как HTTPS-
 - **gpt-5.6-sol:** главный оркестратор и gatekeeper; собирает evidence, реализует контрольный слой, принимает финальные решения.
 - **gpt-5.6-terra:** параллельные Plan/Explore/Regression агенты с холодным контекстом.
 - **gpt-5.6-luna:** финальная reflection-проверка против цели и пропущенных рисков.
-- **Claude Sonnet 5:** глубокая реализация и Android code-review непосредственно на LXC108.
+- **Claude Opus 5:** глубокая реализация и Android code-review непосредственно на LXC108; default подтверждён live-вызовом.
 - **GLM 5.2:** архитектура, Kotlin/Gradle, backend/PocketBase и синтез длинного контекста.
 - **MiniMax M3:** продуктовая целостность «Живой книги», UX, альтернативные идеи и критика однообразия.
 - **DeepSeek V4 Pro:** независимый adversarial review алгоритмов, concurrency, производительности и security.
@@ -67,7 +70,8 @@ Canvas, Compose layout, типографика и обычные иконки н
 1. Создать ветку из свежего `main`, проверить clean tree и toolchain.
 2. Сверить backlog, DESIGN, ADR и уже реализованные механики.
 3. Получить разнообразные предложения моделей; отсеять дубли и фичи без ценности.
-4. Записать 1–3 фичи, acceptance criteria и риски в `CYCLE.yaml`; пройти PLAN.
+4. Записать 1–3 фичи, acceptance criteria и риски в `CYCLE.yaml`; инициализировать
+   внешний run через `cycle.py init`; пройти PLAN.
 5. Для каждой фичи: failing test → подтверждённый RED → минимальная реализация → GREEN → отдельный commit.
 6. Выполнить независимое REVIEW; исправления снова проходят тесты и повторный diff-review.
 7. Пройти BUILD, VISUAL и RUNTIME на реальных инструментах.
@@ -78,7 +82,8 @@ Canvas, Compose layout, типографика и обычные иконки н
 
 ## Recovery и идемпотентность
 
-- После рестарта сначала `cycle.py validate` и `status`, затем проверка Git/CI.
+- После рестарта загрузить внешний `state.json`, перечитать `events.ndjson`, затем
+  `cycle.py --state <path> validate` и `status` и сверить Git/CI.
 - PASS gate не выполняется повторно без причины; evidence перечитывается.
 - Частичный генератор пишет временный файл и делает atomic rename только после успеха.
 - Release с существующим tag/manifest не повторяется автоматически.

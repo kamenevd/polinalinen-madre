@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.kapt")
+    id("io.github.takahirom.roborazzi")
 }
 
 android {
@@ -80,6 +81,17 @@ android {
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.5"
     }
+
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+        unitTests.all {
+            it.maxHeapSize = "2048m"
+        }
+    }
+}
+
+roborazzi {
+    outputDir.set(file("src/test/snapshots"))
 }
 
 dependencies {
@@ -132,6 +144,9 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("com.google.truth:truth:1.2.0")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.0")
+    testImplementation("androidx.test.ext:junit:1.1.5")
+    testImplementation("org.robolectric:robolectric:4.16.1")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.70.0")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test:runner:1.5.2")

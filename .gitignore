@@ -1,13 +1,21 @@
-*.iml
+# Gradle / Android
 .gradle/
-/local.properties
-.idea/
-.DS_Store
-/build
-/app/build
-/captures
-.externalNativeBuild
-.cxx
+**/build/
 local.properties
-*.keystore
+*.apk
+*.aab
+
+# Python workflow tools
+__pycache__/
+*.py[cod]
+
+# IDE / OS
+.idea/
+*.iml
+.DS_Store
+
+# Local secrets and release material
+.env
 *.jks
+*.keystore
+workflow/evidence/local/

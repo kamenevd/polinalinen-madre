@@ -37,27 +37,43 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.polinalinen.madre.data.db.entities.StorageLocation
+import com.polinalinen.madre.ui.components.AgedPhoto
 import com.polinalinen.madre.ui.components.PageLabel
 import com.polinalinen.madre.ui.components.drawPhotoHolders
+import com.polinalinen.madre.ui.photo.rememberPhotoAttachment
 import com.polinalinen.madre.ui.theme.AppColors
+import com.polinalinen.madre.utils.PhotoStore
 
 /**
  * Кормление закваски — экран 5. Точный порт мокапа s-feed из
- * madre-v4-prototype.html (мука/вода по 50г умолчание, Кухня/Холод —
- * штампы-переключатели, декоративная фотокарточка без реального файла —
- * как и в прототипе, заметка на полях). Cycle 3, 2026-07-21.
+ * madre-v4-prototype.html (мука/вода по 50г умолчание, Кухня/Холод — штампы-переключатели,
+ * декоративная фотокарточка).
+ *
+ * Cycle 11: фотокарточка теперь полноценная — на слот-зону можно нажать,
+ * открывается модалка «Камера / Галерея», кадр проходит «Стол оформления»
+ * (ui/photo/PhotoDesigner) и только потом становится файлом в filesDir, путь
+ * которого уезжает в FeedingEntity.photoPath. Старая бутафория (flip
+ * `photoAttached`) удалена — реальный путь должен доехать до репозитория.
  */
 @Composable
 fun FeedingFormScreen(
-    onSave: (flourGrams: Int, waterGrams: Int, location: StorageLocation, note: String?) -> Unit,
+    onSave: (flourGrams: Int, waterGrams: Int, location: StorageLocation, note: String?, photoPath: String?) -> Unit,
     onBack: () -> Unit,
 ) {
     val colors = AppColors.current
+
     var flourText by remember { mutableStateOf("50") }
     var waterText by remember { mutableStateOf("50") }
     var location by remember { mutableStateOf(StorageLocation.KITCHEN) }
     var note by remember { mutableStateOf("") }
-    var photoAttached by remember { mutableStateOf(false) }
+    var photoPath by remember { mutableStateOf<String?>(null) }
+
+    // Ключ 0 — записи кормления ещё не существует, id появится только после
+    // onSave. Имя файла и так уникально по времени, переименовывать нечего.
+    val openPhotoSource = rememberPhotoAttachment(
+        kind = PhotoStore.PhotoKind.FEEDING,
+        key = 0L,
+    ) { path -> photoPath = path }
 
     Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
         Column(
@@ -106,36 +122,75 @@ fun FeedingFormScreen(
                 )
             }
 
-            Box(
-                Modifier
-                    .padding(horizontal = 22.dp, vertical = 18.dp)
-                    .fillMaxWidth()
-                    .rotate(1f)
-                    .drawBehind { drawRect(colors.cream) }
-                    .padding(10.dp)
-                    .clickable { photoAttached = !photoAttached }
-                    .drawBehind {
-                        drawRoundRect(
-                            color = colors.flour,
-                            style = Stroke(
-                                width = 1.dp.toPx(),
-                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 5f)),
-                            ),
-                        )
-                        // Уголки-держатели — как в бумажном фотоальбоме, DESIGN-V4.md §/5.
-                        // Рисунок общий с AgedPhoto (Cycle 6) — см. ui/components/AgedPhoto.kt.
-                        drawPhotoHolders(colors.cocoa.copy(alpha = 0.55f), 14.dp.toPx())
-                    }
-                    .padding(vertical = 18.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    if (photoAttached) "фотокарточка вклеена ✦" else "вклеить фотокарточку",
-                    color = colors.cocoa,
-                    fontFamily = FontFamily.Serif,
-                    fontStyle = FontStyle.Italic,
-                    fontSize = 12.sp,
-                )
+            // Слот фотокарточки:
+            //  - пустой — кликабельный с пунктирной рамкой и камерой-иконкой,
+            //    тап открывает модалку «Камера / Галерея»;
+            //  - заполненный — AgedPhoto (та же карточка, что для выпечки).
+            if (photoPath == null) {
+                Box(
+                    Modifier
+                        .padding(horizontal = 22.dp, vertical = 18.dp)
+                        .fillMaxWidth()
+                        .rotate(1f)
+                        .drawBehind { drawRect(colors.cream) }
+                        .padding(10.dp)
+                        .clickable { openPhotoSource() }
+                        .drawBehind {
+                            drawRoundRect(
+                                color = colors.flour,
+                                style = Stroke(
+                                    width = 1.dp.toPx(),
+                                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 5f)),
+                                ),
+                            )
+                            drawPhotoHolders(colors.cocoa.copy(alpha = 0.55f), 14.dp.toPx())
+                        }
+                        .padding(vertical = 18.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        "вклеить фотокарточку",
+                        color = colors.cocoa,
+                        fontFamily = FontFamily.Serif,
+                        fontStyle = FontStyle.Italic,
+                        fontSize = 12.sp,
+                    )
+                }
+            } else {
+                Box(Modifier.padding(horizontal = 22.dp, vertical = 18.dp)) {
+                    AgedPhoto(
+                        photoPath = photoPath!!,
+                        takenAtMillis = System.currentTimeMillis(),
+                        height = 160.dp,
+                    )
+                }
+                Row(
+                    Modifier.padding(horizontal = 22.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        "заменить фотокарточку",
+                        color = colors.crust,
+                        fontFamily = FontFamily.Serif,
+                        fontStyle = FontStyle.Italic,
+                        fontSize = 12.sp,
+                        modifier = Modifier.clickable { openPhotoSource() },
+                    )
+                    Text(
+                        "·",
+                        color = colors.cocoa,
+                        fontFamily = FontFamily.Serif,
+                        fontSize = 12.sp,
+                    )
+                    Text(
+                        "убрать",
+                        color = colors.crust,
+                        fontFamily = FontFamily.Serif,
+                        fontStyle = FontStyle.Italic,
+                        fontSize = 12.sp,
+                        modifier = Modifier.clickable { photoPath = null },
+                    )
+                }
             }
 
             Column(Modifier.padding(horizontal = 22.dp, vertical = 4.dp)) {
@@ -181,7 +236,7 @@ fun FeedingFormScreen(
                         val flour = flourText.toIntOrNull() ?: 0
                         val water = waterText.toIntOrNull() ?: 0
                         val trimmedNote = note.trim()
-                        onSave(flour, water, location, if (trimmedNote.isBlank()) null else trimmedNote)
+                        onSave(flour, water, location, if (trimmedNote.isBlank()) null else trimmedNote, photoPath)
                     }
                     .drawBehind {
                         drawRoundRect(colors.espresso, cornerRadius = CornerRadius(4.dp.toPx()))

@@ -51,8 +51,20 @@ class SourdoughViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Заметка на полях — пусто трактуем как null (см. FeedingEntity.notes). */
-    fun feed(flourGrams: Int, waterGrams: Int, location: StorageLocation, note: String?) {
+    /**
+     * Cycle 11: кормление теперь может нести фотокарточку (камера или галерея).
+     * Заметка — пусто трактуем как null (см. FeedingEntity.notes). photoPath
+     * приходит уже как абсолютный путь в filesDir — никаких content URI
+     * наружу не утекает, чтобы не получить IllegalArgumentException при
+     * SecurityException через сутки, когда процесс перезапустится.
+     */
+    fun feed(
+        flourGrams: Int,
+        waterGrams: Int,
+        location: StorageLocation,
+        note: String?,
+        photoPath: String? = null,
+    ) {
         val configId = _config.value?.id ?: return
         viewModelScope.launch {
             val feeding = FeedingEntity(
@@ -61,10 +73,12 @@ class SourdoughViewModel(app: Application) : AndroidViewModel(app) {
                 waterGrams = waterGrams,
                 storageLocation = location,
                 notes = note,
+                photoPath = photoPath,
             )
             val feedingId = repository.addFeeding(feeding)
             // Cycle 5: кормление уходит в общую книгу фоном (retry без сети).
             // Заметка и место хранения — личное, наружу только мука/вода/время.
+            // photoPath не шарим — личное.
             syncRepository.shareFeedingStat(feedingId, flourGrams, waterGrams, feeding.timestampMillis)
         }
     }

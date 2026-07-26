@@ -1,17 +1,13 @@
 package com.polinalinen.madre.viewmodel
 
 import android.app.Application
-import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.polinalinen.madre.MadreApplication
 import com.polinalinen.madre.model.BakingSession
 import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.ui.components.CoffeeRing
-import com.polinalinen.madre.utils.PhotoStore
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -129,19 +125,29 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * «Старое фото» (Cycle 6): скопировать выбранный в PhotoPicker снимок в
-     * internal storage и вклеить путь в запись формуляра этой выпечки.
-     * Запись создаётся асинхронно в advanceStep, но к моменту, когда человек
-     * успел выбрать фото, insert давно завершён — bakeRecordIds уже заполнен.
+     * «Старое фото» (Cycle 6 → Cycle 11): вклеить готовый снимок в запись
+     * формуляра этой выпечки. На вход приходит АБСОЛЮТНЫЙ путь файла в
+     * filesDir — копированием, поворотом и оформлением занимается
+     * ui/photo/PhotoAttachment, а content-URI до Room не доходит вовсе.
+     *
+     * Запись формуляра создаётся асинхронно в advanceStep, но к моменту, когда
+     * человек выбрал и оформил кадр, insert давно завершён — bakeRecordIds
+     * уже заполнен.
      */
-    fun attachBakePhoto(sessionId: Long, source: Uri) {
-        viewModelScope.launch {
-            val path = withContext(Dispatchers.IO) {
-                PhotoStore.saveBakePhoto(getApplication(), source, sessionId)
-            } ?: return@launch
-            _bakePhotoPaths.update { it + (sessionId to path) }
-            bakeRecordIds[sessionId]?.let { recordId -> bakeHistoryRepository.attachPhoto(recordId, path) }
-        }
+    fun attachBakePhoto(sessionId: Long, absolutePath: String) {
+        if (absolutePath.isBlank()) return
+        _bakePhotoPaths.update { it + (sessionId to absolutePath) }
+        val recordId = bakeRecordIds[sessionId] ?: return
+        viewModelScope.launch { bakeHistoryRepository.attachPhoto(recordId, absolutePath) }
+    }
+
+    /**
+     * Cycle 11: убрать фотокарточку со страницы. Файл в filesDir намеренно не
+     * удаляем: та же карточка может быть уже вписана в запись формуляра, и
+     * стирать её из-под истории книги эта кнопка не должна.
+     */
+    fun clearBakePhoto(sessionId: Long) {
+        _bakePhotoPaths.update { it - sessionId }
     }
 
     fun stepBack(id: Long) {

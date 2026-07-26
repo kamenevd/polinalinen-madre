@@ -146,8 +146,8 @@ fun MadreNavHost(navController: NavHostController = rememberNavController()) {
         }
         composable(MadreDestinations.FEEDING_FORM) {
             FeedingFormScreen(
-                onSave = { flourGrams, waterGrams, location, note ->
-                    sourdoughViewModel.feed(flourGrams, waterGrams, location, note)
+                onSave = { flourGrams, waterGrams, location, note, photoPath ->
+                    sourdoughViewModel.feed(flourGrams, waterGrams, location, note, photoPath)
                     navController.popBackStack()
                 },
                 onBack = { navController.popBackStack() },

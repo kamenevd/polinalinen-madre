@@ -11,9 +11,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -70,38 +71,48 @@ fun StarterDiaryScreen(
     // свежее кормление (id), т.к. отдельного id у DiaryEntry/фазы нет.
     val inkEventId = history.firstOrNull()?.id ?: 0L
 
+    // history[0] — текущее кормление, оно уже показано выше как «Мадре пишет».
+    // Архив прошлых глав — всё остальное, и это единственный список экрана,
+    // который растёт без потолка: он и едет в LazyColumn как настоящие items.
+    val pastFeedings = history.drop(1)
+    var expandedArchiveId by remember { mutableStateOf<Long?>(null) }
+
     Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
         // «Страница на просвет» (Cycle 4, LightPage): наклон телефона ловит
         // свет — блик по бумаге и водяной знак живой культуры. Висит на
-        // «листе», не на скроллящемся Column. Без датчика — молчит.
+        // «листе», не на скроллящемся списке. Без датчика — молчит.
         Box(Modifier.fillMaxSize().lightPage(watermark = "MADRE · ЖИВАЯ КУЛЬТУРА · ДЕНЬ $dayNumber")) {
-        Column(
+        LazyColumn(
             Modifier
                 .statusBarsPadding()
-                .breathingPage(phase) // страница дышит — механика #5
-                .verticalScroll(rememberScrollState())
-                .padding(bottom = 24.dp)
+                .breathingPage(phase), // страница дышит — механика #5
+            contentPadding = PaddingValues(bottom = 24.dp),
         ) {
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                PageLabel("← Первая полоса", Modifier.clickable { onBack() })
-                PageLabel("Глава VII · день $dayNumber")
-            }
+            item {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    PageLabel("← Первая полоса", Modifier.clickable { onBack() })
+                    PageLabel("Глава VII · день $dayNumber")
+                }
 
-            Text(
-                "Мадре пишет:",
-                color = colors.espresso,
-                fontFamily = FontFamily.Serif,
-                fontWeight = FontWeight.Bold,
-                fontSize = 28.sp,
-                modifier = Modifier.padding(horizontal = 22.dp),
-            )
+                Text(
+                    "Мадре пишет:",
+                    color = colors.espresso,
+                    fontFamily = FontFamily.Serif,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 28.sp,
+                    modifier = Modifier.padding(horizontal = 22.dp),
+                )
+            }
 
             // Дневник — рукописный шрифт, вертикальная линия полей слева.
             // Поверх — кляксы (InkBlot, Cycle 3): отменённая выпечка и голодная
             // фаза оставляют детерминированный след прямо на странице дневника.
+            // Записей всегда единицы (их порождает MadreVoice из одной фазы),
+            // поэтому это один item, а не items.
+            item {
             Box(Modifier.padding(horizontal = 22.dp, vertical = 12.dp)) {
                 Column(
                     Modifier
@@ -154,12 +165,35 @@ fun StarterDiaryScreen(
                     )
                 }
             }
+            }
 
-            DiaryArchiveSection(history = history, profile = profile)
+            // «Прошлые главы» (Cycle 1, DiaryArchive) — единственный список без
+            // потолка: одна строка на каждое прошлое кормление за всю жизнь
+            // закваски. Ключ — id записи, поэтому раскрытая глава остаётся
+            // раскрытой, когда сверху добавляется новое кормление.
+            if (pastFeedings.isNotEmpty()) {
+                item { DiaryArchiveHeader() }
+                itemsIndexed(pastFeedings, key = { _, feeding -> feeding.id }) { i, feeding ->
+                    DiaryArchiveRow(
+                        feeding = feeding,
+                        // «Следующее» кормление, которым закончилась эта глава, —
+                        // на один индекс ближе к настоящему в исходном списке.
+                        nextFeedingMillis = history[i].timestampMillis,
+                        profile = profile,
+                        expanded = expandedArchiveId == feeding.id,
+                        onToggle = {
+                            expandedArchiveId = if (expandedArchiveId == feeding.id) null else feeding.id
+                        },
+                    )
+                }
+            }
 
+            item {
             BubbleVignette(phase, Modifier.padding(horizontal = 22.dp, vertical = 8.dp))
 
-            // Формуляр выпечки — механика #4
+            // Формуляр выпечки — механика #4. Он сознательно ограничен десятью
+            // последними строками, поэтому живёт одним item: разбивать его на
+            // items незачем, а клякса поверх требует общего Box.
             PageLabel("Формуляр кормлений", Modifier.padding(start = 22.dp, top = 10.dp), color = colors.espresso)
             Box(Modifier.padding(horizontal = 22.dp, vertical = 8.dp)) {
             Column(
@@ -224,86 +258,88 @@ fun StarterDiaryScreen(
             ) {
                 Text("Покормить", color = colors.paper, fontFamily = FontFamily.Serif, fontSize = 16.sp, letterSpacing = 1.sp)
             }
+            }
         }
         }
     }
 }
 
 /**
- * «Прошлые главы» (DESIGN-V4.md Cycle 1, фича DiaryArchive) — оглавление
- * второго тома: одна строка на прошлое кормление (дата римскими + первая
- * строка записи), тап разворачивает, чем закончилась эта глава.
- *
- * history[0] — текущее, ещё не завершённое кормление (уже показано выше
- * как «Мадре пишет»), поэтому архив — history.drop(1). Для каждой прошлой
- * записи «следующее» кормление, которым она закончилась, — это
- * history[i] (на один индекс ближе к настоящему в исходном списке).
+ * Заголовок «Прошлых глав» (DESIGN-V4.md Cycle 1, фича DiaryArchive) —
+ * оглавление второго тома. Отдельный item списка: строки архива ниже едут
+ * как настоящие items с ключами, и общего Column у них больше нет.
  */
 @Composable
-private fun DiaryArchiveSection(
-    history: List<FeedingEntity>,
+private fun DiaryArchiveHeader(modifier: Modifier = Modifier) {
+    val colors = AppColors.current
+    Row(
+        modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        HairRule(Modifier.weight(1f))
+        PageLabel("Прошлые главы", color = colors.espresso, modifier = Modifier.padding(horizontal = 10.dp))
+        HairRule(Modifier.weight(1f))
+    }
+}
+
+/**
+ * Одна прошлая глава: дата римскими + первая строка записи, тап разворачивает,
+ * чем эта глава закончилась ([nextFeedingMillis] — кормление, которое её
+ * оборвало).
+ */
+@Composable
+private fun DiaryArchiveRow(
+    feeding: FeedingEntity,
+    nextFeedingMillis: Long,
     profile: SourdoughProfile,
+    expanded: Boolean,
+    onToggle: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = AppColors.current
-    val pastFeedings = history.drop(1)
-    if (pastFeedings.isEmpty()) return
+    // Своя рука на прошлую главу — FamilyHand, fallback-ключ = id кормления
+    // (у FeedingEntity нет userId, но каждая запись всё же выглядит по-своему).
+    val hand = FamilyHand.forUser(null, feeding.id).style()
 
-    var expandedId by remember { mutableStateOf<Long?>(null) }
-
-    Column(modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 10.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            HairRule(Modifier.weight(1f))
-            PageLabel("Прошлые главы", color = colors.espresso, modifier = Modifier.padding(horizontal = 10.dp))
-            HairRule(Modifier.weight(1f))
-        }
-        Column(Modifier.padding(top = 10.dp)) {
-            pastFeedings.forEachIndexed { i, feeding ->
-                val nextFeedingMillis = history[i].timestampMillis
-                val expanded = expandedId == feeding.id
-                // Своя рука на прошлую главу — FamilyHand, fallback-ключ = id кормления
-                // (у FeedingEntity нет userId, но каждая запись всё же выглядит по-своему).
-                val hand = FamilyHand.forUser(null, feeding.id).style()
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable { expandedId = if (expanded) null else feeding.id }
-                        .padding(vertical = 8.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.Top) {
-                        Text(
-                            romanDate(feeding.timestampMillis),
-                            color = colors.cocoa,
-                            fontFamily = FontFamily.SansSerif,
-                            fontSize = 11.sp,
-                            letterSpacing = 1.sp,
-                            modifier = Modifier.width(56.dp).padding(top = 3.dp),
-                        )
-                        Text(
-                            MadreVoice.archiveFirstLine(feeding),
-                            color = hand.ink,
-                            fontFamily = FontFamily.Cursive,
-                            fontWeight = hand.fontWeight,
-                            fontSize = 16.sp,
-                            maxLines = if (expanded) Int.MAX_VALUE else 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f).rotate(hand.rotationDeg),
-                        )
-                    }
-                    AnimatedVisibility(visible = expanded) {
-                        Text(
-                            MadreVoice.archiveFate(feeding, nextFeedingMillis, profile),
-                            color = colors.sage,
-                            fontFamily = FontFamily.Cursive,
-                            fontSize = 15.sp,
-                            lineHeight = 21.sp,
-                            modifier = Modifier.padding(start = 56.dp, top = 3.dp),
-                        )
-                    }
-                }
-                HairRule()
+    Column(modifier.fillMaxWidth().padding(horizontal = 22.dp)) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clickable { onToggle() }
+                .padding(vertical = 8.dp)
+        ) {
+            Row(verticalAlignment = Alignment.Top) {
+                Text(
+                    romanDate(feeding.timestampMillis),
+                    color = colors.cocoa,
+                    fontFamily = FontFamily.SansSerif,
+                    fontSize = 11.sp,
+                    letterSpacing = 1.sp,
+                    modifier = Modifier.width(56.dp).padding(top = 3.dp),
+                )
+                Text(
+                    MadreVoice.archiveFirstLine(feeding),
+                    color = hand.ink,
+                    fontFamily = FontFamily.Cursive,
+                    fontWeight = hand.fontWeight,
+                    fontSize = 16.sp,
+                    maxLines = if (expanded) Int.MAX_VALUE else 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f).rotate(hand.rotationDeg),
+                )
+            }
+            AnimatedVisibility(visible = expanded) {
+                Text(
+                    MadreVoice.archiveFate(feeding, nextFeedingMillis, profile),
+                    color = colors.sage,
+                    fontFamily = FontFamily.Cursive,
+                    fontSize = 15.sp,
+                    lineHeight = 21.sp,
+                    modifier = Modifier.padding(start = 56.dp, top = 3.dp),
+                )
             }
         }
+        HairRule()
     }
 }
 

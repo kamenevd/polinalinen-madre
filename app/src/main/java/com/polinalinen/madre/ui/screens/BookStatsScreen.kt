@@ -5,17 +5,17 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -75,13 +75,18 @@ fun BookStatsScreen(
     val buckets = remember(dates) { weeklyHeat(dates, WEEKS) }
     val maxBucket = (buckets.maxOrNull() ?: 0).coerceAtLeast(1)
 
+    // Главы едут строками по три: список рецептов задан книгой, но растёт с
+    // каждым новым, и держать его целиком смонтированным (как делал прежний
+    // LazyVerticalGrid с руками посчитанной высотой внутри verticalScroll) —
+    // ровно то, чего LazyColumn и должен избегать.
+    val chapterRows = remember(recipes) { recipes.chunked(CHAPTER_COLUMNS) }
+
     Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
-        Column(
-            Modifier
-                .statusBarsPadding()
-                .verticalScroll(rememberScrollState())
-                .padding(bottom = 32.dp)
+        LazyColumn(
+            Modifier.statusBarsPadding(),
+            contentPadding = PaddingValues(bottom = 32.dp),
         ) {
+            item {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -147,19 +152,32 @@ fun BookStatsScreen(
 
             HairRule(Modifier.padding(horizontal = 22.dp, vertical = 16.dp))
             PageLabel("Главы", color = colors.espresso, modifier = Modifier.padding(horizontal = 22.dp))
+            Spacer(Modifier.height(10.dp))
+            }
 
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(3),
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp).height((((recipes.size + 2) / 3) * 130).dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                items(recipes) { r ->
-                    val count = records.count { it.recipeId == r.id }
-                    ChapterTile(r.name, count, onClick = { if (count > 0) openedRecipe = r })
+            // Ключ — id первого рецепта строки: строки главы стабильны, пока
+            // стабилен порядок книги, и перерисовываются только изменившиеся.
+            items(chapterRows, key = { row -> row.first().id }) { row ->
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 5.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    row.forEach { r ->
+                        val count = records.count { it.recipeId == r.id }
+                        ChapterTile(
+                            name = r.name,
+                            count = count,
+                            onClick = { if (count > 0) openedRecipe = r },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    // Хвост неполной строки — пустые места, чтобы последняя
+                    // плитка не растянулась на всю ширину.
+                    repeat(CHAPTER_COLUMNS - row.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
 
+            item {
             Text(
                 "страницы проявляются по мере того, как здесь пекут",
                 color = colors.cocoa,
@@ -169,6 +187,7 @@ fun BookStatsScreen(
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
             )
+            }
         }
     }
 
@@ -186,8 +205,11 @@ fun BookStatsScreen(
             textContentColor = colors.espresso,
             title = { Text(opened.name, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold) },
             text = {
-                Column(Modifier.verticalScroll(rememberScrollState())) {
-                    attempts.forEach { a ->
+                // Попыток у любимой главы бывает много, и почти у каждой —
+                // фотокарточка: список ленивый, чтобы лайтбокс не декодировал
+                // разом все снимки за всю историю книги.
+                LazyColumn(Modifier.heightIn(max = LIGHTBOX_MAX_HEIGHT)) {
+                    items(attempts, key = { it.id }) { a ->
                         val d = Instant.ofEpochMilli(a.completedAtMillis).atZone(ZoneId.systemDefault()).toLocalDate()
                         Text("${formatRuDate(d)} · ×${a.portions}", fontFamily = FontFamily.Serif, fontSize = 14.sp)
                         // «Старое фото» (Cycle 6, AgedPhoto): вклеенная фотокарточка
@@ -227,9 +249,9 @@ private fun FormularRow(label: String, value: String) {
 }
 
 @Composable
-private fun ChapterTile(name: String, count: Int, onClick: () -> Unit) {
+private fun ChapterTile(name: String, count: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val colors = AppColors.current
-    Column(Modifier.clickable(enabled = count > 0, onClick = onClick)) {
+    Column(modifier.clickable(enabled = count > 0, onClick = onClick)) {
         Box(
             Modifier
                 .fillMaxWidth()
@@ -262,6 +284,12 @@ private fun ChapterTile(name: String, count: Int, onClick: () -> Unit) {
 }
 
 private const val WEEKS = 12
+
+/** Три главы в строке — как в прежней сетке разворота. */
+private const val CHAPTER_COLUMNS = 3
+
+/** Потолок лайтбокса: AlertDialog не даёт ленивому списку бесконечную высоту. */
+private val LIGHTBOX_MAX_HEIGHT = 420.dp
 
 private fun weeklyHeat(dates: List<LocalDate>, weeks: Int): List<Int> {
     val now = LocalDate.now()

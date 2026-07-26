@@ -83,7 +83,6 @@ fun HomeScreen(
     onOpenFeeding: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenShelf: () -> Unit,
-    onOpenNotifications: () -> Unit,
     viewModel: BakingViewModel = viewModel(),
     communityViewModel: CommunityStatsViewModel = viewModel(),
     weatherViewModel: WeatherViewModel = viewModel(),
@@ -133,7 +132,7 @@ fun HomeScreen(
                 .dampPaper(weatherNote?.dampAlpha ?: 0f)
         ) {
             LazyColumn(modifier = Modifier.statusBarsPadding()) {
-                item { Masthead(season, onOpenSettings, onOpenShelf, onOpenNotifications) }
+                item { Masthead(season, onOpenSettings, onOpenShelf) }
                 item { MadreLine(madreHeadline, onOpenStarter) }
                 item {
                     WeatherMargin(
@@ -227,7 +226,6 @@ private fun Masthead(
     season: Season,
     onOpenSettings: () -> Unit,
     onOpenShelf: () -> Unit,
-    onOpenNotifications: () -> Unit,
 ) {
     val colors = AppColors.current
     val date = SimpleDateFormat("EEEE · d MMMM", Locale("ru")).format(Date())
@@ -235,10 +233,7 @@ private fun Masthead(
         Modifier.fillMaxWidth().padding(top = 22.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            PageLabel("Домашняя пекарня Полины", modifier = Modifier.clickable { onOpenShelf() })
-            PageLabel(" · Записки", modifier = Modifier.clickable { onOpenNotifications() })
-        }
+        PageLabel("Домашняя пекарня Полины", modifier = Modifier.clickable { onOpenShelf() })
         Text(
             "МАДРЕ",
             color = colors.espresso,
@@ -286,7 +281,7 @@ private fun MadreLine(headline: String, onOpenStarter: () -> Unit) {
 /**
  * «Погода за окном» (DESIGN-V4.md Cycle 7, фича WeatherPage) — заметка Мадре
  * на полях первой полосы: рукописная (Cursive), с лёгким поворотом, как
- * пометки MarginNotes. Пока разрешения на геолокацию нет — тихая строка-
+ * заметки Мадре. Пока разрешения на геолокацию нет — тихая строка-
  * приглашение; в мягкую погоду и без разрешения-отказа блок молчит совсем.
  */
 @Composable

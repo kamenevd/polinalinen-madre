@@ -40,6 +40,10 @@ class SyncWorker(
         when (kind) {
             KIND_BAKE -> api.postBakeStat(gson.fromJson(payload, BakeStatRecord::class.java))
             KIND_FEEDING -> api.postFeedingStat(gson.fromJson(payload, FeedingStatRecord::class.java))
+            // Cycle 11: писать сюда больше некому — «Пометы на полях» убраны.
+            // Ветка остаётся, чтобы уже поставленная в очередь WorkManager
+            // отправка (она переживает обновление приложения) дослалась, а не
+            // падала в бесконечный retry на неизвестном kind.
             KIND_MARGIN_NOTE -> api.postMarginNote(gson.fromJson(payload, MarginNoteSyncRecord::class.java))
             else -> error("Неизвестный вид синхронизации: $kind")
         }

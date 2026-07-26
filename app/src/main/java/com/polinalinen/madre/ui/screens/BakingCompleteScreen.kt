@@ -231,7 +231,7 @@ fun BakingCompleteScreen(
 /**
  * Круглая сургучная печать — центральный мотив экрана. Общая механика штампа
  * (DESIGN-V4.md §«Графический язык»/Штампы) вынесена в WaxSealStamp
- * (ui/components/BookComponents.kt, Cycle 2) — переиспользуется в TimeCapsule.
+ * (ui/components/BookComponents.kt, Cycle 2).
  */
 @Composable
 private fun WaxSeal(dateLabel: String, modifier: Modifier = Modifier) {

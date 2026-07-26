@@ -170,7 +170,7 @@ fun StarterDiaryScreen(
                 Row(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
                     FormHeader("дата", 1.2f)
                     FormHeader("мука/вода", 2f)
-                    FormHeader("отметка", 1.5f, alignEnd = true)
+                    FormHeader("заметка", 1.5f, alignEnd = true)
                 }
                 Box(Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
                     androidx.compose.foundation.Canvas(Modifier.fillMaxWidth().padding(0.dp)) {

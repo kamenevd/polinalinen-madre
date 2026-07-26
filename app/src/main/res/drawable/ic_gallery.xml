@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Cycle 11: «Галерея» — иконка для PhotoSourceChooser. Простой vector-drawable,
+    без SVG-зависимостей, чтобы не тащить внешних библиотек. Стиль —
+    тёплый espresso-контур, как в остальных UI-иконках проекта.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="40dp"
+    android:height="40dp"
+    android:viewportWidth="40"
+    android:viewportHeight="40"
+    android:tint="?android:attr/textColorSecondary">
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#2D1F14"
+        android:strokeWidth="1.6"
+        android:pathData="M6,10 L6,30 L34,30 L34,10 L28,10 L26,7 L14,7 L12,10 Z"/>
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#2D1F14"
+        android:strokeWidth="1.4"
+        android:pathData="M16,24 a3.2,3.2 0 1,0 6.4,0 a3.2,3.2 0 1,0 -6.4,0 Z"/>
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#2D1F14"
+        android:strokeWidth="1.2"
+        android:pathData="M10,15 L12.5,18 M28,18 L31,21"/>
+</vector>

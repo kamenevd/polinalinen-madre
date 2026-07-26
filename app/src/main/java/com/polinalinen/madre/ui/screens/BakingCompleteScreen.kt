@@ -1,8 +1,5 @@
 package com.polinalinen.madre.ui.screens
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -51,7 +48,9 @@ import com.polinalinen.madre.ui.components.TracingPaper
 import com.polinalinen.madre.ui.components.TracingPaperOverlay
 import com.polinalinen.madre.ui.components.WaxSealStamp
 import com.polinalinen.madre.ui.components.drawPhotoHolders
+import com.polinalinen.madre.ui.photo.rememberPhotoAttachment
 import com.polinalinen.madre.ui.theme.AppColors
+import com.polinalinen.madre.utils.PhotoStore
 import com.polinalinen.madre.viewmodel.BakingViewModel
 
 /**
@@ -60,7 +59,8 @@ import com.polinalinen.madre.viewmodel.BakingViewModel
  * (рецепт, порции, время) настоящие, читаются из BakingSession, которую
  * BakingViewModel ещё не убрал (exitSession зовётся только из onHome).
  *
- * Фотокарточка — настоящая (Cycle 6, AgedPhoto): PhotoPicker → копия в
+ * Фотокарточка — настоящая (Cycle 6, AgedPhoto → Cycle 11, камера и «Стол
+ * оформления»): модалка «Камера / Галерея» → редактор оформления → файл в
  * internal storage → путь в BakeRecord.photoPath. Только что вклеенная —
  * цветная; в формуляре книги она будет стареть вместе с записью.
  */
@@ -71,16 +71,23 @@ fun BakingCompleteScreen(
     viewModel: BakingViewModel = viewModel(),
 ) {
     val colors = AppColors.current
+
     val sessions by viewModel.sessions.collectAsState()
     val session = sessionId?.let { id -> sessions.find { it.id == id } }
     val photoPaths by viewModel.bakePhotoPaths.collectAsState()
     val photoPath = sessionId?.let { photoPaths[it] }
-    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri != null && sessionId != null) viewModel.attachBakePhoto(sessionId, uri)
-    }
+
+    // Камера и галерея — одна общая дорога (ui/photo/PhotoAttachment): выбор
+    // источника, «Стол оформления» и сохранение живут там, экран получает уже
+    // готовый абсолютный путь.
+    val openPhotoSource = rememberPhotoAttachment(
+        kind = PhotoStore.PhotoKind.BAKE,
+        key = sessionId ?: 0L,
+    ) { path -> sessionId?.let { viewModel.attachBakePhoto(it, path) } }
+
     // «Калька» (Cycle 9, TracingPaper): юбилейную страницу прокладывает
-    // полупрозрачный лист с припиской Мадре карандашом. Номер выпечки —
-    // общее число записей формуляра (эта выпечка уже вписана в advanceStep).
+    // полупрозрачный лист с припиской Мадре карандашом. Номер выпечки — общее
+    // число записей формуляра (эта выпечка уже вписана в advanceStep).
     val bakeCounts by viewModel.bakeCounts.collectAsState()
     val totalBakes = bakeCounts.values.sum()
 
@@ -130,12 +137,36 @@ fun BakingCompleteScreen(
 
             if (photoPath != null) {
                 AgedPhoto(photoPath = photoPath, takenAtMillis = System.currentTimeMillis())
+                Row(
+                    Modifier.fillMaxWidth().padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.Center,
+                ) {
+                    Text(
+                        "заменить фотокарточку",
+                        color = colors.crust,
+                        fontFamily = FontFamily.Serif,
+                        fontStyle = FontStyle.Italic,
+                        fontSize = 12.sp,
+                        modifier = Modifier.clickable { openPhotoSource() },
+                    )
+                    Text(
+                        "·",
+                        color = colors.cocoa,
+                        fontFamily = FontFamily.Serif,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(horizontal = 6.dp),
+                    )
+                    Text(
+                        "убрать",
+                        color = colors.crust,
+                        fontFamily = FontFamily.Serif,
+                        fontStyle = FontStyle.Italic,
+                        fontSize = 12.sp,
+                        modifier = Modifier.clickable { viewModel.clearBakePhoto(sessionId) },
+                    )
+                }
             } else {
-                PastedPhotoPrompt(
-                    onPick = {
-                        photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                    },
-                )
+                PastedPhotoPrompt(onPick = { openPhotoSource() })
             }
 
             Text(
@@ -336,7 +367,7 @@ private fun CompletedStat(value: String, label: String) {
     }
 }
 
-/** Пустой слот фотокарточки: пунктирная рамка + уголки-держатели, тап открывает PhotoPicker. */
+/** Пустой слот фотокарточки: пунктирная рамка + уголки-держатели, тап открывает модалку «Камера / Галерея». */
 @Composable
 private fun PastedPhotoPrompt(onPick: () -> Unit) {
     val colors = AppColors.current

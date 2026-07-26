@@ -24,7 +24,6 @@ import com.polinalinen.madre.ui.screens.BakingTimerScreen
 import com.polinalinen.madre.ui.screens.BookStatsScreen
 import com.polinalinen.madre.ui.screens.FeedingFormScreen
 import com.polinalinen.madre.ui.screens.HomeScreen
-import com.polinalinen.madre.ui.screens.NotificationsScreen
 import com.polinalinen.madre.ui.screens.RecipeDetailScreen
 import com.polinalinen.madre.ui.screens.SettingsScreen
 import com.polinalinen.madre.ui.screens.ShelfScreen
@@ -34,9 +33,9 @@ import com.polinalinen.madre.viewmodel.SourdoughViewModel
 
 /**
  * Home, RecipeDetail, BakingTimer, StarterDiary, Settings, Полка, BookStats,
- * Feeding — реальные («Живая книга»). Complete/Notifications тоже реальные
- * (2026-07-21), но их визуальная композиция ещё не согласована с Димой/Полиной
- * (мокапы 6/7 в DESIGN-V4.md отмечены как черновые) — данные настоящие.
+ * Feeding — реальные («Живая книга»). Complete тоже реальный (2026-07-21), но
+ * его визуальная композиция ещё не согласована с Димой/Полиной (мокап 6 в
+ * DESIGN-V4.md отмечен как черновой) — данные настоящие.
  *
  * BakingViewModel и SourdoughViewModel шарятся между экранами через
  * activity-scoped viewModel(). Sourdough-состояние — реальное, из Room
@@ -97,7 +96,6 @@ fun MadreNavHost(navController: NavHostController = rememberNavController()) {
                 onOpenFeeding = { navController.navigate(MadreDestinations.FEEDING_FORM) },
                 onOpenSettings = { navController.navigate(MadreDestinations.SETTINGS) },
                 onOpenShelf = { navController.navigate(MadreDestinations.SHELF) },
-                onOpenNotifications = { navController.navigate(MadreDestinations.NOTIFICATIONS) },
                 viewModel = bakingViewModel,
             )
         }
@@ -151,17 +149,6 @@ fun MadreNavHost(navController: NavHostController = rememberNavController()) {
                     navController.popBackStack()
                 },
                 onBack = { navController.popBackStack() },
-            )
-        }
-        composable(MadreDestinations.NOTIFICATIONS) {
-            NotificationsScreen(
-                phase = phase,
-                starterHeadline = headline,
-                recentBakes = bakeRecords,
-                onBack = { navController.popBackStack() },
-                onOpenStarter = { navController.navigate(MadreDestinations.STARTER_DETAIL) },
-                onOpenTimer = { sessionId -> navController.navigate(MadreDestinations.bakingTimer(sessionId.toString())) },
-                viewModel = bakingViewModel,
             )
         }
         composable(MadreDestinations.SETTINGS) {

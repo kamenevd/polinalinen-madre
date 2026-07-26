@@ -13,9 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -24,31 +21,22 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
-import com.polinalinen.madre.data.db.entities.MarginNoteEntity
-import com.polinalinen.madre.data.db.entities.SealedNoteEntity
-import com.polinalinen.madre.family.FamilyHand
-import com.polinalinen.madre.family.style
 import com.polinalinen.madre.model.GuestNote
 import com.polinalinen.madre.model.LibraryNote
 import com.polinalinen.madre.model.Recipe
@@ -60,12 +48,8 @@ import com.polinalinen.madre.ui.components.DottedLeaderRow
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.HandwrittenEditSurface
 import com.polinalinen.madre.ui.components.HeavyRule
-import com.polinalinen.madre.ui.components.HerbariumSection
-import com.polinalinen.madre.ui.components.InkMirror
-import com.polinalinen.madre.ui.components.InkMirrorImprint
 import com.polinalinen.madre.ui.components.PageLabel
 import com.polinalinen.madre.ui.components.StuckPagesOverlay
-import com.polinalinen.madre.ui.components.WaxSealStamp
 import com.polinalinen.madre.ui.components.CoffeeRing
 import com.polinalinen.madre.ui.components.DustLayer
 import com.polinalinen.madre.ui.components.coffeeRings
@@ -78,8 +62,6 @@ import com.polinalinen.madre.utils.heroResFor
 import com.polinalinen.madre.viewmodel.BakingViewModel
 import com.polinalinen.madre.viewmodel.GuestNotesViewModel
 import com.polinalinen.madre.viewmodel.LibraryNotesViewModel
-import com.polinalinen.madre.viewmodel.MarginNoteViewModel
-import com.polinalinen.madre.viewmodel.SealedNoteViewModel
 
 /**
  * Рецепт — «Разворот» (DESIGN-V4.md, экран 2).
@@ -93,8 +75,6 @@ fun RecipeDetailScreen(
     onBack: () -> Unit,
     onStartBaking: (sessionId: Long) -> Unit,
     viewModel: BakingViewModel = viewModel(),
-    marginNoteViewModel: MarginNoteViewModel = viewModel(),
-    sealedNoteViewModel: SealedNoteViewModel = viewModel(),
     libraryNotesViewModel: LibraryNotesViewModel = viewModel(),
     guestNotesViewModel: GuestNotesViewModel = viewModel(),
 ) {
@@ -109,12 +89,11 @@ fun RecipeDetailScreen(
     var portions by remember { mutableIntStateOf(1) }
     val scaleFactor = portions.toDouble()
 
-    val marginNotes by remember(recipeId) { marginNoteViewModel.notesFor(recipeId) }
-        .collectAsState(initial = emptyList())
-    val sealedNotes by remember(recipeId) { sealedNoteViewModel.notesFor(recipeId) }
-        .collectAsState(initial = emptyList())
-    val bakeCount by remember(recipeId) { sealedNoteViewModel.bakeCountFor(recipeId) }
-        .collectAsState(initial = 0)
+    // Сколько раз печён именно этот рецепт — питает крошки, износ и кофейные
+    // круги. Берём из общего среза bake_records, который уже держит
+    // BakingViewModel: отдельный Flow под это заводить незачем.
+    val bakeCounts by viewModel.bakeCounts.collectAsState()
+    val bakeCount = bakeCounts[recipeId] ?: 0
     // «Пыль на страницах» (Cycle 8, DustLayer): сколько дней главу не открывали —
     // разница между СЕЙЧАС и прошлым визитом из SharedPreferences. Читаем прошлую
     // дату один раз до перезаписи (remember), новую пишем в LaunchedEffect ниже.
@@ -134,7 +113,7 @@ fun RecipeDetailScreen(
         prefs.getInt(CoffeeRing.prefsKey(recipeId), 0)
     }
 
-    // «Библиотечная книга» (Cycle 6, LibraryNotes) — чужие заметки на полях.
+    // «Библиотечная книга» (Cycle 6, LibraryNotes) — заметки чужих семей.
     val libraryNotes by libraryNotesViewModel.notes.collectAsState()
     // «Гостевая страница» (Cycle 7, GuestPage) — отзывы гостей из guest_notes.
     val guestNotes by guestNotesViewModel.notes.collectAsState()
@@ -242,30 +221,13 @@ fun RecipeDetailScreen(
                 }
             }
 
-            MarginNotesSection(
-                recipeId = recipeId,
-                notes = marginNotes,
-                libraryNotes = libraryNotes,
-                onAddNote = { text -> marginNoteViewModel.addNote(recipeId, text) },
+            LibraryNotesSection(
+                notes = libraryNotes,
                 modifier = Modifier.padding(top = 14.dp),
-            )
-
-            TimeCapsuleSection(
-                notes = sealedNotes,
-                bakeCount = bakeCount,
-                onSeal = { text, unlockAfterBakes -> sealedNoteViewModel.seal(recipeId, text, unlockAfterBakes) },
-                onUnlock = { noteId -> sealedNoteViewModel.unlock(noteId) },
-                modifier = Modifier.padding(top = 18.dp),
             )
 
             GuestNotesSection(
                 notes = guestNotes,
-                modifier = Modifier.padding(top = 18.dp),
-            )
-
-            // «Гербарий» (Cycle 8, Herbarium) — сезонная находка между страниц.
-            HerbariumSection(
-                recipeId = recipeId,
                 modifier = Modifier.padding(top = 18.dp),
             )
 
@@ -334,147 +296,42 @@ fun RecipeDetailScreen(
 }
 
 /**
- * «На полях» — семейные заметки поверх рецепта, привязанные к recipeId
- * (Room, MarginNoteEntity). Существующие — как помарки пером: Cursive,
- * Espresso, лёгкий поворот -1°. DESIGN-V4.md Cycle 1, фича MarginNotes.
- *
- * Поле ввода — BasicTextField с волосяной линейкой снизу (тот же приём,
- * что «Отметка на полях» в FeedingFormScreen), а не Material-овый
- * OutlinedTextField — иначе сломался бы принцип «никакого Material-дизайна».
+ * «Библиотечная книга» — DESIGN-V4.md Cycle 6, фича LibraryNotes: заметки
+ * других семей, читавших этот же рецепт. Раньше они проступали внутри секции
+ * «На полях»; в Cycle 11 своих помет на полях у книги больше нет, и у чужой
+ * руки появился свой раздел. Без сети список пуст, и блок молчит целиком —
+ * пустых заголовков книга не показывает.
  */
 @Composable
-private fun MarginNotesSection(
-    recipeId: String,
-    notes: List<MarginNoteEntity>,
-    libraryNotes: List<LibraryNote>,
-    onAddNote: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
+private fun LibraryNotesSection(notes: List<LibraryNote>, modifier: Modifier = Modifier) {
+    if (notes.isEmpty()) return
     val colors = AppColors.current
-    var draft by remember { mutableStateOf("") }
-    val recipeFallbackKey = remember(recipeId) { recipeId.hashCode().toLong() }
 
     Column(modifier.fillMaxWidth().padding(horizontal = 22.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             HairRule(Modifier.weight(1f))
-            PageLabel("На полях", color = colors.espresso, modifier = Modifier.padding(horizontal = 10.dp))
+            PageLabel("Из других книг", color = colors.espresso, modifier = Modifier.padding(horizontal = 10.dp))
             HairRule(Modifier.weight(1f))
         }
-
-        // «Зеркальный отпечаток» (DESIGN-V4.md Cycle 10, InkMirror): самая
-        // свежая помета не высохла и при закрытии разворота отпечаталась на
-        // соседней странице — бледный зеркальный след у противоположного
-        // поля. За двое суток выцветает, и секция возвращается к прежнему виду.
-        val imprintNow = remember(notes) { System.currentTimeMillis() }
-        val wetIndex = remember(notes, imprintNow) {
-            InkMirror.freshestWetIndex(imprintNow, notes.map { it.timestampMillis })
-        }
-        if (wetIndex != null) {
-            InkMirrorImprint(
-                text = notes[wetIndex].text,
-                ageMillis = imprintNow - notes[wetIndex].timestampMillis,
-                modifier = Modifier.align(Alignment.End).padding(top = 10.dp),
-            )
-        }
-
-        if (notes.isNotEmpty()) {
-            Column(Modifier.padding(top = 12.dp)) {
-                notes.forEach { note ->
-                    // Своя рука на заметку — DESIGN-V4.md Cycle 2, фича FamilyHand.
-                    val hand = FamilyHand.forUser(note.userId, recipeFallbackKey).style()
+        Column(Modifier.padding(top = 12.dp)) {
+            notes.forEach { note ->
+                Column(Modifier.padding(vertical = 4.dp).rotate(note.slantDeg)) {
                     Text(
                         note.text,
-                        color = hand.ink,
+                        color = colors.espresso.copy(alpha = 0.4f),
                         fontFamily = FontFamily.Cursive,
-                        fontWeight = hand.fontWeight,
                         fontSize = 16.sp,
                         lineHeight = 22.sp,
-                        modifier = Modifier
-                            .padding(vertical = 4.dp)
-                            .rotate(hand.rotationDeg),
+                    )
+                    Text(
+                        "— ${note.familyLabel}",
+                        color = colors.cocoa.copy(alpha = 0.4f),
+                        fontFamily = FontFamily.SansSerif,
+                        fontSize = 9.sp,
+                        letterSpacing = 1.5.sp,
                     )
                 }
             }
-        }
-
-        // «Библиотечная книга» (DESIGN-V4.md Cycle 6, фича LibraryNotes): под
-        // своими пометками проступают чужие — бледные (альфа 0.4), с наклоном
-        // в другую сторону, будто книгу до нас читали в другой семье.
-        // Без сети список пуст и блок молчит полностью.
-        if (libraryNotes.isNotEmpty()) {
-            Column(Modifier.padding(top = 12.dp)) {
-                libraryNotes.forEach { note ->
-                    Column(Modifier.padding(vertical = 4.dp).rotate(note.slantDeg)) {
-                        Text(
-                            note.text,
-                            color = colors.espresso.copy(alpha = 0.4f),
-                            fontFamily = FontFamily.Cursive,
-                            fontSize = 16.sp,
-                            lineHeight = 22.sp,
-                        )
-                        Text(
-                            "— ${note.familyLabel}",
-                            color = colors.cocoa.copy(alpha = 0.4f),
-                            fontFamily = FontFamily.SansSerif,
-                            fontSize = 9.sp,
-                            letterSpacing = 1.5.sp,
-                        )
-                    }
-                }
-            }
-        }
-
-        fun submit() {
-            val trimmed = draft.trim()
-            if (trimmed.isNotEmpty()) {
-                onAddNote(trimmed)
-                draft = ""
-            }
-        }
-
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .padding(top = 12.dp)
-                .drawBehind {
-                    drawLine(
-                        color = colors.flour,
-                        start = Offset(0f, size.height),
-                        end = Offset(size.width, size.height),
-                        strokeWidth = 0.5.dp.toPx(),
-                    )
-                }
-                .padding(bottom = 6.dp)
-        ) {
-            if (draft.isEmpty()) {
-                Text(
-                    "черкните пару слов на полях…",
-                    color = colors.flour,
-                    fontFamily = FontFamily.Cursive,
-                    fontSize = 16.sp,
-                )
-            }
-            BasicTextField(
-                value = draft,
-                onValueChange = { draft = it },
-                textStyle = TextStyle(color = colors.espresso, fontFamily = FontFamily.Cursive, fontSize = 16.sp),
-                cursorBrush = SolidColor(colors.crust),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { submit() }),
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-        if (draft.isNotBlank()) {
-            Text(
-                "записать на полях",
-                color = colors.crust,
-                fontFamily = FontFamily.SansSerif,
-                fontSize = 10.sp,
-                letterSpacing = 2.sp,
-                modifier = Modifier
-                    .padding(top = 8.dp)
-                    .clickable { submit() },
-            )
         }
     }
 }
@@ -530,209 +387,6 @@ private fun GuestNotesSection(notes: List<GuestNote>, modifier: Modifier = Modif
             }
         }
     }
-}
-
-/**
- * «Конверт на будущее» — DESIGN-V4.md Cycle 2, фича TimeCapsule. Рядом с «На
- * полях»: семья запечатывает записку, которая ждёт своего часа, а не тут же
- * читается — вскрыть можно только когда bakeCount этого рецепта догонит
- * unlockAfterBakes. Мотив сургучной печати переиспользован из
- * BakingCompleteScreen (WaxSealStamp, ui/components/BookComponents.kt).
- */
-@Composable
-private fun TimeCapsuleSection(
-    notes: List<SealedNoteEntity>,
-    bakeCount: Int,
-    onSeal: (text: String, unlockAfterBakes: Int) -> Unit,
-    onUnlock: (noteId: Long) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val colors = AppColors.current
-    var composing by remember { mutableStateOf(false) }
-    var draft by remember { mutableStateOf("") }
-    var unlockAfter by remember { mutableIntStateOf(3) }
-
-    Column(modifier.fillMaxWidth().padding(horizontal = 22.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            HairRule(Modifier.weight(1f))
-            PageLabel("Конверт на будущее", color = colors.espresso, modifier = Modifier.padding(horizontal = 10.dp))
-            HairRule(Modifier.weight(1f))
-        }
-
-        if (notes.isNotEmpty()) {
-            Column(
-                Modifier.fillMaxWidth().padding(top = 16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                notes.forEach { note ->
-                    SealedNoteEnvelope(note = note, bakeCount = bakeCount, onUnlock = { onUnlock(note.id) })
-                    Spacer(Modifier.height(16.dp))
-                }
-            }
-        }
-
-        Text(
-            if (composing) "передумали — убрать конверт" else "запечатать записку",
-            color = colors.crust,
-            fontFamily = FontFamily.SansSerif,
-            fontSize = 10.sp,
-            letterSpacing = 2.sp,
-            modifier = Modifier
-                .padding(top = if (notes.isEmpty()) 12.dp else 0.dp)
-                .clickable { composing = !composing },
-        )
-
-        if (composing) {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp)
-                    .drawBehind {
-                        drawLine(
-                            color = colors.flour,
-                            start = Offset(0f, size.height),
-                            end = Offset(size.width, size.height),
-                            strokeWidth = 0.5.dp.toPx(),
-                        )
-                    }
-                    .padding(bottom = 6.dp)
-            ) {
-                if (draft.isEmpty()) {
-                    Text(
-                        "что оставите для будущего пекаря…",
-                        color = colors.flour,
-                        fontFamily = FontFamily.Cursive,
-                        fontSize = 16.sp,
-                    )
-                }
-                BasicTextField(
-                    value = draft,
-                    onValueChange = { draft = it },
-                    textStyle = TextStyle(color = colors.espresso, fontFamily = FontFamily.Cursive, fontSize = 16.sp),
-                    cursorBrush = SolidColor(colors.crust),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-
-            PageLabel("Открыть после выпечки №", color = colors.cocoa, modifier = Modifier.padding(top = 12.dp))
-            Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
-                listOf(1, 3, 5, 10).forEach { n ->
-                    val active = n == unlockAfter
-                    Box(
-                        Modifier
-                            .padding(end = 8.dp)
-                            .clickable { unlockAfter = n }
-                            .drawBehind {
-                                drawRoundRect(
-                                    color = colors.espresso,
-                                    style = if (active) androidx.compose.ui.graphics.drawscope.Fill else Stroke(1.5.dp.toPx()),
-                                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx()),
-                                )
-                            }
-                            .padding(horizontal = 14.dp, vertical = 8.dp),
-                    ) {
-                        Text(
-                            "$n",
-                            color = if (active) colors.paper else colors.espresso,
-                            fontFamily = FontFamily.Serif,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp,
-                        )
-                    }
-                }
-            }
-
-            if (draft.isNotBlank()) {
-                Text(
-                    "запечатать",
-                    color = colors.crust,
-                    fontFamily = FontFamily.SansSerif,
-                    fontSize = 10.sp,
-                    letterSpacing = 2.sp,
-                    modifier = Modifier
-                        .padding(top = 12.dp)
-                        .clickable {
-                            onSeal(draft.trim(), unlockAfter)
-                            draft = ""
-                            composing = false
-                        },
-                )
-            }
-        }
-    }
-}
-
-/** Один конверт: запечатан / готов ко вскрытию / вскрыт — состояние решает bakeCount. */
-@Composable
-private fun SealedNoteEnvelope(
-    note: SealedNoteEntity,
-    bakeCount: Int,
-    onUnlock: () -> Unit,
-) {
-    val colors = AppColors.current
-    val unlockable = note.isUnlockable(bakeCount)
-    val opened = note.unlockedAtMillis != null
-
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .fillMaxWidth()
-            .let { if (unlockable) it.clickable { onUnlock() } else it },
-    ) {
-        when {
-            opened -> {
-                WaxSealStamp(
-                    title = "Вскрыто",
-                    caption = romanDate(note.unlockedAtMillis!!),
-                    color = colors.sage,
-                    stampSize = 96.dp,
-                    rotationDeg = -2f,
-                )
-                Text(
-                    note.text,
-                    color = colors.espresso,
-                    fontFamily = FontFamily.Cursive,
-                    fontSize = 16.sp,
-                    lineHeight = 22.sp,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    modifier = Modifier.padding(top = 10.dp, start = 12.dp, end = 12.dp),
-                )
-            }
-            unlockable -> {
-                WaxSealStamp(
-                    title = "Можно открыть",
-                    caption = "тронуть печать",
-                    color = colors.crust,
-                    stampSize = 96.dp,
-                    rotationDeg = -2f,
-                )
-            }
-            else -> {
-                WaxSealStamp(
-                    title = "Запечатано",
-                    caption = "после выпечки № ${note.unlockAfterBakes}",
-                    color = colors.terracotta,
-                    stampSize = 96.dp,
-                    rotationDeg = 3f,
-                )
-                Text(
-                    "испечено $bakeCount из ${note.unlockAfterBakes}",
-                    color = colors.cocoa,
-                    fontFamily = FontFamily.Serif,
-                    fontStyle = FontStyle.Italic,
-                    fontSize = 11.sp,
-                    modifier = Modifier.padding(top = 6.dp),
-                )
-            }
-        }
-    }
-}
-
-/** «20.VII» — день + месяц римскими, как в формуляре (см. StarterDiaryScreen.romanDate). */
-private fun romanDate(millis: Long): String {
-    val roman = listOf("I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII")
-    val cal = java.util.Calendar.getInstance().apply { timeInMillis = millis }
-    return "${cal.get(java.util.Calendar.DAY_OF_MONTH)}.${roman[cal.get(java.util.Calendar.MONTH)]}"
 }
 
 @Composable

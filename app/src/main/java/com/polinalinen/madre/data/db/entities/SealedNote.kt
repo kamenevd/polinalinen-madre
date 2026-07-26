@@ -4,11 +4,10 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 
 /**
- * Запечатанная записка на будущее — DESIGN-V4.md Cycle 2, фича «Конверт на
- * будущее» (TimeCapsule). Пишется один раз при запечатывании, читается как
- * закрытый конверт до тех пор, пока bakeCount этого рецепта не догонит
- * unlockAfterBakes; unlockedAtMillis проставляется в момент, когда семья
- * реально вскрывает конверт (не раньше, чтобы дата открытия была настоящей).
+ * Cycle 11: фича «Конверт на будущее» (TimeCapsule) из приложения убрана, но
+ * таблица остаётся — иначе Room не откроет уже сохранённую на телефоне
+ * madre.db (identity hash схемы обязан совпадать). Это чистое описание
+ * существующей таблицы: ни DAO, ни репозитория, ни экрана у неё больше нет.
  */
 @Entity(tableName = "sealed_notes")
 data class SealedNoteEntity(
@@ -18,7 +17,4 @@ data class SealedNoteEntity(
     val unlockAfterBakes: Int,
     val createdAtMillis: Long = System.currentTimeMillis(),
     val unlockedAtMillis: Long? = null,
-) {
-    /** Готов к вскрытию, но ещё не вскрыт — конверт можно открыть. */
-    fun isUnlockable(bakeCount: Int): Boolean = unlockedAtMillis == null && bakeCount >= unlockAfterBakes
-}
+)

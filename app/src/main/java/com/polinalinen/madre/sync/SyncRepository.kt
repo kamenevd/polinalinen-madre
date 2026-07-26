@@ -11,12 +11,11 @@ import androidx.work.workDataOf
 import com.google.gson.Gson
 import com.polinalinen.madre.data.remote.BakeStatRecord
 import com.polinalinen.madre.data.remote.FeedingStatRecord
-import com.polinalinen.madre.data.remote.MarginNoteSyncRecord
 import com.polinalinen.madre.data.remote.PocketBaseDates
 import java.util.concurrent.TimeUnit
 
 /**
- * Шаринг статистики в общую книгу (Cycle 5): каждая выпечка/кормление/заметка
+ * Шаринг статистики в общую книгу (Cycle 5): каждая выпечка/кормление
  * превращается в OneTimeWorkRequest — без сети WorkManager подождёт её и
  * дошлёт сам (retry-политика — SyncPolicy). Очередь на запись — уникальное
  * имя + KEEP: повторный вызов с тем же ключом (например, кнопка «Поделиться»
@@ -45,16 +44,6 @@ class SyncRepository(private val context: Context) {
             fedAt = PocketBaseDates.toIso(fedAtMillis),
         )
         enqueue("sync-feeding-$feedingId", SyncWorker.KIND_FEEDING, gson.toJson(record))
-    }
-
-    fun shareMarginNote(noteId: Long, recipeId: String, text: String, writtenAtMillis: Long) {
-        val record = MarginNoteSyncRecord(
-            deviceId = DeviceIdentity.id(context),
-            recipeId = recipeId,
-            text = text,
-            writtenAt = PocketBaseDates.toIso(writtenAtMillis),
-        )
-        enqueue("sync-note-$noteId", SyncWorker.KIND_MARGIN_NOTE, gson.toJson(record))
     }
 
     private fun enqueue(uniqueName: String, kind: String, payload: String) {

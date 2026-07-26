@@ -87,27 +87,6 @@ interface BakeRecordDao {
 }
 
 @Dao
-interface MarginNoteDao {
-    @Query("SELECT * FROM margin_notes WHERE recipeId = :recipeId ORDER BY timestampMillis ASC")
-    fun observeForRecipe(recipeId: String): Flow<List<MarginNoteEntity>>
-
-    @Insert
-    suspend fun insert(note: MarginNoteEntity): Long
-}
-
-@Dao
-interface SealedNoteDao {
-    @Query("SELECT * FROM sealed_notes WHERE recipeId = :recipeId ORDER BY createdAtMillis ASC")
-    fun observeForRecipe(recipeId: String): Flow<List<SealedNoteEntity>>
-
-    @Insert
-    suspend fun insert(note: SealedNoteEntity): Long
-
-    @Query("UPDATE sealed_notes SET unlockedAtMillis = :millis WHERE id = :noteId")
-    suspend fun markUnlocked(noteId: Long, millis: Long)
-}
-
-@Dao
 interface FamilySettingDao {
     @Query("SELECT * FROM family_settings WHERE `key` = :key LIMIT 1")
     fun observe(key: String): Flow<FamilySettingEntity?>
@@ -182,6 +161,14 @@ private val MIGRATION_5_6 = object : Migration(5, 6) {
     }
 }
 
+/**
+ * Cycle 11: «Пометы на полях» и «Конверт на будущее» убраны из приложения, но
+ * margin_notes и sealed_notes ОСТАЮТСЯ объявленными сущностями — намеренно.
+ * Убрать их из [entities] значит поменять identity hash схемы, и Room откажется
+ * открывать уже лежащую на телефонах madre.db. Таблицы никуда не деваются и не
+ * дропаются: разрушительной миграции здесь быть не должно, версия остаётся 6.
+ * Читать и писать их теперь нечем — DAO удалены вместе с фичами.
+ */
 @Database(
     entities = [
         UserEntity::class,
@@ -201,8 +188,6 @@ abstract class MadreDatabase : RoomDatabase() {
     abstract fun sourdoughConfigDao(): SourdoughConfigDao
     abstract fun feedingDao(): FeedingDao
     abstract fun bakeRecordDao(): BakeRecordDao
-    abstract fun marginNoteDao(): MarginNoteDao
-    abstract fun sealedNoteDao(): SealedNoteDao
     abstract fun familySettingDao(): FamilySettingDao
 
     companion object {

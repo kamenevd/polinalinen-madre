@@ -1,7 +1,7 @@
 package com.polinalinen.madre.navigation
 
 /**
- * 8 экранов v4 (v4-screen-inventory.md). Navigation Compose вместо ручного
+ * Экраны v4 (v4-screen-inventory.md). Navigation Compose вместо ручного
  * Screen sealed class из v3/MainActivity.kt (баг-паттерн: навигация была
  * размазана по when-веткам внутри AnimatedContent).
  */
@@ -12,7 +12,6 @@ object MadreDestinations {
     const val BAKING_COMPLETE = "baking/{sessionId}/complete"
     const val STARTER_DETAIL = "starter"
     const val FEEDING_FORM = "starter/feed"
-    const val NOTIFICATIONS = "notifications"
     const val SETTINGS = "settings"
 
     // Полка (2026-07-20/21): своя книга + книги друзей. Друзья пока без бэка —

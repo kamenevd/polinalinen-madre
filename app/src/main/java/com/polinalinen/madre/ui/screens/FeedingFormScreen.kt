@@ -194,7 +194,7 @@ fun FeedingFormScreen(
             }
 
             Column(Modifier.padding(horizontal = 22.dp, vertical = 4.dp)) {
-                PageLabel("Отметка на полях", color = colors.cocoa)
+                PageLabel("Заметка о кормлении", color = colors.cocoa)
                 Box(
                     Modifier
                         .fillMaxWidth()

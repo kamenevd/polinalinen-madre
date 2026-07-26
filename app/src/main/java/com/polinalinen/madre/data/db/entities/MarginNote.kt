@@ -4,8 +4,10 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 
 /**
- * Помета на полях рецепта — семейная рукописная заметка, привязанная к
- * конкретному recipeId. DESIGN-V4.md Cycle 1, фича «Пометы на полях».
+ * Cycle 11: фича «Пометы на полях» из приложения убрана, но таблица остаётся —
+ * иначе Room не откроет уже сохранённую на телефоне madre.db (identity hash
+ * схемы обязан совпадать). Это чистое описание существующей таблицы: ни DAO,
+ * ни репозитория, ни экрана у неё больше нет.
  */
 @Entity(tableName = "margin_notes")
 data class MarginNoteEntity(
@@ -13,8 +15,5 @@ data class MarginNoteEntity(
     val recipeId: String,
     val text: String,
     val timestampMillis: Long = System.currentTimeMillis(),
-    // Cycle 2, фича «Голоса семьи» (FamilyHand): автор заметки, если известен.
-    // Null пока не появился реальный UI выбора пользователя (v4 decision #13) —
-    // FamilyHand.forUser в этом случае берёт детерминированный fallback по recipeId.
     val userId: Long? = null,
 )

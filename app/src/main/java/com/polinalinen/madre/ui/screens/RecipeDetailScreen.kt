@@ -41,9 +41,6 @@ import com.polinalinen.madre.model.GuestNote
 import com.polinalinen.madre.model.LibraryNote
 import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.model.RecipeScaler
-import com.polinalinen.madre.ui.components.BookWormOverlay
-import com.polinalinen.madre.ui.components.Candlelight
-import com.polinalinen.madre.ui.components.candlelight
 import com.polinalinen.madre.ui.components.DottedLeaderRow
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.HandwrittenEditSurface
@@ -54,7 +51,6 @@ import com.polinalinen.madre.ui.components.DustLayer
 import com.polinalinen.madre.ui.components.coffeeRings
 import com.polinalinen.madre.ui.components.crumbs
 import com.polinalinen.madre.ui.components.dustLayer
-import com.polinalinen.madre.ui.components.lightPage
 import com.polinalinen.madre.ui.components.wornPage
 import com.polinalinen.madre.ui.theme.AppColors
 import com.polinalinen.madre.ui.theme.LocalCalmMode
@@ -82,9 +78,6 @@ fun RecipeDetailScreen(
     val recipes by viewModel.recipes.collectAsState()
     val recipe = recipes.find { it.id == recipeId } ?: return
     val chapterIndex = recipes.indexOf(recipe) + 1
-    // «Страница на просвет» (Cycle 4, LightPage): сквозь бумагу разворота
-    // зеркально просвечивает заголовок следующего рецепта книги.
-    val nextRecipeName = recipes.getOrNull(chapterIndex)?.name
 
     var portions by remember { mutableIntStateOf(1) }
     val scaleFactor = portions.toDouble()
@@ -123,36 +116,26 @@ fun RecipeDetailScreen(
     }
 
     Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
-        // «Затёртая страница» (Cycle 4, WornPages) — износ висит на «листе»
-        // (viewport-Box), а не на скроллящемся Column: край темнеет у кромки
-        // экрана и не уезжает вместе с текстом.
-        // «Крошки между страниц» (Cycle 7, Crumbs) — крошки лежат ПОВЕРХ износа
-        // и блика, как в настоящей книге. Свайп-смахивание не мешает
-        // вертикальному скроллу.
-        // «Пыль на страницах» (Cycle 8, DustLayer) — самый внешний слой: пыль
-        // осела последней и лежит поверх всего, включая крошки. Жест при этом
-        // первым забирает внутренний обработчик крошек — см. коммент dustLayer.
-        // «След от кружки» (Cycle 9, CoffeeRing) — между крошками и износом:
-        // кофе пролит поверх печати, но крошки и пыль легли позже.
-        // «Чтение при свече» (Cycle 10, Candlelight) — самый верхний слой:
-        // после заката свет и полумрак ложатся поверх всей бумаги; палец
-        // модификатор только слушает, жесты нижних слоёв не трогает.
-        // «Спокойный режим» (Cycle 11) — по умолчанию включён: пыль, крошки и
-        // свеча либо крутят бесконечную анимацию, либо слушают палец на всём
-        // развороте, и именно они стоили прокрутке плавности. Здесь они не
-        // «замедляются», а не создаются вовсе. Бумага при этом остаётся
-        // бумагой: износ, кофейные круги и просвет следующей страницы —
-        // статичные слои, они рисуются один раз и никуда не деваются.
+        // Cycle 12, бюджет разворота: не больше ДВУХ живых слоёв на экран.
+        // Живой — тот, что либо крутит анимацию каждый кадр, либо слушает
+        // палец поверх текста. Здесь их ровно два, и оба только в полном
+        // оформлении: пыль (Cycle 8) и крошки (Cycle 7). Бумага при этом
+        // остаётся бумагой — износ (Cycle 4) и кофейные круги (Cycle 9)
+        // рисуются один раз и никуда не деваются.
+        //
+        // Ушли отсюда в Cycle 12:
+        //  · «Чтение при свече» — полумрак 0.50 поверх всей страницы после
+        //    21:00. Рецепт читают на кухне, часто с мукой на руках, и гасить
+        //    ему контраст по часам — не уют, а помеха.
+        //  · «Книжный жучок» — анимированная мишень поверх строк рецепта;
+        //    тап по ней уходил жучку, а не тексту под ним.
+        //  · «Страница на просвет» — зеркальный водяной знак под текстом
+        //    съедал контраст на самом плотном по тексту экране книги. В
+        //    дневнике закваски он остался: там разворот просторнее.
         val calm = LocalCalmMode.current
-        val candlelit = remember {
-            Candlelight.isCandleTime(
-                java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
-            )
-        }
         Box(
             Modifier
                 .fillMaxSize()
-                .candlelight(candlelit && !calm)
                 .let {
                     if (calm) it
                     else it
@@ -161,7 +144,6 @@ fun RecipeDetailScreen(
                 }
                 .coffeeRings(coffeeRingCount, seed = recipeId.hashCode().toLong())
                 .wornPage(bakeCount, seed = recipeId.hashCode().toLong())
-                .lightPage(watermark = nextRecipeName, mirrored = true)
         ) {
         Column(
             Modifier
@@ -287,19 +269,6 @@ fun RecipeDetailScreen(
             }
         }
 
-        // «Слипшихся страниц» (Cycle 10) здесь больше нет — см. DESIGN-V4.md,
-        // Cycle 12. Механика забирала себе вертикальный жест в полосе 52dp
-        // вдоль правого обреза, то есть ровно там, где палец скроллит рецепт,
-        // и включалась случайно, без всякого повода со стороны человека.
-        if (!calm) {
-            // «Книжный жучок» (Cycle 8, BookWorm) — редкий гость на левом поле;
-            // живёт на «стекле» viewport-а, поверх текста, но тапы забирает только
-            // маленькая мишень самого жучка. Чаще там, где пыльно (daysSinceOpened).
-            BookWormOverlay(
-                daysSinceOpened = daysSinceOpened,
-                modifier = Modifier.matchParentSize(),
-            )
-        }
         }
     }
 }

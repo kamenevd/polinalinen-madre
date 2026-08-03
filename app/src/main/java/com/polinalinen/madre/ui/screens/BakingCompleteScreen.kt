@@ -45,7 +45,6 @@ import com.polinalinen.madre.ui.components.AgedPhoto
 import com.polinalinen.madre.ui.components.QrCode
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.TracingPaper
-import com.polinalinen.madre.ui.components.TracingPaperOverlay
 import com.polinalinen.madre.ui.components.WaxSealStamp
 import com.polinalinen.madre.ui.components.drawPhotoHolders
 import com.polinalinen.madre.ui.photo.rememberPhotoAttachment
@@ -85,11 +84,14 @@ fun BakingCompleteScreen(
         key = sessionId ?: 0L,
     ) { path -> sessionId?.let { viewModel.attachBakePhoto(it, path) } }
 
-    // «Калька» (Cycle 9, TracingPaper): юбилейную страницу прокладывает
-    // полупрозрачный лист с припиской Мадре карандашом. Номер выпечки — общее
-    // число записей формуляра (эта выпечка уже вписана в advanceStep).
+    // «Калька» (Cycle 9, TracingPaper): приписка Мадре карандашом на юбилейной
+    // выпечке. Cycle 12: лист больше НЕ ложится поверх страницы. Он забирал
+    // себе все тапы и уходил только свайпом, то есть между «испекла» и «на
+    // главную» вставал слой, который надо сначала догадаться смахнуть.
+    // Приписка осталась — как запись на самой странице, где ей и место.
     val bakeCounts by viewModel.bakeCounts.collectAsState()
     val totalBakes = bakeCounts.values.sum()
+    val milestoneNote = TracingPaper.noteFor(totalBakes)
 
     Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
         Box(Modifier.fillMaxSize()) {
@@ -122,6 +124,22 @@ fun BakingCompleteScreen(
                     fontStyle = FontStyle.Italic,
                     fontSize = 14.sp,
                     modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+
+            // Юбилейная приписка — на самой странице, между печатью и цифрами.
+            if (milestoneNote != null) {
+                Text(
+                    milestoneNote,
+                    color = colors.cocoa,
+                    fontFamily = FontFamily.Cursive,
+                    fontSize = 18.sp,
+                    lineHeight = 26.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 14.dp, start = 8.dp, end = 8.dp)
+                        .rotate(-1.5f),
                 )
             }
 
@@ -218,11 +236,6 @@ fun BakingCompleteScreen(
             ) {
                 Text("На главную", color = colors.paper, fontFamily = FontFamily.Serif, fontSize = 16.sp, letterSpacing = 1.sp)
             }
-        }
-
-        // Калька лежит поверх всей страницы, пока её не отвернут свайпом.
-        TracingPaper.noteFor(totalBakes)?.let { note ->
-            TracingPaperOverlay(note = note, modifier = Modifier.matchParentSize())
         }
         }
     }

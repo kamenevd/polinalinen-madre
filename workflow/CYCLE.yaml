@@ -5,7 +5,7 @@
     "kind": "feature",
     "version": "5.2.0-cycle12",
     "branch": "cycle/12",
-    "stage": "verification",
+    "stage": "artifact-ready",
     "created_at": "2026-07-25T00:00:00Z",
     "updated_at": "2026-07-25T00:00:00Z"
   },
@@ -91,7 +91,7 @@
     "apk": "/opt/madre-releases/madre-v5.2.0-cycle12.apk",
     "source_archive": null,
     "sha256": "159ab71f42c03bcb8e3305dc3e545f7170893265bd15f4bbfe75276cfa6f632b",
-    "release_url": null
+    "release_url": "https://kdnfx.space/downloads/madre-v5.2.0-cycle12.apk"
   },
   "blockers": [
     "Runtime smoke не выполнен: на LXC108 нет подключённого Android-устройства/эмулятора.",

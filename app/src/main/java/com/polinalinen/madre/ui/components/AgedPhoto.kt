@@ -1,11 +1,15 @@
 package com.polinalinen.madre.ui.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
@@ -16,6 +20,7 @@ import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
@@ -102,6 +107,11 @@ fun DrawScope.drawPhotoHolders(color: Color, cornerPx: Float) {
 /**
  * Вклеенная фотокарточка выпечки: cream-рамка, лёгкий поворот, уголки-держатели
  * поверх — и ColorMatrix-старение от возраста записи ([takenAtMillis]).
+ *
+ * Cycle 12: по карточке можно нажать — снимок открывается во весь экран
+ * ([FullscreenPhotoViewer]), уже без старения и без обрезки. В рамке он живёт
+ * обрезанным по Crop и состаренным, то есть рассмотреть выпечку внутри
+ * страницы нельзя было в принципе.
  */
 @Composable
 fun AgedPhoto(
@@ -111,9 +121,13 @@ fun AgedPhoto(
     height: Dp = 170.dp,
     rotationDeg: Float = -1f,
     nowMillis: Long = System.currentTimeMillis(),
+    openable: Boolean = true,
+    caption: String? = null,
 ) {
     val colors = AppColors.current
     val matrix = remember(photoPath, takenAtMillis) { PhotoAging.colorMatrix(nowMillis - takenAtMillis) }
+    var viewerOpen by remember(photoPath) { mutableStateOf(false) }
+
     Box(
         modifier
             .fillMaxWidth()
@@ -122,18 +136,32 @@ fun AgedPhoto(
             .padding(10.dp)
     ) {
         Box(
-            Modifier.drawWithContent {
-                drawContent()
-                drawPhotoHolders(colors.cocoa.copy(alpha = 0.55f), 14.dp.toPx())
-            }
+            Modifier
+                .clickable(
+                    enabled = openable,
+                    onClickLabel = "Открыть фотокарточку во весь экран",
+                    role = Role.Button,
+                ) { viewerOpen = true }
+                .drawWithContent {
+                    drawContent()
+                    drawPhotoHolders(colors.cocoa.copy(alpha = 0.55f), 14.dp.toPx())
+                }
         ) {
             AsyncImage(
                 model = File(photoPath),
-                contentDescription = "Вклеенная фотокарточка выпечки",
+                contentDescription = caption ?: "Вклеенная фотокарточка выпечки",
                 contentScale = ContentScale.Crop,
                 colorFilter = ColorFilter.colorMatrix(matrix),
                 modifier = Modifier.fillMaxWidth().height(height),
             )
         }
+    }
+
+    if (viewerOpen) {
+        FullscreenPhotoViewer(
+            photoPath = photoPath,
+            caption = caption,
+            onDismiss = { viewerOpen = false },
+        )
     }
 }

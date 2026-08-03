@@ -1,12 +1,12 @@
 package com.polinalinen.madre.ui.screens
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -16,6 +16,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -28,7 +31,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.polinalinen.madre.model.StepType
+import com.polinalinen.madre.ui.components.BackLabel
+import com.polinalinen.madre.ui.components.BookButton
+import com.polinalinen.madre.ui.components.BookButtonVariant
+import com.polinalinen.madre.ui.components.ConfirmDialog
+import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.PageLabel
+import com.polinalinen.madre.ui.components.TextAction
 import com.polinalinen.madre.ui.theme.AppColors
 import com.polinalinen.madre.viewmodel.BakingViewModel
 
@@ -48,9 +57,17 @@ fun BakingTimerScreen(
     val colors = AppColors.current
     val sessions by viewModel.sessions.collectAsState()
     val remainingMap by viewModel.remainingSeconds.collectAsState()
-    val s = sessions.find { it.id == sessionId } ?: return
+    val s = sessions.find { it.id == sessionId }
+    // Выпечки больше нет в книге — её закрыли, бросили или пережил только
+    // ярлык уведомления после перезапуска. Раньше здесь просто ничего не
+    // рисовалось: человек оставался на белом экране без единой кнопки.
+    if (s == null) {
+        ClosedBakingPage(onBack)
+        return
+    }
     val remaining = remainingMap[sessionId] ?: 0L
     val otherActive = sessions.size - 1
+    var confirmCancel by rememberSaveable { mutableStateOf(false) }
 
     val step = s.currentStep
     val isWait = step.type == StepType.WAIT
@@ -64,10 +81,11 @@ fun BakingTimerScreen(
                 .padding(bottom = 24.dp)
         ) {
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
+                Modifier.fillMaxWidth().padding(horizontal = 22.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                PageLabel("← ${s.recipe.name}", Modifier.clickable { onBack() })
+                BackLabel(s.recipe.name, onClick = onBack)
                 PageLabel("Шаг ${s.currentStepIndex + 1} из ${s.recipe.timeline.size}")
             }
             Text(
@@ -151,62 +169,93 @@ fun BakingTimerScreen(
                 Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Box(
-                    Modifier
-                        .weight(1f)
-                        .clickable { viewModel.togglePause(s.id) }
-                        .drawBehind {
-                            drawRoundRect(
-                                colors.espresso,
-                                style = Stroke(1.5.dp.toPx()),
-                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx()),
-                            )
-                        }
-                        .padding(vertical = 11.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        if (s.isPaused) "Продолжить" else "Пауза",
-                        color = colors.espresso, fontFamily = FontFamily.Serif, fontSize = 14.sp,
-                    )
-                }
-                Box(
-                    Modifier
-                        .weight(1f)
-                        .clickable {
-                            viewModel.advanceStep(s.id)
-                            if (s.isLastStep) onComplete()
-                        }
-                        .drawBehind {
-                            drawRoundRect(colors.espresso, cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx()))
-                        }
-                        .padding(vertical = 11.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        if (s.isLastStep) "Готово" else "Дальше →",
-                        color = colors.paper, fontFamily = FontFamily.Serif, fontSize = 14.sp,
-                    )
-                }
+                BookButton(
+                    label = if (s.isPaused) "Продолжить" else "Пауза",
+                    onClick = { viewModel.togglePause(s.id) },
+                    variant = BookButtonVariant.SECONDARY,
+                    modifier = Modifier.weight(1f),
+                )
+                BookButton(
+                    label = if (s.isLastStep) "Готово" else "Дальше →",
+                    onClick = {
+                        viewModel.advanceStep(s.id)
+                        if (s.isLastStep) onComplete()
+                    },
+                    modifier = Modifier.weight(1f),
+                )
             }
 
-            // Бросить выпечку до готовности — остаётся кляксой в дневнике (InkBlot,
-            // DESIGN-V4.md Cycle 3). Текстовая ссылка, не кнопка — редкое действие.
+            // Бросить выпечку до готовности — остаётся кляксой в дневнике
+            // (InkBlot, Cycle 3) и кофейным кругом на развороте (Cycle 9),
+            // а сама выпечка пропадает безвозвратно.
+            //
+            // Cycle 12: раньше это была строка 12sp сразу под «Дальше», без
+            // отступа и без спроса — палец, промахнувшийся мимо главной
+            // кнопки на пару миллиметров вниз, отменял выпечку молча и
+            // насовсем. Теперь отмена отодвинута линейкой и большим полем,
+            // выглядит приписке на полях, а не соседней кнопкой, и всегда
+            // переспрашивает.
+            Spacer(Modifier.height(28.dp))
+            HairRule(Modifier.padding(horizontal = 22.dp))
+            Row(
+                Modifier.fillMaxWidth().padding(top = 6.dp),
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                TextAction(
+                    label = "бросить эту выпечку",
+                    onClick = { confirmCancel = true },
+                )
+            }
+        }
+    }
+
+    if (confirmCancel) {
+        ConfirmDialog(
+            title = "Бросить выпечку?",
+            message = "«${s.recipe.name}» уйдёт со страницы вместе с таймером — " +
+                "вернуться к этому шагу будет уже нельзя. В дневнике останется клякса.",
+            confirmLabel = "Бросить",
+            dismissLabel = "Остаться",
+            onConfirm = {
+                confirmCancel = false
+                viewModel.cancelSession(s.id)
+                onBack()
+            },
+            onDismiss = { confirmCancel = false },
+        )
+    }
+}
+
+/**
+ * Страница закрытой выпечки: сюда попадают, когда сессии уже нет — её бросили,
+ * довели до конца или открыли по старому ярлыку уведомления после перезапуска.
+ */
+@Composable
+private fun ClosedBakingPage(onBack: () -> Unit) {
+    val colors = AppColors.current
+    Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
+        Column(
+            Modifier.statusBarsPadding().fillMaxSize().padding(horizontal = 22.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
             Text(
-                "оставить эту страницу — отменить выпечку",
+                "эта выпечка уже закрыта",
+                color = colors.espresso,
+                fontFamily = FontFamily.Serif,
+                fontSize = 20.sp,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                "страница таймера живёт, пока идёт выпечка — эта своё отходила",
                 color = colors.cocoa,
                 fontFamily = FontFamily.Serif,
                 fontStyle = FontStyle.Italic,
-                fontSize = 12.sp,
+                fontSize = 13.sp,
                 textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 22.dp, end = 22.dp, top = 4.dp)
-                    .clickable {
-                        viewModel.cancelSession(s.id)
-                        onBack()
-                    },
+                modifier = Modifier.padding(top = 8.dp, bottom = 24.dp),
             )
+            BookButton(label = "На первую полосу", onClick = onBack)
         }
     }
 }

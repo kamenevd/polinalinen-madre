@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -22,6 +23,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,8 +44,11 @@ import com.polinalinen.madre.BuildConfig
 import com.polinalinen.madre.R
 import com.polinalinen.madre.model.GuestPage
 import com.polinalinen.madre.ui.components.AgedPhoto
+import com.polinalinen.madre.ui.components.BookButton
+import com.polinalinen.madre.ui.components.BookButtonVariant
 import com.polinalinen.madre.ui.components.QrCode
 import com.polinalinen.madre.ui.components.HairRule
+import com.polinalinen.madre.ui.components.TextAction
 import com.polinalinen.madre.ui.components.TracingPaper
 import com.polinalinen.madre.ui.components.WaxSealStamp
 import com.polinalinen.madre.ui.components.drawPhotoHolders
@@ -70,6 +75,11 @@ fun BakingCompleteScreen(
     viewModel: BakingViewModel = viewModel(),
 ) {
     val colors = AppColors.current
+
+    // Системная кнопка «назад» со страницы «Готово» означает ровно то же, что
+    // кнопка «На главную»: сессию надо закрыть, иначе она осталась бы висеть
+    // в списке активных выпечек уже завершённой.
+    BackHandler { onHome() }
 
     val sessions by viewModel.sessions.collectAsState()
     val session = sessionId?.let { id -> sessions.find { it.id == id } }
@@ -153,20 +163,17 @@ fun BakingCompleteScreen(
                 Spacer(Modifier.height(22.dp))
             }
 
-            if (photoPath != null) {
-                AgedPhoto(photoPath = photoPath, takenAtMillis = System.currentTimeMillis())
+            if (photoPath != null && sessionId != null) {
+                AgedPhoto(
+                    photoPath = photoPath,
+                    takenAtMillis = System.currentTimeMillis(),
+                    caption = session?.recipe?.name?.let { "Фотокарточка: $it" },
+                )
                 Row(
-                    Modifier.fillMaxWidth().padding(top = 8.dp),
+                    Modifier.fillMaxWidth().padding(top = 4.dp),
                     horizontalArrangement = Arrangement.Center,
                 ) {
-                    Text(
-                        "заменить фотокарточку",
-                        color = colors.crust,
-                        fontFamily = FontFamily.Serif,
-                        fontStyle = FontStyle.Italic,
-                        fontSize = 12.sp,
-                        modifier = Modifier.clickable { openPhotoSource() },
-                    )
+                    TextAction("заменить фотокарточку", onClick = { openPhotoSource() })
                     Text(
                         "·",
                         color = colors.cocoa,
@@ -174,14 +181,7 @@ fun BakingCompleteScreen(
                         fontSize = 12.sp,
                         modifier = Modifier.padding(horizontal = 6.dp),
                     )
-                    Text(
-                        "убрать",
-                        color = colors.crust,
-                        fontFamily = FontFamily.Serif,
-                        fontStyle = FontStyle.Italic,
-                        fontSize = 12.sp,
-                        modifier = Modifier.clickable { viewModel.clearBakePhoto(sessionId) },
-                    )
+                    TextAction("убрать", onClick = { viewModel.clearBakePhoto(sessionId) })
                 }
             } else {
                 PastedPhotoPrompt(onPick = { openPhotoSource() })
@@ -205,7 +205,7 @@ fun BakingCompleteScreen(
             // делает это видимым — повторное нажатие безопасно, очередь
             // дедуплицируется по id сессии (unique work + KEEP).
             if (sessionId != null && session != null) {
-                var shared by remember { mutableStateOf(false) }
+                var shared by rememberSaveable { mutableStateOf(false) }
                 ShareStatsButton(
                     shared = shared,
                     onShare = {
@@ -223,19 +223,11 @@ fun BakingCompleteScreen(
                 Spacer(Modifier.height(10.dp))
             }
 
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp)
-                    .clickable { onHome() }
-                    .drawBehind {
-                        drawRoundRect(colors.espresso, cornerRadius = CornerRadius(4.dp.toPx()))
-                    }
-                    .padding(vertical = 14.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("На главную", color = colors.paper, fontFamily = FontFamily.Serif, fontSize = 16.sp, letterSpacing = 1.sp)
-            }
+            BookButton(
+                label = "На главную",
+                onClick = onHome,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
         }
         }
     }
@@ -271,28 +263,12 @@ private fun ShareStatsButton(shared: Boolean, onShare: () -> Unit, modifier: Mod
             modifier = modifier.fillMaxWidth().padding(vertical = 14.dp),
         )
     } else {
-        Box(
-            modifier
-                .fillMaxWidth()
-                .clickable { onShare() }
-                .drawBehind {
-                    drawRoundRect(
-                        color = colors.espresso,
-                        cornerRadius = CornerRadius(4.dp.toPx()),
-                        style = Stroke(width = 1.5.dp.toPx()),
-                    )
-                }
-                .padding(vertical = 13.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                "Поделиться статистикой",
-                color = colors.espresso,
-                fontFamily = FontFamily.Serif,
-                fontSize = 15.sp,
-                letterSpacing = 1.sp,
-            )
-        }
+        BookButton(
+            label = "Поделиться статистикой",
+            onClick = onShare,
+            variant = BookButtonVariant.SECONDARY,
+            modifier = modifier,
+        )
     }
 }
 
@@ -305,32 +281,16 @@ private fun ShareStatsButton(shared: Boolean, onShare: () -> Unit, modifier: Mod
 @Composable
 private fun GuestPageSection(recipeId: String, recipeName: String, modifier: Modifier = Modifier) {
     val colors = AppColors.current
-    var showQr by remember { mutableStateOf(false) }
+    var showQr by rememberSaveable { mutableStateOf(false) }
     val url = GuestPage.guestUrl(BuildConfig.MADRE_API_URL, recipeId, recipeName)
 
     if (!showQr) {
-        Box(
-            modifier
-                .fillMaxWidth()
-                .clickable { showQr = true }
-                .drawBehind {
-                    drawRoundRect(
-                        color = colors.espresso,
-                        cornerRadius = CornerRadius(4.dp.toPx()),
-                        style = Stroke(width = 1.5.dp.toPx()),
-                    )
-                }
-                .padding(vertical = 13.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                "Позвать гостей в книгу",
-                color = colors.espresso,
-                fontFamily = FontFamily.Serif,
-                fontSize = 15.sp,
-                letterSpacing = 1.sp,
-            )
-        }
+        BookButton(
+            label = "Позвать гостей в книгу",
+            onClick = { showQr = true },
+            variant = BookButtonVariant.SECONDARY,
+            modifier = modifier,
+        )
     } else {
         Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
             // QR — как вклеенная карточка: подложка Cream с лёгким поворотом,

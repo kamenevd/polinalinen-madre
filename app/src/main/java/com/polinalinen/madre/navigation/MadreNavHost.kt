@@ -128,7 +128,15 @@ fun MadreNavHost(navController: NavHostController = rememberNavController()) {
                 BakingTimerScreen(
                     sessionId = sessionId,
                     onBack = { navController.popBackStack(MadreDestinations.HOME, inclusive = false) },
-                    onComplete = { navController.navigate(MadreDestinations.bakingComplete(sessionId.toString())) },
+                    onComplete = {
+                        // Cycle 12: «Готово» не кладётся поверх таймера, а
+                        // сворачивает всю дорогу выпечки до первой полосы.
+                        // Раньше «назад» со страницы «Готово» возвращал на
+                        // таймер уже закрытой выпечки — то есть в никуда.
+                        navController.navigate(MadreDestinations.bakingComplete(sessionId.toString())) {
+                            popUpTo(MadreDestinations.HOME) { inclusive = false }
+                        }
+                    },
                     viewModel = bakingViewModel,
                 )
             }

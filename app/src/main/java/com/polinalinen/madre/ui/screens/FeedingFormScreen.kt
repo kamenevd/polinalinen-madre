@@ -2,6 +2,7 @@ package com.polinalinen.madre.ui.screens
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Surface
@@ -19,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,6 +32,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -37,8 +41,13 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.polinalinen.madre.data.db.entities.StorageLocation
+import com.polinalinen.madre.sourdough.FeedingInput
 import com.polinalinen.madre.ui.components.AgedPhoto
+import com.polinalinen.madre.ui.components.BackLabel
+import com.polinalinen.madre.ui.components.BookButton
+import com.polinalinen.madre.ui.components.MinTouchTarget
 import com.polinalinen.madre.ui.components.PageLabel
+import com.polinalinen.madre.ui.components.TextAction
 import com.polinalinen.madre.ui.components.drawPhotoHolders
 import com.polinalinen.madre.ui.photo.rememberPhotoAttachment
 import com.polinalinen.madre.ui.theme.AppColors
@@ -62,11 +71,15 @@ fun FeedingFormScreen(
 ) {
     val colors = AppColors.current
 
-    var flourText by remember { mutableStateOf("50") }
-    var waterText by remember { mutableStateOf("50") }
-    var location by remember { mutableStateOf(StorageLocation.KITCHEN) }
-    var note by remember { mutableStateOf("") }
-    var photoPath by remember { mutableStateOf<String?>(null) }
+    // rememberSaveable, а не remember: поворот телефона или уход в камеру за
+    // фотокарточкой раньше стирал уже набранные граммы и заметку.
+    var flourText by rememberSaveable { mutableStateOf("50") }
+    var waterText by rememberSaveable { mutableStateOf("50") }
+    var location by rememberSaveable { mutableStateOf(StorageLocation.KITCHEN) }
+    var note by rememberSaveable { mutableStateOf("") }
+    var photoPath by rememberSaveable { mutableStateOf<String?>(null) }
+
+    val validation = FeedingInput.validate(flourText, waterText)
 
     // Ключ 0 — записи кормления ещё не существует, id появится только после
     // onSave. Имя файла и так уникально по времени, переименовывать нечего.
@@ -82,10 +95,7 @@ fun FeedingFormScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(bottom = 32.dp)
         ) {
-            PageLabel(
-                "← Дневник",
-                modifier = Modifier.padding(horizontal = 22.dp, vertical = 16.dp).clickable { onBack() },
-            )
+            BackLabel("Дневник", onClick = onBack, modifier = Modifier.padding(horizontal = 22.dp))
 
             Text(
                 "Новая запись",
@@ -162,34 +172,15 @@ fun FeedingFormScreen(
                         photoPath = photoPath!!,
                         takenAtMillis = System.currentTimeMillis(),
                         height = 160.dp,
+                        caption = "Фотокарточка кормления",
                     )
                 }
                 Row(
-                    Modifier.padding(horizontal = 22.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    Modifier.padding(horizontal = 14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Text(
-                        "заменить фотокарточку",
-                        color = colors.crust,
-                        fontFamily = FontFamily.Serif,
-                        fontStyle = FontStyle.Italic,
-                        fontSize = 12.sp,
-                        modifier = Modifier.clickable { openPhotoSource() },
-                    )
-                    Text(
-                        "·",
-                        color = colors.cocoa,
-                        fontFamily = FontFamily.Serif,
-                        fontSize = 12.sp,
-                    )
-                    Text(
-                        "убрать",
-                        color = colors.crust,
-                        fontFamily = FontFamily.Serif,
-                        fontStyle = FontStyle.Italic,
-                        fontSize = 12.sp,
-                        modifier = Modifier.clickable { photoPath = null },
-                    )
+                    TextAction("заменить фотокарточку", onClick = { openPhotoSource() })
+                    TextAction("убрать", onClick = { photoPath = null })
                 }
             }
 
@@ -228,23 +219,20 @@ fun FeedingFormScreen(
                 }
             }
 
-            Box(
-                Modifier
-                    .padding(horizontal = 22.dp, vertical = 22.dp)
-                    .fillMaxWidth()
-                    .clickable {
-                        val flour = flourText.toIntOrNull() ?: 0
-                        val water = waterText.toIntOrNull() ?: 0
+            // Пока мука и вода не названы, кнопка не работает и честно
+            // объясняет почему. Запись «0 г / 0 г» из книги уже не убрать.
+            Box(Modifier.padding(horizontal = 22.dp, vertical = 22.dp)) {
+                BookButton(
+                    label = "Вписать в дневник",
+                    onClick = {
+                        val flour = validation.flourGrams ?: return@BookButton
+                        val water = validation.waterGrams ?: return@BookButton
                         val trimmedNote = note.trim()
-                        onSave(flour, water, location, if (trimmedNote.isBlank()) null else trimmedNote, photoPath)
-                    }
-                    .drawBehind {
-                        drawRoundRect(colors.espresso, cornerRadius = CornerRadius(4.dp.toPx()))
-                    }
-                    .padding(vertical = 14.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("Вписать в дневник", color = colors.paper, fontFamily = FontFamily.Serif, fontSize = 16.sp, letterSpacing = 1.sp)
+                        onSave(flour, water, location, trimmedNote.ifBlank { null }, photoPath)
+                    },
+                    enabled = validation.canSave,
+                    caption = validation.message,
+                )
             }
         }
     }
@@ -298,11 +286,20 @@ private fun LocationChip(text: String, active: Boolean, rotation: Float, onClick
     Box(
         Modifier
             .rotate(rotation)
-            .clickable { onClick() }
+            // Штамп рисуется прежним, «бумажным» размером, а мишень под ним —
+            // в полный палец: до Cycle 12 в него надо было попасть в 25dp.
+            .defaultMinSize(minWidth = MinTouchTarget, minHeight = MinTouchTarget)
+            .selectable(
+                selected = active,
+                role = Role.RadioButton,
+                onClick = onClick,
+            )
+            .padding(vertical = 9.dp)
             .drawBehind {
                 drawRoundRect(border, style = Stroke(width = 1.5.dp.toPx()), cornerRadius = CornerRadius(3.dp.toPx()))
             }
-            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center,
     ) {
         Text(text.uppercase(), color = ink, fontFamily = FontFamily.SansSerif, fontSize = 11.sp, letterSpacing = 2.sp)
     }

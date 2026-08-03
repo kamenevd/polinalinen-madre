@@ -14,6 +14,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import com.polinalinen.madre.ui.components.ConfirmDialog
 import com.polinalinen.madre.ui.components.PhotoSourceChooser
 import com.polinalinen.madre.utils.CameraCapture
 import com.polinalinen.madre.utils.PhotoStore
@@ -79,8 +80,28 @@ fun rememberPhotoAttachment(
         cameraCapture.launch(target.uri)
     }
 
+    // Cycle 12: отказ в камере перестал быть тишиной. Раньше человек нажимал
+    // «Камера», отказывал в разрешении — и книга просто ничего не делала, как
+    // будто кнопка сломана. Теперь она честно говорит, что произошло, и
+    // предлагает галерею: снимок можно вклеить и без камеры.
+    var cameraDenied by remember { mutableStateOf(false) }
     val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) launchCamera()
+        if (granted) launchCamera() else cameraDenied = true
+    }
+
+    if (cameraDenied) {
+        ConfirmDialog(
+            title = "Камера закрыта",
+            message = "Книге не разрешили снимать. Разрешение можно вернуть в настройках " +
+                "телефона — или вклеить готовый снимок из галереи, это то же самое.",
+            confirmLabel = "Из галереи",
+            dismissLabel = "Не сейчас",
+            onConfirm = {
+                cameraDenied = false
+                galleryPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            },
+            onDismiss = { cameraDenied = false },
+        )
     }
 
     PhotoSourceChooser(

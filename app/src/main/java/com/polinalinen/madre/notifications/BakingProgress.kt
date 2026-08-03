@@ -27,6 +27,10 @@ data class BakingProgress(
     /** Вся выпечка по плану. */
     val totalSeconds: Long,
     val isPaused: Boolean,
+    /** Название шага, который начнётся после текущего; null on the last step. */
+    val nextStepTitle: String? = null,
+    /** Seconds until the next step or until the whole bake ends. */
+    val nextStepSeconds: Long? = null,
 ) {
 
     /**
@@ -45,6 +49,14 @@ data class BakingProgress(
         val tail = if (isPaused) "пауза" else "осталось ${formatRemaining(remainingSeconds)}"
         return "$stepTitle · шаг ${stepIndex + 1} из $stepCount · $tail"
     }
+
+    /** Shared copy for both the timer screen and the foreground notification. */
+    fun etaText(): String = BakingProgressFormatter.etaText(
+        stepIndex = stepIndex,
+        stepCount = stepCount,
+        nextStepTitle = nextStepTitle,
+        remainingSeconds = nextStepSeconds ?: remainingSeconds,
+    )
 
     companion object {
         /** Полоска в NotificationCompat.setProgress — в тысячных. */
@@ -66,6 +78,23 @@ data class BakingProgress(
             val m = (safe % 3600) / 60
             val s = safe % 60
             return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
+        }
+    }
+}
+
+/** Pure, UI-independent ETA wording. It deliberately receives remaining time, not a clock. */
+object BakingProgressFormatter {
+    fun etaText(
+        stepIndex: Int,
+        stepCount: Int,
+        nextStepTitle: String?,
+        remainingSeconds: Long,
+    ): String {
+        val time = BakingProgress.formatRemaining(remainingSeconds)
+        return if (stepIndex >= stepCount - 1 || nextStepTitle.isNullOrBlank()) {
+            "Выпечка завершится через $time"
+        } else {
+            "Следующий шаг: $nextStepTitle · через $time"
         }
     }
 }

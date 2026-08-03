@@ -117,13 +117,18 @@ class BakingProgressService : LifecycleService() {
         shownSessionIds = bakes.map { it.sessionId }.toSet()
     }
 
-    private fun buildNotification(bake: BakingProgress): Notification =
-        baseBuilder()
+    private fun buildNotification(bake: BakingProgress): Notification {
+        val details = "${bake.contentText()}\n${bake.etaText()}"
+        return baseBuilder()
+            // В компактной строке главным остаётся именно ответ на вопрос
+            // «сколько до следующего шага»; остальное видно при раскрытии.
             .setContentTitle(bake.recipeName)
-            .setContentText(bake.contentText())
+            .setContentText(bake.etaText())
+            .setStyle(NotificationCompat.BigTextStyle().bigText(details))
             .setProgress(BakingProgress.PROGRESS_MAX, bake.permille(), false)
             .setContentIntent(openBakingIntent(bake.sessionId))
             .build()
+    }
 
     /** Первые доли секунды, пока не пришёл первый слепок. */
     private fun buildStartingNotification(): Notification =

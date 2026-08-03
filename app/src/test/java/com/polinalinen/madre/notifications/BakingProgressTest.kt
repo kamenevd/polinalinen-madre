@@ -17,6 +17,8 @@ class BakingProgressTest {
         elapsedSeconds: Long = 0,
         totalSeconds: Long = 3600,
         isPaused: Boolean = false,
+        nextStepTitle: String? = "Складка",
+        nextStepSeconds: Long? = remainingSeconds,
     ) = BakingProgress(
         sessionId = sessionId,
         recipeName = "Бородинский",
@@ -27,6 +29,8 @@ class BakingProgressTest {
         elapsedSeconds = elapsedSeconds,
         totalSeconds = totalSeconds,
         isPaused = isPaused,
+        nextStepTitle = nextStepTitle,
+        nextStepSeconds = nextStepSeconds,
     )
 
     @Test
@@ -84,5 +88,29 @@ class BakingProgressTest {
     @Test
     fun `an action step counts down without promising anything`() {
         assertThat(progress(remainingSeconds = 0, isPaused = false).contentText()).isNotEmpty()
+    }
+
+    @Test
+    fun `running progress names the next step and uses current remaining time`() {
+        val text = progress(stepIndex = 1, stepCount = 3, remainingSeconds = 125, nextStepTitle = "Формовка").etaText()
+        assertThat(text).isEqualTo("Следующий шаг: Формовка · через 2:05")
+    }
+
+    @Test
+    fun `paused progress keeps the same remaining time in the shared eta`() {
+        val text = progress(isPaused = true, remainingSeconds = 125, nextStepTitle = "Формовка").etaText()
+        assertThat(text).isEqualTo("Следующий шаг: Формовка · через 2:05")
+    }
+
+    @Test
+    fun `last step says when the whole bake ends`() {
+        val text = progress(stepIndex = 3, stepCount = 4, remainingSeconds = 0, nextStepTitle = null, nextStepSeconds = null).etaText()
+        assertThat(text).isEqualTo("Выпечка завершится через 0:00")
+    }
+
+    @Test
+    fun `zero time uses zero for both next step and final bake`() {
+        assertThat(progress(remainingSeconds = 0, nextStepSeconds = 0).etaText()).contains("через 0:00")
+        assertThat(progress(stepIndex = 3, stepCount = 4, remainingSeconds = 0, nextStepTitle = null).etaText()).contains("0:00")
     }
 }

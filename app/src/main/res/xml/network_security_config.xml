@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- PocketBase живёт в домашней сети по http (Cycle 5) — cleartext разрешён
-     ТОЛЬКО для этого хоста, остальной трафик остаётся под дефолтным запретом. -->
+<!-- Cycle 11: сервер переехал на madre-api.kdnfx.space и отвечает только по
+     HTTPS, поэтому исключений для отдельных хостов здесь больше нет —
+     открытый текст запрещён целиком, включая отладочные сборки. -->
 <network-security-config>
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">192.168.3.59</domain>
-    </domain-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
 </network-security-config>

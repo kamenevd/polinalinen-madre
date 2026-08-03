@@ -44,16 +44,13 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
-        <!-- Отложено сознательно (2026-07-21): класс ещё не написан. Уведомления
-             решили не спешить писать в ночь дедлайна по APK — v3 уже обжигалась
-             на баге с батареей из-за поспешной реализации (баг #5). Раскомментировать
-             вместе с самим SourdoughNotificationReceiver, когда дойдут руки сделать
-             это аккуратно (см. итоговый статус-отчёт от 2026-07-21). -->
-        <!--
-        <receiver
-            android:name=".sourdough.SourdoughNotificationReceiver"
-            android:exported="false" />
-        -->
+        <!-- Cycle 11 (2026-07-26): уведомления наконец сделаны — но не через
+             BroadcastReceiver и не через AlarmManager, как планировалось в
+             2026-07-21. Напоминание о кормлении едет через WorkManager
+             (notifications/FeedingReminderWorker), поэтому ни receiver, ни
+             SCHEDULE_EXACT_ALARM здесь не нужны: WorkManager регистрирует свои
+             компоненты сам. Ровно та осторожность с батареей, ради которой
+             реализацию когда-то отложили (баг v3 #5). -->
 
     </application>
 </manifest>

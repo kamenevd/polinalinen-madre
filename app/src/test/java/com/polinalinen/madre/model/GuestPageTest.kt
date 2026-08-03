@@ -55,8 +55,8 @@ class GuestPageTest {
 
     @Test
     fun `guest url points at the pocketbase form and survives cyrillic`() {
-        val url = GuestPage.guestUrl("http://192.168.3.59:8091", "pane-bianco", "Пане бьянко")
-        assertThat(url).startsWith("http://192.168.3.59:8091/guest.html?recipe=pane-bianco&name=")
+        val url = GuestPage.guestUrl("https://madre-api.kdnfx.space", "pane-bianco", "Пане бьянко")
+        assertThat(url).startsWith("https://madre-api.kdnfx.space/guest.html?recipe=pane-bianco&name=")
         // Кириллица и пробел не должны уехать в query сырыми.
         assertThat(url).doesNotContain("Пане")
         assertThat(url).doesNotContain(" ")
@@ -64,8 +64,8 @@ class GuestPageTest {
 
     @Test
     fun `guest url does not double the slash after base`() {
-        val url = GuestPage.guestUrl("http://192.168.3.59:8091/", "r1", "Хлеб")
-        assertThat(url).contains("8091/guest.html")
-        assertThat(url).doesNotContain("8091//")
+        val url = GuestPage.guestUrl("https://madre-api.kdnfx.space/", "r1", "Хлеб")
+        assertThat(url).contains("kdnfx.space/guest.html")
+        assertThat(url).doesNotContain("kdnfx.space//")
     }
 }

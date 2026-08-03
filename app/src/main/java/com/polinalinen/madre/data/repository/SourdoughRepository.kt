@@ -26,6 +26,16 @@ class SourdoughRepository(private val db: MadreDatabase) {
         db.sourdoughConfigDao().upsert(config)
     }
 
+    /** Cycle 11: интервал кормления из колофона — теперь настоящая настройка. */
+    suspend fun setIntervalHours(configId: Long, hours: Int) = withContext(Dispatchers.IO) {
+        db.sourdoughConfigDao().updateIntervalHours(configId, hours)
+    }
+
+    /** Cycle 11: выключенные напоминания снимают запланированную работу. */
+    suspend fun setRemindersEnabled(configId: Long, enabled: Boolean) = withContext(Dispatchers.IO) {
+        db.sourdoughConfigDao().updateRemindersEnabled(configId, enabled)
+    }
+
     suspend fun addFeeding(feeding: FeedingEntity): Long = withContext(Dispatchers.IO) {
         val id = db.feedingDao().insert(feeding)
         // Обновляем lastFeedingMillis в конфиге, чтобы SourdoughProfile.hoursSinceFeeding()

@@ -1,3 +1,4 @@
+import json
 import re
 import unittest
 from pathlib import Path
@@ -10,10 +11,18 @@ class DocumentationContractTests(unittest.TestCase):
     def read(self, relative):
         return (ROOT / relative).read_text(encoding="utf-8")
 
-    def test_design_has_exactly_one_heading_for_cycles_one_to_ten(self):
+    def test_design_has_exactly_one_heading_per_cycle_with_no_gaps(self):
         text = self.read("DESIGN-V4.md")
         cycles = [int(value) for value in re.findall(r"^## Cycle (\d+)\b", text, re.MULTILINE)]
-        self.assertEqual(list(range(1, 11)), cycles)
+        # Циклов становится больше со временем, но нумерация обязана оставаться
+        # сплошной и без повторов — дубль заголовка означает потерянный раздел.
+        self.assertGreaterEqual(len(cycles), 11)
+        self.assertEqual(list(range(1, len(cycles) + 1)), cycles)
+
+    def test_design_documents_the_current_cycle(self):
+        manifest = json.loads(self.read("workflow/CYCLE.yaml"))
+        current = manifest["cycle"]["number"]
+        self.assertIn(f"## Cycle {current}", self.read("DESIGN-V4.md"))
 
     def test_resolved_page_number_is_removed_from_screen_contract(self):
         screen_contract = self.read("DESIGN-V4.md").split("## Решённые вопросы", 1)[0]

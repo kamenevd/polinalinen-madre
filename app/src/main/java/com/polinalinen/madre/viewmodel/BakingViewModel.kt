@@ -6,6 +6,9 @@ import androidx.lifecycle.viewModelScope
 import com.polinalinen.madre.MadreApplication
 import com.polinalinen.madre.model.BakingSession
 import com.polinalinen.madre.model.Recipe
+import com.polinalinen.madre.notifications.BakingNotificationPlanner
+import com.polinalinen.madre.notifications.MadreNotifier
+import com.polinalinen.madre.notifications.NotificationLedger
 import com.polinalinen.madre.ui.components.CoffeeRing
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -72,6 +75,12 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
 
     private val timerJobs = mutableMapOf<Long, Job>()
     private var nextSessionId = 1L
+
+    // Cycle 11: уведомления по ходу выпечки. Журнал и нотификатор — поля этой
+    // ViewModel, а не статические синглтоны: живут ровно столько, сколько живут
+    // сами сессии выпечки, и не протекают между тестами.
+    private val notifier = MadreNotifier(app)
+    private val notificationLedger = NotificationLedger()
 
     init {
         viewModelScope.launch { _recipes.value = recipeRepository.getRecipes() }
@@ -164,6 +173,8 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
         stopTimer(id)
         _sessions.update { list -> list.filterNot { it.id == id } }
         _remainingSeconds.update { it - id }
+        // Выпечка закрыта — её ключи в журнале уведомлений больше ни к чему.
+        notificationLedger.forgetSession(id)
     }
 
     /**
@@ -193,9 +204,46 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
                 if (!s.isPaused && !s.isCompleted) {
                     val elapsed = (System.currentTimeMillis() - s.stepStartedAtMillis) / 1000
                     val total = s.currentStep.durationMinutes * 60L
-                    _remainingSeconds.update { it + (id to (total - elapsed).coerceAtLeast(0)) }
+                    val remaining = (total - elapsed).coerceAtLeast(0)
+                    _remainingSeconds.update { it + (id to remaining) }
+                    notifyProgress(s, remaining)
                 }
                 delay(1000)
+            }
+        }
+    }
+
+    /**
+     * Cycle 11: два уведомления по ходу выпечки — конец шага-ожидания и просьба
+     * достать сливочное масло за полчаса до шага, которому нужно мягкое.
+     * Условия — в BakingNotificationPlanner, «показать один раз» — в журнале:
+     * тик таймера идёт раз в секунду, а уведомление на пару «сессия + шаг»
+     * уходит ровно одно.
+     *
+     * ЧЕСТНО: таймер живёт в этой ViewModel, то есть уведомления приходят,
+     * пока процесс приложения жив. Убитую систему выпечку они не разбудят —
+     * это не фоновая гарантированная доставка (в отличие от напоминания о
+     * кормлении, которое едет через WorkManager).
+     */
+    private fun notifyProgress(session: BakingSession, remainingSeconds: Long) {
+        if (BakingNotificationPlanner.isButterPrepDue(session, remainingSeconds)) {
+            val key = BakingNotificationPlanner.butterPrepKey(session.id, session.currentStepIndex)
+            if (notificationLedger.markIfNew(key)) {
+                notifier.postBakingNotification(
+                    key = key,
+                    title = "Достаньте сливочное масло",
+                    text = "Через полчаса оно понадобится мягким — «${session.recipe.name}».",
+                )
+            }
+        }
+        if (BakingNotificationPlanner.isStepDone(session, remainingSeconds)) {
+            val key = BakingNotificationPlanner.stepDoneKey(session.id, session.currentStepIndex)
+            if (notificationLedger.markIfNew(key)) {
+                notifier.postBakingNotification(
+                    key = key,
+                    title = "«${session.recipe.name}» — время вышло",
+                    text = "${session.currentStep.title}: шаг закончен, можно продолжать.",
+                )
             }
         }
     }

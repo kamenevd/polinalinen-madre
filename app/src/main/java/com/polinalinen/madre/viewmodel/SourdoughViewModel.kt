@@ -7,6 +7,8 @@ import com.polinalinen.madre.MadreApplication
 import com.polinalinen.madre.data.db.entities.FeedingEntity
 import com.polinalinen.madre.data.db.entities.SourdoughConfigEntity
 import com.polinalinen.madre.data.db.entities.StorageLocation
+import com.polinalinen.madre.notifications.FeedingReminderPlanner
+import com.polinalinen.madre.notifications.FeedingReminderScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -27,6 +29,7 @@ class SourdoughViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repository = (app as MadreApplication).sourdoughRepository
     private val syncRepository = (app as MadreApplication).syncRepository
+    private val reminderScheduler = FeedingReminderScheduler(app)
 
     private val _config = MutableStateFlow<SourdoughConfigEntity?>(null)
     val config: StateFlow<SourdoughConfigEntity?> = _config.asStateFlow()
@@ -45,10 +48,42 @@ class SourdoughViewModel(app: Application) : AndroidViewModel(app) {
             _config.value = bootstrapped
             // Держим конфиг актуальным реактивно: после кормления lastFeedingMillis
             // меняется в БД, Room сам пришлёт новое значение сюда без ручного refetch.
+            //
+            // Cycle 11: сюда же сходятся ВСЕ причины перепланировать напоминание —
+            // новое кормление, другой интервал, выключенные напоминания. Одна
+            // точка вместо трёх вызовов вразнобой: что бы ни поменялось в
+            // конфиге, план пересчитывается от актуальных значений.
             repository.observeConfig(bootstrapped.userId).collect { latest ->
-                if (latest != null) _config.value = latest
+                if (latest != null) {
+                    _config.value = latest
+                    rescheduleReminder(latest)
+                }
             }
         }
+    }
+
+    /**
+     * Cycle 11: интервал из колофона. Значения — ключи profileForInterval()
+     * (12/24/48/72/168); перепланирование придёт реактивно из observeConfig.
+     */
+    fun setIntervalHours(hours: Int) {
+        val configId = _config.value?.id ?: return
+        viewModelScope.launch { repository.setIntervalHours(configId, hours) }
+    }
+
+    fun setRemindersEnabled(enabled: Boolean) {
+        val configId = _config.value?.id ?: return
+        viewModelScope.launch { repository.setRemindersEnabled(configId, enabled) }
+    }
+
+    private fun rescheduleReminder(config: SourdoughConfigEntity) {
+        val plan = FeedingReminderPlanner.plan(
+            remindersEnabled = config.remindersEnabled,
+            intervalHours = config.intervalHours,
+            lastFeedingMillis = config.lastFeedingMillis,
+            nowMillis = System.currentTimeMillis(),
+        )
+        reminderScheduler.apply(config.id, plan, config.name)
     }
 
     /**

@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.polinalinen.madre.model.StepType
+import com.polinalinen.madre.notifications.BakingProgressFormatter
 import com.polinalinen.madre.ui.components.BackLabel
 import com.polinalinen.madre.ui.components.BookButton
 import com.polinalinen.madre.ui.components.BookButtonVariant
@@ -72,6 +73,12 @@ fun BakingTimerScreen(
     val step = s.currentStep
     val isWait = step.type == StepType.WAIT
     val urgent = remaining in 1..(step.durationMinutes * 60L / 10).coerceAtLeast(1)
+    val etaText = BakingProgressFormatter.etaText(
+        stepIndex = s.currentStepIndex,
+        stepCount = s.recipe.timeline.size,
+        nextStepTitle = s.recipe.timeline.getOrNull(s.currentStepIndex + 1)?.title,
+        remainingSeconds = remaining,
+    )
 
     Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
         Column(
@@ -126,6 +133,15 @@ fun BakingTimerScreen(
                 fontSize = 13.sp,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                etaText,
+                color = colors.crust,
+                fontFamily = FontFamily.Serif,
+                fontStyle = FontStyle.Italic,
+                fontSize = 13.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             )
 
             // Текст шага — строго из PDF, без перефразирования

@@ -44,6 +44,12 @@ class SecureTokenStore(
 
     override fun read(): String? {
         val stored = prefs.getString(KEY, null) ?: return null
+        // Проверяем форму строки САМИ, до декодера. android.util.Base64 не
+        // ругается на мусор — он молча пропускает всё, чего нет в алфавите, и
+        // из «это не base64 !!!» достаёт четыре байта из букв b-a-s-e-6-4.
+        // Такой «токен» дошёл бы до шифра и с невезучим шифром расшифровался
+        // бы в мусор, а не в честное «токена нет».
+        if (!isBase64(stored)) return null
         val sealed = runCatching { Base64.decode(stored, Base64.NO_WRAP) }.getOrNull() ?: return null
         val plain = runCatching { cipher.decrypt(sealed) }.getOrNull() ?: return null
         return String(plain, Charsets.UTF_8).takeIf { it.isNotEmpty() }
@@ -61,6 +67,12 @@ class SecureTokenStore(
     companion object {
         const val PREFS = "madre_account"
         const val KEY = "family_auth_token"
+
+        private val BASE64 = Regex("""^[A-Za-z0-9+/]+={0,2}$""")
+
+        /** Строгая форма Base64 без переносов: то, что кладёт [write], и ничего кроме. */
+        fun isBase64(value: String): Boolean =
+            value.length % 4 == 0 && BASE64.matches(value)
     }
 }
 

@@ -87,6 +87,17 @@ class SecureTokenStoreTest {
     }
 
     @Test
+    fun `only strict base64 passes the form check`() {
+        assertThat(SecureTokenStore.isBase64("bWFkcmU=")).isTrue()
+        // Мусор с вкраплениями букв алфавита — то, из чего Base64.decode молча
+        // достаёт «полезные» байты; форму он не проходит.
+        assertThat(SecureTokenStore.isBase64("это не base64 !!!")).isFalse()
+        assertThat(SecureTokenStore.isBase64("bWFkcmU")).isFalse() // длина не кратна 4
+        assertThat(SecureTokenStore.isBase64("bWFk cmU=")).isFalse() // пробел внутри
+        assertThat(SecureTokenStore.isBase64("")).isFalse()
+    }
+
+    @Test
     fun `keystore cipher is backed by the android keystore provider`() {
         assertThat(KeystoreTokenCipher.PROVIDER).isEqualTo("AndroidKeyStore")
         assertThat(KeystoreTokenCipher.TRANSFORMATION).isEqualTo("AES/GCM/NoPadding")

@@ -94,12 +94,15 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
     fun startBaking(recipe: Recipe, scaleFactor: Double): Long {
         val id = nextSessionId++
         _sessions.update { it + BakingSession(id = id, recipe = recipe, scaleFactor = scaleFactor) }
+        restartTimer(id)
+        // Слепок публикуется ДО подъёма сервиса, а не после: сервис читает
+        // список сразу при создании, и пустой список для него означает «всё,
+        // выпечек нет» — он бы ушёл, не показав ни строки.
+        publishProgress()
         // Строка хода выпечки в шторке. Сервис поднимается ровно здесь —
         // из явного действия человека («Начать выпечку»), а не из фона, и
         // потому не спотыкается об ограничения Android 12+.
         BakingProgressService.start(getApplication())
-        restartTimer(id)
-        publishProgress()
         return id
     }
 

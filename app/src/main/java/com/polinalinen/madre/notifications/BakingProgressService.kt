@@ -63,6 +63,14 @@ class BakingProgressService : LifecycleService() {
                     // Последняя выпечка закрылась — снимаем всё своё и уходим.
                     // Ждать, пока система вспомнит про пустой сервис, нельзя:
                     // в шторке осталась бы строка про то, чего уже нет.
+                    //
+                    // Сначала всё же выходим на передний план, если ещё не
+                    // успели: lifecycleScope запускается на Main.immediate и
+                    // может добраться сюда раньше onStartCommand, а система
+                    // ждёт startForeground от каждого поднятого сервиса.
+                    if (foregroundSessionId == null) {
+                        startForegroundFor(PLACEHOLDER_SESSION_ID, buildStartingNotification())
+                    }
                     clearAll()
                     stopForegroundCompat()
                     stopSelf()

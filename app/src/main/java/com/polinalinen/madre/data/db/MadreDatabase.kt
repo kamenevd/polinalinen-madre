@@ -55,6 +55,16 @@ interface SourdoughConfigDao {
     // устаревшей копией конфига.
     @Query("UPDATE sourdough_configs SET lastFeedingMillis = :millis WHERE id = :configId")
     suspend fun updateLastFeeding(configId: Long, millis: Long)
+
+    // Cycle 11: «Кормить» и «Напоминания» в колофоне наконец пишут в Room, а не
+    // в UI-стейт экрана. Точечные UPDATE — по той же причине, что и выше.
+    // Колонки существуют с первой версии схемы (SourdoughConfigEntity), новых
+    // полей нет — миграция не нужна, версия БД остаётся 6.
+    @Query("UPDATE sourdough_configs SET intervalHours = :hours WHERE id = :configId")
+    suspend fun updateIntervalHours(configId: Long, hours: Int)
+
+    @Query("UPDATE sourdough_configs SET remindersEnabled = :enabled WHERE id = :configId")
+    suspend fun updateRemindersEnabled(configId: Long, enabled: Boolean)
 }
 
 @Dao

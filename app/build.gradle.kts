@@ -35,9 +35,10 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // Cycle 5: PocketBase на домашнем сервере (LXC). Адрес меняется только
-        // здесь — код берёт его исключительно из BuildConfig.MADRE_API_URL.
-        buildConfigField("String", "MADRE_API_URL", "\"http://192.168.3.59:8091\"")
+        // Cycle 11: PocketBase переехал из домашней сети в production и виден
+        // только по HTTPS. Адрес меняется только здесь — код берёт его
+        // исключительно из BuildConfig.MADRE_API_URL.
+        buildConfigField("String", "MADRE_API_URL", "\"https://madre-api.kdnfx.space\"")
     }
 
     signingConfigs {

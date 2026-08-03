@@ -2,6 +2,7 @@ package com.polinalinen.madre.navigation
 
 import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,6 +29,9 @@ import com.polinalinen.madre.ui.screens.RecipeDetailScreen
 import com.polinalinen.madre.ui.screens.SettingsScreen
 import com.polinalinen.madre.ui.screens.ShelfScreen
 import com.polinalinen.madre.ui.screens.StarterDiaryScreen
+import com.polinalinen.madre.ui.theme.CalmModeSetting
+import com.polinalinen.madre.ui.theme.LocalCalmMode
+import com.polinalinen.madre.ui.theme.SharedPreferencesFlagStore
 import com.polinalinen.madre.viewmodel.BakingViewModel
 import com.polinalinen.madre.viewmodel.SourdoughViewModel
 
@@ -65,6 +69,16 @@ fun MadreNavHost(navController: NavHostController = rememberNavController()) {
         prefs.edit().putString("my_name", name).apply()
     }
 
+    // «Спокойный режим» (Cycle 11) — там же, в madre_prefs. Значение раздаётся
+    // вниз через LocalCalmMode: его читают и экраны, и модификаторы декораций
+    // глубоко в чужих поддеревьях (Modifier.breathingPage).
+    val calmModeSetting = remember { CalmModeSetting(SharedPreferencesFlagStore(prefs)) }
+    var calmMode by remember { mutableStateOf(calmModeSetting.isCalm()) }
+    val setCalmMode: (Boolean) -> Unit = { calm ->
+        calmModeSetting.setCalm(calm)
+        calmMode = calm
+    }
+
     // Реальная история выпечек — питает Формуляр книги / хитмэп на Полке.
     val bakeRecords by app.bakeHistoryRepository.observeAll().collectAsState(initial = emptyList())
     val recipesForStats by bakingViewModel.recipes.collectAsState()
@@ -83,100 +97,111 @@ fun MadreNavHost(navController: NavHostController = rememberNavController()) {
         ((System.currentTimeMillis() - oldest.timestampMillis) / 86_400_000L).toInt() + 1
     } ?: 1
 
-    NavHost(navController = navController, startDestination = MadreDestinations.HOME) {
-        composable(MadreDestinations.HOME) {
-            HomeScreen(
-                madreHeadline = headline,
-                phase = phase,
-                favoriteIds = favoriteIds,
-                onToggleFavorite = toggleFavorite,
-                onOpenRecipe = { id -> navController.navigate(MadreDestinations.recipeDetail(id)) },
-                onOpenStarter = { navController.navigate(MadreDestinations.STARTER_DETAIL) },
-                onOpenTimer = { sessionId -> navController.navigate(MadreDestinations.bakingTimer(sessionId.toString())) },
-                onOpenFeeding = { navController.navigate(MadreDestinations.FEEDING_FORM) },
-                onOpenSettings = { navController.navigate(MadreDestinations.SETTINGS) },
-                onOpenShelf = { navController.navigate(MadreDestinations.SHELF) },
-                viewModel = bakingViewModel,
-            )
-        }
-        composable(MadreDestinations.RECIPE_DETAIL) { backStackEntry ->
-            val recipeId = backStackEntry.arguments?.getString("recipeId").orEmpty()
-            RecipeDetailScreen(
-                recipeId = recipeId,
-                onBack = { navController.popBackStack() },
-                onStartBaking = { sessionId -> navController.navigate(MadreDestinations.bakingTimer(sessionId.toString())) },
-                viewModel = bakingViewModel,
-            )
-        }
-        composable(MadreDestinations.BAKING_TIMER) { backStackEntry ->
-            val sessionId = backStackEntry.arguments?.getString("sessionId")?.toLongOrNull() ?: return@composable
-            BakingTimerScreen(
-                sessionId = sessionId,
-                onBack = { navController.popBackStack(MadreDestinations.HOME, inclusive = false) },
-                onComplete = { navController.navigate(MadreDestinations.bakingComplete(sessionId.toString())) },
-                viewModel = bakingViewModel,
-            )
-        }
-        composable(MadreDestinations.BAKING_COMPLETE) { backStackEntry ->
-            val sessionId = backStackEntry.arguments?.getString("sessionId")?.toLongOrNull()
-            BakingCompleteScreen(
-                sessionId = sessionId,
-                onHome = {
-                    // Убирает только ЭТУ сессию — если печётся что-то ещё, оно продолжает идти.
-                    sessionId?.let { bakingViewModel.exitSession(it) }
-                    navController.popBackStack(MadreDestinations.HOME, inclusive = false)
-                },
-                viewModel = bakingViewModel,
-            )
-        }
-        composable(MadreDestinations.STARTER_DETAIL) {
-            val cancelledBakeCount by bakingViewModel.cancelledCount.collectAsState()
-            StarterDiaryScreen(
-                dayNumber = dayNumber,
-                phase = phase,
-                profile = profile,
-                entries = MadreVoice.entriesFor(lastFeeding, profile),
-                history = feedingHistory,
-                onBack = { navController.popBackStack() },
-                onFeed = { navController.navigate(MadreDestinations.FEEDING_FORM) },
-                cancelledBakeCount = cancelledBakeCount,
-            )
-        }
-        composable(MadreDestinations.FEEDING_FORM) {
-            FeedingFormScreen(
-                onSave = { flourGrams, waterGrams, location, note, photoPath ->
-                    sourdoughViewModel.feed(flourGrams, waterGrams, location, note, photoPath)
-                    navController.popBackStack()
-                },
-                onBack = { navController.popBackStack() },
-            )
-        }
-        composable(MadreDestinations.SETTINGS) {
-            SettingsScreen(
-                myName = myName,
-                onMyNameChange = setMyName,
-                onBack = { navController.popBackStack() },
-                bakeCount = bakeRecords.size,
-                feedingCount = feedingHistory.size,
-            )
-        }
-        composable(MadreDestinations.SHELF) {
-            ShelfScreen(
-                myName = myName,
-                onBack = { navController.popBackStack() },
-                onOpenMyBook = { navController.navigate(MadreDestinations.bookStats("me")) },
-            )
-        }
-        composable(MadreDestinations.BOOK_STATS) {
-            // Пока есть только "me" — книги друзей появятся здесь же, когда будет
-            // от кого брать данные (нужен сервер, см. ShelfScreen).
-            BookStatsScreen(
-                ownerLabel = myName.ifBlank { "вы" },
-                isMe = true,
-                recipes = recipesForStats,
-                records = bakeRecords,
-                onBack = { navController.popBackStack() },
-            )
+    CompositionLocalProvider(LocalCalmMode provides calmMode) {
+        NavHost(navController = navController, startDestination = MadreDestinations.HOME) {
+            composable(MadreDestinations.HOME) {
+                HomeScreen(
+                    madreHeadline = headline,
+                    phase = phase,
+                    favoriteIds = favoriteIds,
+                    onToggleFavorite = toggleFavorite,
+                    onOpenRecipe = { id -> navController.navigate(MadreDestinations.recipeDetail(id)) },
+                    onOpenStarter = { navController.navigate(MadreDestinations.STARTER_DETAIL) },
+                    onOpenTimer = { sessionId -> navController.navigate(MadreDestinations.bakingTimer(sessionId.toString())) },
+                    onOpenFeeding = { navController.navigate(MadreDestinations.FEEDING_FORM) },
+                    onOpenSettings = { navController.navigate(MadreDestinations.SETTINGS) },
+                    onOpenShelf = { navController.navigate(MadreDestinations.SHELF) },
+                    viewModel = bakingViewModel,
+                )
+            }
+            composable(MadreDestinations.RECIPE_DETAIL) { backStackEntry ->
+                val recipeId = backStackEntry.arguments?.getString("recipeId").orEmpty()
+                RecipeDetailScreen(
+                    recipeId = recipeId,
+                    onBack = { navController.popBackStack() },
+                    onStartBaking = { sessionId -> navController.navigate(MadreDestinations.bakingTimer(sessionId.toString())) },
+                    viewModel = bakingViewModel,
+                )
+            }
+            composable(MadreDestinations.BAKING_TIMER) { backStackEntry ->
+                val sessionId = backStackEntry.arguments?.getString("sessionId")?.toLongOrNull() ?: return@composable
+                BakingTimerScreen(
+                    sessionId = sessionId,
+                    onBack = { navController.popBackStack(MadreDestinations.HOME, inclusive = false) },
+                    onComplete = { navController.navigate(MadreDestinations.bakingComplete(sessionId.toString())) },
+                    viewModel = bakingViewModel,
+                )
+            }
+            composable(MadreDestinations.BAKING_COMPLETE) { backStackEntry ->
+                val sessionId = backStackEntry.arguments?.getString("sessionId")?.toLongOrNull()
+                BakingCompleteScreen(
+                    sessionId = sessionId,
+                    onHome = {
+                        // Убирает только ЭТУ сессию — если печётся что-то ещё, оно продолжает идти.
+                        sessionId?.let { bakingViewModel.exitSession(it) }
+                        navController.popBackStack(MadreDestinations.HOME, inclusive = false)
+                    },
+                    viewModel = bakingViewModel,
+                )
+            }
+            composable(MadreDestinations.STARTER_DETAIL) {
+                val cancelledBakeCount by bakingViewModel.cancelledCount.collectAsState()
+                StarterDiaryScreen(
+                    dayNumber = dayNumber,
+                    phase = phase,
+                    profile = profile,
+                    entries = MadreVoice.entriesFor(lastFeeding, profile),
+                    history = feedingHistory,
+                    onBack = { navController.popBackStack() },
+                    onFeed = { navController.navigate(MadreDestinations.FEEDING_FORM) },
+                    cancelledBakeCount = cancelledBakeCount,
+                )
+            }
+            composable(MadreDestinations.FEEDING_FORM) {
+                FeedingFormScreen(
+                    onSave = { flourGrams, waterGrams, location, note, photoPath ->
+                        sourdoughViewModel.feed(flourGrams, waterGrams, location, note, photoPath)
+                        navController.popBackStack()
+                    },
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable(MadreDestinations.SETTINGS) {
+                SettingsScreen(
+                    myName = myName,
+                    onMyNameChange = setMyName,
+                    onBack = { navController.popBackStack() },
+                    bakeCount = bakeRecords.size,
+                    feedingCount = feedingHistory.size,
+                    // Cycle 11: интервал и напоминания — настоящий конфиг из Room.
+                    // Перепланирование уведомления делает SourdoughViewModel,
+                    // реактивно от той же записи (см. rescheduleReminder).
+                    intervalHours = sourdoughConfig?.intervalHours ?: 24,
+                    onIntervalHoursChange = sourdoughViewModel::setIntervalHours,
+                    remindersEnabled = sourdoughConfig?.remindersEnabled ?: true,
+                    onRemindersEnabledChange = sourdoughViewModel::setRemindersEnabled,
+                    calmMode = calmMode,
+                    onCalmModeChange = setCalmMode,
+                )
+            }
+            composable(MadreDestinations.SHELF) {
+                ShelfScreen(
+                    myName = myName,
+                    onBack = { navController.popBackStack() },
+                    onOpenMyBook = { navController.navigate(MadreDestinations.bookStats("me")) },
+                )
+            }
+            composable(MadreDestinations.BOOK_STATS) {
+                // Пока есть только "me" — книги друзей появятся здесь же, когда будет
+                // от кого брать данные (нужен сервер, см. ShelfScreen).
+                BookStatsScreen(
+                    ownerLabel = myName.ifBlank { "вы" },
+                    isMe = true,
+                    recipes = recipesForStats,
+                    records = bakeRecords,
+                    onBack = { navController.popBackStack() },
+                )
+            }
         }
     }
 }

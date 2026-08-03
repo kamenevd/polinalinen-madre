@@ -1,8 +1,12 @@
 # Мадре — серверная часть (PocketBase)
 
-PocketBase живёт на домашнем сервере: `http://192.168.3.59:8091`
-(LXC, виден только из домашней сети — поэтому auth сознательно нет,
-см. DESIGN-V4.md Cycle 5 и network_security_config.xml в приложении).
+PocketBase отвечает по адресу `https://madre-api.kdnfx.space`
+(Cycle 11 увёл его из домашней сети в production — теперь только HTTPS
+и только с входом, см. DESIGN-V4.md Cycle 11).
+
+Схема и маршруты с Cycle 11 версионируются в `backend/` (см. `backend/README.md`);
+здесь описано то, что осталось от Cycle 5–7, — и эти коллекции миграция
+`lock_legacy_collections` закрыла: правила у них были пустые, то есть публичные.
 
 ## Коллекции
 
@@ -37,13 +41,13 @@ API rules (гости пишут без аккаунта, книга тольк�
 
 `pb_public/guest.html` — публичная страница для гостей: открывается по QR
 с экрана «Испечено» (BakingCompleteScreen), без установки приложения.
-Адрес: `http://192.168.3.59:8091/guest.html?recipe=<id>&name=<название>`.
+Адрес: `https://madre-api.kdnfx.space/guest.html?recipe=<id>&name=<название>`.
 
 Развёртывание: скопировать `server/pb_public/guest.html` в каталог
-`pb_public` рядом с бинарём PocketBase на LXC:
+`pb_public` рядом с бинарём PocketBase:
 
 ```sh
-scp server/pb_public/guest.html root@192.168.3.59:/opt/pocketbase/pb_public/
+rsync -a server/pb_public/guest.html <сервер>:<каталог PocketBase>/pb_public/
 ```
 
 (PocketBase раздаёт `pb_public` со своего корня, рестарт не нужен.)

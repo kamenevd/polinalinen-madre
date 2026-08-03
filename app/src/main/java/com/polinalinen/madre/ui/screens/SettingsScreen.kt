@@ -18,10 +18,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -38,18 +34,20 @@ import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.HeavyRule
 import com.polinalinen.madre.ui.components.PageLabel
 import com.polinalinen.madre.ui.theme.AppColors
+import com.polinalinen.madre.ui.theme.CalmModeSetting
 import com.polinalinen.madre.viewmodel.FamilySettingsViewModel
 
 /**
  * Настройки — «Выходные данные» (колофон книги, DESIGN-V4.md экран 8).
  *
- * «Ваше имя» — единственное поле здесь, что реально сохраняется (SharedPreferences,
- * см. MadreNavHost — тот же механизм, что уже держит избранное). Оно подставляется
- * в автограф на титульной и в подпись корешка на Полке.
+ * «Ваше имя» — SharedPreferences (см. MadreNavHost — тот же механизм, что уже
+ * держит избранное). Оно подставляется в автограф на титульной и в подпись
+ * корешка на Полке.
  *
- * Интервал кормления и напоминания пока живут только в UI-стейте этого экрана —
- * настоящая Room-интеграция через SourdoughRepository запланирована на Cycle 3
- * (см. комментарий в MadreNavHost.kt); здесь не притворяемся, что это уже сохраняется.
+ * Cycle 11: «Кормить» и «Напоминания» перестали быть UI-стейтом этого экрана и
+ * пишут в sourdough_configs (intervalHours / remindersEnabled) — тот же конфиг,
+ * от которого считается фаза закваски и планируется напоминание. «Оформление» —
+ * спокойный режим, madre_prefs (CalmModeSetting).
  */
 @Composable
 fun SettingsScreen(
@@ -58,13 +56,21 @@ fun SettingsScreen(
     onBack: () -> Unit,
     bakeCount: Int = 0,
     feedingCount: Int = 0,
+    intervalHours: Int = 24,
+    onIntervalHoursChange: (Int) -> Unit = {},
+    remindersEnabled: Boolean = true,
+    onRemindersEnabledChange: (Boolean) -> Unit = {},
+    calmMode: Boolean = CalmModeSetting.DEFAULT,
+    onCalmModeChange: (Boolean) -> Unit = {},
     familySettingsViewModel: FamilySettingsViewModel = viewModel(),
 ) {
     val colors = AppColors.current
     val familyName by familySettingsViewModel.familyName.collectAsState()
-    var intervalIdx by remember { mutableIntStateOf(1) }
-    var remindersOn by remember { mutableStateOf(true) }
+    // Ключи — те же, что понимает profileForInterval() (12/24/48/72/168):
+    // строка в колофоне и профиль закваски не могут разойтись.
+    val intervalHoursOptions = listOf(12, 24, 48, 72, 168)
     val intervals = listOf("раз в 12 часов", "раз в 24 часа", "раз в 48 часов", "раз в 72 часа", "раз в неделю")
+    val intervalIdx = intervalHoursOptions.indexOf(intervalHours).takeIf { it >= 0 } ?: 1
 
     Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
         Column(
@@ -111,14 +117,36 @@ fun SettingsScreen(
             SettingsRow(
                 label = "Кормить",
                 value = intervals[intervalIdx],
-                onClick = { intervalIdx = (intervalIdx + 1) % intervals.size },
+                onClick = {
+                    val next = (intervalIdx + 1) % intervalHoursOptions.size
+                    onIntervalHoursChange(intervalHoursOptions[next])
+                },
             )
             HairRule(Modifier.padding(horizontal = 22.dp))
             SettingsRow(
                 label = "Напоминания",
-                value = if (remindersOn) "вкл" else "выкл",
-                valueColor = if (remindersOn) colors.sage else colors.cocoa,
-                onClick = { remindersOn = !remindersOn },
+                value = if (remindersEnabled) "вкл" else "выкл",
+                valueColor = if (remindersEnabled) colors.sage else colors.cocoa,
+                onClick = { onRemindersEnabledChange(!remindersEnabled) },
+            )
+            HairRule(Modifier.padding(horizontal = 22.dp))
+            // «Спокойный режим» (Cycle 11): текст честный — в спокойном
+            // оформлении отключаются именно непрерывные и интерактивные
+            // декорации, а не «часть красоты вообще».
+            SettingsRow(
+                label = "Оформление",
+                value = CalmModeSetting.label(calmMode),
+                onClick = { onCalmModeChange(!calmMode) },
+            )
+            SettingsCaption(
+                if (calmMode) {
+                    "спокойное: книга не крутит непрерывных и интерактивных декораций — " +
+                        "ни пыли, ни крошек, ни свечи, ни дыхания страницы. Прокрутка плавная, " +
+                        "бумага, рамки и следы на страницах остаются на месте."
+                } else {
+                    "полное: пыль, крошки, свеча, книжный жучок и дыхание страницы включены. " +
+                        "Красиво, но на длинных страницах прокрутка может подтормаживать."
+                }
             )
             HairRule(Modifier.padding(horizontal = 22.dp))
             SettingsRow(label = "Тираж", value = "одна семья", onClick = null)
@@ -131,7 +159,8 @@ fun SettingsScreen(
             Spacer(Modifier.height(24.dp))
             HeavyRule(Modifier.padding(horizontal = 22.dp))
             Text(
-                "кормления и таймер закваски подключатся к этим настройкам следующим шагом",
+                "напоминание о кормлении приходит примерно в срок — система будит книгу, " +
+                    "когда ей удобно, с точностью до нескольких минут",
                 color = colors.cocoa,
                 fontFamily = FontFamily.Serif,
                 fontStyle = FontStyle.Italic,
@@ -172,6 +201,20 @@ private fun BookSpineSection(bakeCount: Int, feedingCount: Int) {
             }
         }
     }
+}
+
+/** Пояснение под строкой настроек — тем же голосом, что подписи в колофоне. */
+@Composable
+private fun SettingsCaption(text: String) {
+    val colors = AppColors.current
+    Text(
+        text,
+        color = colors.cocoa,
+        fontFamily = FontFamily.Serif,
+        fontStyle = FontStyle.Italic,
+        fontSize = 11.5.sp,
+        modifier = Modifier.padding(start = 22.dp, end = 22.dp, bottom = 12.dp),
+    )
 }
 
 @Composable

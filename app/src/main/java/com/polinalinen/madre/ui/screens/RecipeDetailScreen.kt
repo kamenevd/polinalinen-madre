@@ -58,6 +58,7 @@ import com.polinalinen.madre.ui.components.dustLayer
 import com.polinalinen.madre.ui.components.lightPage
 import com.polinalinen.madre.ui.components.wornPage
 import com.polinalinen.madre.ui.theme.AppColors
+import com.polinalinen.madre.ui.theme.LocalCalmMode
 import com.polinalinen.madre.utils.heroResFor
 import com.polinalinen.madre.viewmodel.BakingViewModel
 import com.polinalinen.madre.viewmodel.GuestNotesViewModel
@@ -137,6 +138,13 @@ fun RecipeDetailScreen(
         // «Чтение при свече» (Cycle 10, Candlelight) — самый верхний слой:
         // после заката свет и полумрак ложатся поверх всей бумаги; палец
         // модификатор только слушает, жесты нижних слоёв не трогает.
+        // «Спокойный режим» (Cycle 11) — по умолчанию включён: пыль, крошки и
+        // свеча либо крутят бесконечную анимацию, либо слушают палец на всём
+        // развороте, и именно они стоили прокрутке плавности. Здесь они не
+        // «замедляются», а не создаются вовсе. Бумага при этом остаётся
+        // бумагой: износ, кофейные круги и просвет следующей страницы —
+        // статичные слои, они рисуются один раз и никуда не деваются.
+        val calm = LocalCalmMode.current
         val candlelit = remember {
             Candlelight.isCandleTime(
                 java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
@@ -145,9 +153,13 @@ fun RecipeDetailScreen(
         Box(
             Modifier
                 .fillMaxSize()
-                .candlelight(candlelit)
-                .dustLayer(daysSinceOpened, seed = recipeId.hashCode().toLong())
-                .crumbs(bakeCount, seed = recipeId.hashCode().toLong())
+                .candlelight(candlelit && !calm)
+                .let {
+                    if (calm) it
+                    else it
+                        .dustLayer(daysSinceOpened, seed = recipeId.hashCode().toLong())
+                        .crumbs(bakeCount, seed = recipeId.hashCode().toLong())
+                }
                 .coffeeRings(coffeeRingCount, seed = recipeId.hashCode().toLong())
                 .wornPage(bakeCount, seed = recipeId.hashCode().toLong())
                 .lightPage(watermark = nextRecipeName, mirrored = true)
@@ -276,21 +288,26 @@ fun RecipeDetailScreen(
             }
         }
 
-        // «Книжный жучок» (Cycle 8, BookWorm) — редкий гость на левом поле;
-        // живёт на «стекле» viewport-а, поверх текста, но тапы забирает только
-        // маленькая мишень самого жучка. Чаще там, где пыльно (daysSinceOpened).
-        BookWormOverlay(
-            daysSinceOpened = daysSinceOpened,
-            modifier = Modifier.matchParentSize(),
-        )
+        // Оба слоя ниже — интерактивные: жучок бегает по своей анимации, а
+        // склейка держит палец на кромке. В спокойном режиме их просто нет в
+        // композиции (Cycle 11).
+        if (!calm) {
+            // «Книжный жучок» (Cycle 8, BookWorm) — редкий гость на левом поле;
+            // живёт на «стекле» viewport-а, поверх текста, но тапы забирает только
+            // маленькая мишень самого жучка. Чаще там, где пыльно (daysSinceOpened).
+            BookWormOverlay(
+                daysSinceOpened = daysSinceOpened,
+                modifier = Modifier.matchParentSize(),
+            )
 
-        // «Слипшиеся страницы» (Cycle 10, StuckPages) — редкая склейка по
-        // правому обрезу; жест по кромке забирает себе только узкая полоса
-        // самой склейки, пока её медленно не отлепят.
-        StuckPagesOverlay(
-            recipeId = recipeId,
-            modifier = Modifier.matchParentSize(),
-        )
+            // «Слипшиеся страницы» (Cycle 10, StuckPages) — редкая склейка по
+            // правому обрезу; жест по кромке забирает себе только узкая полоса
+            // самой склейки, пока её медленно не отлепят.
+            StuckPagesOverlay(
+                recipeId = recipeId,
+                modifier = Modifier.matchParentSize(),
+            )
+        }
         }
     }
 }

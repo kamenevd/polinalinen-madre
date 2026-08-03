@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.polinalinen.madre.sourdough.GrowthPhase
 import com.polinalinen.madre.ui.theme.AppColors
+import com.polinalinen.madre.ui.theme.LocalCalmMode
 
 // ═══════════════════════════════════════════════════════════════
 // «Живая книга» — типографские компоненты. См. DESIGN-V4.md.
@@ -402,9 +403,15 @@ fun BubbleVignette(phase: GrowthPhase, modifier: Modifier = Modifier) {
  * каждый кадр анимации (~60fps, бесконечно, всё время просмотра экрана).
  * graphicsLayer{} с лямбдой читает State<Float> только на фазе отрисовки —
  * рекомпозиции не происходит вообще, дерево просто перерисовывается.
+ *
+ * Cycle 11: в спокойном режиме (по умолчанию) дыхания нет вовсе. Не «медленнее»
+ * и не «реже кадры» — rememberInfiniteTransition просто не создаётся, и ни
+ * одной бесконечной анимации на экране не заводится.
  */
 @Composable
 fun Modifier.breathingPage(phase: GrowthPhase, amplitude: Float = BookBreath.DIARY_AMPLITUDE): Modifier {
+    if (LocalCalmMode.current) return this
+
     val duration = BookBreath.periodMillisFor(phase)
     val transition = rememberInfiniteTransition(label = "page")
     val scale = transition.animateFloat(

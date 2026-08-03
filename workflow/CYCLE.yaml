@@ -1,46 +1,42 @@
 {
   "schema_version": 1,
   "cycle": {
-    "number": 11,
+    "number": 12,
     "kind": "feature",
-    "version": "5.1.0-cycle11",
-    "branch": "cycle/11",
-    "stage": "backlog",
+    "version": "5.2.0-cycle12",
+    "branch": "cycle/12",
+    "stage": "implementation",
     "created_at": "2026-07-25T00:00:00Z",
     "updated_at": "2026-07-25T00:00:00Z"
   },
   "features": [
     {
-      "id": "family-book",
-      "title": "Семейная книга",
+      "id": "uncluttered-book",
+      "title": "Убрать слипшиеся страницы и декоративные слои",
       "needs_generated_asset": false,
       "acceptance": [
-        "Пользователь может зарегистрироваться/войти и создать семейную книгу либо присоединиться по криптографически стойкому коду приглашения.",
-        "Auth token хранится через Android Keystore; без входа локальная книга полностью работает offline, а сетевые действия показывают явное состояние.",
-        "PocketBase API rules запрещают публичный CRUD и изолируют данные по family; custom join route требует auth и не раскрывает существование семьи по неверному коду.",
-        "Production API доступен только по HTTPS madre-api.kdnfx.space; Android cleartext exception удалён."
+        "В пользовательском потоке нет StuckPages, InkMirror, TracingPaper, Herbarium, FutureEnvelope или MarginNotes overlay; старые локальные данные не удаляются принудительно.",
+        "Основные действия книги не перекрываются жестами и не требуют скрытых свайпов."
       ]
     },
     {
-      "id": "shared-statistics",
-      "title": "Общая статистика семьи",
+      "id": "smartphone-safe-ux",
+      "title": "Смартфонная эргономика и просмотр фотографий",
       "needs_generated_asset": false,
       "acceptance": [
-        "Завершённая выпечка синхронизируется в backend с owner, family и стабильным client_event_id; повторная доставка не создаёт дубль.",
-        "Поля Android DTO и PocketBase schema совпадают; существующая статистика на устройстве остаётся локально и может быть дозагружена после входа.",
-        "На Полке видны книги участников семьи; BookStatsScreen показывает реальные серверные записи выбранного участника и корректные empty/offline/error состояния.",
-        "Пользователь видит только статистику своей family; create/update/delete разрешены только владельцу записи."
+        "Фото на формах, завершённой выпечке и статистике открываются в полноэкранном viewer с понятным back/dismiss.",
+        "Отмена выпечки отделена от «Дальше» и требует явного подтверждения; повторный быстрый тап не создаёт дубль.",
+        "Ключевые интерактивные элементы имеют touch target не менее 48dp, экраны имеют честные loading/empty/error/offline состояния."
       ]
     },
     {
-      "id": "family-gallery",
-      "title": "Семейная галерея выпечки",
+      "id": "live-baking-notifications",
+      "title": "Живые уведомления активной выпечки",
       "needs_generated_asset": false,
       "acceptance": [
-        "Фото выпечки перед upload пере-кодируется в JPEG без EXIF/GPS, не более 1600 px по длинной стороне и не более 5 MB.",
-        "Фото связано с bake record, хранится в защищённом file field PocketBase и доступно только участникам той же family по короткоживущему file token.",
-        "Галерея показывает thumbnails, автора, рецепт и дату; работает с локальным cache и понятными loading/offline/empty/error состояниями.",
-        "Владелец может удалить своё фото; другой участник семьи может только просматривать."
+        "На каждую активную выпечку показывается ongoing foreground notification с названием, этапом, остатком и реальной progress-line.",
+        "Tap notification открывает нужную baking session; завершение и отмена удаляют её строку.",
+        "Сохраняются напоминание кормления, окончание WAIT-шага и масло за 30 минут; обновления прогресса без звука/вибрации."
       ]
     }
   ],
@@ -86,6 +82,9 @@
     "PocketBase 0.39.7 остаётся backend; schema/hooks/migrations версионируются в repository.",
     "Room остаётся offline-first источником локального UX; backend используется для identity и sharing.",
     "Все shared records family-scoped; публичный CRUD и public-by-default gallery запрещены.",
-    "Production endpoint только HTTPS madre-api.kdnfx.space; AI-generated assets не требуются."
+    "Production endpoint только HTTPS madre-api.kdnfx.space; AI-generated assets не требуются.",
+    "Cycle 12: StuckPages удалены из UX: скрытый жест конкурировал со скроллом и выглядел как зависшее приложение, пользы не оправдывали.",
+    "Cycle 12: fullscreen photo viewer — общий паттерн для фото; отмена выпечки только через отдельный подтверждаемый destructive action.",
+    "Cycle 12: live baking progress использует foreground service, потому что ongoing notification должна обновляться настоящим таймером вне приложения."
   ]
 }

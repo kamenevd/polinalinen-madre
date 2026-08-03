@@ -56,10 +56,12 @@ import com.polinalinen.madre.ui.components.RibbonBookmark
 import com.polinalinen.madre.ui.components.Stamp
 import com.polinalinen.madre.ui.components.TicketFrame
 import com.polinalinen.madre.ui.components.WornPage
+import com.polinalinen.madre.ui.components.TextAction
 import com.polinalinen.madre.ui.components.breathingPage
 import com.polinalinen.madre.ui.components.dampPaper
 import com.polinalinen.madre.ui.theme.AppColors
 import com.polinalinen.madre.viewmodel.BakingViewModel
+import com.polinalinen.madre.viewmodel.CommunityState
 import com.polinalinen.madre.viewmodel.CommunityStatsViewModel
 import com.polinalinen.madre.viewmodel.WeatherViewModel
 import java.text.SimpleDateFormat
@@ -107,7 +109,7 @@ fun HomeScreen(
     }
     val weatherNote by weatherViewModel.note.collectAsState()
     // «Общая статистика» (Cycle 5) — сводка bake_stats других семей из PocketBase.
-    val communityStats by communityViewModel.stats.collectAsState()
+    val communityState by communityViewModel.state.collectAsState()
     val sessions by viewModel.sessions.collectAsState()
     val remaining by viewModel.remainingSeconds.collectAsState()
     // «Затёртая страница» (Cycle 4, WornPages) — часто печёные главы темнеют.
@@ -185,7 +187,7 @@ fun HomeScreen(
                         onToggleFavorite = { onToggleFavorite(recipe.id) },
                     )
                 }
-                item { CommunitySection(communityStats) }
+                item { CommunitySection(communityState, onRetry = communityViewModel::refresh) }
                 item { Colophon() }
             }
             // Ляссе поверх страницы — только пока идёт хотя бы одна выпечка.
@@ -233,7 +235,7 @@ private fun Masthead(
         Modifier.fillMaxWidth().padding(top = 22.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        PageLabel("Домашняя пекарня Полины", modifier = Modifier.clickable { onOpenShelf() })
+        PageLabel("Домашняя пекарня Полины")
         Text(
             "МАДРЕ",
             color = colors.espresso,
@@ -241,7 +243,7 @@ private fun Masthead(
             fontWeight = FontWeight.Bold,
             fontSize = 44.sp,
             letterSpacing = 1.sp,
-            modifier = Modifier.padding(top = 4.dp).clickable { onOpenSettings() },
+            modifier = Modifier.padding(top = 4.dp),
         )
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 10.dp),
@@ -258,6 +260,19 @@ private fun Masthead(
                 modifier = Modifier.padding(horizontal = 10.dp),
             )
             HeavyRule(Modifier.weight(1f))
+        }
+        // Cycle 12: два выхода с первой полосы — названные и видимые.
+        //
+        // До этого «Полка» пряталась под надписью «Домашняя пекарня Полины», а
+        // «Настройки» — под самим словом МАДРЕ. Ни то, ни другое ничем не
+        // выдавало себя как кнопку: попасть туда можно было только случайно,
+        // а тап по заголовку книги, уводящий в настройки, ещё и сбивал с толку.
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 22.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            TextAction("Полка", onClick = onOpenShelf)
+            TextAction("Настройки", onClick = onOpenSettings)
         }
     }
 }
@@ -486,19 +501,33 @@ private fun MoodBookmark(spec: MoodBookmarkSpec, totalBakes: Int = 0, modifier: 
  * не исчезает, а честно говорит, что общая книга сейчас не видна.
  */
 @Composable
-private fun CommunitySection(stats: CommunityStats?) {
+private fun CommunitySection(state: CommunityState, onRetry: () -> Unit) {
     val colors = AppColors.current
+    val stats = (state as? CommunityState.Loaded)?.stats
     Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp)) {
         PageLabel("Общая статистика", color = colors.espresso)
         Spacer(Modifier.height(10.dp))
         when {
-            stats == null -> Text(
-                "общая книга откроется, когда появится сеть",
+            state is CommunityState.Loading -> Text(
+                "заглядываем в общую книгу…",
                 color = colors.cocoa,
                 fontFamily = FontFamily.Serif,
                 fontStyle = FontStyle.Italic,
                 fontSize = 12.sp,
             )
+            // Сети нет — и это не тупик: попытку можно повторить, не выходя
+            // из книги. Раньше здесь была строка без единого действия.
+            state is CommunityState.Unreachable -> Column {
+                Text(
+                    "общая книга сейчас не отвечает — ваша книга работает и без неё",
+                    color = colors.cocoa,
+                    fontFamily = FontFamily.Serif,
+                    fontStyle = FontStyle.Italic,
+                    fontSize = 12.sp,
+                )
+                TextAction("заглянуть ещё раз", onClick = onRetry)
+            }
+            stats == null -> Unit
             stats.familiesBaking == 0 -> Text(
                 "пока только ваша семья ведёт эту книгу — первая запись за вами",
                 color = colors.cocoa,

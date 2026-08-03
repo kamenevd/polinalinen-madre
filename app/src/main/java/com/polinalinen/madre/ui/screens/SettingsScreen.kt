@@ -1,7 +1,10 @@
 package com.polinalinen.madre.ui.screens
 
+import android.content.Intent
+import android.provider.Settings
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,19 +19,33 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.polinalinen.madre.notifications.MadreNotifier
+import com.polinalinen.madre.ui.components.BackLabel
+import com.polinalinen.madre.ui.components.BookButton
+import com.polinalinen.madre.ui.components.BookButtonVariant
 import com.polinalinen.madre.ui.components.Bookplate
+import com.polinalinen.madre.ui.components.MinTouchTarget
 import com.polinalinen.madre.ui.components.BookSpine
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.HeavyRule
@@ -79,10 +96,7 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(bottom = 32.dp)
         ) {
-            PageLabel(
-                "← Первая полоса",
-                modifier = Modifier.padding(horizontal = 22.dp, vertical = 16.dp).clickable { onBack() },
-            )
+            BackLabel("Первая полоса", onClick = onBack, modifier = Modifier.padding(horizontal = 22.dp))
 
             Text(
                 "Выходные данные",
@@ -140,12 +154,13 @@ fun SettingsScreen(
             )
             SettingsCaption(
                 if (calmMode) {
-                    "спокойное: книга не крутит непрерывных и интерактивных декораций — " +
-                        "ни пыли, ни крошек, ни свечи, ни дыхания страницы. Прокрутка плавная, " +
-                        "бумага, рамки и следы на страницах остаются на месте."
+                    "спокойное: книга не крутит непрерывных декораций — ни пыли, ни крошек, " +
+                        "ни дыхания страницы. Прокрутка плавная, бумага, рамки и следы на " +
+                        "страницах остаются на месте."
                 } else {
-                    "полное: пыль, крошки, свеча, книжный жучок и дыхание страницы включены. " +
-                        "Красиво, но на длинных страницах прокрутка может подтормаживать."
+                    "полное: пыль на давно не открытых главах, крошки между страниц и дыхание " +
+                        "страницы включены. Красиво, но на длинных страницах прокрутка может " +
+                        "подтормаживать."
                 }
             )
             HairRule(Modifier.padding(horizontal = 22.dp))
@@ -158,14 +173,70 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(24.dp))
             HeavyRule(Modifier.padding(horizontal = 22.dp))
-            Text(
-                "напоминание о кормлении приходит примерно в срок — система будит книгу, " +
-                    "когда ей удобно, с точностью до нескольких минут",
-                color = colors.cocoa,
-                fontFamily = FontFamily.Serif,
-                fontStyle = FontStyle.Italic,
-                fontSize = 11.5.sp,
-                modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
+            NotificationPermissionSection()
+        }
+    }
+}
+
+/**
+ * Cycle 12: честное состояние уведомлений.
+ *
+ * До этого книга спрашивала разрешение при каждом холодном старте, ответ
+ * выбрасывала (`{ _ -> }`) и нигде его не показывала. Человек, однажды
+ * отказавший, потом просто не понимал, почему напоминания не приходят и куда
+ * делся прогресс выпечки: настройки бодро говорили «Напоминания: вкл».
+ *
+ * Теперь состояние проверяется при каждом возвращении на экран (человек мог
+ * поменять его в системных настройках и вернуться), и отказ — не тупик:
+ * системные настройки уведомлений открываются отсюда одной кнопкой.
+ */
+@Composable
+private fun NotificationPermissionSection() {
+    val colors = AppColors.current
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var allowed by remember { mutableStateOf(MadreNotifier(context).canPost()) }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) allowed = MadreNotifier(context).canPost()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp)) {
+        PageLabel("Уведомления книги", color = colors.espresso)
+        Text(
+            if (allowed) {
+                "книге разрешено писать вам: напоминание покормить закваску, конец шага " +
+                    "ожидания, просьба достать масло и строка хода выпечки в шторке. " +
+                    "Напоминание о кормлении приходит примерно в срок — система будит " +
+                    "книгу, когда ей удобно, с точностью до нескольких минут."
+            } else {
+                "уведомления запрещены — книга молчит. Она не разбудит вас, когда " +
+                    "закончится расстойка, не напомнит про закваску и не покажет ход " +
+                    "выпечки в шторке. Таймер на экране при этом работает как прежде."
+            },
+            color = colors.cocoa,
+            fontFamily = FontFamily.Serif,
+            fontStyle = FontStyle.Italic,
+            fontSize = 11.5.sp,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        if (!allowed) {
+            Spacer(Modifier.height(12.dp))
+            BookButton(
+                label = "Открыть настройки уведомлений",
+                variant = BookButtonVariant.SECONDARY,
+                onClick = {
+                    val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                        .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    // Экран настроек уведомлений есть не на всех прошивках —
+                    // если его нет, книга не должна падать из-за этого.
+                    runCatching { context.startActivity(intent) }
+                },
             )
         }
     }
@@ -280,7 +351,16 @@ private fun SettingsRow(label: String, value: String, onClick: (() -> Unit)?, va
     Row(
         Modifier
             .fillMaxWidth()
-            .let { if (onClick != null) it.clickable { onClick() } else it }
+            // Строка-переключатель («Кормить», «Напоминания», «Оформление») —
+            // такая же мишень, как кнопка: 48dp и объявленная роль.
+            .defaultMinSize(minHeight = MinTouchTarget)
+            .let {
+                if (onClick != null) {
+                    it.clickable(onClickLabel = "$label: $value", role = Role.Button) { onClick() }
+                } else {
+                    it
+                }
+            }
             .padding(horizontal = 22.dp, vertical = 14.dp),
         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,

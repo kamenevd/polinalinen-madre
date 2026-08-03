@@ -18,10 +18,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.polinalinen.madre.ui.components.BackLabel
 import com.polinalinen.madre.ui.components.PageLabel
 import com.polinalinen.madre.ui.theme.AppColors
 
@@ -40,10 +42,7 @@ fun ShelfScreen(
     val colors = AppColors.current
     Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
         Column(Modifier.statusBarsPadding()) {
-            PageLabel(
-                "← Первая полоса",
-                modifier = Modifier.padding(horizontal = 22.dp, vertical = 16.dp).clickable { onBack() },
-            )
+            BackLabel("Первая полоса", onClick = onBack, modifier = Modifier.padding(horizontal = 22.dp))
             Column(Modifier.padding(horizontal = 22.dp)) {
                 Text("Полка", color = colors.espresso, fontFamily = FontFamily.Serif, fontSize = 26.sp)
                 Text(
@@ -66,8 +65,6 @@ fun ShelfScreen(
                     outlined = true,
                     onClick = onOpenMyBook,
                 )
-                Spacer(Modifier.width(10.dp))
-                DashedAddSpine()
             }
 
             Text(
@@ -87,9 +84,9 @@ private fun Spine(label: String, color: androidx.compose.ui.graphics.Color, outl
     val colors = AppColors.current
     Box(
         Modifier
-            .width(40.dp)
+            .width(48.dp)
             .height(130.dp)
-            .clickable { onClick() }
+            .clickable(onClickLabel = "Открыть книгу: $label", role = Role.Button) { onClick() }
             .drawBehind {
                 drawRect(color)
                 // Обводка — «это твоя книга», как в мокапе (outline на своём корешке).
@@ -108,21 +105,7 @@ private fun Spine(label: String, color: androidx.compose.ui.graphics.Color, outl
     }
 }
 
-@Composable
-private fun DashedAddSpine() {
-    val colors = AppColors.current
-    Box(
-        Modifier
-            .width(40.dp)
-            .height(90.dp)
-            .drawBehind {
-                drawRect(
-                    color = colors.flour,
-                    style = Stroke(width = 1.5.dp.toPx(), pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(6f, 6f))),
-                )
-            },
-        contentAlignment = Alignment.Center,
-    ) {
-        Text("+", color = colors.cocoa, fontSize = 20.sp)
-    }
-}
+// Cycle 12: пунктирный корешок с плюсом убран. Он выглядел ровно как кнопка
+// «добавить книгу», но не был кликабельным вовсе — добавлять пока нечего и
+// некуда (см. честную строку под полкой). Кнопка, которая не нажимается, —
+// худший из способов рассказать, что фичи ещё нет.

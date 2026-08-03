@@ -59,9 +59,15 @@ class NotificationLedger {
      * Сессия закрыта — её ключи больше не нужны, чужие не трогаем. Совпадение
      * строгое, по форме ключа «<вид>-<сессия>-<шаг>»: подстрокой сессия 1
      * зацепила бы и сессию 21, и шаг №1 чужой выпечки.
+     *
+     * Cycle 12: возвращает забытые ключи. Уведомления по ним уже показаны, и
+     * снять их может только тот, кто знает, какие именно были — иначе в шторке
+     * остаётся висеть «время вышло» от выпечки, которой давно нет.
      */
-    fun forgetSession(sessionId: Long) {
+    fun forgetSession(sessionId: Long): Set<String> {
         val pattern = Regex("""^[a-z-]+-$sessionId-\d+$""")
-        sent.removeAll { pattern.matches(it) }
+        val doomed = sent.filterTo(mutableSetOf()) { pattern.matches(it) }
+        sent.removeAll(doomed)
+        return doomed
     }
 }

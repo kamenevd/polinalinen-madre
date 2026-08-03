@@ -116,4 +116,29 @@ class BakingNotificationPlannerTest {
         assertThat(ledger.markIfNew(BakingNotificationPlanner.stepDoneKey(1L, 0))).isTrue()
         assertThat(ledger.markIfNew(BakingNotificationPlanner.stepDoneKey(2L, 0))).isFalse()
     }
+
+    /**
+     * Cycle 12: показанные уведомления надо ещё и снять. Забыть ключ мало —
+     * иначе в шторке висит «время вышло» от выпечки, которой давно нет, и
+     * снять её некому: id уведомления знает только тот, кто помнил ключ.
+     */
+    @Test
+    fun `closing a bake hands back exactly its own shown keys`() {
+        val ledger = NotificationLedger()
+        val mine = setOf(
+            BakingNotificationPlanner.stepDoneKey(1L, 0),
+            BakingNotificationPlanner.butterPrepKey(1L, 2),
+        )
+        val stranger = BakingNotificationPlanner.stepDoneKey(21L, 1)
+        (mine + stranger).forEach { ledger.markIfNew(it) }
+
+        assertThat(ledger.forgetSession(1L)).containsExactlyElementsIn(mine)
+        // Чужая выпечка не задета: её ключ всё ещё считается показанным.
+        assertThat(ledger.markIfNew(stranger)).isFalse()
+    }
+
+    @Test
+    fun `a bake that showed nothing hands back nothing`() {
+        assertThat(NotificationLedger().forgetSession(7L)).isEmpty()
+    }
 }

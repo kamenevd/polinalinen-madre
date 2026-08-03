@@ -220,6 +220,7 @@ class FamilyAccountRepositoryTest {
         assertThat(account.familyId).isEqualTo("f1")
         assertThat(account.familyName).isEqualTo("Ивановы")
         assertThat(account.inviteCode).isEqualTo("2W4X6Y8ZABCDEFGH")
+        assertThat(account.isFamilyOwner).isTrue()
     }
 
     @Test
@@ -261,6 +262,22 @@ class FamilyAccountRepositoryTest {
         assertThat(account.familyName).isEqualTo("Ивановы")
         assertThat(account.inviteCode).isNull()
         assertThat(api.calls).contains("join")
+    }
+
+    @Test
+    fun `only the family owner can rotate an invite code`() = runTest {
+        val api = FakeApi()
+        api.familyResult = { FamilyRecord("f1", "Ивановы", "other-owner") }
+        val repository = repository(api, FakeTokenStore())
+        repository.signIn("anya@example.com", "пароль")
+        repository.joinFamily("2W4X-6Y8Z-ABCD-EFGH")
+        api.calls.clear()
+
+        val state = repository.rotateInviteCode()
+
+        assertThat(state).isInstanceOf(FamilyBookState.Failed::class.java)
+        assertThat((state as FamilyBookState.Failed).failure).isEqualTo(NetworkFailure.NOT_OWNER)
+        assertThat(api.calls).isEmpty()
     }
 
     @Test

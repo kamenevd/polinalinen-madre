@@ -53,8 +53,11 @@ data class FamilyAccount(
     val familyId: String? = null,
     val familyName: String? = null,
     val inviteCode: String? = null,
+    /** Known only from the server's family record; never inferred from UI. */
+    val familyOwnerId: String? = null,
 ) {
     val hasFamily: Boolean get() = !familyId.isNullOrBlank()
+    val isFamilyOwner: Boolean get() = hasFamily && familyOwnerId == userId
 }
 
 /**
@@ -70,7 +73,8 @@ enum class NetworkFailure(val message: String) {
     INVALID_CREDENTIALS("Почта или пароль не подошли."),
     REJECTED("Приглашение не подошло — проверьте код и попробуйте ещё раз."),
     SERVER("Сервер сейчас не отвечает как надо."),
-    UNKNOWN("Что-то пошло не так.");
+    UNKNOWN("Что-то пошло не так."),
+    NOT_OWNER("Только владелец может обновить код приглашения.");
 
     companion object {
 

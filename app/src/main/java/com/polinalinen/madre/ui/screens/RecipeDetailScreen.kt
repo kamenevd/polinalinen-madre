@@ -49,7 +49,6 @@ import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.HandwrittenEditSurface
 import com.polinalinen.madre.ui.components.HeavyRule
 import com.polinalinen.madre.ui.components.PageLabel
-import com.polinalinen.madre.ui.components.StuckPagesOverlay
 import com.polinalinen.madre.ui.components.CoffeeRing
 import com.polinalinen.madre.ui.components.DustLayer
 import com.polinalinen.madre.ui.components.coffeeRings
@@ -288,23 +287,16 @@ fun RecipeDetailScreen(
             }
         }
 
-        // Оба слоя ниже — интерактивные: жучок бегает по своей анимации, а
-        // склейка держит палец на кромке. В спокойном режиме их просто нет в
-        // композиции (Cycle 11).
+        // «Слипшихся страниц» (Cycle 10) здесь больше нет — см. DESIGN-V4.md,
+        // Cycle 12. Механика забирала себе вертикальный жест в полосе 52dp
+        // вдоль правого обреза, то есть ровно там, где палец скроллит рецепт,
+        // и включалась случайно, без всякого повода со стороны человека.
         if (!calm) {
             // «Книжный жучок» (Cycle 8, BookWorm) — редкий гость на левом поле;
             // живёт на «стекле» viewport-а, поверх текста, но тапы забирает только
             // маленькая мишень самого жучка. Чаще там, где пыльно (daysSinceOpened).
             BookWormOverlay(
                 daysSinceOpened = daysSinceOpened,
-                modifier = Modifier.matchParentSize(),
-            )
-
-            // «Слипшиеся страницы» (Cycle 10, StuckPages) — редкая склейка по
-            // правому обрезу; жест по кромке забирает себе только узкая полоса
-            // самой склейки, пока её медленно не отлепят.
-            StuckPagesOverlay(
-                recipeId = recipeId,
                 modifier = Modifier.matchParentSize(),
             )
         }

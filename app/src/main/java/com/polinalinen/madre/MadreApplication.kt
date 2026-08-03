@@ -9,6 +9,7 @@ import com.polinalinen.madre.data.repository.SourdoughRepository
 import com.polinalinen.madre.data.remote.MadreApi
 import com.polinalinen.madre.data.remote.MadreApiFactory
 import com.polinalinen.madre.sync.SyncRepository
+import com.polinalinen.madre.utils.LegacyPrefs
 
 /**
  * Единая точка создания Room/repository — синглтоны живут в Application,
@@ -16,6 +17,13 @@ import com.polinalinen.madre.sync.SyncRepository
  * при повторном входе на экран).
  */
 class MadreApplication : Application() {
+
+    override fun onCreate() {
+        super.onCreate()
+        // Cycle 12: «слипшихся страниц» в книге больше нет — их ключи в
+        // madre_prefs убираются один раз, тихо и без миграции Room.
+        LegacyPrefs.purge(getSharedPreferences("madre_prefs", MODE_PRIVATE))
+    }
 
     val database: MadreDatabase by lazy { MadreDatabase.build(this) }
     val recipeRepository: RecipeRepository by lazy { RecipeRepository(this) }

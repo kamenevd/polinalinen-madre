@@ -39,6 +39,14 @@ class MadreNotifier(private val context: Context) {
     }
 
     /**
+     * Снять уведомление, показанное по этому ключу (Cycle 12). Ключ тот же,
+     * что в [postBakingNotification], — id из него получается тем же способом.
+     */
+    fun cancelByKey(key: String) {
+        NotificationManagerCompat.from(context).cancel(key.hashCode())
+    }
+
+    /**
      * true, если книге вообще позволено показывать уведомления. Проверяется
      * ДО любого обращения к NotificationManager — на API 33+ без гранта
      * notify() молча отбрасывается системой, и притворяться, что напоминание

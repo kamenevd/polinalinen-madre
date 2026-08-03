@@ -7,6 +7,8 @@ import com.polinalinen.madre.MadreApplication
 import com.polinalinen.madre.model.BakingSession
 import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.notifications.BakingNotificationPlanner
+import com.polinalinen.madre.notifications.BakingProgress
+import com.polinalinen.madre.notifications.BakingProgressService
 import com.polinalinen.madre.notifications.MadreNotifier
 import com.polinalinen.madre.notifications.NotificationLedger
 import com.polinalinen.madre.ui.components.CoffeeRing
@@ -92,7 +94,12 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
     fun startBaking(recipe: Recipe, scaleFactor: Double): Long {
         val id = nextSessionId++
         _sessions.update { it + BakingSession(id = id, recipe = recipe, scaleFactor = scaleFactor) }
+        // Строка хода выпечки в шторке. Сервис поднимается ровно здесь —
+        // из явного действия человека («Начать выпечку»), а не из фона, и
+        // потому не спотыкается об ограничения Android 12+.
+        BakingProgressService.start(getApplication())
         restartTimer(id)
+        publishProgress()
         return id
     }
 
@@ -101,6 +108,9 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
         val s = session(id)
         if (s?.isCompleted == true) {
             stopTimer(id)
+            // Выпечка дошла до конца — строка хода ей больше не нужна, даже
+            // если человек ещё стоит на странице «Готово» и вклеивает фото.
+            publishProgress()
             // Формуляр книги и хитмэп на Полке читают именно эту таблицу — пишем
             // один раз, ровно в момент завершения (не раньше, не задним числом).
             viewModelScope.launch {
@@ -173,8 +183,11 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
         stopTimer(id)
         _sessions.update { list -> list.filterNot { it.id == id } }
         _remainingSeconds.update { it - id }
-        // Выпечка закрыта — её ключи в журнале уведомлений больше ни к чему.
-        notificationLedger.forgetSession(id)
+        // Выпечка закрыта — её ключи в журнале больше ни к чему, а уже
+        // показанные уведомления о шагах надо снять. До Cycle 12 они
+        // оставались висеть: «время вышло» от выпечки, которой давно нет.
+        notificationLedger.forgetSession(id).forEach { key -> notifier.cancelByKey(key) }
+        publishProgress()
     }
 
     /**
@@ -208,9 +221,42 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
                     _remainingSeconds.update { it + (id to remaining) }
                     notifyProgress(s, remaining)
                 }
+                // Слепок для шторки — на каждом тике, включая паузу: строка в
+                // уведомлении должна честно сказать «пауза», а не замереть на
+                // последнем отсчёте, будто выпечка продолжается.
+                publishProgress()
                 delay(1000)
             }
         }
+    }
+
+    /**
+     * Cycle 12: отдать текущее состояние всех выпечек в шторку.
+     *
+     * Своих часов у сервиса нет намеренно — источник времени здесь один, этот
+     * таймер. Два независимых отсчёта неминуемо разошлись бы, и человек видел
+     * бы на экране одно, а в уведомлении другое.
+     */
+    private fun publishProgress() {
+        val bakes = _sessions.value.filterNot { it.isCompleted }.map { s ->
+            val stepsBefore = s.recipe.timeline.take(s.currentStepIndex).sumOf { it.durationMinutes } * 60L
+            val currentStepTotal = s.currentStep.durationMinutes * 60L
+            val remaining = _remainingSeconds.value[s.id] ?: currentStepTotal
+            BakingProgress(
+                sessionId = s.id,
+                recipeName = s.recipe.name,
+                stepTitle = s.currentStep.title,
+                stepIndex = s.currentStepIndex,
+                stepCount = s.recipe.timeline.size,
+                remainingSeconds = remaining,
+                elapsedSeconds = stepsBefore + (currentStepTotal - remaining).coerceAtLeast(0L),
+                totalSeconds = s.totalDurationMinutes * 60L,
+                isPaused = s.isPaused,
+            )
+        }
+        madreApp.activeBakes.publish(bakes)
+        // Пустой список сервис читает как «всё, выпечек нет»: он снимает свои
+        // уведомления и уходит сам. Отдельная команда «стоп» ему не нужна.
     }
 
     /**
@@ -256,6 +302,11 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
     override fun onCleared() {
         timerJobs.values.forEach { it.cancel() }
         timerJobs.clear()
+        // Часы книги остановились — значит, обновлять строку хода выпечки
+        // больше некому. Оставить её висеть с застывшими цифрами было бы
+        // ровно тем обманом, ради которого и заводился сервис.
+        madreApp.activeBakes.clear()
+        BakingProgressService.stop(getApplication())
         // БД НЕ закрываем — она живёт в Application (баг v3 #1 закрыт архитектурно).
         super.onCleared()
     }

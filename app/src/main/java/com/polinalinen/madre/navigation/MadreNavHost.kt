@@ -3,6 +3,7 @@ package com.polinalinen.madre.navigation
 import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,6 +35,7 @@ import com.polinalinen.madre.ui.theme.LocalCalmMode
 import com.polinalinen.madre.ui.theme.SharedPreferencesFlagStore
 import com.polinalinen.madre.viewmodel.BakingViewModel
 import com.polinalinen.madre.viewmodel.SourdoughViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
  * Home, RecipeDetail, BakingTimer, StarterDiary, Settings, Полка, BookStats,
@@ -47,11 +49,29 @@ import com.polinalinen.madre.viewmodel.SourdoughViewModel
  * и держит config/history реактивными через Flow.
  */
 @Composable
-fun MadreNavHost(navController: NavHostController = rememberNavController()) {
+fun MadreNavHost(
+    navController: NavHostController = rememberNavController(),
+    pendingSessionId: MutableStateFlow<Long?>? = null,
+) {
     val context = LocalContext.current
     val bakingViewModel: BakingViewModel = viewModel()
     val sourdoughViewModel: SourdoughViewModel = viewModel()
     val app = context.applicationContext as MadreApplication
+
+    // Cycle 12: тап по строке хода выпечки в шторке открывает ИМЕННО ту
+    // выпечку. Намерение приходит из MainActivity и ждёт здесь, пока NavHost
+    // готов; после исполнения гасится, чтобы поворот экрана не увёл человека
+    // на таймер второй раз.
+    if (pendingSessionId != null) {
+        val requested by pendingSessionId.collectAsState()
+        LaunchedEffect(requested) {
+            val id = requested ?: return@LaunchedEffect
+            pendingSessionId.value = null
+            navController.navigate(MadreDestinations.bakingTimer(id.toString())) {
+                popUpTo(MadreDestinations.HOME) { inclusive = false }
+            }
+        }
+    }
 
     // Избранное + имя: SharedPreferences как в v3 (простое и рабочее, Room не нужен)
     val prefs = remember { context.getSharedPreferences("madre_prefs", Context.MODE_PRIVATE) }

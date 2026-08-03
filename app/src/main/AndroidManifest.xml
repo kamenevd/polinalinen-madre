@@ -7,6 +7,14 @@
          Точная (FINE) не нужна — городу хватает и вышек сети. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Cycle 12: строка хода выпечки в шторке. Полоска обязана двигаться,
+         пока человек в другом приложении, а после смерти процесса — исчезнуть
+         вместе с ним, а не застыть навсегда с последними цифрами. Это ровно
+         то, что даёт foreground service, и ничто другое. Типа «кухонный
+         таймер» у Android нет, а подменять его dataSync или location было бы
+         неправдой в манифесте — отсюда specialUse с явным описанием. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
@@ -33,6 +41,15 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <service
+            android:name=".notifications.BakingProgressService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Countdown for an in-progress bake: keeps the step timer running and its progress notification live while the user is in another app." />
+        </service>
 
         <provider
             android:name="androidx.core.content.FileProvider"

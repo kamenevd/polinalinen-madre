@@ -1,0 +1,243 @@
+package com.polinalinen.madre.notifications
+
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.os.Build
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import androidx.lifecycle.LifecycleService
+import androidx.lifecycle.lifecycleScope
+import com.polinalinen.madre.MadreApplication
+import com.polinalinen.madre.MainActivity
+import com.polinalinen.madre.R
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
+
+/**
+ * Cycle 12: строка хода выпечки в шторке — по одной на каждую активную выпечку.
+ *
+ * ПОЧЕМУ ИМЕННО FOREGROUND SERVICE. Требование — живой прогресс, а не
+ * нарисованная один раз полоска. Значит, кто-то должен обновлять уведомление
+ * каждую секунду, пока человек смотрит на другое приложение. Обычное ongoing-
+ * уведомление, выставленное из ViewModel, это умеет ровно до тех пор, пока
+ * система не убьёт процесс — а после убийства оно останется висеть навсегда с
+ * последним значением, и снять его будет уже некому. Именно такой застывший
+ * прогресс и был бы обманом. Foreground service решает обе половины: пока он
+ * жив, процесс жив и цифры настоящие; когда его убивают — система снимает и
+ * его уведомления вместе с ним.
+ *
+ * Тип — specialUse: у Android нет типа «кухонный таймер», а подменять его
+ * dataSync или location было бы неправдой в манифесте. Запускается сервис
+ * только из явного действия человека («Начать выпечку»), поэтому ограничения
+ * Android 12+ на старт из фона его не касаются.
+ *
+ * Своих часов сервис не заводит: единственный источник времени — таймер в
+ * BakingViewModel, а сюда приходит уже готовый слепок ([ActiveBakes]). Два
+ * независимых отсчёта неминуемо разошлись бы между экраном и шторкой.
+ */
+class BakingProgressService : LifecycleService() {
+
+    private lateinit var notifier: MadreNotifier
+    private lateinit var manager: NotificationManagerCompat
+
+    /** Что сейчас показано — чтобы снимать ровно то, что уже не идёт. */
+    private var shownSessionIds: Set<Long> = emptySet()
+
+    /** Чьё уведомление сейчас держит сервис на переднем плане. */
+    private var foregroundSessionId: Long? = null
+
+    override fun onCreate() {
+        super.onCreate()
+        notifier = MadreNotifier(this)
+        manager = NotificationManagerCompat.from(this)
+        ensureChannel()
+
+        lifecycleScope.launch {
+            (application as MadreApplication).activeBakes.progress.collectLatest { bakes ->
+                if (bakes.isEmpty()) {
+                    // Последняя выпечка закрылась — снимаем всё своё и уходим.
+                    // Ждать, пока система вспомнит про пустой сервис, нельзя:
+                    // в шторке осталась бы строка про то, чего уже нет.
+                    clearAll()
+                    stopForegroundCompat()
+                    stopSelf()
+                } else {
+                    render(bakes)
+                }
+            }
+        }
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        super.onStartCommand(intent, flags, startId)
+        // Пока сборка слепков не дошла, сервис обязан выставить уведомление
+        // сразу — иначе система убьёт его за молчание в первые секунды.
+        if (foregroundSessionId == null) {
+            val waiting = (application as MadreApplication).activeBakes.progress.value.firstOrNull()
+            startForegroundFor(
+                sessionId = waiting?.sessionId ?: PLACEHOLDER_SESSION_ID,
+                notification = waiting?.let(::buildNotification) ?: buildStartingNotification(),
+            )
+        }
+        // Восстанавливать себя после убийства процесса нечего: сессии выпечки
+        // живут в памяти и умирают вместе с ним. Врать про «продолжаем» нельзя.
+        return START_NOT_STICKY
+    }
+
+    private fun render(bakes: List<BakingProgress>) {
+        // Переднеплановое уведомление — у самой ранней выпечки: она стабильна,
+        // пока идёт, и не прыгает от того, что где-то тикнул счётчик.
+        val leader = bakes.minBy { it.sessionId }
+        if (foregroundSessionId != leader.sessionId) {
+            startForegroundFor(leader.sessionId, buildNotification(leader))
+        }
+        // Переднеплановое уведомление обновляется тем же способом, что и
+        // остальные: startForeground закрепил за ним id, дальше это обычный
+        // notify по тому же id.
+        bakes.forEach { bake ->
+            notifier.notifySafely(BakingProgress.notificationId(bake.sessionId), buildNotification(bake))
+        }
+        // Выпечки, которых больше нет в списке, — закрыты или брошены.
+        (shownSessionIds - bakes.map { it.sessionId }.toSet()).forEach { gone ->
+            manager.cancel(BakingProgress.notificationId(gone))
+        }
+        shownSessionIds = bakes.map { it.sessionId }.toSet()
+    }
+
+    private fun buildNotification(bake: BakingProgress): Notification =
+        baseBuilder()
+            .setContentTitle(bake.recipeName)
+            .setContentText(bake.contentText())
+            .setProgress(BakingProgress.PROGRESS_MAX, bake.permille(), false)
+            .setContentIntent(openBakingIntent(bake.sessionId))
+            .build()
+
+    /** Первые доли секунды, пока не пришёл первый слепок. */
+    private fun buildStartingNotification(): Notification =
+        baseBuilder()
+            .setContentTitle("Выпечка началась")
+            .setContentText("книга ведёт таймер")
+            .setProgress(BakingProgress.PROGRESS_MAX, 0, true)
+            .setContentIntent(openBakingIntent(null))
+            .build()
+
+    private fun baseBuilder(): NotificationCompat.Builder =
+        NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification_bread)
+            // Не смахивается и не уходит по тапу: пока печётся — висит.
+            .setOngoing(true)
+            .setAutoCancel(false)
+            // Ни звука, ни вибрации, ни всплытия: строка обновляется каждую
+            // секунду, и дёргать человека на каждое обновление недопустимо.
+            // Про важное — конец шага и масло — говорят отдельные уведомления
+            // на своём канале, у них на это есть право.
+            .setSilent(true)
+            .setOnlyAlertOnce(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+            .setShowWhen(false)
+
+    /**
+     * Тап открывает ИМЕННО эту выпечку. Свой requestCode на каждую — иначе
+     * PendingIntent'ы разных выпечек считались бы одним и тем же, и вторая
+     * строка в шторке вела бы на первую.
+     */
+    private fun openBakingIntent(sessionId: Long?): PendingIntent {
+        val intent = Intent(this, MainActivity::class.java)
+            .setAction(Intent.ACTION_VIEW)
+            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        if (sessionId != null) intent.putExtra(MainActivity.EXTRA_SESSION_ID, sessionId)
+        return PendingIntent.getActivity(
+            this,
+            (sessionId ?: PLACEHOLDER_SESSION_ID).toInt(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
+    private fun startForegroundFor(sessionId: Long, notification: Notification) {
+        val id = BakingProgress.notificationId(sessionId)
+        val previous = foregroundSessionId
+        runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(id, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+            } else {
+                startForeground(id, notification)
+            }
+            foregroundSessionId = sessionId
+            shownSessionIds = shownSessionIds + sessionId
+        }
+        // Прежнее переднеплановое уведомление после смены остаётся обычным —
+        // если его выпечки уже нет, снимаем сами.
+        if (previous != null && previous != sessionId && previous !in shownSessionIds) {
+            manager.cancel(BakingProgress.notificationId(previous))
+        }
+    }
+
+    private fun clearAll() {
+        shownSessionIds.forEach { manager.cancel(BakingProgress.notificationId(it)) }
+        foregroundSessionId?.let { manager.cancel(BakingProgress.notificationId(it)) }
+        shownSessionIds = emptySet()
+        foregroundSessionId = null
+    }
+
+    private fun stopForegroundCompat() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } else {
+            @Suppress("DEPRECATION")
+            stopForeground(true)
+        }
+    }
+
+    override fun onDestroy() {
+        clearAll()
+        super.onDestroy()
+    }
+
+    private fun ensureChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val service = getSystemService(NotificationManager::class.java) ?: return
+        if (service.getNotificationChannel(CHANNEL_ID) != null) return
+        // IMPORTANCE_LOW: строка видна в шторке, но не всплывает и не звучит.
+        service.createNotificationChannel(
+            NotificationChannel(CHANNEL_ID, "Ход выпечки", NotificationManager.IMPORTANCE_LOW).apply {
+                description = "Название, этап, остаток и полоска хода — пока идёт выпечка."
+                setShowBadge(false)
+                enableVibration(false)
+                setSound(null, null)
+            }
+        )
+    }
+
+    companion object {
+        const val CHANNEL_ID = "madre_baking_progress"
+
+        /** id для мгновения между стартом сервиса и первым слепком. */
+        private const val PLACEHOLDER_SESSION_ID = 0L
+
+        /**
+         * Поднять сервис. Зовётся из BakingViewModel в момент, когда человек
+         * нажал «Начать выпечку», — то есть всегда с переднего плана.
+         */
+        fun start(context: Context) {
+            val intent = Intent(context, BakingProgressService::class.java)
+            runCatching {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
+            }
+        }
+
+        fun stop(context: Context) {
+            runCatching { context.stopService(Intent(context, BakingProgressService::class.java)) }
+        }
+    }
+}

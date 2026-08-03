@@ -8,6 +8,7 @@ import com.polinalinen.madre.data.repository.RecipeRepository
 import com.polinalinen.madre.data.repository.SourdoughRepository
 import com.polinalinen.madre.data.remote.MadreApi
 import com.polinalinen.madre.data.remote.MadreApiFactory
+import com.polinalinen.madre.notifications.ActiveBakes
 import com.polinalinen.madre.sync.SyncRepository
 import com.polinalinen.madre.utils.LegacyPrefs
 
@@ -24,6 +25,13 @@ class MadreApplication : Application() {
         // madre_prefs убираются один раз, тихо и без миграции Room.
         LegacyPrefs.purge(getSharedPreferences("madre_prefs", MODE_PRIVATE))
     }
+
+    /**
+     * Cycle 12: что сейчас в печи. Живёт в Application, потому что читателей
+     * двое и друг друга они не видят — BakingViewModel пишет сюда на каждом
+     * тике таймера, BakingProgressService читает и рисует шторку.
+     */
+    val activeBakes: ActiveBakes by lazy { ActiveBakes() }
 
     val database: MadreDatabase by lazy { MadreDatabase.build(this) }
     val recipeRepository: RecipeRepository by lazy { RecipeRepository(this) }

@@ -77,6 +77,7 @@ class FamilyAccountRepository(
     suspend fun rotateInviteCode(): FamilyBookState {
         val authorization = token ?: return fail(NetworkFailure.SIGNED_OUT)
         val current = account ?: return fail(NetworkFailure.SIGNED_OUT)
+        if (!current.isFamilyOwner) return fail(NetworkFailure.NOT_OWNER)
         val response = runCatching { api.rotateInviteCode(authorization) }
             .getOrElse { return fail(NetworkFailure.classify(it)) }
         return remember(current, response)
@@ -92,28 +93,35 @@ class FamilyAccountRepository(
         token = response.token
 
         val familyId = response.record.family.takeIf { it.isNotBlank() }
-        // Название семьи — отдельный запрос, и его провал не повод не пускать
-        // читателя внутрь: книга просто побудет пока безымянной.
-        val familyName = familyId?.let { id ->
-            runCatching { api.family(response.token, id).name }.getOrNull()
-        }
+        // Название и владелец семьи — отдельный запрос, и его провал не повод
+        // не пускать читателя внутрь: книга просто побудет пока безымянной.
+        val family = familyId?.let { id -> runCatching { api.family(response.token, id) }.getOrNull() }
 
         val restored = FamilyAccount(
             userId = response.record.id,
             email = response.record.email,
             displayName = response.record.name,
             familyId = familyId,
-            familyName = familyName,
+            familyName = family?.name,
+            familyOwnerId = family?.owner,
         )
         account = restored
         return FamilyBookState.SignedIn(restored)
     }
 
-    private fun remember(current: FamilyAccount, response: FamilyResponse): FamilyBookState {
+    private suspend fun remember(current: FamilyAccount, response: FamilyResponse): FamilyBookState {
+        val ownerId = if (response.inviteCode != null) {
+            current.userId
+        } else {
+            token?.let { authorization ->
+                runCatching { api.family(authorization, response.familyId).owner }.getOrNull()
+            }
+        }
         val updated = current.copy(
             familyId = response.familyId,
             familyName = response.familyName,
             inviteCode = response.inviteCode,
+            familyOwnerId = ownerId,
         )
         account = updated
         return FamilyBookState.SignedIn(updated)

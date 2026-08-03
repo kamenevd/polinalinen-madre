@@ -1,6 +1,8 @@
 package com.polinalinen.madre.ui.screens
 
 import android.content.Intent
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.provider.Settings
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -18,7 +20,9 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -41,6 +45,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.polinalinen.madre.notifications.MadreNotifier
+import com.polinalinen.madre.account.FamilyBookState
+import com.polinalinen.madre.account.InviteCode
 import com.polinalinen.madre.ui.components.BackLabel
 import com.polinalinen.madre.ui.components.BookButton
 import com.polinalinen.madre.ui.components.BookButtonVariant
@@ -50,9 +56,11 @@ import com.polinalinen.madre.ui.components.BookSpine
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.HeavyRule
 import com.polinalinen.madre.ui.components.PageLabel
+import com.polinalinen.madre.ui.components.TextAction
 import com.polinalinen.madre.ui.theme.AppColors
 import com.polinalinen.madre.ui.theme.CalmModeSetting
 import com.polinalinen.madre.viewmodel.FamilySettingsViewModel
+import com.polinalinen.madre.viewmodel.FamilyBookViewModel
 
 /**
  * Настройки — «Выходные данные» (колофон книги, DESIGN-V4.md экран 8).
@@ -80,9 +88,12 @@ fun SettingsScreen(
     calmMode: Boolean = CalmModeSetting.DEFAULT,
     onCalmModeChange: (Boolean) -> Unit = {},
     familySettingsViewModel: FamilySettingsViewModel = viewModel(),
+    familyBookViewModel: FamilyBookViewModel = viewModel(),
 ) {
     val colors = AppColors.current
     val familyName by familySettingsViewModel.familyName.collectAsState()
+    val familyBookState by familyBookViewModel.state.collectAsState()
+    LaunchedEffect(Unit) { familyBookViewModel.restore() }
     // Ключи — те же, что понимает profileForInterval() (12/24/48/72/168):
     // строка в колофоне и профиль закваски не могут разойтись.
     val intervalHoursOptions = listOf(12, 24, 48, 72, 168)
@@ -115,6 +126,18 @@ fun SettingsScreen(
                 familyName = familyName,
                 onSetName = familySettingsViewModel::setFamilyName,
                 modifier = Modifier.padding(horizontal = 22.dp, vertical = 18.dp),
+            )
+            HairRule(Modifier.padding(horizontal = 22.dp))
+
+            FamilyBookSection(
+                state = familyBookState,
+                onSignIn = familyBookViewModel::signIn,
+                onRegister = familyBookViewModel::register,
+                onCreateFamily = familyBookViewModel::createFamily,
+                onJoinFamily = familyBookViewModel::joinFamily,
+                onRotateInvite = familyBookViewModel::rotateInviteCode,
+                onSignOut = familyBookViewModel::signOut,
+                onCodeHandled = familyBookViewModel::clearInviteCode,
             )
             HairRule(Modifier.padding(horizontal = 22.dp))
 
@@ -176,6 +199,145 @@ fun SettingsScreen(
             NotificationPermissionSection()
         }
     }
+}
+
+/** Optional online family book. The local Room book remains available in every state. */
+@Composable
+private fun FamilyBookSection(
+    state: FamilyBookState,
+    onSignIn: (String, String) -> Unit,
+    onRegister: (String, String, String) -> Unit,
+    onCreateFamily: (String) -> Unit,
+    onJoinFamily: (String) -> Unit,
+    onRotateInvite: () -> Unit,
+    onSignOut: () -> Unit,
+    onCodeHandled: () -> Unit,
+) {
+    val colors = AppColors.current
+    val context = LocalContext.current
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var displayName by remember { mutableStateOf("") }
+    var familyName by remember { mutableStateOf("") }
+    var inviteCode by remember { mutableStateOf("") }
+    val failed = state as? FamilyBookState.Failed
+    val account = state.account
+    val loading = state is FamilyBookState.Loading
+
+    Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp)) {
+        PageLabel("Семейная книга", color = colors.espresso)
+        Text(
+            "ваша локальная книга остаётся на этом телефоне и открывается без аккаунта и сети",
+            color = colors.cocoa,
+            fontFamily = FontFamily.Serif,
+            fontStyle = FontStyle.Italic,
+            fontSize = 11.5.sp,
+            modifier = Modifier.padding(top = 6.dp, bottom = 10.dp),
+        )
+        if (failed != null) {
+            Text(
+                failed.failure.message,
+                color = colors.terracotta,
+                fontFamily = FontFamily.Serif,
+                fontSize = 13.sp,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+        }
+        when {
+            loading -> Text("проверяем общую книгу", color = colors.cocoa, fontFamily = FontFamily.Serif, fontStyle = FontStyle.Italic)
+            account == null -> {
+                FamilyBookField("Почта", email) { email = it }
+                FamilyBookField("Пароль", password) { password = it }
+                FamilyBookField("Как подписать вас", displayName) { displayName = it }
+                Spacer(Modifier.height(8.dp))
+                BookButton(
+                    label = "Войти",
+                    enabled = email.isNotBlank() && password.isNotBlank(),
+                    onClick = { onSignIn(email, password) },
+                )
+                Spacer(Modifier.height(8.dp))
+                BookButton(
+                    label = "Зарегистрироваться",
+                    variant = BookButtonVariant.SECONDARY,
+                    enabled = email.isNotBlank() && password.isNotBlank() && displayName.isNotBlank(),
+                    onClick = { onRegister(email, password, displayName) },
+                )
+            }
+            !account.hasFamily -> {
+                Text("вы вошли как ${account.displayName.ifBlank { account.email }}", color = colors.espresso, fontFamily = FontFamily.Serif)
+                FamilyBookField("Название новой книги", familyName) { familyName = it }
+                BookButton(
+                    label = "Создать семейную книгу",
+                    enabled = familyName.isNotBlank(),
+                    onClick = { onCreateFamily(familyName) },
+                )
+                Spacer(Modifier.height(12.dp))
+                FamilyBookField("Код приглашения", inviteCode) { inviteCode = it }
+                BookButton(
+                    label = "Вступить по коду",
+                    variant = BookButtonVariant.SECONDARY,
+                    enabled = inviteCode.isNotBlank(),
+                    onClick = { onJoinFamily(inviteCode) },
+                )
+                TextAction("Выйти из аккаунта", onClick = onSignOut)
+            }
+            else -> {
+                Text(
+                    "общая книга: ${account.familyName ?: "семья"}",
+                    color = colors.espresso,
+                    fontFamily = FontFamily.Serif,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                )
+                val code = account.inviteCode
+                if (code != null) {
+                    val printedCode = InviteCode.format(code)
+                    Text(
+                        printedCode,
+                        color = colors.crust,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 17.sp,
+                        modifier = Modifier.padding(top = 10.dp),
+                    )
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
+                        TextAction("Скопировать", onClick = {
+                            val clipboard = context.getSystemService(ClipboardManager::class.java)
+                            clipboard?.setPrimaryClip(ClipData.newPlainText("Код семейной книги", printedCode))
+                            onCodeHandled()
+                        }, modifier = Modifier.weight(1f))
+                        TextAction("Отправить", onClick = {
+                            val share = Intent(Intent.ACTION_SEND)
+                                .setType("text/plain")
+                                .putExtra(Intent.EXTRA_TEXT, "Вступите в семейную книгу «${account.familyName ?: "Мадре"}»: $printedCode")
+                            context.startActivity(Intent.createChooser(share, "Отправить приглашение"))
+                            onCodeHandled()
+                        }, modifier = Modifier.weight(1f))
+                    }
+                }
+                if (account.isFamilyOwner) {
+                    Spacer(Modifier.height(8.dp))
+                    BookButton(
+                        label = "Обновить код приглашения",
+                        variant = BookButtonVariant.SECONDARY,
+                        onClick = onRotateInvite,
+                    )
+                }
+                TextAction("Выйти из аккаунта", onClick = onSignOut)
+            }
+        }
+    }
+}
+
+@Composable
+private fun FamilyBookField(label: String, value: String, onValueChange: (String) -> Unit) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label) },
+        singleLine = true,
+        textStyle = TextStyle(fontFamily = FontFamily.Serif, fontSize = 15.sp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+    )
 }
 
 /**

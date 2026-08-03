@@ -110,6 +110,7 @@ roborazzi {
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.06.00")
     implementation(composeBom)
+    testImplementation(composeBom)
     androidTestImplementation(composeBom)
 
     implementation("androidx.core:core-ktx:1.13.1")
@@ -161,6 +162,11 @@ dependencies {
     testImplementation("org.robolectric:robolectric:4.16.1")
     testImplementation("io.github.takahirom.roborazzi:roborazzi:1.47.0")
     testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.47.0")
+    // Cycle 12: Compose-взаимодействия проверяются на Robolectric, а не только
+    // на устройстве. Эмулятора в этой сборочной среде нет, а правила «отмена
+    // спрашивает» и «мишень не меньше 48dp» проверять глазами нельзя.
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test:runner:1.5.2")

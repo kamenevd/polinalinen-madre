@@ -5,7 +5,7 @@
     "kind": "feature",
     "version": "5.2.0-cycle12",
     "branch": "cycle/12",
-    "stage": "implementation",
+    "stage": "verification",
     "created_at": "2026-07-25T00:00:00Z",
     "updated_at": "2026-07-25T00:00:00Z"
   },
@@ -42,42 +42,61 @@
   ],
   "gates": {
     "plan": {
-      "status": "pending",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        "DESIGN-V4.md: Cycle 12 decisions and acceptance criteria"
+      ]
     },
     "tdd": {
-      "status": "pending",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        "./gradlew testDebugUnitTest: PASS (284 tests)"
+      ]
     },
     "build": {
-      "status": "pending",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        "./gradlew lintDebug assembleDebug: BUILD SUCCESSFUL",
+        "aapt2 dump badging: versionCode 15, versionName 5.2.0-cycle12"
+      ]
     },
     "review": {
-      "status": "pending",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        "multi-provider UX review packet",
+        "Opus implementation commits on cycle/12"
+      ]
     },
     "visual": {
-      "status": "pending",
-      "evidence": []
+      "status": "passed",
+      "evidence": [
+        "./gradlew verifyRoborazziDebug: BUILD SUCCESSFUL"
+      ]
     },
     "runtime": {
-      "status": "pending",
-      "evidence": []
+      "status": "blocked",
+      "evidence": [
+        "adb devices -l on LXC108 returned no connected devices; emulator smoke not executable"
+      ]
     },
     "release": {
-      "status": "pending",
-      "evidence": []
+      "status": "blocked",
+      "evidence": [
+        "debug APK artifact is ready; production signing key and connected runtime are unavailable"
+      ]
     }
   },
   "reviews": [],
   "artifacts": {
-    "apk": null,
+    "apk": "/opt/madre-releases/madre-v5.2.0-cycle12.apk",
     "source_archive": null,
-    "sha256": null,
+    "sha256": "159ab71f42c03bcb8e3305dc3e545f7170893265bd15f4bbfe75276cfa6f632b",
     "release_url": null
   },
-  "blockers": [],
+  "blockers": [
+    "Runtime smoke не выполнен: на LXC108 нет подключённого Android-устройства/эмулятора.",
+    "APK собран debug-ключом; production signing key не найден."
+  ],
   "decisions": [
     "PocketBase 0.39.7 остаётся backend; schema/hooks/migrations версионируются в repository.",
     "Room остаётся offline-first источником локального UX; backend используется для identity и sharing.",

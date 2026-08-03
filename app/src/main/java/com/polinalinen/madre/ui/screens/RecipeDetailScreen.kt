@@ -6,12 +6,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Surface
@@ -22,6 +24,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,6 +33,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -41,7 +45,10 @@ import com.polinalinen.madre.model.GuestNote
 import com.polinalinen.madre.model.LibraryNote
 import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.model.RecipeScaler
+import com.polinalinen.madre.ui.components.BackLabel
+import com.polinalinen.madre.ui.components.BookButton
 import com.polinalinen.madre.ui.components.DottedLeaderRow
+import com.polinalinen.madre.ui.components.MinTouchTarget
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.HandwrittenEditSurface
 import com.polinalinen.madre.ui.components.HeavyRule
@@ -76,10 +83,16 @@ fun RecipeDetailScreen(
 ) {
     val colors = AppColors.current
     val recipes by viewModel.recipes.collectAsState()
-    val recipe = recipes.find { it.id == recipeId } ?: return
+    val recipe = recipes.find { it.id == recipeId }
+    // Книга ещё раскрывается (recipes.json читается с диска) — это не то же
+    // самое, что «такой главы нет». Раньше оба случая давали пустой экран.
+    if (recipe == null) {
+        MissingRecipePage(loading = recipes.isEmpty(), onBack = onBack)
+        return
+    }
     val chapterIndex = recipes.indexOf(recipe) + 1
 
-    var portions by remember { mutableIntStateOf(1) }
+    var portions by rememberSaveable { mutableIntStateOf(1) }
     val scaleFactor = portions.toDouble()
 
     // Сколько раз печён именно этот рецепт — питает крошки, износ и кофейные
@@ -155,7 +168,7 @@ fun RecipeDetailScreen(
                 Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                PageLabel("← Оглавление", Modifier.clickable { onBack() })
+                BackLabel("Оглавление", onClick = onBack)
                 PageLabel("Рецепт № %02d".format(chapterIndex))
             }
 
@@ -225,37 +238,22 @@ fun RecipeDetailScreen(
             )
 
             Spacer(Modifier.height(14.dp))
-            Box(
-                Modifier
-                    .padding(horizontal = 22.dp)
-                    .fillMaxWidth()
-                    .clickable {
+            // Что именно сейчас начнётся — прямо над кнопкой. Порции выбирают
+            // в начале страницы, а нажимают «Начать выпечку» в конце, через
+            // весь список ингредиентов: без этой строки легко уехать в
+            // трёхчасовую выпечку не на ту семью.
+            Box(Modifier.padding(horizontal = 22.dp)) {
+                BookButton(
+                    label = "Начать выпечку",
+                    onClick = {
                         val sessionId = viewModel.startBaking(recipe, scaleFactor)
                         onStartBaking(sessionId)
-                    }
-                    .drawBehind {
-                        drawRoundRect(colors.espresso, cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx()))
-                    }
-                    .padding(vertical = 14.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    "Начать выпечку",
-                    color = colors.paper,
-                    fontFamily = FontFamily.Serif,
-                    fontSize = 16.sp,
-                    letterSpacing = 1.sp,
+                    },
+                    caption = "×$portions ${familyWord(portions)} · " +
+                        "${recipe.timeline.sumOf { it.durationMinutes } / 60} ч · " +
+                        "${recipe.timeline.size} шагов — таймер поведёт за руку",
                 )
             }
-            Text(
-                "таймер поведёт за руку, шаг за шагом",
-                color = colors.cocoa,
-                fontFamily = FontFamily.Serif,
-                fontStyle = FontStyle.Italic,
-                fontSize = 11.sp,
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            )
 
             // Просьба Полины (2026-07-21, помнить и не убирать): весь рецепт должен
             // быть написан целиком, книжным текстом, прямо на этой странице —
@@ -269,6 +267,35 @@ fun RecipeDetailScreen(
             }
         }
 
+        }
+    }
+}
+
+/**
+ * Глава не открылась: либо книга ещё раскрывается (recipes.json читается с
+ * диска), либо такой главы в ней нет. Раньше оба случая давали пустой белый
+ * экран, с которого нельзя было даже уйти назад.
+ */
+@Composable
+private fun MissingRecipePage(loading: Boolean, onBack: () -> Unit) {
+    val colors = AppColors.current
+    Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
+        Column(Modifier.statusBarsPadding().fillMaxSize()) {
+            BackLabel("Оглавление", onClick = onBack, modifier = Modifier.padding(horizontal = 22.dp))
+            Column(
+                Modifier.fillMaxSize().padding(horizontal = 22.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    if (loading) "книга раскрывается…" else "такой главы в книге нет",
+                    color = colors.espresso,
+                    fontFamily = FontFamily.Serif,
+                    fontStyle = FontStyle.Italic,
+                    fontSize = 18.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
+            }
         }
     }
 }
@@ -498,7 +525,15 @@ private fun PortionSelector(portions: Int, onSelect: (Int) -> Unit, modifier: Mo
                 Box(
                     Modifier
                         .weight(if (active) 1.5f else 1f)
-                        .clickable { onSelect(n) }
+                        // Ячейка выходила ростом около 40dp — палец промахивался
+                        // на соседнюю порцию, а выбор порций меняет все граммы
+                        // рецепта разом.
+                        .defaultMinSize(minHeight = MinTouchTarget)
+                        .selectable(
+                            selected = active,
+                            role = Role.RadioButton,
+                            onClick = { onSelect(n) },
+                        )
                         .drawBehind { if (active) drawRect(colors.espresso) }
                         .padding(vertical = 9.dp),
                     contentAlignment = Alignment.Center,

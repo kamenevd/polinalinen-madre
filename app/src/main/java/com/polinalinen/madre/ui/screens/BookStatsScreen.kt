@@ -35,6 +35,9 @@ import androidx.compose.ui.unit.sp
 import com.polinalinen.madre.data.db.entities.BakeRecordEntity
 import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.ui.components.AgedPhoto
+import com.polinalinen.madre.ui.components.BackLabel
+import com.polinalinen.madre.ui.components.BookButton
+import com.polinalinen.madre.ui.components.BookButtonVariant
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.HeavyRule
 import com.polinalinen.madre.ui.components.PageLabel
@@ -92,7 +95,7 @@ fun BookStatsScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                PageLabel("← Полка", Modifier.clickable { onBack() })
+                BackLabel("Полка", onClick = onBack)
                 Stamp(if (isMe) "твоя книга" else "только чтение", colors.cocoa)
             }
 
@@ -198,7 +201,15 @@ fun BookStatsScreen(
         // DESIGN-V4.md §Концепция): плоская карточка страницы, скругление ≤4dp.
         AlertDialog(
             onDismissRequest = { openedRecipe = null },
-            confirmButton = {},
+            confirmButton = {
+                // У лайтбокса не было ни одной кнопки закрытия: уйти можно
+                // было только тапом мимо карточки или системной «назад».
+                BookButton(
+                    label = "Закрыть",
+                    onClick = { openedRecipe = null },
+                    variant = BookButtonVariant.SECONDARY,
+                )
+            },
             shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
             containerColor = colors.cream,
             titleContentColor = colors.espresso,
@@ -219,6 +230,7 @@ fun BookStatsScreen(
                                 photoPath = a.photoPath,
                                 takenAtMillis = a.completedAtMillis,
                                 height = 110.dp,
+                                caption = "${'$'}{opened.name}, ${'$'}{formatRuDate(d)}",
                                 modifier = Modifier.padding(vertical = 6.dp),
                             )
                         }

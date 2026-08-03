@@ -66,7 +66,22 @@ class MadreNotifier(private val context: Context) {
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
             .build()
-        NotificationManagerCompat.from(context).notify(id, notification)
+        notifySafely(id, notification)
+    }
+
+    /**
+     * [canPost] проверяет разрешение честно, но проверка живёт в отдельном
+     * методе, и статический анализ этого не видит (lint MissingPermission).
+     * Явная обработка SecurityException — не заглушка ради зелёного lint:
+     * между проверкой и показом человек может отозвать разрешение из шторки,
+     * и книга не должна падать посреди выпечки из-за уведомления.
+     */
+    fun notifySafely(id: Int, notification: android.app.Notification) {
+        try {
+            NotificationManagerCompat.from(context).notify(id, notification)
+        } catch (_: SecurityException) {
+            // Разрешение отозвали прямо сейчас — молчим, как и без него.
+        }
     }
 
     private fun ensureChannel(channelId: String, channelName: String) {

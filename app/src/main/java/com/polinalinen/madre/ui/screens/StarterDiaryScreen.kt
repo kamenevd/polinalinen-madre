@@ -21,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,6 +40,8 @@ import com.polinalinen.madre.sourdough.DiaryEntry
 import com.polinalinen.madre.sourdough.GrowthPhase
 import com.polinalinen.madre.sourdough.MadreVoice
 import com.polinalinen.madre.sourdough.SourdoughProfile
+import com.polinalinen.madre.ui.components.BackLabel
+import com.polinalinen.madre.ui.components.BookButton
 import com.polinalinen.madre.ui.components.BubbleVignette
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.InkBlot
@@ -75,7 +78,7 @@ fun StarterDiaryScreen(
     // Архив прошлых глав — всё остальное, и это единственный список экрана,
     // который растёт без потолка: он и едет в LazyColumn как настоящие items.
     val pastFeedings = history.drop(1)
-    var expandedArchiveId by remember { mutableStateOf<Long?>(null) }
+    var expandedArchiveId by rememberSaveable { mutableStateOf<Long?>(null) }
 
     Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
         // «Страница на просвет» (Cycle 4, LightPage): наклон телефона ловит
@@ -93,7 +96,7 @@ fun StarterDiaryScreen(
                     Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    PageLabel("← Первая полоса", Modifier.clickable { onBack() })
+                    BackLabel("Первая полоса", onClick = onBack)
                     PageLabel("Глава VII · день $dayNumber")
                 }
 
@@ -245,18 +248,8 @@ fun StarterDiaryScreen(
                 }
             }
 
-            Box(
-                Modifier
-                    .padding(horizontal = 22.dp, vertical = 14.dp)
-                    .fillMaxWidth()
-                    .clickable { onFeed() }
-                    .drawBehind {
-                        drawRoundRect(colors.espresso, cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx()))
-                    }
-                    .padding(vertical = 14.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("Покормить", color = colors.paper, fontFamily = FontFamily.Serif, fontSize = 16.sp, letterSpacing = 1.sp)
+            Box(Modifier.padding(horizontal = 22.dp, vertical = 14.dp)) {
+                BookButton(label = "Покормить", onClick = onFeed)
             }
             }
         }

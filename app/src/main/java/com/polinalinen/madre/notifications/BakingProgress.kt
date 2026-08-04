@@ -29,8 +29,6 @@ data class BakingProgress(
     val isPaused: Boolean,
     /** Название шага, который начнётся после текущего; null on the last step. */
     val nextStepTitle: String? = null,
-    /** Seconds until the next step or until the whole bake ends. */
-    val nextStepSeconds: Long? = null,
 ) {
 
     /**
@@ -50,12 +48,18 @@ data class BakingProgress(
         return "$stepTitle · шаг ${stepIndex + 1} из $stepCount · $tail"
     }
 
-    /** Shared copy for both the timer screen and the foreground notification. */
-    fun etaText(): String = BakingProgressFormatter.etaText(
+    /**
+     * Cycle 14: следующий шаг — только название.
+     *
+     * До этого цикла здесь стояло «Следующий шаг: Формовка · через 2:05» — со
+     * своим временем, которое на деле было временем ТЕКУЩЕГО шага. Экран и
+     * шторка показывали одну и ту же секунду дважды, и понять, до чего именно
+     * 2:05, было невозможно. Один ход выпечки — один отсчёт; здесь его нет.
+     */
+    fun nextStepText(): String = BakingProgressFormatter.nextStepText(
         stepIndex = stepIndex,
         stepCount = stepCount,
         nextStepTitle = nextStepTitle,
-        remainingSeconds = nextStepSeconds ?: remainingSeconds,
     )
 
     companion object {
@@ -82,20 +86,21 @@ data class BakingProgress(
     }
 }
 
-/** Pure, UI-independent ETA wording. It deliberately receives remaining time, not a clock. */
+/**
+ * Pure, UI-independent wording for the step after the current one.
+ *
+ * Времени сюда не передают вовсе — и это не упущение, а условие: у следующего
+ * шага не может быть своего отсчёта, пока идёт текущий.
+ */
 object BakingProgressFormatter {
-    fun etaText(
+    fun nextStepText(
         stepIndex: Int,
         stepCount: Int,
         nextStepTitle: String?,
-        remainingSeconds: Long,
-    ): String {
-        val time = BakingProgress.formatRemaining(remainingSeconds)
-        return if (stepIndex >= stepCount - 1 || nextStepTitle.isNullOrBlank()) {
-            "Выпечка завершится через $time"
-        } else {
-            "Следующий шаг: $nextStepTitle · через $time"
-        }
+    ): String = if (stepIndex >= stepCount - 1 || nextStepTitle.isNullOrBlank()) {
+        "последний шаг"
+    } else {
+        "дальше: $nextStepTitle"
     }
 }
 

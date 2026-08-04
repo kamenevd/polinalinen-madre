@@ -74,11 +74,13 @@ fun BakingTimerScreen(
     val step = s.currentStep
     val isWait = step.type == StepType.WAIT
     val urgent = remaining in 1..(step.durationMinutes * 60L / 10).coerceAtLeast(1)
-    val etaText = BakingProgressFormatter.etaText(
+    // Cycle 14: следующий шаг — название и только. Крупные цифры выше и есть
+    // единственный таймер этой выпечки; второй отсчёт рядом с ними отвечал бы
+    // на вопрос, которого никто не задавал, теми же секундами.
+    val nextStepText = BakingProgressFormatter.nextStepText(
         stepIndex = s.currentStepIndex,
         stepCount = s.recipe.timeline.size,
         nextStepTitle = s.recipe.timeline.getOrNull(s.currentStepIndex + 1)?.title,
-        remainingSeconds = remaining,
     )
 
     Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
@@ -136,7 +138,7 @@ fun BakingTimerScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
             Text(
-                etaText,
+                nextStepText,
                 color = colors.crust,
                 fontFamily = FontFamily.Serif,
                 fontStyle = FontStyle.Italic,

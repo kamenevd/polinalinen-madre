@@ -18,7 +18,6 @@ class BakingProgressTest {
         totalSeconds: Long = 3600,
         isPaused: Boolean = false,
         nextStepTitle: String? = "Складка",
-        nextStepSeconds: Long? = remainingSeconds,
     ) = BakingProgress(
         sessionId = sessionId,
         recipeName = "Бородинский",
@@ -30,7 +29,6 @@ class BakingProgressTest {
         totalSeconds = totalSeconds,
         isPaused = isPaused,
         nextStepTitle = nextStepTitle,
-        nextStepSeconds = nextStepSeconds,
     )
 
     @Test
@@ -90,27 +88,57 @@ class BakingProgressTest {
         assertThat(progress(remainingSeconds = 0, isPaused = false).contentText()).isNotEmpty()
     }
 
+    /**
+     * Cycle 14: один ход выпечки — один отсчёт.
+     *
+     * До этого цикла следующий шаг ехал строкой «Следующий шаг: Формовка ·
+     * через 2:05» — со СВОИМ временем, которое на деле было временем текущего
+     * шага. Два countdown'а на экране и в шторке про одну и ту же секунду:
+     * человек видел «через 2:05» дважды и не понимал, до чего именно 2:05.
+     * Теперь следующий шаг — только название и контекст.
+     */
     @Test
-    fun `running progress names the next step and uses current remaining time`() {
-        val text = progress(stepIndex = 1, stepCount = 3, remainingSeconds = 125, nextStepTitle = "Формовка").etaText()
-        assertThat(text).isEqualTo("Следующий шаг: Формовка · через 2:05")
+    fun `the next step is a name, not a second countdown`() {
+        val text = progress(stepIndex = 1, stepCount = 3, remainingSeconds = 125, nextStepTitle = "Формовка")
+            .nextStepText()
+        assertThat(text).isEqualTo("дальше: Формовка")
+        assertThat(text).doesNotContain("2:05")
+        // Никаких цифр вовсе: время в этой строке взяться неоткуда.
+        assertThat(text.any { it.isDigit() }).isFalse()
     }
 
     @Test
-    fun `paused progress keeps the same remaining time in the shared eta`() {
-        val text = progress(isPaused = true, remainingSeconds = 125, nextStepTitle = "Формовка").etaText()
-        assertThat(text).isEqualTo("Следующий шаг: Формовка · через 2:05")
+    fun `the last step says it is the last, with no next to name`() {
+        val text = progress(stepIndex = 3, stepCount = 4, nextStepTitle = null).nextStepText()
+        assertThat(text).isEqualTo("последний шаг")
+    }
+
+    /** Шаг может оказаться последним и по счёту, даже если название пришло. */
+    @Test
+    fun `a next title on the final step is ignored, not printed`() {
+        val text = progress(stepIndex = 3, stepCount = 4, nextStepTitle = "Формовка").nextStepText()
+        assertThat(text).isEqualTo("последний шаг")
     }
 
     @Test
-    fun `last step says when the whole bake ends`() {
-        val text = progress(stepIndex = 3, stepCount = 4, remainingSeconds = 0, nextStepTitle = null, nextStepSeconds = null).etaText()
-        assertThat(text).isEqualTo("Выпечка завершится через 0:00")
+    fun `a blank next title is treated as no next step at all`() {
+        assertThat(progress(stepIndex = 0, stepCount = 4, nextStepTitle = "  ").nextStepText())
+            .isEqualTo("последний шаг")
     }
 
     @Test
-    fun `zero time uses zero for both next step and final bake`() {
-        assertThat(progress(remainingSeconds = 0, nextStepSeconds = 0).etaText()).contains("через 0:00")
-        assertThat(progress(stepIndex = 3, stepCount = 4, remainingSeconds = 0, nextStepTitle = null).etaText()).contains("0:00")
+    fun `pausing changes the countdown line, never the next step line`() {
+        val running = progress(stepIndex = 1, stepCount = 3, nextStepTitle = "Формовка")
+        val paused = progress(stepIndex = 1, stepCount = 3, nextStepTitle = "Формовка", isPaused = true)
+        assertThat(paused.nextStepText()).isEqualTo(running.nextStepText())
+        assertThat(paused.contentText()).isNotEqualTo(running.contentText())
+    }
+
+    /** Единственное место, где в слепке есть время, — остаток текущего шага. */
+    @Test
+    fun `a snapshot carries exactly one clock`() {
+        val text = progress(stepIndex = 1, stepCount = 3, remainingSeconds = 125, nextStepTitle = "Формовка")
+        assertThat(text.contentText()).contains("2:05")
+        assertThat(text.nextStepText()).doesNotContain("2:05")
     }
 }

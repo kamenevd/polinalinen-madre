@@ -255,9 +255,10 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
                 elapsedSeconds = stepsBefore + (currentStepTotal - remaining).coerceAtLeast(0L),
                 totalSeconds = s.totalDurationMinutes * 60L,
                 isPaused = s.isPaused,
+                // Cycle 14: у следующего шага только название. Отсчёт в
+                // слепке один — remainingSeconds текущего шага, тот же, что
+                // показывает экран таймера.
                 nextStepTitle = s.recipe.timeline.getOrNull(s.currentStepIndex + 1)?.title,
-                // One clock: this is the same remaining value used by the timer screen.
-                nextStepSeconds = remaining,
             )
         }
         madreApp.activeBakes.publish(bakes)

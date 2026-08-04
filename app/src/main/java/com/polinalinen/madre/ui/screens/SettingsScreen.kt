@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -39,6 +40,9 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
@@ -224,6 +228,12 @@ private fun FamilyBookSection(
     val account = state.account
     val loading = state is FamilyBookState.Loading
 
+    // Одноразовый код не должен пережить уход со страницы: как только секция
+    // покидает композицию, просим ViewModel забыть открытый код из состояния.
+    DisposableEffect(Unit) {
+        onDispose { onCodeHandled() }
+    }
+
     Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp)) {
         PageLabel("Семейная книга", color = colors.espresso)
         Text(
@@ -247,7 +257,7 @@ private fun FamilyBookSection(
             loading -> Text("проверяем общую книгу", color = colors.cocoa, fontFamily = FontFamily.Serif, fontStyle = FontStyle.Italic)
             account == null -> {
                 FamilyBookField("Почта", email) { email = it }
-                FamilyBookField("Пароль", password) { password = it }
+                FamilyBookField("Пароль", password, masked = true) { password = it }
                 FamilyBookField("Как подписать вас", displayName) { displayName = it }
                 Spacer(Modifier.height(8.dp))
                 BookButton(
@@ -329,12 +339,23 @@ private fun FamilyBookSection(
 }
 
 @Composable
-private fun FamilyBookField(label: String, value: String, onValueChange: (String) -> Unit) {
+private fun FamilyBookField(
+    label: String,
+    value: String,
+    masked: Boolean = false,
+    onValueChange: (String) -> Unit,
+) {
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
         label = { Text(label) },
         singleLine = true,
+        visualTransformation = if (masked) PasswordVisualTransformation() else VisualTransformation.None,
+        keyboardOptions = if (masked) {
+            KeyboardOptions(keyboardType = KeyboardType.Password)
+        } else {
+            KeyboardOptions.Default
+        },
         textStyle = TextStyle(fontFamily = FontFamily.Serif, fontSize = 15.sp),
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
     )

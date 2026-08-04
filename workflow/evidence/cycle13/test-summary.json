@@ -1,0 +1,14 @@
+{
+  "head": "cc98a3e85aa4c286ea83d425912994e4f95d2e78",
+  "unit_tests": 304,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "commands": [
+    "testDebugUnitTest",
+    "lintDebug",
+    "verifyRoborazziDebug",
+    "assembleDebug"
+  ],
+  "result": "BUILD SUCCESSFUL"
+}

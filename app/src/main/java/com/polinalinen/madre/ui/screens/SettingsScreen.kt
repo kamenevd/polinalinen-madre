@@ -514,15 +514,19 @@ private fun SettingsField(label: String, caption: String, field: @Composable () 
  * SourdoughRepository, поэтому в базе не окажется ни пустой строки, ни абзаца.
  */
 @Composable
-private fun StarterNameField(persisted: String, onChange: (String) -> Unit) {
-    // Ключ — persisted: черновик пересобирается, если имя пришло со стороны
-    // (первая загрузка конфига из Room), и не трогается, пока его правят.
-    var draft by rememberSaveable(persisted) { mutableStateOf(persisted) }
+internal fun StarterNameField(persisted: String, onChange: (String) -> Unit) {
+    // null — человек ещё не трогал поле, и в нём стоит сохранённое имя. Как
+    // только он начал править, поле принадлежит ему целиком: строка, стёртая
+    // под ноль, обязана остаться пустой, хотя в базе к этому моменту уже лежит
+    // «Мадре» (пустого имени книга не хранит). Пересобирать черновик по
+    // сохранённому значению значило бы подставлять «Мадре» прямо под палец.
+    var draft by rememberSaveable { mutableStateOf<String?>(null) }
     NameField(
-        value = draft,
+        value = draft ?: persisted,
         onChange = { typed ->
-            draft = typed.take(StarterName.MAX_LENGTH)
-            onChange(draft)
+            val trimmed = typed.take(StarterName.MAX_LENGTH)
+            draft = trimmed
+            onChange(trimmed)
         },
         placeholder = StarterName.DEFAULT,
     )

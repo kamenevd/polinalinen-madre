@@ -10,7 +10,8 @@ import subprocess
 from pathlib import Path
 
 FINGERPRINT_PATTERN = re.compile(r"^[0-9a-f]{64}$")
-DIGEST_LINE = re.compile(r"Signer #1 certificate SHA-256 digest:\s*([0-9a-fA-F:]+)")
+DIGEST_LINE = re.compile(r"Signer #(\d+) certificate SHA-256 digest:\s*([0-9a-fA-F:]+)")
+SIGNER_COUNT_LINE = re.compile(r"Number of signers:\s*(\d+)")
 
 
 def normalize_fingerprint(value: str) -> str:
@@ -20,11 +21,31 @@ def normalize_fingerprint(value: str) -> str:
     return normalized
 
 
+def combine_streams(stdout: str | None, stderr: str | None) -> str:
+    # apksigner versions differ on whether the certificate block lands on
+    # stdout or stderr, so both are analysed together.
+    return "\n".join(part for part in (stdout or "", stderr or ""))
+
+
+def signer_fingerprint_from_streams(stdout: str | None, stderr: str | None) -> str:
+    return parse_signer_fingerprint(combine_streams(stdout, stderr))
+
+
 def parse_signer_fingerprint(output: str) -> str:
+    counts = [int(value) for value in SIGNER_COUNT_LINE.findall(output)]
+    if len(set(counts)) > 1:
+        raise ValueError("contradictory apksigner signer count lines")
+    if counts and counts[0] != 1:
+        raise ValueError("expected exactly one APK signer")
     matches = DIGEST_LINE.findall(output)
-    if len(matches) != 1:
+    if not matches:
         raise ValueError("expected exactly one APK signer certificate digest")
-    return normalize_fingerprint(matches[0])
+    if any(int(number) != 1 for number, _ in matches):
+        raise ValueError("unexpected additional APK signer certificate digest")
+    fingerprints = {normalize_fingerprint(digest) for _, digest in matches}
+    if len(fingerprints) != 1:
+        raise ValueError("conflicting Signer #1 certificate digests")
+    return next(iter(fingerprints))
 
 
 def latest_apksigner(android_home: Path) -> Path:
@@ -51,7 +72,7 @@ def main() -> int:
             text=True,
             capture_output=True,
         )
-        actual = parse_signer_fingerprint(result.stdout)
+        actual = signer_fingerprint_from_streams(result.stdout, result.stderr)
     except (ValueError, subprocess.CalledProcessError) as exc:
         raise SystemExit(str(exc)) from exc
     if actual != expected:

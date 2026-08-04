@@ -3,11 +3,11 @@
   "cycle": {
     "number": 13,
     "kind": "feature",
-    "version": "5.3.0-cycle13",
+    "version": "5.3.1-cycle13",
     "branch": "cycle/13",
     "stage": "releasable",
     "created_at": "2026-08-03T00:00:00Z",
-    "updated_at": "2026-08-04T09:33:44Z"
+    "updated_at": "2026-08-04T00:00:00Z"
   },
   "features": [
     {
@@ -128,6 +128,8 @@
     "Cycle 13 remains offline-first; online family book is optional.",
     "Invite codes are one-time UI secrets; account state is preserved on generic rejection without preserving shown code.",
     "PocketBase family routes use authenticated custom hooks; public legacy collections are unchanged.",
-    "Production signing certificate is pinned in the fail-closed GitHub release workflow."
+    "Production signing certificate is pinned in the fail-closed GitHub release workflow.",
+    "Signed tag v5.3.0-cycle13 failed packaging: verify_apk_signature.py rejected a correctly signed APK on the GitHub runner because a newer apksigner split the certificate block across stdout/stderr and repeated the single Signer #1 digest; no GitHub release was published for it.",
+    "v5.3.0-cycle13 is superseded by v5.3.1-cycle13 (versionCode 17), which carries the fail-closed stdout+stderr signer parsing fix; the release gate stays pending until the new tag builds green."
   ]
 }

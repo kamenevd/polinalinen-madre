@@ -12,6 +12,7 @@ object MadreDestinations {
     const val BAKING_COMPLETE = "baking/{sessionId}/complete"
     const val STARTER_DETAIL = "starter"
     const val FEEDING_FORM = "starter/feed"
+    const val PHOTO_GALLERY = "photo-gallery"
     const val SETTINGS = "settings"
 
     // Полка (2026-07-20/21): своя книга + книги друзей. Друзья пока без бэка —

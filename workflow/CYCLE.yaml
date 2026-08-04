@@ -5,9 +5,9 @@
     "kind": "feature",
     "version": "5.4.0-cycle14",
     "branch": "cycle/14",
-    "stage": "planning",
+    "stage": "validating",
     "created_at": "2026-08-04T00:00:00Z",
-    "updated_at": "2026-08-04T00:00:00Z"
+    "updated_at": "2026-08-04T19:46:12Z"
   },
   "features": [
     {
@@ -42,16 +42,53 @@
     }
   ],
   "gates": {
-    "plan": {"status": "pass", "evidence": ["DESIGN-V4.md", "workflow/CYCLE.yaml"]},
-    "tdd": {"status": "pending", "evidence": []},
-    "build": {"status": "pending", "evidence": []},
-    "review": {"status": "pending", "evidence": []},
-    "visual": {"status": "pending", "evidence": []},
-    "runtime": {"status": "pending", "evidence": []},
-    "release": {"status": "pending", "evidence": []}
+    "plan": {
+      "status": "pass",
+      "evidence": [
+        "DESIGN-V4.md",
+        "workflow/CYCLE.yaml"
+      ]
+    },
+    "tdd": {
+      "status": "pass",
+      "evidence": [
+        "workflow/evidence/cycle14/test-summary.json"
+      ]
+    },
+    "build": {
+      "status": "pass",
+      "evidence": [
+        "workflow/evidence/cycle14/test-summary.json"
+      ]
+    },
+    "review": {
+      "status": "pass",
+      "evidence": [
+        "workflow/evidence/cycle14/reviews.md"
+      ]
+    },
+    "visual": {
+      "status": "pass",
+      "evidence": [
+        "workflow/evidence/cycle14/test-summary.json"
+      ]
+    },
+    "runtime": {
+      "status": "pending",
+      "evidence": []
+    },
+    "release": {
+      "status": "pending",
+      "evidence": []
+    }
   },
   "reviews": [],
-  "artifacts": {"apk": null, "source_archive": null, "sha256": null, "release_url": null},
+  "artifacts": {
+    "apk": null,
+    "source_archive": null,
+    "sha256": null,
+    "release_url": null
+  },
   "blockers": [],
   "decisions": [
     "Cycle 14 groups six product requests into three independently reviewable features.",

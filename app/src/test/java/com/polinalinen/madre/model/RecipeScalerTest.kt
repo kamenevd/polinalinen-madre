@@ -170,9 +170,9 @@ class RecipeScalerTest {
      * «Смешать всю опару с 300 г воды» при ×3 обязано стать 900 г, иначе на
      * одной странице стоят два разных рецепта.
      *
-     * Пересчитываются ТОЛЬКО те числа, которые рецепт задал строкой ингредиента
-     * ([RecipeScaler.scalableWeights]). Остальное — проза, и разбирать её книга
-     * не берётся.
+     * Пересчитывается ТОЛЬКО то, что сам рецепт пометил весом и назвал по имени
+     * строки: `{{300 г|main:вода}}`. Остальное — проза, и разбирать её книга не
+     * берётся.
      */
     private val stepRecipe = recipeOf(
         water(300.0),
@@ -181,91 +181,189 @@ class RecipeScalerTest {
         Ingredient(name = "молока", amount = 120.0, unit = "г", category = "milk"),
     )
 
-    private val stepWeights = RecipeScaler.scalableWeights(stepRecipe)
+    private val stepBindings = RecipeScaler.scalableBindings(stepRecipe)
+
+    private fun ref(name: String, section: String = "main") = IngredientRef(section, name)
 
     @Test
-    fun `scalableWeights are the weights the recipe itself declares`() {
-        assertThat(stepWeights).containsExactly(300.0, 515.0, 37.5, 120.0)
+    fun `scalableBindings name every weighable line by its section and name`() {
+        assertThat(stepBindings.keys).containsExactly(
+            ref("вода"), ref("мука"), ref("закваски"), ref("молока"),
+        )
+        assertThat(stepBindings.getValue(ref("закваски")).amount).isEqualTo(37.5)
     }
 
     @Test
-    fun `scalableWeights leave out eggs, tastes and weightless lines`() {
+    fun `scalableBindings leave out eggs, tastes and weightless lines`() {
         val recipe = recipeOf(
             water(200.0),
             Ingredient(name = "яйцо", amount = 2.0, unit = "шт", category = "egg", eggGrams = 50),
             Ingredient(name = "ваниль", amount = 0.0, unit = "по вкусу", category = "flavor", scalable = false),
             Ingredient(name = "опара", amount = 0.0, unit = "г", category = "ref", refType = "all_of_section"),
         )
-        assertThat(RecipeScaler.scalableWeights(recipe)).containsExactly(200.0)
+        assertThat(RecipeScaler.scalableBindings(recipe).keys).containsExactly(ref("вода"))
+    }
+
+    /** Одно имя в двух секциях — две разные строки и два разных веса. */
+    @Test
+    fun `the same name in two sections stays two different lines`() {
+        val recipe = Recipe(
+            id = "t", name = "t", emoji = "", description = "",
+            ingredients = mapOf(
+                "sponge" to listOf(flour("муки", 100.0)),
+                "main" to listOf(flour("муки", 300.0)),
+            ),
+            timeline = emptyList(),
+        )
+        val bindings = RecipeScaler.scalableBindings(recipe)
+        assertThat(bindings.getValue(ref("муки", "sponge")).amount).isEqualTo(100.0)
+        assertThat(bindings.getValue(ref("муки", "main")).amount).isEqualTo(300.0)
+        assertThat(
+            RecipeScaler.scaledStepText("Смешать {{100 г|sponge:муки}} муки опары.", 2.0, bindings)
+        ).isEqualTo("Смешать 200 г муки опары.")
     }
 
     @Test
-    fun `scaledStepText scales grams inside the step text`() {
+    fun `scaledStepText scales the weights the recipe marked`() {
         assertThat(
-            RecipeScaler.scaledStepText("Смешать всю опару с 300 г воды и 515 г муки.", 3.0, stepWeights)
+            RecipeScaler.scaledStepText(
+                "Смешать всю опару с {{300 г|main:вода}} воды и {{515 г|main:мука}} муки.",
+                3.0,
+                stepBindings,
+            )
         ).isEqualTo("Смешать всю опару с 900 г воды и 1545 г муки.")
     }
 
     @Test
-    fun `scaledStepText scales millilitres too`() {
-        // 120 г молока в списке — «120 мл» в тексте шага: та же строка рецепта.
-        assertThat(RecipeScaler.scaledStepText("Добавить 120 мл молока.", 2.0, stepWeights))
-            .isEqualTo("Добавить 240 мл молока.")
+    fun `a marked weight may name millilitres for a line the recipe weighs in grams`() {
+        // 120 г молока в списке — «120 мл» в тексте шага: та же строка рецепта,
+        // и рецепт говорит об этом прямо, а не совпадением числа.
+        assertThat(
+            RecipeScaler.scaledStepText("Добавить {{120 мл|main:молока}} молока.", 2.0, stepBindings)
+        ).isEqualTo("Добавить 240 мл молока.")
+    }
+
+    /** Часть строки — тоже вес этой строки: в чиабатту вода уходит в два приёма. */
+    @Test
+    fun `a marked weight may be a part of the line it names`() {
+        assertThat(
+            RecipeScaler.scaledStepText("Влить {{200 г|main:вода}} воды.", 2.0, stepBindings)
+        ).isEqualTo("Влить 400 г воды.")
     }
 
     @Test
     fun `scaledStepText rounds fractional grams to whole ones`() {
-        assertThat(RecipeScaler.scaledStepText("Смешать 37.5 г закваски.", 3.0, stepWeights))
-            .isEqualTo("Смешать 113 г закваски.")
+        assertThat(
+            RecipeScaler.scaledStepText("Смешать {{37.5 г|main:закваски}} закваски.", 3.0, stepBindings)
+        ).isEqualTo("Смешать 113 г закваски.")
     }
 
     /** Времена, температуры и номера опар — не граммы и не трогаются. */
     @Test
     fun `scaledStepText leaves minutes, degrees and plain numbers alone`() {
         val text = "Опара 2: оставить на 30 минут, печь при 250°C 20 мин."
-        assertThat(RecipeScaler.scaledStepText(text, 4.0, stepWeights)).isEqualTo(text)
+        assertThat(RecipeScaler.scaledStepText(text, 4.0, stepBindings)).isEqualTo(text)
+    }
+
+    /**
+     * ГЛАВНОЕ В ЭТОЙ ПРАВКЕ. У рецепта есть строка ровно на 100 г — и есть шаг,
+     * где те же 100 г названы как то, что НАДО ОСТАВИТЬ. Прежняя книга искала
+     * число: раз какой-то ингредиент весит 100, значит и здесь вес, значит ×3.
+     * «Оставьте 300 г опары» — рецепт, которого Полина не писала. Совпадение
+     * числа доказательством не было и не стало.
+     */
+    @Test
+    fun `a fixed instruction keeps its number even when an ingredient weighs the same`() {
+        val recipe = recipeOf(
+            flour("муки", 100.0),
+            water(200.0),
+            sectionName = "sponge",
+        )
+        val bindings = RecipeScaler.scalableBindings(recipe)
+        assertThat(bindings.getValue(ref("муки", "sponge")).amount).isEqualTo(100.0)
+
+        val text = "Смешать {{100 г|sponge:муки}} муки с водой. Оставьте 100 г опары на следующий раз."
+        assertThat(RecipeScaler.scaledStepText(text, 3.0, bindings))
+            .isEqualTo("Смешать 300 г муки с водой. Оставьте 100 г опары на следующий раз.")
+    }
+
+    /** То же самое через единицу: 100 мл в прозе — не 100 г из списка. */
+    @Test
+    fun `a cross-unit number in the prose is not a weight either`() {
+        val text = "Развести в 120 мл тёплой воды. Оставить 300 г теста на закваску."
+        assertThat(RecipeScaler.scaledStepText(text, 3.0, stepBindings)).isEqualTo(text)
     }
 
     @Test
     fun `scaledStepText does not mistake a word for a unit`() {
-        // «300 граммов» — слово, а не единица: обрезать его до «г» книга не станет.
         val text = "Отвесить 300 граммов и 2 горсти муки."
-        assertThat(RecipeScaler.scaledStepText(text, 2.0, stepWeights)).isEqualTo(text)
-    }
-
-    /**
-     * Главное в этой правке: число в граммах, которого нет ни в одной строке
-     * рецепта, книга не трогает. «Оставьте 100 г опары на следующий раз» —
-     * это не порция теста, и утроить его значило бы выдумать рецепт.
-     */
-    @Test
-    fun `a weight the recipe never declared stays exactly as written`() {
-        val text = "Оставьте 100 г опары на следующий раз."
-        assertThat(RecipeScaler.scaledStepText(text, 3.0, stepWeights)).isEqualTo(text)
+        assertThat(RecipeScaler.scaledStepText(text, 2.0, stepBindings)).isEqualTo(text)
     }
 
     /** Единицы, которых книга не знает, она и не переписывает. */
     @Test
     fun `unfamiliar units are left to the prose they live in`() {
         val text = "Влить 0,5 л воды, добавить 1 ст. ложку соли, раскатать в 2 см толщиной."
-        assertThat(RecipeScaler.scaledStepText(text, 3.0, stepWeights)).isEqualTo(text)
+        assertThat(RecipeScaler.scaledStepText(text, 3.0, stepBindings)).isEqualTo(text)
+    }
+
+    /**
+     * Пометка на строку, которой в рецепте нет, ничего не пересчитывает — и
+     * фигурных скобок человеку не показывает. Молчание здесь честнее выдумки,
+     * а поймать такую пометку — дело теста на всю книгу.
+     */
+    @Test
+    fun `a mark naming a line the recipe does not have is printed as written`() {
+        val text = "Добавить {{300 г|main:сахара}} сахара."
+        assertThat(RecipeScaler.scaledStepText(text, 3.0, stepBindings))
+            .isEqualTo("Добавить 300 г сахара.")
+    }
+
+    @Test
+    fun `a mark naming an ingredient counted in pieces is printed as written`() {
+        val recipe = recipeOf(
+            water(200.0),
+            Ingredient(name = "яйцо", amount = 2.0, unit = "шт", category = "egg", eggGrams = 50),
+        )
+        val text = "Вбить {{2 г|main:яйцо}} яйца."
+        assertThat(RecipeScaler.scaledStepText(text, 3.0, RecipeScaler.scalableBindings(recipe)))
+            .isEqualTo("Вбить 2 г яйца.")
+    }
+
+    @Test
+    fun `a mark the book cannot read is printed as written`() {
+        val text = "Влить {{полстакана|main:вода}} воды."
+        assertThat(RecipeScaler.scaledStepText(text, 3.0, stepBindings))
+            .isEqualTo("Влить полстакана воды.")
+    }
+
+    @Test
+    fun `stepQuantities reads every mark the step carries`() {
+        val text = "Смешать {{300 г|main:вода}} воды и {{515 г|main:мука}} муки."
+        assertThat(RecipeScaler.stepQuantityCount(text)).isEqualTo(2)
+        assertThat(RecipeScaler.stepQuantities(text)).containsExactly(
+            StepQuantity(300.0, "г", ref("вода")),
+            StepQuantity(515.0, "г", ref("мука")),
+        )
     }
 
     @Test
     fun `a step of a recipe with nothing weighable is left alone entirely`() {
-        val text = "Смешать 300 г воды и 515 г муки."
-        assertThat(RecipeScaler.scaledStepText(text, 3.0, emptySet())).isEqualTo(text)
+        val text = "Смешать {{300 г|main:вода}} воды и {{515 г|main:мука}} муки."
+        assertThat(RecipeScaler.scaledStepText(text, 3.0, emptyMap()))
+            .isEqualTo("Смешать 300 г воды и 515 г муки.")
     }
 
     @Test
-    fun `scaledStepText at scale one changes nothing`() {
-        val text = "Смешать всю опару с 300 г воды и 515 г муки."
-        assertThat(RecipeScaler.scaledStepText(text, 1.0, stepWeights)).isEqualTo(text)
+    fun `scaledStepText at scale one changes nothing but the marks`() {
+        val text = "Смешать всю опару с {{300 г|main:вода}} воды и {{515 г|main:мука}} муки."
+        assertThat(RecipeScaler.scaledStepText(text, 1.0, stepBindings))
+            .isEqualTo("Смешать всю опару с 300 г воды и 515 г муки.")
     }
 
     @Test
     fun `scaledStepText survives an empty step`() {
-        assertThat(RecipeScaler.scaledStepText("", 3.0, stepWeights)).isEmpty()
+        assertThat(RecipeScaler.scaledStepText("", 3.0, stepBindings)).isEmpty()
     }
 
     @Test

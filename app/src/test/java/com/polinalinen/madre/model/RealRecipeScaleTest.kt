@@ -109,17 +109,17 @@ class RealRecipeScaleTest {
         assertThat(naiveSum(bread, 1)).isEqualTo(1095)
     }
 
-    // --- текст шага: пересчитывается объявленный вес и только он ---
+    // --- текст шага: пересчитывается помеченный вес и только он ---
 
     @Test
-    fun `a step text scales the weights the recipe declared`() {
+    fun `a step text scales the weights the recipe marked`() {
         val pizza = recipe("pizza")
-        val weights = RecipeScaler.scalableWeights(pizza)
+        val bindings = RecipeScaler.scalableBindings(pizza)
         val knead = pizza.timeline.first { it.title == "Замес" }
-        // «150 мл воды» — та же строка, что «150 г воды» в списке.
-        assertThat(RecipeScaler.scaledStepText(knead.description, 2.0, weights)).contains("300 мл")
+        // «150 мл воды» помечено ссылкой на строку «воды» секции main.
+        assertThat(RecipeScaler.scaledStepText(knead.description, 2.0, bindings)).contains("300 мл")
         // Минуты остаются минутами.
-        assertThat(RecipeScaler.scaledStepText(knead.description, 2.0, weights)).contains("30 мин")
+        assertThat(RecipeScaler.scaledStepText(knead.description, 2.0, bindings)).contains("30 мин")
     }
 
     /**
@@ -129,12 +129,115 @@ class RealRecipeScaleTest {
     @Test
     fun `a spoonful in the prose is left exactly as Polina wrote it`() {
         val focaccia = recipe("focaccia")
-        val weights = RecipeScaler.scalableWeights(focaccia)
+        val bindings = RecipeScaler.scalableBindings(focaccia)
         val sponge = focaccia.timeline.first { it.description.contains(" ст") }
-        val scaled = RecipeScaler.scaledStepText(sponge.description, 3.0, weights)
+        val scaled = RecipeScaler.scaledStepText(sponge.description, 3.0, bindings)
         assertThat(scaled).contains("1 ст")
-        // При этом объявленные 120 мл воды пересчитаны.
+        // При этом помеченные 120 мл воды опары пересчитаны.
         assertThat(scaled).contains("360 мл")
+    }
+
+    /**
+     * Чиабатта наливает воду в два приёма: 350 мл из 450 г сначала, остальное
+     * потом. Это часть строки, а не отдельное число из воздуха, — и растёт она
+     * вместе со строкой.
+     */
+    @Test
+    fun `ciabatta scales the part of the water that goes in first`() {
+        val ciabatta = recipe("ciabatta")
+        val bindings = RecipeScaler.scalableBindings(ciabatta)
+        val autolyse = ciabatta.timeline.first { it.description.contains("холодной воды") }
+        assertThat(RecipeScaler.scaledStepText(autolyse.description, 1.0, bindings)).contains("350 мл")
+        assertThat(RecipeScaler.scaledStepText(autolyse.description, 2.0, bindings)).contains("700 мл")
+    }
+
+    /**
+     * Проверка всей книги, а не одного рецепта: каждая пометка веса в каждом
+     * шаге обязана указывать на строку, которая в этом рецепте ЕСТЬ, — секцией
+     * и именем, — и просить не больше, чем в этой строке написано.
+     *
+     * Пометка с опечаткой ведёт себя тихо: текст просто не пересчитается.
+     * Поймать её можно только здесь.
+     */
+    @Test
+    fun `every marked weight in the book names a line that really exists`() {
+        var marks = 0
+        allRecipes().forEach { r ->
+            val bindings = RecipeScaler.scalableBindings(r)
+            r.timeline.forEach { step ->
+                val quantities = RecipeScaler.stepQuantities(step.description)
+                assertThat(quantities).hasSize(RecipeScaler.stepQuantityCount(step.description))
+                quantities.forEach { q ->
+                    marks++
+                    val ingredient = bindings[q.ref]
+                    assertThat(ingredient).isNotNull()
+                    // Часть строки — можно, больше строки — нет: это уже не она.
+                    assertThat(q.amount).isAtMost(ingredient!!.amount)
+                }
+            }
+        }
+        // Книга правда размечена, а не «ни одной пометки, значит всё сходится».
+        assertThat(marks).isEqualTo(16)
+    }
+
+    /**
+     * Обратная сторона того же: в книге не осталось граммов и миллилитров,
+     * которые НЕ помечены. Незамеченный вес не пересчитается — и человек с
+     * весами прочтёт на одной странице два разных рецепта.
+     */
+    @Test
+    fun `no weight in the book is left unmarked`() {
+        allRecipes().forEach { r ->
+            val bindings = RecipeScaler.scalableBindings(r)
+            r.timeline.forEach { step ->
+                val shown = RecipeScaler.scaledStepText(step.description, 1.0, bindings)
+                assertThat(WEIGHT_IN_TEXT.findAll(shown).count())
+                    .isEqualTo(RecipeScaler.stepQuantityCount(step.description))
+            }
+        }
+    }
+
+    /** Разметка — служебная, и человеку её видеть незачем ни при каком масштабе. */
+    @Test
+    fun `no step ever shows its marks to the reader`() {
+        allRecipes().forEach { r ->
+            val bindings = RecipeScaler.scalableBindings(r)
+            r.timeline.forEach { step ->
+                listOf(1.0, 3.0, 5.0).forEach { scale ->
+                    val shown = RecipeScaler.scaledStepText(step.description, scale, bindings)
+                    assertThat(shown).doesNotContain("{")
+                    assertThat(shown).doesNotContain("}")
+                    assertThat(shown).doesNotContain("|")
+                }
+            }
+        }
+    }
+
+    /**
+     * Числа, которые рецепт не пометил, ×5 не переживают ни одного изменения:
+     * минуты, градусы, сантиметры и «1 ст. ложка» остаются собой.
+     */
+    @Test
+    fun `unmarked prose survives the biggest batch untouched`() {
+        allRecipes().forEach { r ->
+            val bindings = RecipeScaler.scalableBindings(r)
+            r.timeline.forEach { step ->
+                val plain = RecipeScaler.scaledStepText(step.description, 1.0, bindings)
+                val scaled = RecipeScaler.scaledStepText(step.description, 5.0, bindings)
+                // Убрав из обоих сами веса, получаем ту же прозу слово в слово:
+                // минуты, градусы, сантиметры и ложки ×5 не пережили ни одного
+                // изменения.
+                assertThat(WEIGHT_IN_TEXT.replace(scaled, "·"))
+                    .isEqualTo(WEIGHT_IN_TEXT.replace(plain, "·"))
+            }
+        }
+    }
+
+    private fun allRecipes(): List<Recipe> = runBlocking { book.getRecipes() }
+
+    private companion object {
+        /** Число и единица веса в уже показанном человеку тексте. */
+        private val WEIGHT_IN_TEXT = Regex("\\d+(?:[.,]\\d+)?\\s*(?:мл|г)(?![а-яёА-ЯЁ])")
     }
 
     @Test

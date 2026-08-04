@@ -409,9 +409,9 @@ private fun GuestNotesSection(notes: List<GuestNote>, modifier: Modifier = Modif
 @Composable
 private fun FullRecipeSection(recipe: Recipe, scaleFactor: Double, modifier: Modifier = Modifier) {
     val colors = AppColors.current
-    // Пересчитать в тексте шага можно только те числа, которые рецепт задал
-    // строкой ингредиента: остальное — проза, и трогать её книга не берётся.
-    val scalableWeights = remember(recipe) { RecipeScaler.scalableWeights(recipe) }
+    // Пересчитываются только те числа, которые сам рецепт пометил весом и
+    // назвал по имени строки: остальное — проза, и трогать её книга не берётся.
+    val quantityBindings = remember(recipe) { RecipeScaler.scalableBindings(recipe) }
     Column(modifier.fillMaxWidth()) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 22.dp),
@@ -455,7 +455,7 @@ private fun FullRecipeSection(recipe: Recipe, scaleFactor: Double, modifier: Mod
                             // пересчитаны тем же масштабом, что и список
                             // ингредиентов. Иначе на одной странице стояли бы
                             // два разных рецепта.
-                            RecipeScaler.scaledStepText(step.description, scaleFactor, scalableWeights),
+                            RecipeScaler.scaledStepText(step.description, scaleFactor, quantityBindings),
                             color = colors.espresso,
                             fontFamily = FontFamily.Serif,
                             fontSize = 15.5.sp,

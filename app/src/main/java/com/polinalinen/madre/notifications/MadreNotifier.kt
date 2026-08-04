@@ -28,22 +28,26 @@ class MadreNotifier(private val context: Context) {
 
     /** Кормление закваски — негромкий, но заметный канал. */
     fun postFeedingReminder(title: String, text: String) {
-        post(CHANNEL_SOURDOUGH, "Закваска", ID_FEEDING, title, text)
-    }
-
-    /** Ход выпечки: конец шага-ожидания и напоминание про масло. */
-    fun postBakingNotification(key: String, title: String, text: String) {
-        // Ключ уникален по паре «сессия + шаг», поэтому уведомления о разных
-        // шагах не затирают друг друга, а повтор того же — заменяет, не плодит.
-        post(CHANNEL_BAKING, "Выпечка", notificationId(key), title, text)
+        post(CHANNEL_SOURDOUGH, "Закваска", tag = null, id = ID_FEEDING, title = title, text = text)
     }
 
     /**
-     * Снять уведомление, показанное по этому ключу (Cycle 12). Ключ тот же,
-     * что в [postBakingNotification], — id из него получается тем же способом.
+     * Ход выпечки: конец шага-ожидания и напоминание про масло.
+     *
+     * Ключ уникален по паре «сессия + шаг» и уходит в систему КАК ЕСТЬ — тегом.
+     * Разные шаги не затирают друг друга, повтор того же ключа заменяет своё же
+     * уведомление, и ничего считать для этого не нужно.
+     */
+    fun postBakingNotification(key: String, title: String, text: String) {
+        post(CHANNEL_BAKING, "Выпечка", tag = key, id = ID_KEYED, title = title, text = text)
+    }
+
+    /**
+     * Снять уведомление, показанное по этому ключу (Cycle 12). Пара «тег + id»
+     * та же, что в [postBakingNotification], — снимается ровно оно.
      */
     fun cancelByKey(key: String) {
-        NotificationManagerCompat.from(context).cancel(notificationId(key))
+        NotificationManagerCompat.from(context).cancel(key, ID_KEYED)
     }
 
     /**
@@ -63,7 +67,14 @@ class MadreNotifier(private val context: Context) {
         return NotificationManagerCompat.from(context).areNotificationsEnabled()
     }
 
-    private fun post(channelId: String, channelName: String, id: Int, title: String, text: String) {
+    private fun post(
+        channelId: String,
+        channelName: String,
+        tag: String?,
+        id: Int,
+        title: String,
+        text: String,
+    ) {
         if (!canPost()) return
         ensureChannel(channelId, channelName)
         val notification = NotificationCompat.Builder(context, channelId)
@@ -74,7 +85,7 @@ class MadreNotifier(private val context: Context) {
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
             .build()
-        notifySafely(id, notification)
+        notifySafely(id, notification, tag)
     }
 
     /**
@@ -84,9 +95,9 @@ class MadreNotifier(private val context: Context) {
      * между проверкой и показом человек может отозвать разрешение из шторки,
      * и книга не должна падать посреди выпечки из-за уведомления.
      */
-    fun notifySafely(id: Int, notification: android.app.Notification) {
+    fun notifySafely(id: Int, notification: android.app.Notification, tag: String? = null) {
         try {
-            NotificationManagerCompat.from(context).notify(id, notification)
+            NotificationManagerCompat.from(context).notify(tag, id, notification)
         } catch (_: SecurityException) {
             // Разрешение отозвали прямо сейчас — молчим, как и без него.
         }
@@ -109,21 +120,23 @@ class MadreNotifier(private val context: Context) {
         internal const val ID_FEEDING = 1001
 
         /**
-         * Своя полка id для уведомлений по ключу. Раньше здесь стоял голый
-         * key.hashCode(): любое целое, включая 1001 и 2000+id сессии. Совпадение
-         * редкое, но последствие у него не косметическое — «время вышло» встало
-         * бы на место напоминания о кормлении или, того хуже, cancelByKey снял
-         * бы строку хода чужой выпечки. Диапазон разводит id по местам:
-         * кормление — 1001, ход выпечки — 2000+, уведомления по ключу — здесь.
+         * Уведомления по ключу живут на ОДНОМ id и различаются тегом — той
+         * самой строкой ключа, без единого преобразования. Система различает
+         * уведомления по паре «тег + id», и пара «ключ + [ID_KEYED]» столь же
+         * уникальна, сколь уникален сам ключ.
+         *
+         * Раньше id считался из ключа: сначала голый key.hashCode(), потом
+         * floorMod по миллиону. И то и другое — отображение бесконечного
+         * множества ключей в конечное, то есть совпадения в нём есть по
+         * построению, а не по невезению: «step-done-1408-0» и
+         * «step-done-1605-10» попадали в один и тот же 352312-й слот. Одно
+         * «время вышло» вставало на место другого, а cancelByKey снимал
+         * уведомление чужого шага. Считать здесь больше нечего.
+         *
+         * Тег непустой, поэтому пара не совпадает ни с кормлением (id 1001 без
+         * тега), ни со строкой хода выпечки (2000+id сессии, тоже без тега),
+         * какое бы число ни стояло рядом.
          */
-        internal const val ID_KEYED_BASE = 3_000_000
-        internal const val ID_KEYED_RANGE = 1_000_000
-
-        /**
-         * Стабильный id для ключа. floorMod, а не abs: у Int.MIN_VALUE
-         * абсолютного значения нет, и abs вернул бы его же — отрицательный.
-         */
-        internal fun notificationId(key: String): Int =
-            ID_KEYED_BASE + Math.floorMod(key.hashCode(), ID_KEYED_RANGE)
+        internal const val ID_KEYED = 3000
     }
 }

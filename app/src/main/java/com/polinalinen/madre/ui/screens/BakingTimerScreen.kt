@@ -76,9 +76,9 @@ fun BakingTimerScreen(
     var confirmCancel by rememberSaveable { mutableStateOf(false) }
 
     val step = s.currentStep
-    // Пересчитать в тексте шага можно только те числа, которые рецепт задал
-    // строкой ингредиента: остальное — проза, и трогать её книга не берётся.
-    val scalableWeights = remember(s.recipe) { RecipeScaler.scalableWeights(s.recipe) }
+    // Пересчитываются только те числа, которые сам рецепт пометил весом и
+    // назвал по имени строки: остальное — проза, и трогать её книга не берётся.
+    val quantityBindings = remember(s.recipe) { RecipeScaler.scalableBindings(s.recipe) }
     val isWait = step.type == StepType.WAIT
     val urgent = remaining in 1..(step.durationMinutes * 60L / 10).coerceAtLeast(1)
     // Cycle 14: следующий шаг — название и только. Крупные цифры выше и есть
@@ -166,7 +166,7 @@ fun BakingTimerScreen(
             // граммы в нём пересчитаны на выбранные порции — тем же масштабом,
             // с которым выпечку начали, и тем же, что на развороте рецепта.
             Text(
-                RecipeScaler.scaledStepText(step.description, s.scaleFactor, scalableWeights),
+                RecipeScaler.scaledStepText(step.description, s.scaleFactor, quantityBindings),
                 color = colors.espresso,
                 fontFamily = FontFamily.Serif,
                 fontSize = 15.sp,

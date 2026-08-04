@@ -66,21 +66,20 @@ object RecipeScaler {
     }
 
     /**
-     * Вес, который книга правда знает: граммы каждой строки рецепта, какой она
-     * написана при одной порции. Ровно эти числа — и никакие другие — можно
-     * пересчитать в тексте шага, потому что только про них известно, что они
-     * зависят от количества порций.
+     * Строки рецепта, к которым текст шага вправе привязать свой вес: те, что
+     * заданы граммами или миллилитрами и растут с порциями.
      *
-     * Яйца сюда не идут: они считаются штуками и половинками, и «2 г» из
-     * текста шага не то же самое, что «2 шт».
+     * Яйца сюда не идут: они считаются штуками и половинками, и «2 г» из текста
+     * шага не то же самое, что «2 шт». Ссылка «вся опара» тоже: своего веса у
+     * неё нет вовсе, его приносит [RecipeScale].
      */
-    fun scalableWeights(recipe: Recipe): Set<Double> =
-        recipe.ingredients.values
-            .flatten()
-            .filter { it.scalable && it.eggGrams == null && it.amount > 0.0 }
-            .filter { it.unit == GRAMS || it.unit == MILLILITRES }
-            .map { it.amount }
-            .toSet()
+    fun scalableBindings(recipe: Recipe): Map<IngredientRef, Ingredient> =
+        recipe.ingredients.flatMap { (section, items) ->
+            items
+                .filter { it.scalable && it.eggGrams == null && it.amount > 0.0 }
+                .filter { it.unit == GRAMS || it.unit == MILLILITRES }
+                .map { IngredientRef(section, it.name) to it }
+        }.toMap()
 
     /**
      * Cycle 14: текст шага — такая же часть рецепта, как список ингредиентов.
@@ -88,26 +87,70 @@ object RecipeScaler {
      * одной странице стоят два разных рецепта — и книжный, и таймерный текст
      * рассказывают человеку с весами разное.
      *
-     * ЧТО ИМЕННО ПЕРЕСЧИТЫВАЕТСЯ И ПОЧЕМУ ТОЛЬКО ЭТО. Разбирать свободный текст
-     * книга не умеет и не притворяется, что умеет: «1 ст», «0,5 л», «на 2 см
-     * толщиной», «оставьте 100 г опары на следующий раз» — всё это числа, про
-     * которые из прозы не узнать, растут ли они с порциями. Поэтому меняется
-     * ровно то, что рецепт уже задал строкой ингредиента ([scalableWeights]):
-     * число в граммах или миллилитрах, в точности совпадающее с весом одной из
-     * его строк. Любое другое число остаётся как написано — молча переписать
-     * его значило бы выдумать рецепт за Полину.
+     * ЧТО ИМЕННО ПЕРЕСЧИТЫВАЕТСЯ И ПОЧЕМУ ТОЛЬКО ЭТО. Свободный текст книга не
+     * разбирает вообще: пересчитывается ровно то, что в самом рецепте помечено
+     * как вес и названо по имени — `{{300 г|main:тёплой воды}}`. Число внутри
+     * пометки принадлежит вот этой строке вот этой секции, и порции двигают
+     * именно её.
      *
-     * Слово, начинающееся с той же буквы («300 граммов»), единицей не считается:
-     * за ней должна кончаться кириллица.
+     * До этой правки здесь стоял поиск по числу: любое «100 г» в прозе считалось
+     * весом, если хоть один ингредиент рецепта весил 100 — хоть мука, хоть сахар
+     * в креме, хоть миллилитры против граммов. «Оставьте 100 г опары на
+     * следующий раз» при ×3 превращалось в «300 г»: рецепт, которого Полина не
+     * писала. Совпадение числа — не доказательство, и книга больше не выдаёт
+     * его за доказательство.
+     *
+     * Всё непомеченное остаётся как написано — «1 ст. ложка», «0,5 л», «2 см»,
+     * «180°C», «40 минут» и любые граммы, которые рецепт не привязал.
      */
-    fun scaledStepText(text: String, scaleFactor: Double, scalableWeights: Set<Double>): String =
-        WEIGHT_IN_TEXT.replace(text) { match ->
-            val amount = match.groupValues[1].replace(',', '.').toDoubleOrNull()
-                ?: return@replace match.value
-            if (scalableWeights.none { abs(it - amount) < WEIGHT_TOLERANCE }) return@replace match.value
-            val unit = match.groupValues[2]
-            "${formatCount(roundWeight(amount * scaleFactor))} $unit"
+    fun scaledStepText(
+        text: String,
+        scaleFactor: Double,
+        bindings: Map<IngredientRef, Ingredient>,
+    ): String =
+        STEP_QUANTITY.replace(text) { match ->
+            val written = match.groupValues[1].trim()
+            val quantity = parseQuantity(
+                written = written,
+                ref = IngredientRef(match.groupValues[2].trim(), match.groupValues[3].trim()),
+            ) ?: return@replace written
+            // Единственные ворота — [scalableBindings]: строки, которых там нет
+            // (яйца, «по вкусу», «вся опара», чужой рецепт), веса не имеют.
+            bindings[quantity.ref] ?: return@replace written
+            "${formatCount(roundWeight(quantity.amount * scaleFactor))} ${quantity.unit}"
         }
+
+    /**
+     * Разобранная пометка веса, либо null — если она написана не так, как книга
+     * умеет читать. Тогда текст остаётся ровно тем, что стоит в рецепте: не
+     * понял — не трогай.
+     */
+    private fun parseQuantity(written: String, ref: IngredientRef): StepQuantity? {
+        val match = WRITTEN_WEIGHT.matchEntire(written.trim()) ?: return null
+        val amount = match.groupValues[1].replace(',', '.').toDoubleOrNull() ?: return null
+        if (ref.section.isBlank() || ref.name.isBlank()) return null
+        return StepQuantity(amount = amount, unit = match.groupValues[2], ref = ref)
+    }
+
+    /**
+     * Сколько пометок веса стоит в тексте — считая написанные с ошибкой.
+     * Вместе со [stepQuantities] это и есть проверка книги: пометка, которую не
+     * удалось разобрать, ведёт себя тихо (текст остаётся как есть), и заметить
+     * её можно только по расхождению этих двух чисел.
+     */
+    fun stepQuantityCount(text: String): Int = STEP_QUANTITY.findAll(text).count()
+
+    /**
+     * Разобранные пометки веса одного шага. Каждая обязана указывать на строку,
+     * которая в рецепте правда есть, — за этим следит тест на всю книгу.
+     */
+    fun stepQuantities(text: String): List<StepQuantity> =
+        STEP_QUANTITY.findAll(text).mapNotNull { match ->
+            parseQuantity(
+                written = match.groupValues[1],
+                ref = IngredientRef(match.groupValues[2].trim(), match.groupValues[3].trim()),
+            )
+        }.toList()
 
     /**
      * Вес округляется до грамма, но никогда не до нуля: «0 г соли» — это не
@@ -129,23 +172,24 @@ object RecipeScaler {
     }
 
     /**
-     * Число, пробел (необязательный), «г» или «мл» — и дальше НЕ кириллица,
-     * иначе это начало слова, а не единица измерения.
+     * Пометка веса в тексте шага: `{{300 г|main:тёплой воды}}` — вес, вертикальная
+     * черта, секция, двоеточие, имя строки. Имя пишется точно так же, как в
+     * списке ингредиентов: это и есть привязка, а не подсказка.
      */
-    private val WEIGHT_IN_TEXT = Regex("(\\d+(?:[.,]\\d+)?)\\s*(мл|г)(?![а-яёА-ЯЁ])")
+    private val STEP_QUANTITY = Regex("\\{\\{([^|{}]+)\\|([^:{}]+):([^{}]+)}}")
+
+    /** Внутренность пометки: число (точка или запятая) и знакомая единица. */
+    private val WRITTEN_WEIGHT = Regex("(\\d+(?:[.,]\\d+)?)\\s*(мл|г)")
 
     private const val GRAMS = "г"
 
     /**
      * Воду рецепты этой книги задают в граммах, а в тексте шага та же вода
      * иногда написана миллилитрами («120 мл» при «120 г воды» в списке). Один
-     * грамм воды — один миллилитр, и совпадение числа со строкой ингредиента
-     * здесь и есть доказательство, что речь о ней.
+     * грамм воды — один миллилитр, поэтому пометке разрешено назвать свою
+     * единицу самой: перевод здесь тождественный, а не выдуманный.
      */
     private const val MILLILITRES = "мл"
-
-    /** Числа приходят из текста и из JSON — сравнивать их байт в байт нельзя. */
-    private const val WEIGHT_TOLERANCE = 0.001
 
     private fun formatCount(value: Double): String =
         if (abs(value - value.toLong().toDouble()) < 0.001) {

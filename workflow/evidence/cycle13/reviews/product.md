@@ -1,3 +1,5 @@
+> Sanitized for repository endpoint policy. Original independent-review SHA-256 is recorded in workflow/CYCLE.yaml.
+
 Good. Now I have sufficient evidence to deliver the review verdict. Let me finalize my review.
 
 I have read PACKET.md, acceptance.md, CYCLE.yaml, the SHA256SUMS, and the full 13,336-line diff (covering cycle 11+12+13 changes to the Madre Android app + backend). Evidence-backed findings below.
@@ -53,7 +55,7 @@ Findings (each cites file and hunk/line in `full-diff.patch`):
 - `backend/pb_migrations/1784937720_users_family_relation.js` (`@12757–12814`): `users.updateRule = "id = @request.auth.id && @request.body.family:isset = false"` — client cannot reassign its own family. Verified by `UsersFamilyRelationTests.test_client_cannot_reassign_its_own_family`.
 - `backend/pb_hooks/madre_family.pb.js` (`@12407–12580`): all three routes under `$apis.requireAuth()`; `randomStringWithAlphabet` (not `Math.random`); HMAC via `$security.hs256(code, pepper)` with `MADRE_INVITE_PEPPER` mandatory (500 if missing); join returns identical `JOIN_FAILURE` regardless of whether the family exists. `FamilyHookContractTests` enforces all of this.
 - `app/src/main/res/xml/network_security_config.xml` (`@9650–9669`): `cleartextTrafficPermitted="false"` globally; no host exceptions. `test_family_backend_contract.py.ProductionEndpointTests.test_cleartext_traffic_is_denied_everywhere` enforces.
-- `app/build.gradle.kts` (`@99–103`): `MADRE_API_URL = "https://madre-api.kdnfx.space"` (was `http://192.168.3.59:8091`). `ProductionEndpointTests.test_no_source_file_points_at_the_old_lan_address` greps for residual `192.168.3.59`.
+- `app/build.gradle.kts` (`@99–103`): `MADRE_API_URL = "https://madre-api.kdnfx.space"` (was `http://[legacy LAN endpoint redacted]:8091`). `ProductionEndpointTests.test_no_source_file_points_at_the_old_lan_address` greps for residual `[legacy LAN endpoint redacted]`.
 
 **Test summary (workflow/evidence/cycle13/test-summary.json)**: `unit_tests: 304, failures: 0, errors: 0, skipped: 0`, BUILD SUCCESSFUL on `testDebugUnitTest`, `lintDebug`, `verifyRoborazziDebug`, `assembleDebug`. Runtime E2E (`runtime-e2e.md`) confirms invite display, wrong-code rejection without logout/family assignment, real-code join, and process survival on live PocketBase.
 

@@ -1,0 +1,19 @@
+{
+  "create_statuses": [
+    200,
+    400
+  ],
+  "create_success_count": 1,
+  "family_count_after_create_race": 3,
+  "create_membership_matches": true,
+  "join_statuses": [
+    200,
+    400
+  ],
+  "join_success_count": 1,
+  "join_membership_matches": true,
+  "public_health_status": 200,
+  "cleanup_users_remaining": 0,
+  "cleanup_families_remaining": 0,
+  "deployed_hook_sha256": "5b7da5500f30bc756ecd07c0192a8a4d2e6719e00ab6669faabd667fe3892d5b"
+}

@@ -1,5 +1,5 @@
 {
-  "head": "cc98a3e85aa4c286ea83d425912994e4f95d2e78",
+  "head": "2f897a28fc325046d424e0095c5f83a92a799f0d",
   "unit_tests": 304,
   "failures": 0,
   "errors": 0,
@@ -10,5 +10,7 @@
     "verifyRoborazziDebug",
     "assembleDebug"
   ],
-  "result": "BUILD SUCCESSFUL"
+  "result": "BUILD SUCCESSFUL",
+  "backend_contract_tests": 39,
+  "backend_failures": 0
 }

@@ -1,109 +1,94 @@
 {
   "schema_version": 1,
   "cycle": {
-    "number": 12,
+    "number": 13,
     "kind": "feature",
-    "version": "5.2.0-cycle12",
-    "branch": "cycle/12",
-    "stage": "artifact-ready",
-    "created_at": "2026-07-25T00:00:00Z",
-    "updated_at": "2026-07-25T00:00:00Z"
+    "version": "5.3.0-cycle13",
+    "branch": "cycle/13",
+    "stage": "reviewing",
+    "created_at": "2026-08-03T00:00:00Z",
+    "updated_at": "2026-08-04T09:15:57Z"
   },
   "features": [
     {
-      "id": "uncluttered-book",
-      "title": "Убрать слипшиеся страницы и декоративные слои",
+      "id": "family-book-ui",
+      "title": "Семейная книга и приглашения",
       "needs_generated_asset": false,
       "acceptance": [
-        "В пользовательском потоке нет StuckPages, InkMirror, TracingPaper, Herbarium, FutureEnvelope или MarginNotes overlay; старые локальные данные не удаляются принудительно.",
-        "Основные действия книги не перекрываются жестами и не требуют скрытых свайпов."
+        "Signed-out/signed-in/failed состояния честны; регистрация, вход, создание семьи и вступление по коду работают с live PocketBase.",
+        "Invite-код не пишется в лог, очищается после показа, старый код не воскресает после ошибки; повторные taps не дублируют запрос.",
+        "Локальная Room-книга остаётся доступной без аккаунта и сети; Share Sheet даёт понятную инструкцию."
       ]
     },
     {
-      "id": "smartphone-safe-ux",
-      "title": "Смартфонная эргономика и просмотр фотографий",
+      "id": "next-step-eta",
+      "title": "ETA следующего шага",
       "needs_generated_asset": false,
       "acceptance": [
-        "Фото на формах, завершённой выпечке и статистике открываются в полноэкранном viewer с понятным back/dismiss.",
-        "Отмена выпечки отделена от «Дальше» и требует явного подтверждения; повторный быстрый тап не создаёт дубль.",
-        "Ключевые интерактивные элементы имеют touch target не менее 48dp, экраны имеют честные loading/empty/error/offline состояния."
+        "Экран активной выпечки и foreground notification используют один источник времени и форматирование следующего шага.",
+        "Running, paused, last-step и zero-time покрыты тестами; последняя стадия не показывает несуществующий следующий шаг.",
+        "Foreground service совместим с API 26–35; specialUse передаётся только с API 34."
       ]
     },
     {
-      "id": "live-baking-notifications",
-      "title": "Живые уведомления активной выпечки",
+      "id": "offline-photo-archive",
+      "title": "Фотоархив закваски и спокойный viewer",
       "needs_generated_asset": false,
       "acceptance": [
-        "На каждую активную выпечку показывается ongoing foreground notification с названием, этапом, остатком и реальной progress-line.",
-        "Tap notification открывает нужную baking session; завершение и отмена удаляют её строку.",
-        "Сохраняются напоминание кормления, окончание WAIT-шага и масло за 30 минут; обновления прогресса без звука/вибрации."
+        "Offline-first lazy grid показывает фото кормлений и выпечек новыми сверху, с empty и broken-path состояниями.",
+        "Viewer использует Warm Paper, fit без обрезки, системные insets, крупную кнопку Закрыть и рабочий Back.",
+        "BookStats caption использует реальные данные и не содержит сырой Kotlin-интерполяции."
       ]
     }
   ],
   "gates": {
     "plan": {
-      "status": "passed",
+      "status": "pass",
       "evidence": [
-        "DESIGN-V4.md: Cycle 12 decisions and acceptance criteria"
+        "DESIGN-V4.md"
       ]
     },
     "tdd": {
-      "status": "passed",
+      "status": "pass",
       "evidence": [
-        "./gradlew testDebugUnitTest: PASS (284 tests)"
+        "workflow/evidence/cycle13/test-summary.json"
       ]
     },
     "build": {
-      "status": "passed",
+      "status": "pass",
       "evidence": [
-        "./gradlew lintDebug assembleDebug: BUILD SUCCESSFUL",
-        "aapt2 dump badging: versionCode 15, versionName 5.2.0-cycle12"
+        "workflow/evidence/cycle13/test-summary.json"
       ]
     },
     "review": {
-      "status": "passed",
-      "evidence": [
-        "multi-provider UX review packet",
-        "Opus implementation commits on cycle/12"
-      ]
+      "status": "pending",
+      "evidence": []
     },
     "visual": {
-      "status": "passed",
-      "evidence": [
-        "./gradlew verifyRoborazziDebug: BUILD SUCCESSFUL"
-      ]
+      "status": "pending",
+      "evidence": []
     },
     "runtime": {
-      "status": "blocked",
-      "evidence": [
-        "adb devices -l on LXC108 returned no connected devices; emulator smoke not executable"
-      ]
+      "status": "pending",
+      "evidence": []
     },
     "release": {
-      "status": "blocked",
-      "evidence": [
-        "debug APK artifact is ready; production signing key and connected runtime are unavailable"
-      ]
+      "status": "pending",
+      "evidence": []
     }
   },
   "reviews": [],
   "artifacts": {
-    "apk": "/opt/madre-releases/madre-v5.2.0-cycle12.apk",
+    "apk": null,
     "source_archive": null,
-    "sha256": "159ab71f42c03bcb8e3305dc3e545f7170893265bd15f4bbfe75276cfa6f632b",
-    "release_url": "https://kdnfx.space/downloads/madre-v5.2.0-cycle12.apk"
+    "sha256": null,
+    "release_url": null
   },
-  "blockers": [
-    "Runtime smoke не выполнен: на LXC108 нет подключённого Android-устройства/эмулятора.",
-    "APK собран debug-ключом; production signing key не найден."
-  ],
+  "blockers": [],
   "decisions": [
-    "PocketBase 0.39.7 остаётся backend; schema/hooks/migrations версионируются в repository.",
-    "Room остаётся offline-first источником локального UX; backend используется для identity и sharing.",
-    "Все shared records family-scoped; публичный CRUD и public-by-default gallery запрещены.",
-    "Production endpoint только HTTPS madre-api.kdnfx.space; AI-generated assets не требуются.",
-    "Cycle 12: StuckPages удалены из UX: скрытый жест конкурировал со скроллом и выглядел как зависшее приложение, пользы не оправдывали.",
-    "Cycle 12: fullscreen photo viewer — общий паттерн для фото; отмена выпечки только через отдельный подтверждаемый destructive action.",
-    "Cycle 12: live baking progress использует foreground service, потому что ongoing notification должна обновляться настоящим таймером вне приложения."
+    "Cycle 13 remains offline-first; online family book is optional.",
+    "Invite codes are one-time UI secrets; account state is preserved on generic rejection without preserving shown code.",
+    "PocketBase family routes use authenticated custom hooks; public legacy collections are unchanged.",
+    "Production signing certificate is pinned in the fail-closed GitHub release workflow."
   ]
 }

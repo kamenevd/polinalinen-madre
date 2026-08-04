@@ -5,7 +5,7 @@ import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -13,7 +13,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -27,6 +26,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.Text
 import coil.compose.AsyncImage
+import com.polinalinen.madre.ui.theme.AppColors
 import java.io.File
 
 /**
@@ -38,8 +38,8 @@ import java.io.File
  *
  * Здесь он открывается на весь экран: без старения (смотрим фотографию, а не
  * страницу книги), целиком — ContentScale.Fit, с двумя пальцами на увеличение
- * и перетаскиванием. Закрыть можно тремя способами, и все три очевидны:
- * кнопкой «Закрыть» сверху, системной кнопкой «назад» и тапом по фону.
+ * и перетаскиванием. Тёплая бумага не прячет управление: закрыть можно
+ * нижней кнопкой, системной кнопкой «назад» и тапом по фону.
  */
 object PhotoZoom {
     const val MIN_SCALE = 1f
@@ -74,6 +74,7 @@ fun FullscreenPhotoViewer(
             dismissOnClickOutside = true,
         ),
     ) {
+        val colors = AppColors.current
         var scale by remember { mutableFloatStateOf(1f) }
         var offsetX by remember { mutableFloatStateOf(0f) }
         var offsetY by remember { mutableFloatStateOf(0f) }
@@ -83,9 +84,7 @@ fun FullscreenPhotoViewer(
         Box(
             Modifier
                 .fillMaxSize()
-                // Тёмный фон — единственное место в книге, где бумага уступает:
-                // фотографию смотрят на тёмном, иначе не видно теней корки.
-                .background(Color(0xE6100D0A)),
+                .background(colors.paper),
             contentAlignment = Alignment.Center,
         ) {
             AsyncImage(
@@ -94,7 +93,8 @@ fun FullscreenPhotoViewer(
                 contentScale = ContentScale.Fit,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 8.dp, vertical = 72.dp)
+                    .padding(horizontal = 8.dp, vertical = 24.dp)
+                    .padding(bottom = 72.dp)
                     .pointerInput(Unit) {
                         viewportWidth = size.width.toFloat()
                         viewportHeight = size.height.toFloat()
@@ -117,20 +117,21 @@ fun FullscreenPhotoViewer(
                 onClick = onDismiss,
                 variant = BookButtonVariant.SECONDARY,
                 modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .statusBarsPadding()
-                    .padding(horizontal = 60.dp, vertical = 8.dp),
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(horizontal = 22.dp, vertical = 12.dp),
             )
 
             Text(
                 caption ?: "два пальца — приблизить",
-                color = Color(0xFFD9CDBC),
+                color = colors.cocoa,
                 fontFamily = FontFamily.Serif,
                 fontSize = 12.sp,
                 textAlign = TextAlign.Center,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(24.dp)
+                    .navigationBarsPadding()
+                    .padding(bottom = 78.dp, start = 24.dp, end = 24.dp)
                     .semantics { contentDescription = "" },
             )
         }

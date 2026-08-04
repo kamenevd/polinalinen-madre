@@ -47,6 +47,7 @@ import com.polinalinen.madre.model.Season
 import com.polinalinen.madre.model.SeasonalEdition
 import com.polinalinen.madre.model.WeatherNote
 import com.polinalinen.madre.sourdough.GrowthPhase
+import com.polinalinen.madre.sourdough.StarterName
 import com.polinalinen.madre.ui.components.BookBreath
 import com.polinalinen.madre.ui.components.DogEar
 import com.polinalinen.madre.ui.components.HairRule
@@ -76,6 +77,7 @@ import java.util.Locale
 @Composable
 fun HomeScreen(
     madreHeadline: String,
+    starterName: String = StarterName.DEFAULT,
     phase: GrowthPhase,
     favoriteIds: Set<String>,
     onToggleFavorite: (String) -> Unit,
@@ -135,7 +137,7 @@ fun HomeScreen(
         ) {
             LazyColumn(modifier = Modifier.statusBarsPadding()) {
                 item { Masthead(season, onOpenSettings, onOpenShelf) }
-                item { MadreLine(madreHeadline, onOpenStarter) }
+                item { MadreLine(madreHeadline, starterName, onOpenStarter) }
                 item {
                     WeatherMargin(
                         note = weatherNote,
@@ -278,10 +280,10 @@ private fun Masthead(
 }
 
 @Composable
-private fun MadreLine(headline: String, onOpenStarter: () -> Unit) {
+private fun MadreLine(headline: String, starterName: String, onOpenStarter: () -> Unit) {
     val colors = AppColors.current
     Column(Modifier.fillMaxWidth().clickable { onOpenStarter() }.padding(horizontal = 22.dp, vertical = 6.dp)) {
-        PageLabel("Мадре пишет")
+        PageLabel(StarterName.homeLabel(starterName))
         Text(
             "«$headline»",
             color = colors.espresso,

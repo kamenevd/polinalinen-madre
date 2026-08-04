@@ -4,6 +4,7 @@ import com.polinalinen.madre.data.db.MadreDatabase
 import com.polinalinen.madre.data.db.entities.FeedingEntity
 import com.polinalinen.madre.data.db.entities.SourdoughConfigEntity
 import com.polinalinen.madre.data.db.entities.UserEntity
+import com.polinalinen.madre.sourdough.StarterName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -29,6 +30,15 @@ class SourdoughRepository(private val db: MadreDatabase) {
     /** Cycle 11: интервал кормления из колофона — теперь настоящая настройка. */
     suspend fun setIntervalHours(configId: Long, hours: Int) = withContext(Dispatchers.IO) {
         db.sourdoughConfigDao().updateIntervalHours(configId, hours)
+    }
+
+    /**
+     * Cycle 14: переименовать закваску. Имя приводится к общему виду ДО записи
+     * ([StarterName.sanitize]), а не при показе: в базе не должно оказаться
+     * строки, которую каждый экран потом чинит по-своему.
+     */
+    suspend fun setName(configId: Long, name: String) = withContext(Dispatchers.IO) {
+        db.sourdoughConfigDao().updateName(configId, StarterName.sanitize(name))
     }
 
     /** Cycle 11: выключенные напоминания снимают запланированную работу. */

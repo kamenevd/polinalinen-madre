@@ -20,6 +20,7 @@ import com.polinalinen.madre.sourdough.GrowthPhase
 import com.polinalinen.madre.sourdough.MadreVoice
 import com.polinalinen.madre.sourdough.currentPhase
 import com.polinalinen.madre.sourdough.hoursSinceFeeding
+import com.polinalinen.madre.sourdough.StarterName
 import com.polinalinen.madre.sourdough.profileForInterval
 import com.polinalinen.madre.ui.screens.BakingCompleteScreen
 import com.polinalinen.madre.ui.screens.BakingTimerScreen
@@ -109,7 +110,11 @@ fun MadreNavHost(
     // через SourdoughViewModel — реактивно, без ручного refetch после кормления.
     val sourdoughConfig by sourdoughViewModel.config.collectAsState()
     val feedingHistory by sourdoughViewModel.history.collectAsState()
-    val galleryPhotos = remember(feedingHistory, bakeRecords) {
+    // Cycle 14: имя закваски одно на всю книгу и живёт в Room. Отсюда оно
+    // расходится в дневник, на первую полосу, в подписи фотокарточек кормлений
+    // и (через SourdoughViewModel.rescheduleReminder) в напоминание.
+    val starterName = StarterName.sanitize(sourdoughConfig?.name.orEmpty())
+    val galleryPhotos = remember(feedingHistory, bakeRecords, starterName) {
         val all = mutableListOf<GalleryPhoto>()
         feedingHistory.forEach { feeding ->
             feeding.photoPath?.takeIf { it.isNotBlank() }?.let { path ->
@@ -117,7 +122,7 @@ fun MadreNavHost(
                     id = "feeding-${feeding.id}",
                     path = path,
                     timestampMillis = feeding.timestampMillis,
-                    caption = "Кормление Мадре",
+                    caption = StarterName.feedingPhotoCaption(starterName),
                 )
             }
         }
@@ -148,6 +153,7 @@ fun MadreNavHost(
             composable(MadreDestinations.HOME) {
                 HomeScreen(
                     madreHeadline = headline,
+                    starterName = starterName,
                     phase = phase,
                     favoriteIds = favoriteIds,
                     onToggleFavorite = toggleFavorite,
@@ -210,6 +216,7 @@ fun MadreNavHost(
                     onFeed = { navController.navigate(MadreDestinations.FEEDING_FORM) },
                     onOpenGallery = { navController.navigate(MadreDestinations.PHOTO_GALLERY) },
                     cancelledBakeCount = cancelledBakeCount,
+                    starterName = starterName,
                 )
             }
             composable(MadreDestinations.PHOTO_GALLERY) {
@@ -232,6 +239,8 @@ fun MadreNavHost(
                     myName = myName,
                     onMyNameChange = setMyName,
                     onBack = { navController.popBackStack() },
+                    starterName = starterName,
+                    onStarterNameChange = sourdoughViewModel::setStarterName,
                     bakeCount = bakeRecords.size,
                     feedingCount = feedingHistory.size,
                     // Cycle 11: интервал и напоминания — настоящий конфиг из Room.

@@ -47,11 +47,10 @@ object RecipeScaler {
     fun scaledDisplayText(ingredient: Ingredient, scaleFactor: Double): String {
         if (!ingredient.scalable) return ingredient.name
 
-        if (ingredient.refType != null) {
-            return when (ingredient.refType) {
-                "all_of_section" -> "опара (вес рассчитается автоматически)"
-                else -> ingredient.displayText()
-            }
+        // Ссылка на всю секцию веса не имеет вовсе: он складывается из той
+        // секции, а она уже пересчитана — своего числа здесь нет и быть не может.
+        if (ingredient.refType == "all_of_section") {
+            return "опара (вес рассчитается автоматически)"
         }
 
         if (ingredient.eggGrams != null) {
@@ -59,11 +58,56 @@ object RecipeScaler {
             return "${formatCount(scaled)} ${ingredient.unit} ${ingredient.name}"
         }
 
-        val scaledAmount = round(ingredient.amount * scaleFactor)
+        // Cycle 14: ссылка «часть секции» — обычный вес и масштабируется как
+        // обычный вес. До этого цикла она возвращала исходные граммы, и при ×3
+        // в списке стояло «150 г опары» рядом с втрое выросшим тестом.
+        val scaledAmount = roundWeight(ingredient.amount * scaleFactor)
         return ingredient.displayText(scaledAmount)
     }
 
-    private fun roundToHalf(value: Double): Double = round(value * 2.0) / 2.0
+    /**
+     * Cycle 14: текст шага — такая же часть рецепта, как список ингредиентов.
+     * «Смешать всю опару с 300 г воды» при ×3 обязано стать 900 г, иначе на
+     * одной странице стоят два разных рецепта — и книжный, и таймерный текст
+     * рассказывают человеку с весами разное.
+     *
+     * Масштабируются ровно граммы и миллилитры. Минуты, градусы и номера опар
+     * («Опара 2») — не вес, и трогать их нельзя. Слово, начинающееся с той же
+     * буквы («300 граммов»), единицей не считается: за ней должна кончаться
+     * кириллица.
+     */
+    fun scaledStepText(text: String, scaleFactor: Double): String =
+        WEIGHT_IN_TEXT.replace(text) { match ->
+            val amount = match.groupValues[1].replace(',', '.').toDoubleOrNull()
+                ?: return@replace match.value
+            val unit = match.groupValues[2]
+            "${formatCount(roundWeight(amount * scaleFactor))} $unit"
+        }
+
+    /**
+     * Вес округляется до грамма, но никогда не до нуля: «0 г соли» — это не
+     * рецепт, а стёртая со страницы строка. Ноль остаётся нулём только если
+     * ингредиент и правда ничего не весит.
+     */
+    private fun roundWeight(value: Double): Double {
+        // Math.round, а не kotlin.math.round: последний округляет половинки к
+        // чётному (112.5 → 112), и «37.5 г закваски ×3» разошлось бы между
+        // списком ингредиентов и текстом шага. На кухне половинка идёт вверх.
+        val rounded = Math.round(value).toDouble()
+        return if (rounded == 0.0 && value > 0.0) 1.0 else rounded
+    }
+
+    /** Половинки яиц тоже не пропадают: четверть яйца — это половина, а не ноль. */
+    private fun roundToHalf(value: Double): Double {
+        val rounded = round(value * 2.0) / 2.0
+        return if (rounded == 0.0 && value > 0.0) 0.5 else rounded
+    }
+
+    /**
+     * Число, пробел (необязательный), «г» или «мл» — и дальше НЕ кириллица,
+     * иначе это начало слова, а не единица измерения.
+     */
+    private val WEIGHT_IN_TEXT = Regex("(\\d+(?:[.,]\\d+)?)\\s*(мл|г)(?![а-яёА-ЯЁ])")
 
     private fun formatCount(value: Double): String =
         if (abs(value - value.toLong().toDouble()) < 0.001) {

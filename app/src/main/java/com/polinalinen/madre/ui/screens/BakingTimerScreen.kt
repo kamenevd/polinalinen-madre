@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.polinalinen.madre.model.RecipeScaler
 import com.polinalinen.madre.model.StepType
 import com.polinalinen.madre.notifications.BakingProgressFormatter
 import com.polinalinen.madre.ui.components.BackLabel
@@ -144,9 +145,11 @@ fun BakingTimerScreen(
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             )
 
-            // Текст шага — строго из PDF, без перефразирования
+            // Текст шага — строго из PDF, без перефразирования. Cycle 14:
+            // граммы в нём пересчитаны на выбранные порции — тем же масштабом,
+            // с которым выпечку начали, и тем же, что на развороте рецепта.
             Text(
-                step.description,
+                RecipeScaler.scaledStepText(step.description, s.scaleFactor),
                 color = colors.espresso,
                 fontFamily = FontFamily.Serif,
                 fontSize = 15.sp,

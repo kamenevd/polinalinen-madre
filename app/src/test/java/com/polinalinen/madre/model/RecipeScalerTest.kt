@@ -117,17 +117,100 @@ class RecipeScalerTest {
             .isEqualTo("опара (вес рассчитается автоматически)")
     }
 
+    /**
+     * Cycle 14. До этого цикла ветка «ref_type есть, но это не all_of_section»
+     * возвращала исходные граммы — то есть при ×3 в списке стояло «150 г опары»
+     * рядом с втрое выросшим тестом. Ровно тот случай, ради которого фича и
+     * заводилась: ни один ингредиент не остаётся со старым масштабом.
+     */
     @Test
-    fun `scaledDisplayText for portion_of_section ref is NOT scaled — falls through to raw displayText`() {
-        // Задокументировано поведение as-is (портировано без изменений из v3):
-        // ветка refType != null, но != "all_of_section" возвращает displayText()
-        // с исходным (нескейлированным) amount — scaleFactor здесь не применяется.
+    fun `scaledDisplayText scales a portion_of_section ref like any other weight`() {
         val portion = Ingredient(
             name = "часть опары", amount = 150.0, unit = "г", category = "ref",
             refType = "portion_of_section", refSection = "sponge",
         )
         assertThat(RecipeScaler.scaledDisplayText(portion, scaleFactor = 3.0))
-            .isEqualTo(portion.displayText())
+            .isEqualTo("450 г часть опары")
+    }
+
+    @Test
+    fun `an all_of_section ref still weighs itself, at any scale`() {
+        val sponge = Ingredient(
+            name = "опара", amount = 0.0, unit = "г", category = "ref",
+            refType = "all_of_section", refSection = "sponge",
+        )
+        assertThat(RecipeScaler.scaledDisplayText(sponge, scaleFactor = 4.0))
+            .isEqualTo("опара (вес рассчитается автоматически)")
+    }
+
+    /**
+     * Округление до нуля стирало бы ингредиент со страницы: «0 г соли» — это
+     * не рецепт. Всё, что весит хоть сколько-то, весит минимум грамм.
+     */
+    @Test
+    fun `a tiny weight never rounds away to zero`() {
+        val yeast = Ingredient(name = "сухих дрожжей", amount = 0.4, unit = "г", category = "leavening")
+        assertThat(RecipeScaler.scaledDisplayText(yeast, scaleFactor = 1.0)).isEqualTo("1 г сухих дрожжей")
+    }
+
+    @Test
+    fun `an ingredient with no weight at all stays weightless`() {
+        val taste = Ingredient(name = "соль по вкусу", amount = 0.0, unit = "по вкусу", category = "salt")
+        assertThat(RecipeScaler.scaledDisplayText(taste, scaleFactor = 3.0)).isEqualTo("соль по вкусу")
+    }
+
+    @Test
+    fun `a half egg never rounds away either`() {
+        val egg = Ingredient(name = "яйцо", amount = 0.2, unit = "шт", category = "egg", eggGrams = 50)
+        assertThat(RecipeScaler.scaledDisplayText(egg, scaleFactor = 1.0)).isEqualTo("0.5 шт яйцо")
+    }
+
+    /**
+     * Cycle 14: текст шага — такая же часть рецепта, как список ингредиентов.
+     * «Смешать всю опару с 300 г воды» при ×3 обязано стать 900 г, иначе на
+     * одной странице стоят два разных рецепта.
+     */
+    @Test
+    fun `scaledStepText scales grams inside the step text`() {
+        assertThat(RecipeScaler.scaledStepText("Смешать всю опару с 300 г воды и 515 г муки.", 3.0))
+            .isEqualTo("Смешать всю опару с 900 г воды и 1545 г муки.")
+    }
+
+    @Test
+    fun `scaledStepText scales millilitres too`() {
+        assertThat(RecipeScaler.scaledStepText("Добавить 120 мл воды.", 2.0))
+            .isEqualTo("Добавить 240 мл воды.")
+    }
+
+    @Test
+    fun `scaledStepText rounds fractional grams to whole ones`() {
+        assertThat(RecipeScaler.scaledStepText("Смешать 37.5 г закваски.", 3.0))
+            .isEqualTo("Смешать 113 г закваски.")
+    }
+
+    /** Времена, температуры и номера опар — не граммы и не трогаются. */
+    @Test
+    fun `scaledStepText leaves minutes, degrees and plain numbers alone`() {
+        val text = "Опара 2: оставить на 30 минут, печь при 250°C 20 мин."
+        assertThat(RecipeScaler.scaledStepText(text, 4.0)).isEqualTo(text)
+    }
+
+    @Test
+    fun `scaledStepText does not mistake a word for a unit`() {
+        // «300 граммов» — слово, а не единица: обрезать его до «г» книга не станет.
+        val text = "Отвесить 300 граммов и 2 горсти муки."
+        assertThat(RecipeScaler.scaledStepText(text, 2.0)).isEqualTo(text)
+    }
+
+    @Test
+    fun `scaledStepText at scale one changes nothing`() {
+        val text = "Смешать всю опару с 300 г воды и 515 г муки."
+        assertThat(RecipeScaler.scaledStepText(text, 1.0)).isEqualTo(text)
+    }
+
+    @Test
+    fun `scaledStepText survives an empty step`() {
+        assertThat(RecipeScaler.scaledStepText("", 3.0)).isEmpty()
     }
 
     @Test

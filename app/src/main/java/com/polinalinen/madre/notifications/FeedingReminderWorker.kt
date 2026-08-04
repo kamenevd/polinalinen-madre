@@ -7,6 +7,7 @@ import androidx.work.Worker
 import androidx.work.WorkerParameters
 import androidx.work.WorkManager
 import androidx.work.workDataOf
+import com.polinalinen.madre.sourdough.StarterName
 import java.util.concurrent.TimeUnit
 
 /**
@@ -21,9 +22,11 @@ class FeedingReminderWorker(
 ) : Worker(context, params) {
 
     override fun doWork(): Result {
-        val name = inputData.getString(KEY_STARTER_NAME) ?: "Закваска"
+        // Cycle 14: в шторке стоит то же имя, что в дневнике и в колофоне —
+        // одно на всю книгу, приведённое к общему виду в StarterName.
+        val name = StarterName.sanitize(inputData.getString(KEY_STARTER_NAME).orEmpty())
         MadreNotifier(applicationContext).postFeedingReminder(
-            title = "$name проголодалась",
+            title = StarterName.hungryTitle(name),
             text = "Пора кормить — мука и вода по вашему обычному соотношению.",
         )
         return Result.success()

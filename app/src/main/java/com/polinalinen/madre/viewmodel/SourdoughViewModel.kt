@@ -71,6 +71,16 @@ class SourdoughViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { repository.setIntervalHours(configId, hours) }
     }
 
+    /**
+     * Cycle 14: переименовать закваску. Запись идёт в тот же конфиг, который
+     * читают дневник, колофон и планировщик напоминаний, — поэтому новое имя
+     * доезжает во все три места одним путём, реактивно из observeConfig.
+     */
+    fun setStarterName(name: String) {
+        val configId = _config.value?.id ?: return
+        viewModelScope.launch { repository.setName(configId, name) }
+    }
+
     fun setRemindersEnabled(enabled: Boolean) {
         val configId = _config.value?.id ?: return
         viewModelScope.launch { repository.setRemindersEnabled(configId, enabled) }

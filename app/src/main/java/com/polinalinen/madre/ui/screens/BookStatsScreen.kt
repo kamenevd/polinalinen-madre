@@ -33,8 +33,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.polinalinen.madre.data.db.entities.BakeRecordEntity
+import com.polinalinen.madre.model.ChapterPhoto
+import com.polinalinen.madre.model.ChapterPhotos
+import com.polinalinen.madre.model.MonthGrid
+import com.polinalinen.madre.model.MonthRhythm
 import com.polinalinen.madre.model.Recipe
+import com.polinalinen.madre.model.RuDate
 import com.polinalinen.madre.ui.components.AgedPhoto
+import com.polinalinen.madre.ui.components.ChapterPhotoViewer
 import com.polinalinen.madre.ui.components.BackLabel
 import com.polinalinen.madre.ui.components.BookButton
 import com.polinalinen.madre.ui.components.BookButtonVariant
@@ -42,9 +48,15 @@ import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.HeavyRule
 import com.polinalinen.madre.ui.components.PageLabel
 import com.polinalinen.madre.ui.components.Stamp
+import androidx.compose.ui.platform.testTag
 import com.polinalinen.madre.ui.theme.AppColors
+import androidx.compose.ui.platform.LocalContext
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import java.io.File
 import java.time.Instant
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 
@@ -58,6 +70,13 @@ import java.time.temporal.ChronoUnit
  * собственной книги. Для книг друзей этот экран будет переиспользован один в
  * один, когда появится синхронизация — вопрос только источника [records].
  */
+/** Ярлыки для тестов: полка длинная, и до плитки главы надо ещё доехать. */
+object BookStats {
+    const val LIST_TAG = "book-stats-list"
+
+    fun chapterTileTag(recipeId: String): String = "chapter-tile-$recipeId"
+}
+
 @Composable
 fun BookStatsScreen(
     ownerLabel: String,
@@ -68,6 +87,10 @@ fun BookStatsScreen(
 ) {
     val colors = AppColors.current
     var openedRecipe by remember { mutableStateOf<Recipe?>(null) }
+    // Cycle 14: глава, открытая во весь экран. Отдельно от [openedRecipe]:
+    // главу без единого снимка открывать во весь экран нечем, и она уходит
+    // в прежний список попыток.
+    var openedChapter by remember { mutableStateOf<Recipe?>(null) }
 
     val dates = remember(records) {
         records.map { Instant.ofEpochMilli(it.completedAtMillis).atZone(ZoneId.systemDefault()).toLocalDate() }
@@ -75,8 +98,13 @@ fun BookStatsScreen(
     val topRecipeName = remember(records) { topRecipe(records) }
     val avgInterval = remember(dates) { avgIntervalDays(dates) }
     val weekday = remember(dates) { if (dates.size >= 3) commonWeekday(dates) else null }
-    val buckets = remember(dates) { weeklyHeat(dates, WEEKS) }
-    val maxBucket = (buckets.maxOrNull() ?: 0).coerceAtLeast(1)
+    // Cycle 14: ритм выпечки — календарь ТЕКУЩЕГО месяца, а не двенадцать
+    // безымянных квадратов «по неделям», по которым нельзя было сказать ни
+    // числа, ни месяца, и в которых июль сливался с августом.
+    val month = remember { YearMonth.now() }
+    val monthGrid = remember(records, month) {
+        MonthRhythm.build(records.map { it.completedAtMillis }, month, ZoneId.systemDefault())
+    }
 
     // Главы едут строками по три: список рецептов задан книгой, но растёт с
     // каждым новым, и держать его целиком смонтированным (как делал прежний
@@ -86,7 +114,7 @@ fun BookStatsScreen(
 
     Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
         LazyColumn(
-            Modifier.statusBarsPadding(),
+            Modifier.statusBarsPadding().testTag(BookStats.LIST_TAG),
             contentPadding = PaddingValues(bottom = 32.dp),
         ) {
             item {
@@ -127,23 +155,7 @@ fun BookStatsScreen(
             }
 
             PageLabel("Ритм выпечки", color = colors.espresso, modifier = Modifier.padding(horizontal = 22.dp, vertical = 8.dp))
-            Row(Modifier.fillMaxWidth().padding(horizontal = 22.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                buckets.forEach { c ->
-                    val t = c.toFloat() / maxBucket
-                    val tone = when {
-                        c == 0 -> colors.parchment
-                        t > 0.66f -> colors.amberDeep
-                        t > 0.33f -> colors.crust
-                        else -> colors.caramel
-                    }
-                    Box(
-                        Modifier
-                            .weight(1f)
-                            .aspectRatio(1f)
-                            .drawBehind { drawRect(tone) }
-                    )
-                }
-            }
+            MonthHeatmap(monthGrid)
             Text(
                 weekday?.let { "чаще всего — по $it" } ?: if (dates.isEmpty()) "здесь пока тихо — ни одной записи" else "пока рано искать закономерность",
                 color = colors.cocoa,
@@ -167,10 +179,20 @@ fun BookStatsScreen(
                 ) {
                     row.forEach { r ->
                         val count = records.count { it.recipeId == r.id }
+                        // Лицо главы — последний её снимок. Путь, а не Bitmap:
+                        // декодирует Coil, и только то, что видно на экране.
+                        val cover = remember(records, r.id) { ChapterPhotos.cover(records, r.id) }
                         ChapterTile(
                             name = r.name,
                             count = count,
-                            onClick = { if (count > 0) openedRecipe = r },
+                            cover = cover,
+                            tileTag = BookStats.chapterTileTag(r.id),
+                            onClick = {
+                                // Есть снимки — открываем главу во весь экран;
+                                // нет — прежний список попыток, он всё ещё
+                                // единственное место, где видны даты и порции.
+                                if (cover != null) openedChapter = r else if (count > 0) openedRecipe = r
+                            },
                             modifier = Modifier.weight(1f),
                         )
                     }
@@ -192,6 +214,18 @@ fun BookStatsScreen(
             )
             }
         }
+    }
+
+    // Cycle 14: fullscreen-просмотр снимков ОДНОЙ главы — открывается на
+    // последнем и листает только её. Список путей считается один раз здесь,
+    // а не в композиции viewer'а.
+    val chapter = openedChapter
+    if (chapter != null) {
+        ChapterPhotoViewer(
+            photos = remember(records, chapter.id) { ChapterPhotos.of(records, chapter.id) },
+            chapterName = chapter.name,
+            onDismiss = { openedChapter = null },
+        )
     }
 
     val opened = openedRecipe
@@ -260,10 +294,34 @@ private fun FormularRow(label: String, value: String) {
     }
 }
 
+/**
+ * Cycle 14: у главы с выпечкой появляется лицо — её последний снимок вместо
+ * цветного квадрата.
+ *
+ * Плитка запрашивает у Coil маленькую копию (TILE_PX), а не исходный кадр:
+ * на полке их десяток, и поднимать в память десять полноразмерных фотографий
+ * ради квадрата 110dp — ровно тот способ уронить экран, от которого в Cycle 6
+ * уходили к AsyncImage. Полный размер декодируется только в viewer'е, для
+ * одного открытого снимка.
+ *
+ * Честный fallback без снимка: главу пекли, но не фотографировали — цветной
+ * квадрат со счётчиком, как раньше. Пустой рамки книга не показывает.
+ */
 @Composable
-private fun ChapterTile(name: String, count: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun ChapterTile(
+    name: String,
+    count: Int,
+    cover: ChapterPhoto?,
+    tileTag: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val colors = AppColors.current
-    Column(modifier.clickable(enabled = count > 0, onClick = onClick)) {
+    val context = LocalContext.current
+    // Файл могли удалить из галереи телефона — тогда это глава без снимка,
+    // а не глава с пустой рамкой.
+    val coverFile = remember(cover?.path) { cover?.path?.let(::File)?.takeIf { it.isFile } }
+    Column(modifier.testTag(tileTag).clickable(enabled = count > 0, onClick = onClick)) {
         Box(
             Modifier
                 .fillMaxWidth()
@@ -272,6 +330,18 @@ private fun ChapterTile(name: String, count: Int, onClick: () -> Unit, modifier:
                     if (count > 0) drawRect(colors.crust) else drawRect(colors.parchment)
                 }
         ) {
+            if (coverFile != null) {
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(coverFile)
+                        .size(TILE_PX)
+                        .crossfade(false)
+                        .build(),
+                    contentDescription = "Фотографии главы: $name",
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
             if (count > 0) {
                 Text(
                     "×$count",
@@ -295,25 +365,110 @@ private fun ChapterTile(name: String, count: Int, onClick: () -> Unit, modifier:
     }
 }
 
-private const val WEEKS = 12
+/**
+ * Cycle 14: календарь текущего месяца — весь, с тихими днями.
+ *
+ * Дни, когда не пекли, — тоже часть ритма, поэтому они здесь стоят пустыми
+ * клетками, а не выпадают из картинки. Сетка фиксированная, шесть строк
+ * максимум: ленивый список внутри ленивого списка тут не нужен и вреден.
+ */
+@Composable
+private fun MonthHeatmap(grid: MonthGrid) {
+    val colors = AppColors.current
+    // Клетки календаря: пустые места перед первым числом + все дни месяца.
+    val cells: List<MonthDayCell> = remember(grid) {
+        List(grid.leadingBlanks) { MonthDayCell.Blank } + grid.days.map { MonthDayCell.Day(it.date.dayOfMonth, it.bakes) }
+    }
+
+    Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp)) {
+        Text(
+            MonthRhythm.title(grid.month),
+            color = colors.espresso,
+            fontFamily = FontFamily.Serif,
+            fontSize = 14.sp,
+            modifier = Modifier.padding(bottom = 6.dp),
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            MonthRhythm.WEEKDAY_LETTERS.forEach { letter ->
+                Text(
+                    letter,
+                    color = colors.cocoa,
+                    fontFamily = FontFamily.SansSerif,
+                    fontSize = 9.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+        cells.chunked(WEEK_LENGTH).forEach { week ->
+            Row(
+                Modifier.fillMaxWidth().padding(top = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                week.forEach { cell ->
+                    when (cell) {
+                        is MonthDayCell.Blank -> Spacer(Modifier.weight(1f).aspectRatio(1f))
+                        is MonthDayCell.Day -> Box(
+                            Modifier
+                                .weight(1f)
+                                .aspectRatio(1f)
+                                .drawBehind {
+                                    drawRect(heatTone(MonthRhythm.intensity(cell.bakes, grid.maxBakes), colors))
+                                },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                "${cell.dayOfMonth}",
+                                color = if (cell.bakes > 0) colors.cream else colors.cocoa,
+                                fontFamily = FontFamily.SansSerif,
+                                fontSize = 8.sp,
+                            )
+                        }
+                    }
+                }
+                // Хвост последней недели — пустые места, чтобы клетки не
+                // растянулись на всю ширину.
+                repeat(WEEK_LENGTH - week.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+        Text(
+            if (grid.totalBakes == 0) {
+                "в этом месяце здесь пока не пекли"
+            } else {
+                "в этом месяце: ${grid.totalBakes} ${bakeWord(grid.totalBakes)}"
+            },
+            color = colors.cocoa,
+            fontFamily = FontFamily.Serif,
+            fontStyle = FontStyle.Italic,
+            fontSize = 11.5.sp,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+    }
+}
+
+/** Клетка календаря: либо день месяца, либо пустое место перед первым числом. */
+private sealed interface MonthDayCell {
+    data object Blank : MonthDayCell
+    data class Day(val dayOfMonth: Int, val bakes: Int) : MonthDayCell
+}
+
+private fun heatTone(level: Int, colors: com.polinalinen.madre.ui.theme.MadreExtendedColors) = when (level) {
+    0 -> colors.parchment
+    1 -> colors.caramel
+    2 -> colors.crust
+    else -> colors.amberDeep
+}
+
+private const val WEEK_LENGTH = 7
+
+/** Во сколько пикселей просить у Coil обложку главы — плитка около 110dp. */
+private const val TILE_PX = 320
 
 /** Три главы в строке — как в прежней сетке разворота. */
 private const val CHAPTER_COLUMNS = 3
 
 /** Потолок лайтбокса: AlertDialog не даёт ленивому списку бесконечную высоту. */
 private val LIGHTBOX_MAX_HEIGHT = 420.dp
-
-private fun weeklyHeat(dates: List<LocalDate>, weeks: Int): List<Int> {
-    val now = LocalDate.now()
-    val weekStart = now.with(java.time.DayOfWeek.MONDAY)
-    val buckets = IntArray(weeks)
-    dates.forEach { d ->
-        val diffDays = ChronoUnit.DAYS.between(d, weekStart)
-        val idx = weeks - 1 - (diffDays / 7).toInt()
-        if (idx in 0 until weeks) buckets[idx]++
-    }
-    return buckets.toList()
-}
 
 private fun avgIntervalDays(dates: List<LocalDate>): Int? {
     if (dates.size < 2) return null
@@ -341,12 +496,13 @@ private fun dayWord(n: Int) = when {
     else -> "дней"
 }
 
-private val RU_MONTHS = listOf(
-    "января", "февраля", "марта", "апреля", "мая", "июня",
-    "июля", "августа", "сентября", "октября", "ноября", "декабря",
-)
+private fun bakeWord(n: Int) = when {
+    n % 10 == 1 && n % 100 != 11 -> "выпечка"
+    n % 10 in 2..4 && n % 100 !in 12..14 -> "выпечки"
+    else -> "выпечек"
+}
 
 internal fun formatStatsPhotoCaption(recipeName: String, date: LocalDate): String =
     "$recipeName, ${formatRuDate(date)}"
 
-private fun formatRuDate(d: LocalDate) = "${d.dayOfMonth} ${RU_MONTHS[d.monthValue - 1]}"
+private fun formatRuDate(d: LocalDate) = RuDate.dayAndMonth(d)

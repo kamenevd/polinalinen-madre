@@ -18,7 +18,6 @@ class BakingProgressTest {
         totalSeconds: Long = 3600,
         isPaused: Boolean = false,
         nextStepTitle: String? = "Складка",
-        nextStepSeconds: Long? = remainingSeconds,
     ) = BakingProgress(
         sessionId = sessionId,
         recipeName = "Бородинский",
@@ -30,7 +29,6 @@ class BakingProgressTest {
         totalSeconds = totalSeconds,
         isPaused = isPaused,
         nextStepTitle = nextStepTitle,
-        nextStepSeconds = nextStepSeconds,
     )
 
     @Test
@@ -90,27 +88,109 @@ class BakingProgressTest {
         assertThat(progress(remainingSeconds = 0, isPaused = false).contentText()).isNotEmpty()
     }
 
+    /**
+     * Cycle 14: один ход выпечки — один отсчёт.
+     *
+     * До этого цикла следующий шаг ехал строкой «Следующий шаг: Формовка ·
+     * через 2:05» — со СВОИМ временем, которое на деле было временем текущего
+     * шага. Два countdown'а на экране и в шторке про одну и ту же секунду:
+     * человек видел «через 2:05» дважды и не понимал, до чего именно 2:05.
+     * Теперь следующий шаг — только название и контекст.
+     */
     @Test
-    fun `running progress names the next step and uses current remaining time`() {
-        val text = progress(stepIndex = 1, stepCount = 3, remainingSeconds = 125, nextStepTitle = "Формовка").etaText()
-        assertThat(text).isEqualTo("Следующий шаг: Формовка · через 2:05")
+    fun `the next step is a name, not a second countdown`() {
+        val text = progress(stepIndex = 1, stepCount = 3, remainingSeconds = 125, nextStepTitle = "Формовка")
+            .nextStepText()
+        assertThat(text).isEqualTo("дальше: Формовка")
+        assertThat(text).doesNotContain("2:05")
+        // Никаких цифр вовсе: время в этой строке взяться неоткуда.
+        assertThat(text.any { it.isDigit() }).isFalse()
     }
 
     @Test
-    fun `paused progress keeps the same remaining time in the shared eta`() {
-        val text = progress(isPaused = true, remainingSeconds = 125, nextStepTitle = "Формовка").etaText()
-        assertThat(text).isEqualTo("Следующий шаг: Формовка · через 2:05")
+    fun `the last step says it is the last, with no next to name`() {
+        val text = progress(stepIndex = 3, stepCount = 4, nextStepTitle = null).nextStepText()
+        assertThat(text).isEqualTo("последний шаг")
+    }
+
+    /** Шаг может оказаться последним и по счёту, даже если название пришло. */
+    @Test
+    fun `a next title on the final step is ignored, not printed`() {
+        val text = progress(stepIndex = 3, stepCount = 4, nextStepTitle = "Формовка").nextStepText()
+        assertThat(text).isEqualTo("последний шаг")
     }
 
     @Test
-    fun `last step says when the whole bake ends`() {
-        val text = progress(stepIndex = 3, stepCount = 4, remainingSeconds = 0, nextStepTitle = null, nextStepSeconds = null).etaText()
-        assertThat(text).isEqualTo("Выпечка завершится через 0:00")
+    fun `a blank next title is treated as no next step at all`() {
+        assertThat(progress(stepIndex = 0, stepCount = 4, nextStepTitle = "  ").nextStepText())
+            .isEqualTo("последний шаг")
     }
 
     @Test
-    fun `zero time uses zero for both next step and final bake`() {
-        assertThat(progress(remainingSeconds = 0, nextStepSeconds = 0).etaText()).contains("через 0:00")
-        assertThat(progress(stepIndex = 3, stepCount = 4, remainingSeconds = 0, nextStepTitle = null).etaText()).contains("0:00")
+    fun `pausing changes the countdown line, never the next step line`() {
+        val running = progress(stepIndex = 1, stepCount = 3, nextStepTitle = "Формовка")
+        val paused = progress(stepIndex = 1, stepCount = 3, nextStepTitle = "Формовка", isPaused = true)
+        assertThat(paused.nextStepText()).isEqualTo(running.nextStepText())
+        assertThat(paused.contentText()).isNotEqualTo(running.contentText())
+    }
+
+    /** Единственное место, где в слепке есть время, — остаток текущего шага. */
+    @Test
+    fun `a snapshot carries exactly one clock`() {
+        val text = progress(stepIndex = 1, stepCount = 3, remainingSeconds = 125, nextStepTitle = "Формовка")
+        assertThat(text.contentText()).contains("2:05")
+        assertThat(text.nextStepText()).doesNotContain("2:05")
+    }
+
+    // --- то же время, сказанное вслух: подпись таймера для экранного диктора ---
+
+    @Test
+    fun `the timer says its time in words, not in colons`() {
+        assertThat(BakingProgress.timerLabel(3725, isPaused = false)).isEqualTo("осталось 1 час 2 минуты")
+        assertThat(BakingProgress.timerLabel(125, isPaused = false)).isEqualTo("осталось 2 минуты 5 секунд")
+        assertThat(BakingProgress.timerLabel(45, isPaused = false)).isEqualTo("осталось 45 секунд")
+    }
+
+    @Test
+    fun `a whole minute left is said without a trailing zero seconds`() {
+        assertThat(BakingProgress.spokenRemaining(120)).isEqualTo("2 минуты")
+    }
+
+    @Test
+    fun `a paused timer and a finished one say what they are`() {
+        assertThat(BakingProgress.timerLabel(300, isPaused = true)).isEqualTo("пауза, осталось 5 минут")
+        assertThat(BakingProgress.timerLabel(0, isPaused = false)).isEqualTo("время вышло")
+        assertThat(BakingProgress.timerLabel(-5, isPaused = false)).isEqualTo("время вышло")
+    }
+
+    /**
+     * Русское склонение на числах, где его чаще всего и ломают: 11 — не «одна»,
+     * 21 — не «много», 12 и 14 — не «две» и не «четыре».
+     */
+    @Test
+    fun `minutes are declined the way Russian actually declines them`() {
+        assertThat(BakingProgress.spokenRemaining(11 * 60L)).isEqualTo("11 минут")
+        assertThat(BakingProgress.spokenRemaining(12 * 60L)).isEqualTo("12 минут")
+        assertThat(BakingProgress.spokenRemaining(14 * 60L)).isEqualTo("14 минут")
+        assertThat(BakingProgress.spokenRemaining(21 * 60L)).isEqualTo("21 минута")
+        assertThat(BakingProgress.spokenRemaining(22 * 60L)).isEqualTo("22 минуты")
+        assertThat(BakingProgress.spokenRemaining(25 * 60L)).isEqualTo("25 минут")
+    }
+
+    @Test
+    fun `hours and seconds are declined too`() {
+        assertThat(BakingProgress.spokenRemaining(11 * 3600L)).isEqualTo("11 часов")
+        assertThat(BakingProgress.spokenRemaining(21 * 3600L)).isEqualTo("21 час")
+        assertThat(BakingProgress.spokenRemaining(2 * 3600L)).isEqualTo("2 часа")
+        assertThat(BakingProgress.spokenRemaining(11)).isEqualTo("11 секунд")
+        assertThat(BakingProgress.spokenRemaining(12)).isEqualTo("12 секунд")
+        assertThat(BakingProgress.spokenRemaining(14)).isEqualTo("14 секунд")
+        assertThat(BakingProgress.spokenRemaining(21)).isEqualTo("21 секунда")
+    }
+
+    /** Секунды в многочасовой расстойке — шум, а не ответ на «сколько ещё». */
+    @Test
+    fun `seconds are left out once there are hours to name`() {
+        assertThat(BakingProgress.spokenRemaining(3600 + 3 * 60 + 41)).isEqualTo("1 час 3 минуты")
     }
 }

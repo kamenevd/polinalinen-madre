@@ -40,6 +40,7 @@ import com.polinalinen.madre.sourdough.DiaryEntry
 import com.polinalinen.madre.sourdough.GrowthPhase
 import com.polinalinen.madre.sourdough.MadreVoice
 import com.polinalinen.madre.sourdough.SourdoughProfile
+import com.polinalinen.madre.sourdough.StarterName
 import com.polinalinen.madre.ui.components.BackLabel
 import com.polinalinen.madre.ui.components.BookButton
 import com.polinalinen.madre.ui.components.BubbleVignette
@@ -69,6 +70,7 @@ fun StarterDiaryScreen(
     onFeed: () -> Unit,
     onOpenGallery: () -> Unit = {},
     cancelledBakeCount: Int = 0,
+    starterName: String = StarterName.DEFAULT,
 ) {
     val colors = AppColors.current
     // «Клякса» — DESIGN-V4.md Cycle 3, фича InkBlot. Событие для seed — самое
@@ -102,7 +104,8 @@ fun StarterDiaryScreen(
                 }
 
                 Text(
-                    "Мадре пишет:",
+                    // Cycle 14: имя закваски — то, которым её назвали в колофоне.
+                    StarterName.diaryTitle(starterName),
                     color = colors.espresso,
                     fontFamily = FontFamily.Serif,
                     fontWeight = FontWeight.Bold,

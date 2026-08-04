@@ -65,6 +65,11 @@ interface SourdoughConfigDao {
 
     @Query("UPDATE sourdough_configs SET remindersEnabled = :enabled WHERE id = :configId")
     suspend fun updateRemindersEnabled(configId: Long, enabled: Boolean)
+
+    // Cycle 14: имя закваски наконец редактируется. Колонка name существует с
+    // первой версии схемы — новых полей нет, миграция не нужна, версия БД та же.
+    @Query("UPDATE sourdough_configs SET name = :name WHERE id = :configId")
+    suspend fun updateName(configId: Long, name: String)
 }
 
 @Dao

@@ -17,12 +17,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -30,7 +33,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.polinalinen.madre.model.RecipeScaler
 import com.polinalinen.madre.model.StepType
+import com.polinalinen.madre.notifications.BakingProgress
 import com.polinalinen.madre.notifications.BakingProgressFormatter
 import com.polinalinen.madre.ui.components.BackLabel
 import com.polinalinen.madre.ui.components.BookButton
@@ -71,13 +76,18 @@ fun BakingTimerScreen(
     var confirmCancel by rememberSaveable { mutableStateOf(false) }
 
     val step = s.currentStep
+    // Пересчитываются только те числа, которые сам рецепт пометил весом и
+    // назвал по имени строки: остальное — проза, и трогать её книга не берётся.
+    val quantityBindings = remember(s.recipe) { RecipeScaler.scalableBindings(s.recipe) }
     val isWait = step.type == StepType.WAIT
     val urgent = remaining in 1..(step.durationMinutes * 60L / 10).coerceAtLeast(1)
-    val etaText = BakingProgressFormatter.etaText(
+    // Cycle 14: следующий шаг — название и только. Крупные цифры выше и есть
+    // единственный таймер этой выпечки; второй отсчёт рядом с ними отвечал бы
+    // на вопрос, которого никто не задавал, теми же секундами.
+    val nextStepText = BakingProgressFormatter.nextStepText(
         stepIndex = s.currentStepIndex,
         stepCount = s.recipe.timeline.size,
         nextStepTitle = s.recipe.timeline.getOrNull(s.currentStepIndex + 1)?.title,
-        remainingSeconds = remaining,
     )
 
     Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
@@ -122,7 +132,15 @@ fun BakingTimerScreen(
                 fontSize = 88.sp,
                 letterSpacing = (-3).sp,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp)
+                    // Единственный таймер выпечки — и для тех, кто его не видит.
+                    // «1:02:05» диктор читает набором чисел; здесь то же время
+                    // сказано словами. Живой области (liveRegion) здесь нет
+                    // намеренно: цифры меняются каждую секунду, и диктор
+                    // перебивал бы сам себя весь час расстойки.
+                    .semantics { contentDescription = BakingProgress.timerLabel(remaining, s.isPaused) },
                 maxLines = 1,
             )
             Text(
@@ -135,7 +153,7 @@ fun BakingTimerScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
             Text(
-                etaText,
+                nextStepText,
                 color = colors.crust,
                 fontFamily = FontFamily.Serif,
                 fontStyle = FontStyle.Italic,
@@ -144,9 +162,11 @@ fun BakingTimerScreen(
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             )
 
-            // Текст шага — строго из PDF, без перефразирования
+            // Текст шага — строго из PDF, без перефразирования. Cycle 14:
+            // граммы в нём пересчитаны на выбранные порции — тем же масштабом,
+            // с которым выпечку начали, и тем же, что на развороте рецепта.
             Text(
-                step.description,
+                RecipeScaler.scaledStepText(step.description, s.scaleFactor, quantityBindings),
                 color = colors.espresso,
                 fontFamily = FontFamily.Serif,
                 fontSize = 15.sp,

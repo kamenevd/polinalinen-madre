@@ -50,6 +50,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.polinalinen.madre.notifications.MadreNotifier
+import com.polinalinen.madre.sourdough.StarterName
 import com.polinalinen.madre.account.FamilyBookState
 import com.polinalinen.madre.account.InviteCode
 import com.polinalinen.madre.ui.components.BackLabel
@@ -84,6 +85,8 @@ fun SettingsScreen(
     myName: String,
     onMyNameChange: (String) -> Unit,
     onBack: () -> Unit,
+    starterName: String = StarterName.DEFAULT,
+    onStarterNameChange: (String) -> Unit = {},
     bakeCount: Int = 0,
     feedingCount: Int = 0,
     intervalHours: Int = 24,
@@ -154,7 +157,16 @@ fun SettingsScreen(
             }
 
             HairRule(Modifier.padding(horizontal = 22.dp))
-            SettingsRow(label = "Имя закваски", value = "Мадре", onClick = null)
+            // Cycle 14: имя закваски — настоящая настройка, а не строка в коде.
+            // Пишется в sourdough_configs, то есть в тот же конфиг, от которого
+            // считается фаза и планируется напоминание: дневник, колофон и
+            // шторка не могут разойтись в написании одного имени.
+            SettingsField(
+                label = "Имя закваски",
+                caption = "так её зовут в дневнике, на фотокарточках кормлений и в напоминаниях",
+            ) {
+                StarterNameField(persisted = starterName, onChange = onStarterNameChange)
+            }
             HairRule(Modifier.padding(horizontal = 22.dp))
             SettingsRow(
                 label = "Кормить",
@@ -490,6 +502,34 @@ private fun SettingsField(label: String, caption: String, field: @Composable () 
             modifier = Modifier.padding(top = 4.dp),
         )
     }
+}
+
+/**
+ * Cycle 14: поле имени закваски.
+ *
+ * Показывает СВОЙ черновик, а не то, что уже лежит в Room. Иначе стёртая под
+ * ноль строка мгновенно возвращалась бы словом «Мадре» прямо под пальцем:
+ * пустое имя книга не хранит, и сохранённое значение спорило бы с набираемым.
+ * Наружу уходит каждое изменение — приведением к общему виду занимается
+ * SourdoughRepository, поэтому в базе не окажется ни пустой строки, ни абзаца.
+ */
+@Composable
+internal fun StarterNameField(persisted: String, onChange: (String) -> Unit) {
+    // null — человек ещё не трогал поле, и в нём стоит сохранённое имя. Как
+    // только он начал править, поле принадлежит ему целиком: строка, стёртая
+    // под ноль, обязана остаться пустой, хотя в базе к этому моменту уже лежит
+    // «Мадре» (пустого имени книга не хранит). Пересобирать черновик по
+    // сохранённому значению значило бы подставлять «Мадре» прямо под палец.
+    var draft by rememberSaveable { mutableStateOf<String?>(null) }
+    NameField(
+        value = draft ?: persisted,
+        onChange = { typed ->
+            val trimmed = typed.take(StarterName.MAX_LENGTH)
+            draft = trimmed
+            onChange(trimmed)
+        },
+        placeholder = StarterName.DEFAULT,
+    )
 }
 
 @Composable

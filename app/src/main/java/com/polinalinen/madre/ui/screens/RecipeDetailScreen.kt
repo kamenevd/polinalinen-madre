@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Surface
@@ -34,6 +35,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -44,6 +47,7 @@ import coil.compose.AsyncImage
 import com.polinalinen.madre.model.GuestNote
 import com.polinalinen.madre.model.LibraryNote
 import com.polinalinen.madre.model.Recipe
+import com.polinalinen.madre.model.RecipeScale
 import com.polinalinen.madre.model.RecipeScaler
 import com.polinalinen.madre.ui.components.BackLabel
 import com.polinalinen.madre.ui.components.BookButton
@@ -92,8 +96,10 @@ fun RecipeDetailScreen(
     }
     val chapterIndex = recipes.indexOf(recipe) + 1
 
-    var portions by rememberSaveable { mutableIntStateOf(1) }
-    val scaleFactor = portions.toDouble()
+    // Cycle 14: порции — единственный источник масштаба. Коэффициент, выход,
+    // подписи шагов и запись в историю берут его отсюда и только отсюда.
+    var portions by rememberSaveable { mutableIntStateOf(RecipeScale.MIN_PORTIONS) }
+    val scaleFactor = RecipeScale.factor(portions)
 
     // Сколько раз печён именно этот рецепт — питает крошки, износ и кофейные
     // круги. Берём из общего среза bake_records, который уже держит
@@ -194,9 +200,11 @@ fun RecipeDetailScreen(
 
             PortionSelector(
                 portions = portions,
-                onSelect = { portions = it },
+                onSelect = { portions = RecipeScale.clampPortions(it) },
                 modifier = Modifier.padding(horizontal = 22.dp, vertical = 8.dp),
             )
+
+            ScaleNotes(recipe = recipe, portions = portions)
 
             PastedPhoto(recipe, Modifier.padding(horizontal = 22.dp, vertical = 10.dp))
 
@@ -210,6 +218,8 @@ fun RecipeDetailScreen(
                 Column(Modifier.padding(horizontal = 22.dp, vertical = 4.dp)) {
                     items.forEach { ingredient ->
                         val text = RecipeScaler.scaledDisplayText(ingredient, scaleFactor)
+                        // Каждая строка пересчитывается от текущего scaleFactor —
+                        // старых значений на странице не остаётся ни в одной.
                         // Отточие: имя слева, граммы справа. Если формат нераздельный — одной строкой.
                         val parts = text.split(" г ", limit = 2)
                         if (parts.size == 2 && parts[0].toDoubleOrNull() != null) {
@@ -249,8 +259,10 @@ fun RecipeDetailScreen(
                         val sessionId = viewModel.startBaking(recipe, scaleFactor)
                         onStartBaking(sessionId)
                     },
+                    // Часы считаются от плана рецепта, а не от порций: время
+                    // этапов от количества семей не зависит (RecipeScale.TIMING_NOTE).
                     caption = "×$portions ${familyWord(portions)} · " +
-                        "${recipe.timeline.sumOf { it.durationMinutes } / 60} ч · " +
+                        "${RecipeScale.totalMinutes(recipe, portions) / 60} ч · " +
                         "${recipe.timeline.size} шагов — таймер поведёт за руку",
                 )
             }
@@ -263,7 +275,7 @@ fun RecipeDetailScreen(
             // «Правка от руки» (Cycle 4, HandwrittenEdit) — рукописные правки
             // поверх книжного текста; bitmap в internal storage, ключ — recipeId.
             HandwrittenEditSurface(recipeId = recipeId, modifier = Modifier.padding(top = 32.dp)) {
-                FullRecipeSection(recipe)
+                FullRecipeSection(recipe, scaleFactor)
             }
         }
 
@@ -395,8 +407,11 @@ private fun GuestNotesSection(notes: List<GuestNote>, modifier: Modifier = Modif
 }
 
 @Composable
-private fun FullRecipeSection(recipe: Recipe, modifier: Modifier = Modifier) {
+private fun FullRecipeSection(recipe: Recipe, scaleFactor: Double, modifier: Modifier = Modifier) {
     val colors = AppColors.current
+    // Пересчитываются только те числа, которые сам рецепт пометил весом и
+    // назвал по имени строки: остальное — проза, и трогать её книга не берётся.
+    val quantityBindings = remember(recipe) { RecipeScaler.scalableBindings(recipe) }
     Column(modifier.fillMaxWidth()) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 22.dp),
@@ -436,7 +451,11 @@ private fun FullRecipeSection(recipe: Recipe, modifier: Modifier = Modifier) {
                             letterSpacing = 1.sp,
                         )
                         Text(
-                            step.description,
+                            // Cycle 14: граммы внутри книжного текста шага
+                            // пересчитаны тем же масштабом, что и список
+                            // ингредиентов. Иначе на одной странице стояли бы
+                            // два разных рецепта.
+                            RecipeScaler.scaledStepText(step.description, scaleFactor, quantityBindings),
                             color = colors.espresso,
                             fontFamily = FontFamily.Serif,
                             fontSize = 15.5.sp,
@@ -502,9 +521,14 @@ private fun StatCell(
 /**
  * «НА СКОЛЬКО ПЕЧЁМ» — pill-паттерн: активная ячейка залита Espresso и шире
  * остальных («×3 семьи»). Единственное место применения референса Yandex Music.
+ *
+ * Экранному диктору ячейка называет себя словами: «×2» он читает как «умножить
+ * на два», а выбор порций меняет все граммы рецепта разом — угадывать здесь
+ * нечего. Ряд объявлен группой выбора (selectableGroup), поэтому TalkBack
+ * говорит «2 из 5» и не притворяется, что кнопки не связаны.
  */
 @Composable
-private fun PortionSelector(portions: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
+internal fun PortionSelector(portions: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
     val colors = AppColors.current
     Column(modifier) {
         PageLabel("На сколько печём", color = colors.espresso)
@@ -512,6 +536,7 @@ private fun PortionSelector(portions: Int, onSelect: (Int) -> Unit, modifier: Mo
             Modifier
                 .fillMaxWidth()
                 .padding(top = 8.dp)
+                .selectableGroup()
                 .drawBehind {
                     drawRoundRect(
                         colors.espresso,
@@ -520,7 +545,7 @@ private fun PortionSelector(portions: Int, onSelect: (Int) -> Unit, modifier: Mo
                     )
                 }
         ) {
-            (1..5).forEach { n ->
+            (RecipeScale.MIN_PORTIONS..RecipeScale.MAX_PORTIONS).forEach { n ->
                 val active = n == portions
                 Box(
                     Modifier
@@ -534,6 +559,7 @@ private fun PortionSelector(portions: Int, onSelect: (Int) -> Unit, modifier: Mo
                             role = Role.RadioButton,
                             onClick = { onSelect(n) },
                         )
+                        .semantics { contentDescription = portionLabel(n) }
                         .drawBehind { if (active) drawRect(colors.espresso) }
                         .padding(vertical = 9.dp),
                     contentAlignment = Alignment.Center,
@@ -552,11 +578,71 @@ private fun PortionSelector(portions: Int, onSelect: (Int) -> Unit, modifier: Mo
     }
 }
 
+/**
+ * Cycle 14: что именно меняет выбор порций — сказано прямо под селектором.
+ *
+ * Выход пересчитывается вместе с ингредиентами. Времена — нет, и книга пишет
+ * об этом вслух: молчание здесь читалось бы как «расстойка тоже выросла втрое».
+ * Ограничение духовки появляется только тогда, когда тесто в неё правда не
+ * входит, и с настоящими числами, а не словом «много».
+ */
+@Composable
+private fun ScaleNotes(recipe: Recipe, portions: Int) {
+    val colors = AppColors.current
+    val yieldText = RecipeScale.yieldText(recipe, portions)
+    val capacityNote = RecipeScale.capacityNote(recipe, portions)
+
+    Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp)) {
+        if (yieldText != null) {
+            Text(
+                yieldText,
+                color = colors.espresso,
+                fontFamily = FontFamily.Serif,
+                fontSize = 14.sp,
+            )
+        }
+        Text(
+            RecipeScale.TIMING_NOTE,
+            color = colors.cocoa,
+            fontFamily = FontFamily.Serif,
+            fontStyle = FontStyle.Italic,
+            fontSize = 11.5.sp,
+            modifier = Modifier.padding(top = 3.dp),
+        )
+        if (capacityNote != null) {
+            Row(
+                Modifier
+                    .padding(top = 8.dp)
+                    .fillMaxWidth()
+                    .drawBehind {
+                        drawRoundRect(
+                            colors.terracotta,
+                            style = Stroke(1.dp.toPx()),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx()),
+                        )
+                    }
+                    .padding(10.dp),
+            ) {
+                Text(
+                    capacityNote,
+                    color = colors.espresso,
+                    fontFamily = FontFamily.Serif,
+                    fontSize = 12.5.sp,
+                    lineHeight = 18.sp,
+                )
+            }
+        }
+    }
+}
+
 private fun familyWord(n: Int) = when (n) {
     1 -> "семья"
     in 2..4 -> "семьи"
     else -> "семей"
 }
+
+/** Как ячейка порций называет себя вслух: «печём на 3 семьи». */
+internal fun portionLabel(n: Int): String = "печём на $n ${familyWord(n)}"
 
 /** Hero-фото как вклеенная фотокарточка: белая рамка, лёгкий поворот. */
 @Composable

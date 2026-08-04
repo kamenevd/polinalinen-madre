@@ -117,15 +117,30 @@ class BakingProgressService : LifecycleService() {
         shownSessionIds = bakes.map { it.sessionId }.toSet()
     }
 
+    /**
+     * Cycle 14: что писать — решает [BakingNotificationContent], здесь только
+     * раскладка по билдеру.
+     *
+     * Обратный отсчёт отдан системному хронометру: setWhen на момент конца шага
+     * плюс setUsesChronometer/setChronometerCountDown. Так цифры идут сами,
+     * между обновлениями и в свёрнутой карточке, и не могут разойтись с
+     * экраном — источник времени один и тот же слепок.
+     *
+     * Раскрыта карточка или свёрнута, решает система: программного способа
+     * держать её раскрытой у Android нет, и книга такого не обещает. Поэтому
+     * свёрнутая строка осмысленна сама по себе, а полный текст ждёт в BigText.
+     */
     private fun buildNotification(bake: BakingProgress): Notification {
-        val details = "${bake.contentText()}\n${bake.etaText()}"
+        val content = BakingNotificationContent.from(bake, System.currentTimeMillis())
         return baseBuilder()
-            // В компактной строке главным остаётся именно ответ на вопрос
-            // «сколько до следующего шага»; остальное видно при раскрытии.
-            .setContentTitle(bake.recipeName)
-            .setContentText(bake.etaText())
-            .setStyle(NotificationCompat.BigTextStyle().bigText(details))
-            .setProgress(BakingProgress.PROGRESS_MAX, bake.permille(), false)
+            .setContentTitle(content.title)
+            .setContentText(content.compact)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(content.bigText))
+            .setProgress(BakingProgress.PROGRESS_MAX, content.progressPermille, false)
+            .setShowWhen(content.usesChronometer)
+            .setWhen(content.chronometerFinishAtMillis)
+            .setUsesChronometer(content.usesChronometer)
+            .setChronometerCountDown(content.usesChronometer)
             .setContentIntent(openBakingIntent(bake.sessionId))
             .build()
     }
@@ -167,7 +182,7 @@ class BakingProgressService : LifecycleService() {
         if (sessionId != null) intent.putExtra(MainActivity.EXTRA_SESSION_ID, sessionId)
         return PendingIntent.getActivity(
             this,
-            (sessionId ?: PLACEHOLDER_SESSION_ID).toInt(),
+            BakingNotificationContent.intentRequestCode(sessionId ?: PLACEHOLDER_SESSION_ID),
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )

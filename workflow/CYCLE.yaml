@@ -5,9 +5,9 @@
     "kind": "feature",
     "version": "5.4.0-cycle14",
     "branch": "cycle/14",
-    "stage": "validating",
+    "stage": "releasable",
     "created_at": "2026-08-04T00:00:00Z",
-    "updated_at": "2026-08-04T19:46:12Z"
+    "updated_at": "2026-08-04T20:03:42Z"
   },
   "features": [
     {
@@ -74,8 +74,10 @@
       ]
     },
     "runtime": {
-      "status": "pending",
-      "evidence": []
+      "status": "pass",
+      "evidence": [
+        "workflow/evidence/cycle14/runtime-e2e.md"
+      ]
     },
     "release": {
       "status": "pending",

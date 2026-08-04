@@ -1,6 +1,7 @@
 package com.polinalinen.madre.account
 
 import com.google.common.truth.Truth.assertThat
+import com.google.gson.Gson
 import com.polinalinen.madre.data.remote.AuthResponse
 import com.polinalinen.madre.data.remote.CreateFamilyRequest
 import com.polinalinen.madre.data.remote.FamilyBookApi
@@ -162,6 +163,22 @@ class FamilyAccountRepositoryTest {
     }
 
     @Test
+    fun `pocketbase null family relation signs in without crashing`() = runTest {
+        val api = FakeApi()
+        api.authResult = {
+            Gson().fromJson(
+                """{"token":"pb_token_1","record":{"id":"u1","email":"anya@example.com","name":"Аня","family":null}}""",
+                AuthResponse::class.java,
+            )
+        }
+
+        val state = repository(api).signIn("anya@example.com", "пароль")
+
+        assertThat(state).isInstanceOf(FamilyBookState.SignedIn::class.java)
+        assertThat((state as FamilyBookState.SignedIn).account.familyId).isNull()
+    }
+
+    @Test
     fun `wrong credentials do not leave a token behind`() = runTest {
         val api = FakeApi()
         api.authResult = { throw http(400) }
@@ -232,7 +249,9 @@ class FamilyAccountRepositoryTest {
 
         val state = repository.joinFamily("не код")
 
-        assertThat(state).isEqualTo(FamilyBookState.Failed(NetworkFailure.REJECTED))
+        assertThat(state).isInstanceOf(FamilyBookState.Failed::class.java)
+        assertThat((state as FamilyBookState.Failed).failure).isEqualTo(NetworkFailure.REJECTED)
+        assertThat(state.account?.email).isEqualTo("anya@example.com")
         assertThat(api.calls).isEmpty()
     }
 
@@ -247,7 +266,10 @@ class FamilyAccountRepositoryTest {
         val malformed = repository.joinFamily("не код")
 
         assertThat(wrong).isEqualTo(malformed)
-        assertThat(wrong).isEqualTo(FamilyBookState.Failed(NetworkFailure.REJECTED))
+        assertThat(wrong).isInstanceOf(FamilyBookState.Failed::class.java)
+        assertThat((wrong as FamilyBookState.Failed).failure).isEqualTo(NetworkFailure.REJECTED)
+        assertThat(wrong.account?.email).isEqualTo("anya@example.com")
+        assertThat(malformed.account?.email).isEqualTo("anya@example.com")
     }
 
     @Test

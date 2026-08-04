@@ -54,6 +54,13 @@ class FamilyBookRecordsTest {
     }
 
     @Test
+    fun `user without a family also accepts pocketbase null relation`() {
+        val json = """{"token":"t","record":{"id":"u1","email":"a@b.c","name":"Аня","family":null}}"""
+        val response = gson.fromJson(json, AuthResponse::class.java)
+        assertThat(response.record.family).isNull()
+    }
+
+    @Test
     fun `family routes speak snake_case`() {
         assertThat(gson.toJson(CreateFamilyRequest(name = "Ивановы"))).contains("\"name\":\"Ивановы\"")
         assertThat(gson.toJson(JoinFamilyRequest(code = "2W4X6Y8ZABCDEFGH")))

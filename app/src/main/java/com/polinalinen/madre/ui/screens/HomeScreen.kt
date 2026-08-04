@@ -579,12 +579,9 @@ private fun familiesBakeWord(n: Int) = when {
 
 private fun vedutWord(n: Int) = if (n % 10 == 1 && n % 100 !in 11..14) "ведёт" else "ведут"
 
-private fun bakeWord(n: Int) = when {
-    n % 100 in 11..14 -> "выпечек"
-    n % 10 == 1 -> "выпечка"
-    n % 10 in 2..4 -> "выпечки"
-    else -> "выпечек"
-}
+// bakeWord живёт в BookStatsScreen.kt — одно склонение на весь пакет экранов.
+// Две одинаковые копии в одном пакете расходятся ровно в тот день, когда одну
+// из них поправят.
 
 @Composable
 private fun Colophon() {

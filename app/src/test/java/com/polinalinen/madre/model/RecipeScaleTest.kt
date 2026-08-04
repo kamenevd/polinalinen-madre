@@ -19,13 +19,35 @@ class RecipeScaleTest {
     private fun water(grams: Double) =
         Ingredient(name = "вода", amount = grams, unit = "г", category = "water")
 
-    private fun recipeOf(vararg ingredients: Ingredient): Recipe = Recipe(
+    private fun starter(grams: Double) =
+        Ingredient(name = "закваска", amount = grams, unit = "г", category = "starter")
+
+    private fun sugar(grams: Double) =
+        Ingredient(name = "сахар", amount = grams, unit = "г", category = "sugar")
+
+    private fun butter(grams: Double) =
+        Ingredient(name = "масло", amount = grams, unit = "г", category = "fat")
+
+    private fun recipeOf(vararg ingredients: Ingredient): Recipe =
+        recipeOfSections("main" to ingredients.toList())
+
+    private fun recipeOfSections(vararg sections: Pair<String, List<Ingredient>>): Recipe = Recipe(
         id = "test",
         name = "Test",
         emoji = "",
         description = "",
-        ingredients = mapOf("main" to ingredients.toList()),
+        ingredients = linkedMapOf(*sections),
         timeline = listOf(TimelineStep(StepType.WAIT, "Расстойка", "", 120)),
+    )
+
+    private fun allOfSection(section: String) = Ingredient(
+        name = "опара", amount = 0.0, unit = "г", category = "ref",
+        refType = "all_of_section", refSection = section,
+    )
+
+    private fun portionOfSection(section: String, grams: Double) = Ingredient(
+        name = "опары", amount = grams, unit = "г", category = "ref",
+        refType = "portion_of_section", refSection = section,
     )
 
     @Test
@@ -80,6 +102,70 @@ class RecipeScaleTest {
         }
     }
 
+    // --- выход = то тесто, которое правда поедет в духовку ---
+
+    /**
+     * Опара стоит в рецепте дважды: своей секцией и строкой «вся опара» в
+     * тесте. Сложить обе — значит обещать вдвое больше теста, чем выйдет.
+     */
+    @Test
+    fun `a preferment folded into the dough is weighed once, not twice`() {
+        val recipe = recipeOfSections(
+            "sponge" to listOf(flour(95.0), water(95.0)),
+            "main" to listOf(allOfSection("sponge"), flour(500.0), water(300.0)),
+        )
+        // 190 г опары + 800 г теста, а не 190 + 190 + 800.
+        assertThat(RecipeScale.yieldGrams(recipe, 1)).isEqualTo(990)
+        assertThat(RecipeScale.yieldGrams(recipe, 2)).isEqualTo(1980)
+    }
+
+    /**
+     * «Часть секции» — ровно тот вес, который написан. Остаток опары в духовку
+     * не едет, и записывать его в выход книга не имеет права.
+     */
+    @Test
+    fun `only the portion of the preferment that goes in counts as dough`() {
+        val recipe = recipeOfSections(
+            "sponge" to listOf(flour(50.0), water(50.0), starter(15.0)),
+            "main" to listOf(portionOfSection("sponge", 100.0), flour(250.0), water(150.0)),
+        )
+        // Опары вышло 115 г, в тесто ушло 100 — выход 100 + 400.
+        assertThat(RecipeScale.yieldGrams(recipe, 1)).isEqualTo(500)
+        assertThat(RecipeScale.yieldGrams(recipe, 3)).isEqualTo(1500)
+    }
+
+    /** Начинку сворачивают внутрь, крем кладут сверху — тестом они не станут. */
+    @Test
+    fun `filling and cream are not dough and never were`() {
+        val recipe = recipeOfSections(
+            "sponge" to listOf(flour(100.0), water(100.0)),
+            "dough" to listOf(allOfSection("sponge"), flour(300.0), water(200.0)),
+            "filling" to listOf(sugar(100.0), butter(70.0)),
+            "cream" to listOf(sugar(50.0)),
+        )
+        assertThat(RecipeScale.yieldGrams(recipe, 1)).isEqualTo(700)
+    }
+
+    /** Две опары — две ссылки, и каждая приносит свою секцию, а не чужую. */
+    @Test
+    fun `two preferments each bring their own section`() {
+        val recipe = recipeOfSections(
+            "sponge1" to listOf(flour(100.0), water(113.0)),
+            "sponge2" to listOf(flour(250.0), water(250.0)),
+            "dough" to listOf(allOfSection("sponge1"), allOfSection("sponge2"), flour(300.0)),
+        )
+        assertThat(RecipeScale.yieldGrams(recipe, 1)).isEqualTo(213 + 500 + 300)
+    }
+
+    /** Ссылка в никуда — не повод молча потерять или выдумать граммы. */
+    @Test
+    fun `a reference to a section that is not there falls back to its own number`() {
+        val recipe = recipeOfSections(
+            "main" to listOf(portionOfSection("nowhere", 120.0), flour(300.0)),
+        )
+        assertThat(RecipeScale.yieldGrams(recipe, 1)).isEqualTo(420)
+    }
+
     @Test
     fun `a batch that fits the oven says nothing about batches`() {
         val recipe = recipeOf(flour(500.0), water(350.0))
@@ -112,6 +198,35 @@ class RecipeScaleTest {
         )
         assertThat(RecipeScale.batches(recipe, 4)).isEqualTo(1)
         assertThat(RecipeScale.capacityNote(recipe, 4)).isNull()
+    }
+
+    /**
+     * Русское склонение на числах, где его чаще всего и ломают: 11 — не «один»,
+     * 21 — не «много», 12 и 14 — не «два» и не «четыре».
+     */
+    @Test
+    fun `the batch count is spelled the way Russian actually declines it`() {
+        fun noteFor(grams: Double): String =
+            RecipeScale.capacityNote(recipeOf(flour(grams)), 1).orEmpty()
+
+        // 11 заходов: 15001..16500 г теста.
+        assertThat(noteFor(16_000.0)).contains("в 11 заходов")
+        // 12: 16501..18000
+        assertThat(noteFor(17_000.0)).contains("в 12 заходов")
+        // 14: 19501..21000
+        assertThat(noteFor(20_000.0)).contains("в 14 заходов")
+        // 21: 30001..31500
+        assertThat(noteFor(30_100.0)).contains("в 21 заход")
+    }
+
+    @Test
+    fun `two, three and five batches are spelled right too`() {
+        fun noteFor(grams: Double): String =
+            RecipeScale.capacityNote(recipeOf(flour(grams)), 1).orEmpty()
+
+        assertThat(noteFor(2_000.0)).contains("в 2 захода")
+        assertThat(noteFor(4_000.0)).contains("в 3 захода")
+        assertThat(noteFor(7_000.0)).contains("в 5 заходов")
     }
 
     /**

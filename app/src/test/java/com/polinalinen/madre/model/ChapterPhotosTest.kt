@@ -28,6 +28,13 @@ class ChapterPhotosTest {
         photoPath = photoPath,
     )
 
+    /**
+     * Диска в этих тестах нет: проверяется отбор снимков, а не файловая система.
+     * Настоящая проверка файла — в [ChapterPhotos] по умолчанию, и её ловит
+     * BookStatsScreenUiTest на реальных временных файлах.
+     */
+    private val anyFile: (String) -> Boolean = { true }
+
     @Test
     fun `a chapter shows its own photos and nobody else's`() {
         val records = listOf(
@@ -35,7 +42,7 @@ class ChapterPhotosTest {
             record(2, recipeId = "focaccia"),
             record(3, recipeId = "bread"),
         )
-        val photos = ChapterPhotos.of(records, "bread")
+        val photos = ChapterPhotos.of(records, "bread", anyFile)
         assertThat(photos.map { it.recordId }).containsExactly(3L, 1L).inOrder()
     }
 
@@ -46,28 +53,28 @@ class ChapterPhotosTest {
             record(2, completedAtMillis = 900),
             record(3, completedAtMillis = 500),
         )
-        assertThat(ChapterPhotos.of(records, "bread").map { it.recordId })
+        assertThat(ChapterPhotos.of(records, "bread", anyFile).map { it.recordId })
             .containsExactly(2L, 3L, 1L).inOrder()
     }
 
     @Test
     fun `the cover is the newest photo of the chapter`() {
         val records = listOf(record(1, completedAtMillis = 100), record(2, completedAtMillis = 900))
-        assertThat(ChapterPhotos.cover(records, "bread")?.recordId).isEqualTo(2L)
+        assertThat(ChapterPhotos.cover(records, "bread", anyFile)?.recordId).isEqualTo(2L)
     }
 
     /** Честный fallback: главу пекли, но не фотографировали — снимка нет. */
     @Test
     fun `a chapter baked without a camera has no cover at all`() {
         val records = listOf(record(1, photoPath = null), record(2, photoPath = null))
-        assertThat(ChapterPhotos.cover(records, "bread")).isNull()
-        assertThat(ChapterPhotos.of(records, "bread")).isEmpty()
+        assertThat(ChapterPhotos.cover(records, "bread", anyFile)).isNull()
+        assertThat(ChapterPhotos.of(records, "bread", anyFile)).isEmpty()
     }
 
     @Test
     fun `a chapter never baked has nothing to show either`() {
-        assertThat(ChapterPhotos.cover(emptyList(), "bread")).isNull()
-        assertThat(ChapterPhotos.of(emptyList(), "bread")).isEmpty()
+        assertThat(ChapterPhotos.cover(emptyList(), "bread", anyFile)).isNull()
+        assertThat(ChapterPhotos.of(emptyList(), "bread", anyFile)).isEmpty()
     }
 
     /**
@@ -77,7 +84,7 @@ class ChapterPhotosTest {
     @Test
     fun `a blank path is not a photo`() {
         val records = listOf(record(1, photoPath = "   "), record(2, photoPath = ""), record(3))
-        assertThat(ChapterPhotos.of(records, "bread").map { it.recordId }).containsExactly(3L)
+        assertThat(ChapterPhotos.of(records, "bread", anyFile).map { it.recordId }).containsExactly(3L)
     }
 
     @Test
@@ -87,12 +94,57 @@ class ChapterPhotosTest {
             record(2, completedAtMillis = 100),
         )
         // Самая свежая выпечка без фото не делает главу безликой.
-        assertThat(ChapterPhotos.cover(records, "bread")?.recordId).isEqualTo(2L)
+        assertThat(ChapterPhotos.cover(records, "bread", anyFile)?.recordId).isEqualTo(2L)
+    }
+
+    // --- снимок, которого больше нет на телефоне ---
+
+    /** Читаемым считаем всё, кроме перечисленных путей. */
+    private fun allExcept(vararg gone: String): (String) -> Boolean = { it !in gone }
+
+    /**
+     * Главное в этой правке: самый свежий снимок удалили из галереи, а под ним
+     * лежат целые. Глава обязана показать лицом ближайшую целую фотографию, а
+     * не пустую рамку с надписью «файла больше нет».
+     */
+    @Test
+    fun `a deleted newest photo hands the cover to the newest one still readable`() {
+        val records = listOf(
+            record(3, completedAtMillis = 900),
+            record(2, completedAtMillis = 500),
+            record(1, completedAtMillis = 100),
+        )
+        val readable = allExcept("/photos/3.jpg")
+        assertThat(ChapterPhotos.cover(records, "bread", readable)?.recordId).isEqualTo(2L)
+    }
+
+    /** В viewer попадают только те пути, которые правда открываются. */
+    @Test
+    fun `the viewer is given readable photos and nothing else`() {
+        val records = listOf(
+            record(3, completedAtMillis = 900),
+            record(2, completedAtMillis = 500),
+            record(1, completedAtMillis = 100),
+        )
+        val photos = ChapterPhotos.of(records, "bread", allExcept("/photos/3.jpg", "/photos/1.jpg"))
+        assertThat(photos.map { it.recordId }).containsExactly(2L)
+    }
+
+    /**
+     * Все снимки главы удалили с телефона — значит фотографий у неё нет. Это
+     * тот же случай, что «пекли без камеры»: глава уходит в список попыток, а
+     * не открывается пустым fullscreen'ом.
+     */
+    @Test
+    fun `a chapter whose photos were all deleted has no cover to show`() {
+        val records = listOf(record(1, completedAtMillis = 100), record(2, completedAtMillis = 900))
+        assertThat(ChapterPhotos.of(records, "bread") { false }).isEmpty()
+        assertThat(ChapterPhotos.cover(records, "bread") { false }).isNull()
     }
 
     @Test
     fun `a photo carries what its caption needs`() {
-        val photo = ChapterPhotos.of(listOf(record(7, completedAtMillis = 1_700_000_000_000L)), "bread").single()
+        val photo = ChapterPhotos.of(listOf(record(7, completedAtMillis = 1_700_000_000_000L)), "bread", anyFile).single()
         assertThat(photo.path).isEqualTo("/photos/7.jpg")
         assertThat(photo.recipeName).isEqualTo("Бородинский")
         assertThat(photo.takenAtMillis).isEqualTo(1_700_000_000_000L)

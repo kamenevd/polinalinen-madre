@@ -141,4 +141,56 @@ class BakingProgressTest {
         assertThat(text.contentText()).contains("2:05")
         assertThat(text.nextStepText()).doesNotContain("2:05")
     }
+
+    // --- то же время, сказанное вслух: подпись таймера для экранного диктора ---
+
+    @Test
+    fun `the timer says its time in words, not in colons`() {
+        assertThat(BakingProgress.timerLabel(3725, isPaused = false)).isEqualTo("осталось 1 час 2 минуты")
+        assertThat(BakingProgress.timerLabel(125, isPaused = false)).isEqualTo("осталось 2 минуты 5 секунд")
+        assertThat(BakingProgress.timerLabel(45, isPaused = false)).isEqualTo("осталось 45 секунд")
+    }
+
+    @Test
+    fun `a whole minute left is said without a trailing zero seconds`() {
+        assertThat(BakingProgress.spokenRemaining(120)).isEqualTo("2 минуты")
+    }
+
+    @Test
+    fun `a paused timer and a finished one say what they are`() {
+        assertThat(BakingProgress.timerLabel(300, isPaused = true)).isEqualTo("пауза, осталось 5 минут")
+        assertThat(BakingProgress.timerLabel(0, isPaused = false)).isEqualTo("время вышло")
+        assertThat(BakingProgress.timerLabel(-5, isPaused = false)).isEqualTo("время вышло")
+    }
+
+    /**
+     * Русское склонение на числах, где его чаще всего и ломают: 11 — не «одна»,
+     * 21 — не «много», 12 и 14 — не «две» и не «четыре».
+     */
+    @Test
+    fun `minutes are declined the way Russian actually declines them`() {
+        assertThat(BakingProgress.spokenRemaining(11 * 60L)).isEqualTo("11 минут")
+        assertThat(BakingProgress.spokenRemaining(12 * 60L)).isEqualTo("12 минут")
+        assertThat(BakingProgress.spokenRemaining(14 * 60L)).isEqualTo("14 минут")
+        assertThat(BakingProgress.spokenRemaining(21 * 60L)).isEqualTo("21 минута")
+        assertThat(BakingProgress.spokenRemaining(22 * 60L)).isEqualTo("22 минуты")
+        assertThat(BakingProgress.spokenRemaining(25 * 60L)).isEqualTo("25 минут")
+    }
+
+    @Test
+    fun `hours and seconds are declined too`() {
+        assertThat(BakingProgress.spokenRemaining(11 * 3600L)).isEqualTo("11 часов")
+        assertThat(BakingProgress.spokenRemaining(21 * 3600L)).isEqualTo("21 час")
+        assertThat(BakingProgress.spokenRemaining(2 * 3600L)).isEqualTo("2 часа")
+        assertThat(BakingProgress.spokenRemaining(11)).isEqualTo("11 секунд")
+        assertThat(BakingProgress.spokenRemaining(12)).isEqualTo("12 секунд")
+        assertThat(BakingProgress.spokenRemaining(14)).isEqualTo("14 секунд")
+        assertThat(BakingProgress.spokenRemaining(21)).isEqualTo("21 секунда")
+    }
+
+    /** Секунды в многочасовой расстойке — шум, а не ответ на «сколько ещё». */
+    @Test
+    fun `seconds are left out once there are hours to name`() {
+        assertThat(BakingProgress.spokenRemaining(3600 + 3 * 60 + 41)).isEqualTo("1 час 3 минуты")
+    }
 }

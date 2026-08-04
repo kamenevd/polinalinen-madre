@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Surface
@@ -34,6 +35,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -406,6 +409,9 @@ private fun GuestNotesSection(notes: List<GuestNote>, modifier: Modifier = Modif
 @Composable
 private fun FullRecipeSection(recipe: Recipe, scaleFactor: Double, modifier: Modifier = Modifier) {
     val colors = AppColors.current
+    // Пересчитать в тексте шага можно только те числа, которые рецепт задал
+    // строкой ингредиента: остальное — проза, и трогать её книга не берётся.
+    val scalableWeights = remember(recipe) { RecipeScaler.scalableWeights(recipe) }
     Column(modifier.fillMaxWidth()) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 22.dp),
@@ -449,7 +455,7 @@ private fun FullRecipeSection(recipe: Recipe, scaleFactor: Double, modifier: Mod
                             // пересчитаны тем же масштабом, что и список
                             // ингредиентов. Иначе на одной странице стояли бы
                             // два разных рецепта.
-                            RecipeScaler.scaledStepText(step.description, scaleFactor),
+                            RecipeScaler.scaledStepText(step.description, scaleFactor, scalableWeights),
                             color = colors.espresso,
                             fontFamily = FontFamily.Serif,
                             fontSize = 15.5.sp,
@@ -515,9 +521,14 @@ private fun StatCell(
 /**
  * «НА СКОЛЬКО ПЕЧЁМ» — pill-паттерн: активная ячейка залита Espresso и шире
  * остальных («×3 семьи»). Единственное место применения референса Yandex Music.
+ *
+ * Экранному диктору ячейка называет себя словами: «×2» он читает как «умножить
+ * на два», а выбор порций меняет все граммы рецепта разом — угадывать здесь
+ * нечего. Ряд объявлен группой выбора (selectableGroup), поэтому TalkBack
+ * говорит «2 из 5» и не притворяется, что кнопки не связаны.
  */
 @Composable
-private fun PortionSelector(portions: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
+internal fun PortionSelector(portions: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
     val colors = AppColors.current
     Column(modifier) {
         PageLabel("На сколько печём", color = colors.espresso)
@@ -525,6 +536,7 @@ private fun PortionSelector(portions: Int, onSelect: (Int) -> Unit, modifier: Mo
             Modifier
                 .fillMaxWidth()
                 .padding(top = 8.dp)
+                .selectableGroup()
                 .drawBehind {
                     drawRoundRect(
                         colors.espresso,
@@ -547,6 +559,7 @@ private fun PortionSelector(portions: Int, onSelect: (Int) -> Unit, modifier: Mo
                             role = Role.RadioButton,
                             onClick = { onSelect(n) },
                         )
+                        .semantics { contentDescription = portionLabel(n) }
                         .drawBehind { if (active) drawRect(colors.espresso) }
                         .padding(vertical = 9.dp),
                     contentAlignment = Alignment.Center,
@@ -627,6 +640,9 @@ private fun familyWord(n: Int) = when (n) {
     in 2..4 -> "семьи"
     else -> "семей"
 }
+
+/** Как ячейка порций называет себя вслух: «печём на 3 семьи». */
+internal fun portionLabel(n: Int): String = "печём на $n ${familyWord(n)}"
 
 /** Hero-фото как вклеенная фотокарточка: белая рамка, лёгкий поворот. */
 @Composable

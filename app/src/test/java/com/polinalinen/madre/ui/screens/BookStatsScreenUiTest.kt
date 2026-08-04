@@ -2,18 +2,23 @@ package com.polinalinen.madre.ui.screens
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.polinalinen.madre.data.db.entities.BakeRecordEntity
 import com.polinalinen.madre.model.MonthRhythm
 import com.polinalinen.madre.model.Recipe
+import com.polinalinen.madre.ui.components.ChapterPhotoViewer
 import com.polinalinen.madre.ui.theme.MadreTheme
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
@@ -26,7 +31,12 @@ import java.time.ZoneId
  *
  * Проверяется проводка, а не арифметика (она в MonthRhythmTest/ChapterPhotosTest):
  * календарь показывает ЭТОТ месяц целиком, глава со снимком открывается во весь
- * экран, а глава без снимка не притворяется, что он у неё есть.
+ * экран, глава без единого читаемого снимка уходит в список попыток, а открытая
+ * глава переживает пересоздание активити.
+ *
+ * Файлы здесь настоящие (TemporaryFolder): вся суть отбора снимков в том, что
+ * запись в книге и файл на диске — разные вещи, и подделанная проверка файла
+ * проверяла бы сама себя.
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -35,6 +45,9 @@ class BookStatsScreenUiTest {
 
     @get:Rule
     val rule = createComposeRule()
+
+    @get:Rule
+    val photos = TemporaryFolder()
 
     private val thisMonth: YearMonth = YearMonth.now()
 
@@ -46,12 +59,25 @@ class BookStatsScreenUiTest {
     private fun millisOn(date: LocalDate): Long =
         date.atTime(12, 0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
 
-    private fun record(id: Long, recipeId: String, name: String, photoPath: String?) = BakeRecordEntity(
+    /** Настоящий файл на диске — такой же, как снимок, лежащий в галерее. */
+    private fun realPhoto(name: String): String =
+        photos.newFile(name).apply { writeBytes(byteArrayOf(1, 2, 3)) }.absolutePath
+
+    /** Путь, по которому файла нет: снимок удалили с телефона. */
+    private fun deletedPhoto(name: String): String = photos.root.resolve(name).absolutePath
+
+    private fun record(
+        id: Long,
+        recipeId: String,
+        name: String,
+        photoPath: String?,
+        day: Int = 1,
+    ) = BakeRecordEntity(
         id = id,
         recipeId = recipeId,
         recipeName = name,
         portions = 1,
-        completedAtMillis = millisOn(thisMonth.atDay(1)),
+        completedAtMillis = millisOn(thisMonth.atDay(day)),
         photoPath = photoPath,
     )
 
@@ -63,18 +89,20 @@ class BookStatsScreenUiTest {
         rule.waitForIdle()
     }
 
-    private fun open(records: List<BakeRecordEntity>) {
-        rule.setContent {
-            MadreTheme {
-                BookStatsScreen(
-                    ownerLabel = "вы",
-                    isMe = true,
-                    recipes = listOf(recipe("bread", "Бородинский"), recipe("focaccia", "Фокачча")),
-                    records = records,
-                    onBack = {},
-                )
-            }
+    private fun shelf(records: List<BakeRecordEntity>): @androidx.compose.runtime.Composable () -> Unit = {
+        MadreTheme {
+            BookStatsScreen(
+                ownerLabel = "вы",
+                isMe = true,
+                recipes = listOf(recipe("bread", "Бородинский"), recipe("focaccia", "Фокачча")),
+                records = records,
+                onBack = {},
+            )
         }
+    }
+
+    private fun open(records: List<BakeRecordEntity>) {
+        rule.setContent { shelf(records)() }
     }
 
     @Test
@@ -103,15 +131,12 @@ class BookStatsScreenUiTest {
         rule.onNodeWithText("в этом месяце: 1 выпечка").assertIsDisplayed()
     }
 
-    /**
-     * Глава со снимком открывается во весь экран. Файла на диске нет — значит
-     * viewer обязан сказать об этом, а не показать пустую страницу.
-     */
     @Test
     fun `tapping a chapter with photos opens it fullscreen`() {
-        open(listOf(record(1, "bread", "Бородинский", photoPath = "/nowhere/1.jpg")))
+        open(listOf(record(1, "bread", "Бородинский", photoPath = realPhoto("1.jpg"))))
         tapChapter("bread")
-        rule.onNodeWithText("файла больше нет").assertIsDisplayed()
+        rule.onNodeWithTag(ChapterPhotoViewer.PAGER_TAG).assertIsDisplayed()
+        rule.onNodeWithText("файла больше нет").assertDoesNotExist()
     }
 
     /** Глава без снимка не притворяется, что он у неё есть. */
@@ -119,15 +144,112 @@ class BookStatsScreenUiTest {
     fun `a chapter baked without a camera falls back to its list of attempts`() {
         open(listOf(record(1, "bread", "Бородинский", photoPath = null)))
         tapChapter("bread")
-        rule.onNodeWithText("файла больше нет").assertDoesNotExist()
+        rule.onNodeWithTag(ChapterPhotoViewer.PAGER_TAG).assertDoesNotExist()
         rule.onNodeWithText("Закрыть").assertIsDisplayed()
     }
 
     @Test
     fun `a chapter never baked cannot be opened at all`() {
-        open(listOf(record(1, "bread", "Бородинский", photoPath = "/nowhere/1.jpg")))
+        open(listOf(record(1, "bread", "Бородинский", photoPath = realPhoto("1.jpg"))))
         tapChapter("focaccia")
-        rule.onNodeWithText("файла больше нет").assertDoesNotExist()
+        rule.onNodeWithTag(ChapterPhotoViewer.PAGER_TAG).assertDoesNotExist()
         rule.onNodeWithText("Закрыть").assertDoesNotExist()
+    }
+
+    /**
+     * Главное в этой правке: последний снимок удалили с телефона, а под ним
+     * лежат целые. Глава открывается на ближайшей целой фотографии, и «файла
+     * больше нет» человек не видит вовсе — ему есть что показать.
+     */
+    @Test
+    fun `a chapter whose newest photo is gone opens on the newest one still there`() {
+        open(
+            listOf(
+                record(1, "bread", "Бородинский", photoPath = realPhoto("old.jpg"), day = 1),
+                record(2, "bread", "Бородинский", photoPath = deletedPhoto("gone.jpg"), day = 2),
+            )
+        )
+        tapChapter("bread")
+        rule.onNodeWithTag(ChapterPhotoViewer.PAGER_TAG).assertIsDisplayed()
+        rule.onNodeWithText("файла больше нет").assertDoesNotExist()
+        // Целый снимок ровно один — считать его вслух незачем.
+        rule.onNodeWithText("1 из 2").assertDoesNotExist()
+    }
+
+    /** Все снимки главы удалили — это глава без фотографий, а не пустой viewer. */
+    @Test
+    fun `a chapter whose photos were all deleted falls back to its list of attempts`() {
+        open(
+            listOf(
+                record(1, "bread", "Бородинский", photoPath = deletedPhoto("gone-1.jpg"), day = 1),
+                record(2, "bread", "Бородинский", photoPath = deletedPhoto("gone-2.jpg"), day = 2),
+            )
+        )
+        tapChapter("bread")
+        rule.onNodeWithTag(ChapterPhotoViewer.PAGER_TAG).assertDoesNotExist()
+        rule.onNodeWithText("файла больше нет").assertDoesNotExist()
+        rule.onNodeWithText("Закрыть").assertIsDisplayed()
+    }
+
+    // --- пересоздание активити ---
+
+    private fun threePhotoChapter() = listOf(
+        record(1, "bread", "Бородинский", photoPath = realPhoto("1.jpg"), day = 1),
+        record(2, "bread", "Бородинский", photoPath = realPhoto("2.jpg"), day = 2),
+        record(3, "bread", "Бородинский", photoPath = realPhoto("3.jpg"), day = 3),
+    )
+
+    /**
+     * Поворот экрана посреди просмотра — не повод захлопнуть книгу. До этой
+     * правки открытая глава жила в remember и умирала вместе с активити:
+     * человек возвращался на Полку и искал плитку заново.
+     */
+    @Test
+    fun `an opened chapter survives the activity being recreated`() {
+        // Файлы создаются один раз, до setContent: composable-лямбду Compose
+        // зовёт на каждой рекомпозиции, и создавать в ней файлы нельзя.
+        val records = threePhotoChapter()
+        val restoration = StateRestorationTester(rule)
+        restoration.setContent { shelf(records)() }
+        tapChapter("bread")
+        rule.onNodeWithText("1 из 3").assertIsDisplayed()
+
+        restoration.emulateSavedInstanceStateRestore()
+        rule.waitForIdle()
+
+        rule.onNodeWithTag(ChapterPhotoViewer.PAGER_TAG).assertIsDisplayed()
+        rule.onNodeWithText("1 из 3").assertIsDisplayed()
+    }
+
+    /** И страница остаётся той же: вернуться должны туда, где стояли. */
+    @Test
+    fun `the page being looked at survives the recreation too`() {
+        val records = threePhotoChapter()
+        val restoration = StateRestorationTester(rule)
+        restoration.setContent { shelf(records)() }
+        tapChapter("bread")
+        rule.onNodeWithTag(ChapterPhotoViewer.PAGER_TAG).performTouchInput { swipeLeft() }
+        rule.waitForIdle()
+        rule.onNodeWithText("2 из 3").assertIsDisplayed()
+
+        restoration.emulateSavedInstanceStateRestore()
+        rule.waitForIdle()
+
+        rule.onNodeWithText("2 из 3").assertIsDisplayed()
+    }
+
+    /** Список попыток тоже открыт человеком — и тоже не должен захлопываться. */
+    @Test
+    fun `an opened list of attempts survives the recreation`() {
+        val restoration = StateRestorationTester(rule)
+        val records = listOf(record(1, "bread", "Бородинский", photoPath = null))
+        restoration.setContent { shelf(records)() }
+        tapChapter("bread")
+        rule.onNodeWithText("Закрыть").assertIsDisplayed()
+
+        restoration.emulateSavedInstanceStateRestore()
+        rule.waitForIdle()
+
+        rule.onNodeWithText("Закрыть").assertIsDisplayed()
     }
 }

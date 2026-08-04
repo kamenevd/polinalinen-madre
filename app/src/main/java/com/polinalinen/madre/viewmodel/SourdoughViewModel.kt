@@ -9,6 +9,7 @@ import com.polinalinen.madre.data.db.entities.SourdoughConfigEntity
 import com.polinalinen.madre.data.db.entities.StorageLocation
 import com.polinalinen.madre.notifications.FeedingReminderPlanner
 import com.polinalinen.madre.notifications.FeedingReminderScheduler
+import com.polinalinen.madre.sourdough.StarterRenameQueue
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -42,10 +43,15 @@ class SourdoughViewModel(app: Application) : AndroidViewModel(app) {
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    /** Имя, набранное до того, как конфиг приехал из Room. */
+    private val renameQueue = StarterRenameQueue()
+
     init {
         viewModelScope.launch {
             val bootstrapped = repository.getOrCreateDefaultConfig()
             _config.value = bootstrapped
+            // Конфиг есть — записываем имя, если его успели набрать раньше.
+            renameQueue.flush()?.let { repository.setName(bootstrapped.id, it) }
             // Держим конфиг актуальным реактивно: после кормления lastFeedingMillis
             // меняется в БД, Room сам пришлёт новое значение сюда без ручного refetch.
             //
@@ -75,9 +81,14 @@ class SourdoughViewModel(app: Application) : AndroidViewModel(app) {
      * Cycle 14: переименовать закваску. Запись идёт в тот же конфиг, который
      * читают дневник, колофон и планировщик напоминаний, — поэтому новое имя
      * доезжает во все три места одним путём, реактивно из observeConfig.
+     *
+     * Имя, набранное до того, как конфиг приехал из Room, не теряется: оно
+     * ждёт в [renameQueue] и уходит в базу первым делом после загрузки. Раньше
+     * такое переименование молча пропадало — поле показывало набранное слово,
+     * а в книге оставалось прежнее имя.
      */
     fun setStarterName(name: String) {
-        val configId = _config.value?.id ?: return
+        val configId = renameQueue.rename(_config.value?.id, name) ?: return
         viewModelScope.launch { repository.setName(configId, name) }
     }
 

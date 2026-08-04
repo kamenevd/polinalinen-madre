@@ -75,6 +75,55 @@ data class BakingProgress(
 
         fun notificationId(sessionId: Long): Int = ID_BASE + sessionId.toInt()
 
+        /**
+         * Остаток словами — для экранного диктора.
+         *
+         * Крупные цифры «1:02:05» TalkBack читает как «один двоеточие ноль два
+         * двоеточие ноль пять»: это и есть весь таймер выпечки, и незрячий
+         * человек остаётся с ним один на один. Здесь то же самое время сказано
+         * по-русски, целыми словами, и склонение считается честно — «21 минута»,
+         * но «11 минут».
+         *
+         * Секунды называются только когда часов нет: «два часа три минуты сорок
+         * одна секунда» — это не ответ на вопрос «сколько ещё».
+         */
+        fun timerLabel(remainingSeconds: Long, isPaused: Boolean): String {
+            val time = spokenRemaining(remainingSeconds)
+            return when {
+                remainingSeconds <= 0L -> if (isPaused) "пауза, время вышло" else "время вышло"
+                isPaused -> "пауза, осталось $time"
+                else -> "осталось $time"
+            }
+        }
+
+        /** «1 час 2 минуты», «45 секунд». Ноль здесь — «время вышло». */
+        fun spokenRemaining(totalSeconds: Long): String {
+            if (totalSeconds <= 0L) return "время вышло"
+            val h = totalSeconds / 3600
+            val m = (totalSeconds % 3600) / 60
+            val s = totalSeconds % 60
+            val parts = buildList {
+                if (h > 0) add("$h ${hourWord(h)}")
+                if (m > 0) add("$m ${minuteWord(m)}")
+                // Секунды — только в последний час, иначе они лишний шум.
+                if (h == 0L && (s > 0 || m == 0L)) add("$s ${secondWord(s)}")
+            }
+            return parts.joinToString(" ")
+        }
+
+        private fun hourWord(n: Long) = plural(n, "час", "часа", "часов")
+
+        private fun minuteWord(n: Long) = plural(n, "минута", "минуты", "минут")
+
+        private fun secondWord(n: Long) = plural(n, "секунда", "секунды", "секунд")
+
+        /** Русское склонение по числу: 21 минута, 22 минуты, 11 минут. */
+        private fun plural(n: Long, one: String, few: String, many: String) = when {
+            n % 10 == 1L && n % 100 != 11L -> one
+            n % 10 in 2L..4L && n % 100 !in 12L..14L -> few
+            else -> many
+        }
+
         /** hh:mm:ss при часах, иначе m:ss — тот же формат, что на экране таймера. */
         fun formatRemaining(totalSeconds: Long): String {
             val safe = totalSeconds.coerceAtLeast(0)

@@ -1,6 +1,7 @@
 package com.polinalinen.madre.model
 
 import com.polinalinen.madre.data.db.entities.BakeRecordEntity
+import java.io.File
 import java.time.Instant
 import java.time.ZoneId
 
@@ -28,11 +29,27 @@ data class ChapterPhoto(
  */
 object ChapterPhotos {
 
-    /** Снимки главы, свежие первыми. Записи без карточки сюда не попадают. */
-    fun of(records: List<BakeRecordEntity>, recipeId: String): List<ChapterPhoto> =
+    /**
+     * Снимки главы, свежие первыми. Записи без карточки сюда не попадают — и
+     * записи, чей файл уже не открыть, тоже.
+     *
+     * Проверка файла живёт ЗДЕСЬ, а не в плитке: иначе самый свежий снимок,
+     * удалённый из галереи телефона, оставался бы лицом главы, viewer
+     * открывался бы на «файла больше нет», а десяток целых фотографий под ним
+     * пришлось бы искать листанием. Читаемое фото есть — глава показывает его;
+     * ни одного не осталось — глава честно возвращается к списку попыток.
+     *
+     * [isReadable] отделён от логики, чтобы отбор проверялся без диска.
+     */
+    fun of(
+        records: List<BakeRecordEntity>,
+        recipeId: String,
+        isReadable: (String) -> Boolean = ::isReadableFile,
+    ): List<ChapterPhoto> =
         records.asSequence()
             .filter { it.recipeId == recipeId }
             .filter { !it.photoPath.isNullOrBlank() }
+            .filter { isReadable(it.photoPath!!) }
             .sortedByDescending { it.completedAtMillis }
             .map {
                 ChapterPhoto(
@@ -45,12 +62,24 @@ object ChapterPhotos {
             .toList()
 
     /**
-     * Лицо главы — последний снимок. null означает честное «фотографии нет»:
-     * главу либо не пекли, либо пекли, но не снимали. Плитка в этом случае
-     * показывает подпись, а не пустую рамку.
+     * Лицо главы — последний ЧИТАЕМЫЙ снимок. null означает честное
+     * «фотографии нет»: главу либо не пекли, либо пекли, но не снимали, либо
+     * все её снимки удалили с телефона. Плитка в этом случае показывает
+     * подпись, а не пустую рамку.
      */
-    fun cover(records: List<BakeRecordEntity>, recipeId: String): ChapterPhoto? =
-        of(records, recipeId).firstOrNull()
+    fun cover(
+        records: List<BakeRecordEntity>,
+        recipeId: String,
+        isReadable: (String) -> Boolean = ::isReadableFile,
+    ): ChapterPhoto? = of(records, recipeId, isReadable).firstOrNull()
+
+    /**
+     * Файл на месте и его правда можно прочитать. Исключения гасим: снимок мог
+     * лежать на вынутой карте памяти, и разворот Полки не должен падать из-за
+     * одной пропавшей фотокарточки.
+     */
+    private fun isReadableFile(path: String): Boolean =
+        runCatching { File(path).let { it.isFile && it.canRead() } }.getOrDefault(false)
 
     /** Viewer открывается на последнем снимке — он же первый в списке. */
     fun startIndex(size: Int): Int = 0

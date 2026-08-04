@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,9 +21,12 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -86,11 +90,26 @@ fun BookStatsScreen(
     onBack: () -> Unit,
 ) {
     val colors = AppColors.current
-    var openedRecipe by remember { mutableStateOf<Recipe?>(null) }
-    // Cycle 14: глава, открытая во весь экран. Отдельно от [openedRecipe]:
+    // Что открыто — переживает поворот экрана и убийство активити в фоне.
+    // Хранится ИДЕНТИФИКАТОРОМ, а не рецептом: Bundle умеет строку и число, а
+    // Recipe со всем таймлайном ему не отдать. Раньше здесь стоял remember, и
+    // поворот телефона на раскрытом снимке возвращал человека на Полку.
+    var openedRecipeId by rememberSaveable { mutableStateOf<String?>(null) }
+    // Cycle 14: глава, открытая во весь экран. Отдельно от [openedRecipeId]:
     // главу без единого снимка открывать во весь экран нечем, и она уходит
     // в прежний список попыток.
-    var openedChapter by remember { mutableStateOf<Recipe?>(null) }
+    var openedChapterId by rememberSaveable { mutableStateOf<String?>(null) }
+    // Страница viewer'а живёт здесь же и по той же причине.
+    var viewerPage by rememberSaveable { mutableIntStateOf(0) }
+    val openedRecipe = openedRecipeId?.let { id -> recipes.find { it.id == id } }
+    val openedChapter = openedChapterId?.let { id -> recipes.find { it.id == id } }
+
+    // Системная «назад» закрывает сначала то, что открыто поверх разворота, и
+    // только потом уводит с Полки. Без этого «назад» с раскрытого снимка
+    // выбрасывала на предыдущий экран вместе с ним.
+    BackHandler(enabled = openedChapter != null || openedRecipe != null) {
+        if (openedChapterId != null) openedChapterId = null else openedRecipeId = null
+    }
 
     val dates = remember(records) {
         records.map { Instant.ofEpochMilli(it.completedAtMillis).atZone(ZoneId.systemDefault()).toLocalDate() }
@@ -179,9 +198,12 @@ fun BookStatsScreen(
                 ) {
                     row.forEach { r ->
                         val count = records.count { it.recipeId == r.id }
-                        // Лицо главы — последний её снимок. Путь, а не Bitmap:
-                        // декодирует Coil, и только то, что видно на экране.
-                        val cover = remember(records, r.id) { ChapterPhotos.cover(records, r.id) }
+                        // Лицо главы — её последний ЧИТАЕМЫЙ снимок. Путь, а не
+                        // Bitmap: декодирует Coil, и только то, что видно на
+                        // экране. Отбор (включая проверку файла) — в
+                        // ChapterPhotos, чтобы плитка и viewer видели одно и то же.
+                        val photos = remember(records, r.id) { ChapterPhotos.of(records, r.id) }
+                        val cover = photos.firstOrNull()
                         ChapterTile(
                             name = r.name,
                             count = count,
@@ -191,7 +213,12 @@ fun BookStatsScreen(
                                 // Есть снимки — открываем главу во весь экран;
                                 // нет — прежний список попыток, он всё ещё
                                 // единственное место, где видны даты и порции.
-                                if (cover != null) openedChapter = r else if (count > 0) openedRecipe = r
+                                if (cover != null) {
+                                    openedChapterId = r.id
+                                    viewerPage = ChapterPhotos.startIndex(photos.size)
+                                } else if (count > 0) {
+                                    openedRecipeId = r.id
+                                }
                             },
                             modifier = Modifier.weight(1f),
                         )
@@ -221,11 +248,23 @@ fun BookStatsScreen(
     // а не в композиции viewer'а.
     val chapter = openedChapter
     if (chapter != null) {
-        ChapterPhotoViewer(
-            photos = remember(records, chapter.id) { ChapterPhotos.of(records, chapter.id) },
-            chapterName = chapter.name,
-            onDismiss = { openedChapter = null },
-        )
+        val chapterPhotos = remember(records, chapter.id) { ChapterPhotos.of(records, chapter.id) }
+        // Пока viewer был открыт, последний снимок могли удалить с телефона.
+        // Пустой fullscreen тогда не показываем — глава уходит в список попыток.
+        if (chapterPhotos.isEmpty()) {
+            LaunchedEffect(chapter.id) {
+                openedChapterId = null
+                openedRecipeId = chapter.id
+            }
+        } else {
+            ChapterPhotoViewer(
+                photos = chapterPhotos,
+                chapterName = chapter.name,
+                onDismiss = { openedChapterId = null },
+                initialPage = viewerPage,
+                onPageChange = { viewerPage = it },
+            )
+        }
     }
 
     val opened = openedRecipe
@@ -234,13 +273,13 @@ fun BookStatsScreen(
         // Форма/цвет — не стандартный Material-попап (concept: "никакого material-дизайна",
         // DESIGN-V4.md §Концепция): плоская карточка страницы, скругление ≤4dp.
         AlertDialog(
-            onDismissRequest = { openedRecipe = null },
+            onDismissRequest = { openedRecipeId = null },
             confirmButton = {
                 // У лайтбокса не было ни одной кнопки закрытия: уйти можно
                 // было только тапом мимо карточки или системной «назад».
                 BookButton(
                     label = "Закрыть",
-                    onClick = { openedRecipe = null },
+                    onClick = { openedRecipeId = null },
                     variant = BookButtonVariant.SECONDARY,
                 )
             },
@@ -490,13 +529,15 @@ private fun commonWeekday(dates: List<LocalDate>): String? {
 private fun topRecipe(records: List<BakeRecordEntity>): String? =
     records.groupingBy { it.recipeId to it.recipeName }.eachCount().maxByOrNull { it.value }?.key?.second
 
-private fun dayWord(n: Int) = when {
+/** «раз в 21 день», но «раз в 11 дней»: склонение считается, а не угадывается. */
+internal fun dayWord(n: Int) = when {
     n % 10 == 1 && n % 100 != 11 -> "день"
     n % 10 in 2..4 && n % 100 !in 12..14 -> "дня"
     else -> "дней"
 }
 
-private fun bakeWord(n: Int) = when {
+/** «21 выпечка», но «11 выпечек». */
+internal fun bakeWord(n: Int) = when {
     n % 10 == 1 && n % 100 != 11 -> "выпечка"
     n % 10 in 2..4 && n % 100 !in 12..14 -> "выпечки"
     else -> "выпечек"

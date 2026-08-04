@@ -49,10 +49,21 @@ class ChapterPhotoViewerUiTest {
         photo(1, 1_700_000_100_000L),
     )
 
-    private fun open(photos: List<ChapterPhoto> = chapter, onDismiss: () -> Unit = {}) {
+    private fun open(
+        photos: List<ChapterPhoto> = chapter,
+        onDismiss: () -> Unit = {},
+        initialPage: Int = 0,
+        onPageChange: (Int) -> Unit = {},
+    ) {
         rule.setContent {
             MadreTheme {
-                ChapterPhotoViewer(photos = photos, chapterName = "Бородинский", onDismiss = onDismiss)
+                ChapterPhotoViewer(
+                    photos = photos,
+                    chapterName = "Бородинский",
+                    onDismiss = onDismiss,
+                    initialPage = initialPage,
+                    onPageChange = onPageChange,
+                )
             }
         }
     }
@@ -116,6 +127,34 @@ class ChapterPhotoViewerUiTest {
     fun `a single photo chapter does not count itself out loud`() {
         open(photos = listOf(photo(1, 1_700_000_100_000L)))
         rule.onNodeWithText("1 из 1").assertDoesNotExist()
+    }
+
+    /**
+     * Страница приходит снаружи: после поворота экрана Полка возвращает viewer
+     * ровно туда, где человек стоял. Внутри диалога это состояние не сохранить —
+     * он живёт ровно столько, сколько открыта глава.
+     */
+    @Test
+    fun `the viewer opens on the page it was asked to open on`() {
+        open(initialPage = 2)
+        rule.onNodeWithText("3 из 3").assertIsDisplayed()
+    }
+
+    @Test
+    fun `a page beyond the chapter is pulled back onto it`() {
+        open(initialPage = 9)
+        rule.onNodeWithText("3 из 3").assertIsDisplayed()
+    }
+
+    /** Наружу уходит осевшая страница — то, на чём человек правда остановился. */
+    @Test
+    fun `the settled page is reported back to the shelf`() {
+        val pages = mutableListOf<Int>()
+        open(onPageChange = { pages += it })
+        rule.waitForIdle()
+        rule.onNodeWithTag(ChapterPhotoViewer.PAGER_TAG).performTouchInput { swipeLeft() }
+        rule.waitForIdle()
+        assertThat(pages.last()).isEqualTo(1)
     }
 
     @Test

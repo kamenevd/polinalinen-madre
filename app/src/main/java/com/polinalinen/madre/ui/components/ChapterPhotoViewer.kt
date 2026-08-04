@@ -12,7 +12,9 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
@@ -61,6 +63,11 @@ fun ChapterPhotoViewer(
     photos: List<ChapterPhoto>,
     chapterName: String,
     onDismiss: () -> Unit,
+    // Cycle 14: страница приходит снаружи и уходит наружу. Внутри диалога её
+    // негде сохранить так, чтобы она пережила поворот экрана: диалог живёт
+    // ровно столько, сколько открыта глава, а сама глава — состояние Полки.
+    initialPage: Int = 0,
+    onPageChange: (Int) -> Unit = {},
 ) {
     Dialog(
         onDismissRequest = onDismiss,
@@ -78,8 +85,14 @@ fun ChapterPhotoViewer(
                 EmptyChapterPage(chapterName)
             } else {
                 val pagerState = rememberPagerState(
-                    initialPage = ChapterPhotos.startIndex(photos.size),
+                    initialPage = ChapterPhotos.clampIndex(initialPage, photos.size),
                 ) { photos.size }
+                // Наверх уходит только осевшая страница: пока палец тянет
+                // снимок, «текущей» успевают побывать обе соседние.
+                LaunchedEffect(pagerState, photos.size) {
+                    snapshotFlow { pagerState.settledPage }
+                        .collect { onPageChange(ChapterPhotos.clampIndex(it, photos.size)) }
+                }
 
                 HorizontalPager(
                     state = pagerState,

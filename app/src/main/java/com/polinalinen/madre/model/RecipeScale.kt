@@ -30,20 +30,75 @@ object RecipeScale {
     /** Порции меняют граммы — и только их. */
     const val TIMING_NOTE = "время этапов от количества порций не меняется — тесто зреет столько же"
 
+    /** Ссылка на секцию целиком: в тесто уходит вся опара, сколько её вышло. */
+    const val ALL_OF_SECTION = "all_of_section"
+
+    /**
+     * Секции, которые в тесто не замешивают. Начинку сворачивают внутрь, крем
+     * кладут сверху уже на остывшее — на объём теста, который надо расстоять и
+     * посадить в духовку, они не влияют. До этой правки синнабоны считали
+     * начинку и крем тестом и сообщали про два захода там, где заход один.
+     */
+    private val NON_DOUGH_SECTIONS = setOf(
+        "filling", "cream", "topping", "glaze", "frosting", "sauce", "syrup", "decor",
+    )
+
     fun clampPortions(portions: Int): Int = portions.coerceIn(MIN_PORTIONS, MAX_PORTIONS)
 
     fun factor(portions: Int): Double = clampPortions(portions).toDouble()
 
-    /** Выход теста в целых граммах при выбранных порциях. */
+    /**
+     * Выход теста в целых граммах — того теста, которое правда поедет в духовку.
+     *
+     * Считается не «сумма всех строк рецепта», а вес ФИНАЛЬНОЙ секции: её
+     * собственные ингредиенты плюс то, что приносят её ссылки. Иначе опара,
+     * посчитанная и в своей секции, и в тесте, удваивается, а начинка с кремом
+     * записываются в тесто, которого они не составляют.
+     *
+     * Ссылка читается по своему типу и никак иначе:
+     *  · [ALL_OF_SECTION] — вся опара, то есть вес её секции;
+     *  · всё остальное («часть секции») — ровно тот вес, который написан в
+     *    самой строке. У пиццы опары выходит 115 г, а в тесто идёт 100 —
+     *    оставшиеся 15 г в духовку не едут и в выход не входят.
+     */
     fun yieldGrams(recipe: Recipe, portions: Int): Int {
         val scale = factor(portions)
-        // Складываем уже округлённые граммы, а не округляем сумму: в списке
-        // ингредиентов человек видит именно округлённые числа, и выход обязан
-        // сходиться с тем, что он положит на весы.
-        return recipe.ingredients.values
-            .flatten()
-            .filter { it.scalable && it.refType == null }
-            .sumOf { (it.gramsValue() * scale).roundToInt() }
+        val doughSections = recipe.ingredients.filterKeys { it.lowercase() !in NON_DOUGH_SECTIONS }
+        // Финальное тесто — секция, которая ссылается на опару. Если ссылок в
+        // рецепте нет вовсе, замешивать нечего кроме того, что написано: всё
+        // тестовые секции складываются как есть, дважды там ничего не стоит.
+        val finalSection = doughSections.values.firstOrNull { items -> items.any { it.refType != null } }
+            ?: return doughSections.values.flatten().sumOf { ownGrams(it, scale) }
+
+        return finalSection.sumOf { ownGrams(it, scale) } +
+            finalSection.filter { it.refType != null }.sumOf { refGrams(recipe, it, scale) }
+    }
+
+    /**
+     * Собственный вес строки. Ссылка своего веса не имеет — её приносит
+     * [refGrams], и складывать её здесь значило бы посчитать опару дважды.
+     *
+     * Складываем уже округлённые граммы, а не округляем сумму: в списке
+     * ингредиентов человек видит именно округлённые числа, и выход обязан
+     * сходиться с тем, что он положит на весы.
+     */
+    private fun ownGrams(ingredient: Ingredient, scale: Double): Int =
+        if (!ingredient.scalable || ingredient.refType != null) {
+            0
+        } else {
+            (ingredient.gramsValue() * scale).roundToInt()
+        }
+
+    /** Сколько граммов приносит в тесто одна ссылка. */
+    private fun refGrams(recipe: Recipe, ref: Ingredient, scale: Double): Int {
+        if (!ref.scalable) return 0
+        val portionOfSection = { (ref.gramsValue() * scale).roundToInt() }
+        if (ref.refType != ALL_OF_SECTION) return portionOfSection()
+        // Опары в этой книге плоские: сама на другую опару не ссылается,
+        // поэтому её вес — сумма собственных строк её секции. Секции с таким
+        // именем в рецепте нет — верим числу в самой строке, а не выдумываем.
+        val section = recipe.ingredients[ref.refSection] ?: return portionOfSection()
+        return section.sumOf { ownGrams(it, scale) }
     }
 
     /** Строка выхода, либо null — если весить в рецепте нечего. */

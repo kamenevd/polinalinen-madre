@@ -35,7 +35,7 @@ class MadreNotifier(private val context: Context) {
     fun postBakingNotification(key: String, title: String, text: String) {
         // Ключ уникален по паре «сессия + шаг», поэтому уведомления о разных
         // шагах не затирают друг друга, а повтор того же — заменяет, не плодит.
-        post(CHANNEL_BAKING, "Выпечка", key.hashCode(), title, text)
+        post(CHANNEL_BAKING, "Выпечка", notificationId(key), title, text)
     }
 
     /**
@@ -43,7 +43,7 @@ class MadreNotifier(private val context: Context) {
      * что в [postBakingNotification], — id из него получается тем же способом.
      */
     fun cancelByKey(key: String) {
-        NotificationManagerCompat.from(context).cancel(key.hashCode())
+        NotificationManagerCompat.from(context).cancel(notificationId(key))
     }
 
     /**
@@ -106,6 +106,24 @@ class MadreNotifier(private val context: Context) {
         const val CHANNEL_BAKING = "madre_baking"
 
         // Напоминание о кормлении всегда одно — новое заменяет прежнее.
-        private const val ID_FEEDING = 1001
+        internal const val ID_FEEDING = 1001
+
+        /**
+         * Своя полка id для уведомлений по ключу. Раньше здесь стоял голый
+         * key.hashCode(): любое целое, включая 1001 и 2000+id сессии. Совпадение
+         * редкое, но последствие у него не косметическое — «время вышло» встало
+         * бы на место напоминания о кормлении или, того хуже, cancelByKey снял
+         * бы строку хода чужой выпечки. Диапазон разводит id по местам:
+         * кормление — 1001, ход выпечки — 2000+, уведомления по ключу — здесь.
+         */
+        internal const val ID_KEYED_BASE = 3_000_000
+        internal const val ID_KEYED_RANGE = 1_000_000
+
+        /**
+         * Стабильный id для ключа. floorMod, а не abs: у Int.MIN_VALUE
+         * абсолютного значения нет, и abs вернул бы его же — отрицательный.
+         */
+        internal fun notificationId(key: String): Int =
+            ID_KEYED_BASE + Math.floorMod(key.hashCode(), ID_KEYED_RANGE)
     }
 }

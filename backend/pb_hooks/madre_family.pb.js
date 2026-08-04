@@ -51,6 +51,15 @@ routerAdd("POST", "/api/madre/family/create", (e) => {
     let created = null;
 
     $app.runInTransaction((txApp) => {
+        const member = txApp.findRecordById("users", e.auth.id);
+        // Проверка e.auth.family снаружи транзакции гонку не закрывает: два
+        // параллельных create проходят её оба. Перечитываем членство здесь и
+        // до создания книги — иначе второй запрос оставит осиротевшую family
+        // без владельца, а этот rollback гарантирует, что её и не появится.
+        if (member.getString("family")) {
+            throw new BadRequestError("Книга уже заведена — из неё сначала нужно выйти.", null);
+        }
+
         const families = txApp.findCollectionByNameOrId("families");
 
         created = new Record(families);
@@ -59,7 +68,6 @@ routerAdd("POST", "/api/madre/family/create", (e) => {
         created.set("invite_code_hash", $security.hs256(code, pepper));
         txApp.save(created);
 
-        const member = txApp.findRecordById("users", e.auth.id);
         member.set("family", created.id);
         txApp.save(member);
     });
@@ -122,6 +130,13 @@ routerAdd("POST", "/api/madre/family/join", (e) => {
         }
 
         const member = txApp.findRecordById("users", e.auth.id);
+        // Та же гонка, что в create: внешняя проверка пропускает два
+        // параллельных join. Перечитываем членство до записи и отвечаем тем же
+        // JOIN_FAILURE, чтобы не перезаписать уже проставленную книгу и не
+        // выдать оракулом, что чьё-то приглашение подошло.
+        if (member.getString("family")) {
+            throw new BadRequestError(JOIN_FAILURE, null);
+        }
         member.set("family", joined.id);
         txApp.save(member);
     });

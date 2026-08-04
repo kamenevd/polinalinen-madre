@@ -92,7 +92,7 @@ class FamilyAccountRepository(
         tokens.write(response.token)
         token = response.token
 
-        val familyId = response.record.family.takeIf { it.isNotBlank() }
+        val familyId = response.record.family.orEmpty().takeIf { it.isNotBlank() }
         // Название и владелец семьи — отдельный запрос, и его провал не повод
         // не пускать читателя внутрь: книга просто побудет пока безымянной.
         val family = familyId?.let { id -> runCatching { api.family(response.token, id) }.getOrNull() }
@@ -141,6 +141,9 @@ class FamilyAccountRepository(
         return FamilyBookState.Failed(failure, account)
     }
 
-    /** Отказ по коду приглашения не несёт вообще ничего — в этом весь смысл. */
-    private fun rejected(): FamilyBookState = FamilyBookState.Failed(NetworkFailure.REJECTED)
+    /**
+     * Отказ по коду не раскрывает ничего о семье, но сохраняет локально уже
+     * известный аккаунт: ошибка приглашения не должна разлогинивать читателя.
+     */
+    private fun rejected(): FamilyBookState = FamilyBookState.Failed(NetworkFailure.REJECTED, account)
 }

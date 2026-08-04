@@ -29,13 +29,14 @@ data class PasswordAuthRequest(
 
 /**
  * Запись пользователя. `family` — relation на коллекцию families; PocketBase
- * отдаёт незаполненную связь пустой строкой, а не null.
+ * в зависимости от версии/состояния записи может вернуть незаполненную связь
+ * как пустую строку или null, поэтому граница API обязана быть nullable.
  */
 data class UserRecord(
     @SerializedName("id") val id: String,
     @SerializedName("email") val email: String,
     @SerializedName("name") val name: String,
-    @SerializedName("family") val family: String,
+    @SerializedName("family") val family: String?,
 )
 
 data class AuthResponse(

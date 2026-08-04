@@ -88,6 +88,19 @@ class FamilyAccountRepository(
         return forget()
     }
 
+    /**
+     * Забыть открытый код: сервер отдаёт его один раз, и после показа он не
+     * должен всплыть снова. Чистить только экран мало — код живёт и в этом
+     * локальном аккаунте, а его тащит с собой любой следующий отказ ([fail],
+     * [rejected]). Не вычистив его здесь, провалившийся rotate/join вернул бы
+     * старый код обратно на страницу.
+     */
+    fun clearInviteCode() {
+        val current = account ?: return
+        if (current.inviteCode == null) return
+        account = current.copy(inviteCode = null)
+    }
+
     private suspend fun adopt(response: AuthResponse): FamilyBookState {
         tokens.write(response.token)
         token = response.token

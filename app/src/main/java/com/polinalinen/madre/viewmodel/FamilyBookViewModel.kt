@@ -6,20 +6,51 @@ import androidx.lifecycle.viewModelScope
 import com.polinalinen.madre.MadreApplication
 import com.polinalinen.madre.account.FamilyAccountRepository
 import com.polinalinen.madre.account.FamilyBookState
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /** UI-facing coordinator for the optional online family book. Room stays separate. */
-class FamilyBookViewModel(app: Application) : AndroidViewModel(app) {
-    private val repository: FamilyAccountRepository = (app as MadreApplication).familyAccountRepository
+class FamilyBookViewModel internal constructor(
+    app: Application,
+    private val repository: FamilyAccountRepository,
+) : AndroidViewModel(app) {
+    constructor(app: Application) : this(app, (app as MadreApplication).familyAccountRepository)
+
     private val _state = MutableStateFlow<FamilyBookState>(FamilyBookState.SignedOut)
     val state: StateFlow<FamilyBookState> = _state.asStateFlow()
+
+    /**
+     * Ровно один сетевой запрос за раз. Проверять по [_state] нельзя: Loading
+     * ставился внутри launch и до его исполнения два быстрых тапа успевали
+     * проскочить мимо, отправив создание/ротацию дважды. Флаг взводится
+     * синхронно, до launch, и снимается гарантированно.
+     */
+    private val inFlight = AtomicBoolean(false)
 
     fun restore() {
         if (_state.value is FamilyBookState.Loading || _state.value is FamilyBookState.SignedIn) return
         runNetwork { repository.restore() }
+    }
+
+    /** Keep the one-time invite code out of both the screen and the repository. */
+    fun clearInviteCode() {
+        repository.clearInviteCode()
+        when (val current = _state.value) {
+            is FamilyBookState.SignedIn ->
+                if (current.account.inviteCode != null) {
+                    _state.value = current.copy(account = current.account.copy(inviteCode = null))
+                }
+            is FamilyBookState.Failed -> {
+                val account = current.account
+                if (account?.inviteCode != null) {
+                    _state.value = current.copy(account = account.copy(inviteCode = null))
+                }
+            }
+            else -> Unit
+        }
     }
 
     fun signIn(email: String, password: String) = runNetwork {
@@ -40,19 +71,17 @@ class FamilyBookViewModel(app: Application) : AndroidViewModel(app) {
         _state.value = repository.signOut()
     }
 
-    /** Keep the one-time invite code out of the screen state after it was shown. */
-    fun clearInviteCode() {
-        val current = _state.value
-        if (current is FamilyBookState.SignedIn && current.account.inviteCode != null) {
-            _state.value = current.copy(account = current.account.copy(inviteCode = null))
-        }
-    }
-
     private fun runNetwork(action: suspend () -> FamilyBookState) {
-        if (_state.value is FamilyBookState.Loading) return
+        // Взвести флаг до launch: guard по _state пропускал двойной тап, пока
+        // Loading ещё не выставлен. compareAndSet впускает ровно первого.
+        if (!inFlight.compareAndSet(false, true)) return
+        _state.value = FamilyBookState.Loading
         viewModelScope.launch {
-            _state.value = FamilyBookState.Loading
-            _state.value = action()
+            try {
+                _state.value = action()
+            } finally {
+                inFlight.set(false)
+            }
         }
     }
 }

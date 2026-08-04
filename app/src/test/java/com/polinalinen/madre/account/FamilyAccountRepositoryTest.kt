@@ -328,6 +328,40 @@ class FamilyAccountRepositoryTest {
         assertThat(state.account?.email).isEqualTo("anya@example.com")
     }
 
+    // ── Одноразовый код не всплывает снова ───────────────────────────────
+
+    @Test
+    fun `a cleared invite code never comes back on a later failure`() = runTest {
+        val api = FakeApi()
+        api.inviteResult = { throw http(500) }
+        val repository = repository(api, FakeTokenStore())
+        repository.signIn("anya@example.com", "пароль")
+        repository.createFamily("Ивановы")
+
+        repository.clearInviteCode()
+        val state = repository.rotateInviteCode()
+
+        assertThat(state).isInstanceOf(FamilyBookState.Failed::class.java)
+        assertThat((state as FamilyBookState.Failed).account?.inviteCode).isNull()
+    }
+
+    @Test
+    fun `clearing the invite code keeps the rest of the account`() = runTest {
+        val api = FakeApi()
+        val repository = repository(api, FakeTokenStore())
+        repository.signIn("anya@example.com", "пароль")
+        repository.createFamily("Ивановы")
+
+        repository.clearInviteCode()
+        // Отказ по коду тащит с собой локальный аккаунт — он и виден.
+        api.joinResult = { throw http(400) }
+        val state = repository.joinFamily("не код") as FamilyBookState.Failed
+
+        assertThat(state.account?.inviteCode).isNull()
+        assertThat(state.account?.familyName).isEqualTo("Ивановы")
+        assertThat(state.account?.email).isEqualTo("anya@example.com")
+    }
+
     // ── Выход ────────────────────────────────────────────────────────────
 
     @Test

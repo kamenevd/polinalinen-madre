@@ -176,21 +176,46 @@ class BakingProgressService : LifecycleService() {
     private fun startForegroundFor(sessionId: Long, notification: Notification) {
         val id = BakingProgress.notificationId(sessionId)
         val previous = foregroundSessionId
-        runCatching {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(id, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-            } else {
-                startForeground(id, notification)
-            }
-            foregroundSessionId = sessionId
-            shownSessionIds = shownSessionIds + sessionId
-        }
+        if (!enterForeground(id, notification)) return
+        foregroundSessionId = sessionId
+        shownSessionIds = shownSessionIds + sessionId
         // Прежнее переднеплановое уведомление после смены остаётся обычным —
         // если его выпечки уже нет, снимаем сами.
         if (previous != null && previous != sessionId && previous !in shownSessionIds) {
             manager.cancel(BakingProgress.notificationId(previous))
         }
     }
+
+    /**
+     * Выйти на передний план подходящим для этой версии способом. Тип
+     * specialUse существует только с Android 14 (API 34) — на 29..33 его
+     * передача не проходит проверку «тип входит в объявленный в манифесте» и
+     * оставляет сервис без переднего плана, а система убивает его за молчание.
+     * Поэтому тип идёт только с 34, ниже — обычный двухаргументный overload.
+     *
+     * Возвращает false лишь в одном честном случае — когда система вовсе не даёт
+     * стартовать из фона (Android 12+). Любой другой отказ означает, что сервис
+     * остался без переднего плана по нашей ошибке, и глотать это нельзя.
+     */
+    private fun enterForeground(id: Int, notification: Notification): Boolean =
+        try {
+            // Проверка версии здесь встроена намеренно: и трёхаргументный
+            // startForeground (с API 29), и сам тип требуют явного SDK_INT рядом,
+            // иначе lint не увидит защиты. Граница «с какой версии тип» одна и та
+            // же, что и в [specialUseForegroundType], — там она под тестом.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(id, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+            } else {
+                startForeground(id, notification)
+            }
+            true
+        } catch (error: Exception) {
+            if (isBackgroundStartRestriction(error)) false else throw error
+        }
+
+    private fun isBackgroundStartRestriction(error: Throwable): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            error is android.app.ForegroundServiceStartNotAllowedException
 
     private fun clearAll() {
         shownSessionIds.forEach { manager.cancel(BakingProgress.notificationId(it)) }
@@ -233,6 +258,19 @@ class BakingProgressService : LifecycleService() {
 
         /** id для мгновения между стартом сервиса и первым слепком. */
         private const val PLACEHOLDER_SESSION_ID = 0L
+
+        /**
+         * Тип переднепланового сервиса для этой версии, либо null, если тип
+         * передавать нельзя. specialUse валиден только с Android 14 (API 34);
+         * ниже — обычный startForeground без типа. Вынесено отдельно, чтобы
+         * границу «с какой версии тип» можно было проверить без самого сервиса.
+         */
+        internal fun specialUseForegroundType(sdkInt: Int): Int? =
+            if (sdkInt >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            } else {
+                null
+            }
 
         /**
          * Поднять сервис. Зовётся из BakingViewModel в момент, когда человек

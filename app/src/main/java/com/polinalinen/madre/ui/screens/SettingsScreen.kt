@@ -29,6 +29,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -207,7 +208,7 @@ fun SettingsScreen(
 
 /** Optional online family book. The local Room book remains available in every state. */
 @Composable
-private fun FamilyBookSection(
+internal fun FamilyBookSection(
     state: FamilyBookState,
     onSignIn: (String, String) -> Unit,
     onRegister: (String, String, String) -> Unit,
@@ -219,11 +220,14 @@ private fun FamilyBookSection(
 ) {
     val colors = AppColors.current
     val context = LocalContext.current
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var displayName by remember { mutableStateOf("") }
-    var familyName by remember { mutableStateOf("") }
-    var inviteCode by remember { mutableStateOf("") }
+    // rememberSaveable, а не remember: лист «Отправить» и смена кода уводят
+    // Activity в фон и переживают её пересоздание — набранные почта, пароль,
+    // подпись, название и код не должны обнуляться под руками.
+    var email by rememberSaveable { mutableStateOf("") }
+    var password by rememberSaveable { mutableStateOf("") }
+    var displayName by rememberSaveable { mutableStateOf("") }
+    var familyName by rememberSaveable { mutableStateOf("") }
+    var inviteCode by rememberSaveable { mutableStateOf("") }
     val failed = state as? FamilyBookState.Failed
     val account = state.account
     val loading = state is FamilyBookState.Loading

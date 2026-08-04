@@ -67,6 +67,7 @@ fun StarterDiaryScreen(
     history: List<FeedingEntity>,
     onBack: () -> Unit,
     onFeed: () -> Unit,
+    onOpenGallery: () -> Unit = {},
     cancelledBakeCount: Int = 0,
 ) {
     val colors = AppColors.current
@@ -248,8 +249,17 @@ fun StarterDiaryScreen(
                 }
             }
 
-            Box(Modifier.padding(horizontal = 22.dp, vertical = 14.dp)) {
-                BookButton(label = "Покормить", onClick = onFeed)
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                BookButton(label = "Покормить", onClick = onFeed, modifier = Modifier.weight(1f))
+                BookButton(
+                    label = "Фото",
+                    onClick = onOpenGallery,
+                    variant = com.polinalinen.madre.ui.components.BookButtonVariant.SECONDARY,
+                    modifier = Modifier.weight(1f),
+                )
             }
             }
         }

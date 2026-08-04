@@ -25,7 +25,9 @@ import com.polinalinen.madre.ui.screens.BakingCompleteScreen
 import com.polinalinen.madre.ui.screens.BakingTimerScreen
 import com.polinalinen.madre.ui.screens.BookStatsScreen
 import com.polinalinen.madre.ui.screens.FeedingFormScreen
+import com.polinalinen.madre.ui.screens.GalleryPhoto
 import com.polinalinen.madre.ui.screens.HomeScreen
+import com.polinalinen.madre.ui.screens.PhotoGalleryScreen
 import com.polinalinen.madre.ui.screens.RecipeDetailScreen
 import com.polinalinen.madre.ui.screens.SettingsScreen
 import com.polinalinen.madre.ui.screens.ShelfScreen
@@ -107,6 +109,30 @@ fun MadreNavHost(
     // через SourdoughViewModel — реактивно, без ручного refetch после кормления.
     val sourdoughConfig by sourdoughViewModel.config.collectAsState()
     val feedingHistory by sourdoughViewModel.history.collectAsState()
+    val galleryPhotos = remember(feedingHistory, bakeRecords) {
+        val all = mutableListOf<GalleryPhoto>()
+        feedingHistory.forEach { feeding ->
+            feeding.photoPath?.takeIf { it.isNotBlank() }?.let { path ->
+                all += GalleryPhoto(
+                    id = "feeding-${feeding.id}",
+                    path = path,
+                    timestampMillis = feeding.timestampMillis,
+                    caption = "Кормление Мадре",
+                )
+            }
+        }
+        bakeRecords.forEach { bake ->
+            bake.photoPath?.takeIf { it.isNotBlank() }?.let { path ->
+                all += GalleryPhoto(
+                    id = "bake-${bake.id}",
+                    path = path,
+                    timestampMillis = bake.completedAtMillis,
+                    caption = bake.recipeName,
+                )
+            }
+        }
+        all.sortedByDescending { it.timestampMillis }
+    }
     val lastFeeding = feedingHistory.firstOrNull() // observeHistory сортирует DESC
     val profile = profileForInterval(sourdoughConfig?.intervalHours ?: 24)
     val phase = sourdoughConfig?.lastFeedingMillis?.let { currentPhase(hoursSinceFeeding(it), profile) }
@@ -182,7 +208,14 @@ fun MadreNavHost(
                     history = feedingHistory,
                     onBack = { navController.popBackStack() },
                     onFeed = { navController.navigate(MadreDestinations.FEEDING_FORM) },
+                    onOpenGallery = { navController.navigate(MadreDestinations.PHOTO_GALLERY) },
                     cancelledBakeCount = cancelledBakeCount,
+                )
+            }
+            composable(MadreDestinations.PHOTO_GALLERY) {
+                PhotoGalleryScreen(
+                    photos = galleryPhotos,
+                    onBack = { navController.popBackStack() },
                 )
             }
             composable(MadreDestinations.FEEDING_FORM) {

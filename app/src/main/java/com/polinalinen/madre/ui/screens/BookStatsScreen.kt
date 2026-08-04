@@ -230,7 +230,7 @@ fun BookStatsScreen(
                                 photoPath = a.photoPath,
                                 takenAtMillis = a.completedAtMillis,
                                 height = 110.dp,
-                                caption = "${'$'}{opened.name}, ${'$'}{formatRuDate(d)}",
+                                caption = formatStatsPhotoCaption(opened.name, d),
                                 modifier = Modifier.padding(vertical = 6.dp),
                             )
                         }
@@ -345,5 +345,8 @@ private val RU_MONTHS = listOf(
     "января", "февраля", "марта", "апреля", "мая", "июня",
     "июля", "августа", "сентября", "октября", "ноября", "декабря",
 )
+
+internal fun formatStatsPhotoCaption(recipeName: String, date: LocalDate): String =
+    "$recipeName, ${formatRuDate(date)}"
 
 private fun formatRuDate(d: LocalDate) = "${d.dayOfMonth} ${RU_MONTHS[d.monthValue - 1]}"

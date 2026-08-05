@@ -95,6 +95,15 @@ android {
     }
 }
 
+// Схема Room выгружается в app/schemas и лежит в git: без неё
+// MigrationTestHelper (androidTest/data/db/MigrationTest.kt) не может открыть
+// БД старой версии и проверить миграции на настоящих данных.
+kapt {
+    arguments {
+        arg("room.schemaLocation", "$projectDir/schemas")
+    }
+}
+
 val verifyReleaseSigning by tasks.registering(Exec::class) {
     commandLine("python3", rootProject.file("scripts/check_release_signing.py"))
 }

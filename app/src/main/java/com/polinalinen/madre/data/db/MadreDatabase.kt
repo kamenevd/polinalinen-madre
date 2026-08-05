@@ -206,12 +206,21 @@ abstract class MadreDatabase : RoomDatabase() {
     abstract fun familySettingDao(): FamilySettingDao
 
     companion object {
+        /**
+         * Единственный список миграций — его же берёт androidTest/MigrationTest.
+         * Если миграцию написать, но забыть здесь зарегистрировать, тест
+         * упадёт вместе с приложением, а не «пройдёт» на своей копии списка.
+         */
+        val MIGRATIONS: Array<Migration> = arrayOf(
+            MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
+        )
+
         // Room создаётся один раз через Application (см. MadreApplication.kt),
         // а не через lazy-singleton в ViewModel — закрывает баг v3 #1
         // (db.close() в onCleared() → crash при повторном входе).
         fun build(context: Context): MadreDatabase =
             Room.databaseBuilder(context.applicationContext, MadreDatabase::class.java, "madre.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                .addMigrations(*MIGRATIONS)
                 .build()
     }
 }

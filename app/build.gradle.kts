@@ -93,6 +93,14 @@ android {
             it.maxHeapSize = "2048m"
         }
     }
+
+    // MigrationTestHelper ищет схемы среди ассетов инструментального APK —
+    // без этого он не сможет собрать БД старой версии и молча провалит тест.
+    sourceSets {
+        getByName("androidTest") {
+            assets.srcDirs(files("$projectDir/schemas"))
+        }
+    }
 }
 
 // Схема Room выгружается в app/schemas и лежит в git: без неё
@@ -180,5 +188,11 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test:runner:1.5.2")
     androidTestImplementation("androidx.test:rules:1.5.0")
+    androidTestImplementation("androidx.test:core:1.5.0")
+    // Cycle 15: миграции Room проверяются на настоящей SQLite, а не на глаз.
+    // История схем лежит в app/schemas — MigrationTestHelper поднимает БД
+    // нужной версии оттуда.
+    androidTestImplementation("androidx.room:room-testing:$roomVersion")
+    androidTestImplementation("com.google.truth:truth:1.2.0")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

@@ -94,7 +94,7 @@ jobs:
           APK=$(python3 -c 'from pathlib import Path; files=list(Path("app/build/outputs/apk/release").glob("*.apk")); print(files[0] if len(files) == 1 else "")')
           test -n "${APK}"
           python3 scripts/verify_apk_signature.py "${APK}"
-          python3 scripts/release_cycle.py package --repo-root . --apk "${APK}" --output dist
+          python3 scripts/release_cycle.py package --repo-root . --apk "${APK}" --output dist --current-tag "${GITHUB_REF_NAME}"
           MANIFEST=$(find dist -name '*-manifest.json' -type f -print -quit)
           python3 scripts/release_cycle.py verify "${MANIFEST}"
 

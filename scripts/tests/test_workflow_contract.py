@@ -50,6 +50,14 @@ class WorkflowContractTests(unittest.TestCase):
             self.assertIn(required, text)
         self.assertNotIn("assembleDebug", text)
 
+    def test_release_workflow_passes_the_exact_tag_being_released(self):
+        # Without the current tag the packager compares the build against its own
+        # tag and rejects its own versionCode.
+        text = self.read(".github/workflows/release.yml")
+        package = re.findall(r"^.*scripts/release_cycle\.py package.*$", text, re.MULTILINE)
+        self.assertEqual(1, len(package), "release workflow must package exactly once")
+        self.assertIn('--current-tag "${GITHUB_REF_NAME}"', package[0])
+
     def test_release_workflow_pins_the_build_tools_the_verifier_expects(self):
         text = self.read(".github/workflows/release.yml")
         pinned = re.findall(r'^\s*MADRE_BUILD_TOOLS_VERSION:\s*"([^"]+)"', text, re.MULTILINE)

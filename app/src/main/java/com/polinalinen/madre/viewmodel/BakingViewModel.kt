@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.polinalinen.madre.MadreApplication
+import com.polinalinen.madre.model.BakingClock
 import com.polinalinen.madre.model.BakingSession
 import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.notifications.BakingNotificationPlanner
@@ -93,7 +94,7 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
     /** Возвращает id новой сессии — экран таймера должен открыться именно на ней. */
     fun startBaking(recipe: Recipe, scaleFactor: Double): Long {
         val id = nextSessionId++
-        _sessions.update { it + BakingSession(id = id, recipe = recipe, scaleFactor = scaleFactor) }
+        _sessions.update { it + BakingSession.start(id = id, recipe = recipe, scaleFactor = scaleFactor) }
         restartTimer(id)
         // Слепок публикуется ДО подъёма сервиса, а не после: сервис читает
         // список сразу при создании, и пустой список для него означает «всё,
@@ -107,7 +108,9 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun advanceStep(id: Long) {
-        _sessions.update { list -> list.map { if (it.id == id) it.advance() else it } }
+        val nowElapsed = BakingClock.elapsed()
+        val nowWallClock = BakingClock.wallClock()
+        _sessions.update { list -> list.map { if (it.id == id) it.advance(nowElapsed, nowWallClock) else it } }
         val s = session(id)
         if (s?.isCompleted == true) {
             stopTimer(id)
@@ -174,12 +177,15 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun stepBack(id: Long) {
-        _sessions.update { list -> list.map { if (it.id == id) it.retreat() else it } }
+        val nowElapsed = BakingClock.elapsed()
+        val nowWallClock = BakingClock.wallClock()
+        _sessions.update { list -> list.map { if (it.id == id) it.retreat(nowElapsed, nowWallClock) else it } }
         restartTimer(id)
     }
 
     fun togglePause(id: Long) {
-        _sessions.update { list -> list.map { if (it.id == id) it.togglePause() else it } }
+        val nowElapsed = BakingClock.elapsed()
+        _sessions.update { list -> list.map { if (it.id == id) it.togglePause(nowElapsed) else it } }
     }
 
     /** Завершает и убирает ИМЕННО эту сессию — остальные активные продолжают идти нетронутыми. */
@@ -219,9 +225,10 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
             while (true) {
                 val s = session(id) ?: break
                 if (!s.isPaused && !s.isCompleted) {
-                    val elapsed = (System.currentTimeMillis() - s.stepStartedAtMillis) / 1000
-                    val total = s.currentStep.durationMinutes * 60L
-                    val remaining = (total - elapsed).coerceAtLeast(0)
+                    // Монотонные часы, а не стенные: смена пояса или переход на
+                    // летнее время не должны отнимать у теста час расстойки
+                    // (и не должны дарить его).
+                    val remaining = s.remainingSeconds(BakingClock.elapsed())
                     _remainingSeconds.update { it + (id to remaining) }
                     notifyProgress(s, remaining)
                 }

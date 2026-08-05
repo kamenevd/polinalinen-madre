@@ -29,7 +29,13 @@ class BakingNotificationPlannerTest {
         TimelineStep(StepType.ACTION, "Замес", "", minutes, requiresButterPrep = butter)
 
     private fun session(recipe: Recipe, stepIndex: Int = 0) =
-        BakingSession(id = 1L, recipe = recipe, currentStepIndex = stepIndex)
+        BakingSession(
+            id = 1L,
+            recipe = recipe,
+            currentStepIndex = stepIndex,
+            startedAtElapsed = 5_000_000L,
+            startedAtWallClock = 1_700_000_000_000L,
+        )
 
     @Test
     fun `a wait step that has run out is worth a notification`() {

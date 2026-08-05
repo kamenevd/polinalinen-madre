@@ -118,22 +118,61 @@ enum class StepType {
 }
 
 /**
+ * Часы выпечки — единственное место, где модель времени касается системы.
+ *
+ * Двое часов, и каждые для своего (Cycle 15):
+ * [elapsed] монотонны и не двигаются ни от смены пояса, ни от перевода на
+ * летнее время — по ним и только по ним считается остаток шага;
+ * [wallClock] переживают перезагрузку — по ним запись ложится в формуляр и по
+ * ним же сессия восстанавливается после ребута (BakingSession.rebasedTo).
+ */
+object BakingClock {
+    fun elapsed(): Long = android.os.SystemClock.elapsedRealtime()
+    fun wallClock(): Long = System.currentTimeMillis()
+}
+
+/**
  * Runtime state of an active baking session.
  *
  * [id] identifies one baking run among possibly several running at once
  * (bread proofing while dough for something else rests) — see
  * BakingViewModel, which now holds a list of sessions instead of one.
+ *
+ * Часов сама не читает: «сейчас» приходит параметром — так отсчёт проверяется
+ * тестом без Android и не зависит от того, что творится с системным временем
+ * между двумя тиками таймера.
  */
 data class BakingSession(
     val id: Long,
     val recipe: Recipe,
     val currentStepIndex: Int = 0,
-    val stepStartedAtMillis: Long = System.currentTimeMillis(),
+    /** Начало текущего шага по монотонным часам — основа отсчёта остатка. */
+    val startedAtElapsed: Long,
+    /** Тот же момент по стенным часам — для истории и восстановления после ребута. */
+    val startedAtWallClock: Long,
     val isPaused: Boolean = false,
     val completedAt: Long? = null,
-    val accumulatedPauseMs: Long = 0,
+    /**
+     * Момент паузы по монотонным часам; null — сейчас не на паузе. Именно
+     * null, а не ноль: после ребута [rebasedTo] уводит отметки в отрицательные
+     * числа (шаг начался раньше загрузки), и ноль как признак «паузы нет» там
+     * тихо разморозил бы отсчёт.
+     */
+    val pausedAtElapsed: Long? = null,
     val scaleFactor: Double = 1.0
 ) {
+    companion object {
+        /** Завести сессию «сейчас» — единственный путь, которым в неё попадают часы. */
+        fun start(id: Long, recipe: Recipe, scaleFactor: Double = 1.0): BakingSession =
+            BakingSession(
+                id = id,
+                recipe = recipe,
+                startedAtElapsed = BakingClock.elapsed(),
+                startedAtWallClock = BakingClock.wallClock(),
+                scaleFactor = scaleFactor,
+            )
+    }
+
     val currentStep: TimelineStep
         get() = recipe.timeline.getOrElse(currentStepIndex) {
             recipe.timeline.lastOrNull() ?: TimelineStep(StepType.WAIT, "—", "", 0)
@@ -152,38 +191,80 @@ data class BakingSession(
     val totalDurationMinutes: Int
         get() = recipe.timeline.sumOf { it.durationMinutes }
 
-    fun advance(): BakingSession {
+    /**
+     * Сколько шаг уже идёт. На паузе счёт стоит на моменте паузы — простоявшее
+     * время шага не съедает.
+     */
+    fun elapsedSeconds(nowElapsed: Long): Long {
+        val until = if (isPaused) pausedAtElapsed ?: nowElapsed else nowElapsed
+        return ((until - startedAtElapsed) / 1000).coerceAtLeast(0)
+    }
+
+    /** Остаток текущего шага. Отсчёт один на всё приложение — экран и шторка берут его отсюда. */
+    fun remainingSeconds(nowElapsed: Long): Long =
+        (currentStep.durationMinutes * 60L - elapsedSeconds(nowElapsed)).coerceAtLeast(0)
+
+    /**
+     * Перезагрузка обнулила монотонные часы, и старый [startedAtElapsed] стал
+     * числом из прошлой жизни телефона. Пересчитываем его по стенным часам —
+     * единственному, что ребут пережило: шаг начался [startedAtWallClock], то
+     * есть столько-то миллисекунд назад, столько же назад он начался и по
+     * новым монотонным часам. Смещение паузы сохраняем как есть — на паузе
+     * остаток и так заморожен.
+     */
+    fun rebasedTo(nowElapsed: Long, nowWallClock: Long): BakingSession {
+        val sinceStart = (nowWallClock - startedAtWallClock).coerceAtLeast(0)
+        val rebasedStart = nowElapsed - sinceStart
+        return copy(
+            startedAtElapsed = rebasedStart,
+            pausedAtElapsed = pausedAtElapsed?.let { rebasedStart + (it - startedAtElapsed) },
+        )
+    }
+
+    fun advance(nowElapsed: Long, nowWallClock: Long): BakingSession {
         if (isCompleted) return this
         return if (isLastStep) {
-            copy(completedAt = System.currentTimeMillis(), accumulatedPauseMs = 0)
+            copy(completedAt = nowWallClock, pausedAtElapsed = null)
         } else {
             copy(
                 currentStepIndex = currentStepIndex + 1,
-                stepStartedAtMillis = System.currentTimeMillis(),
+                startedAtElapsed = nowElapsed,
+                startedAtWallClock = nowWallClock,
                 isPaused = false,
-                accumulatedPauseMs = 0
+                pausedAtElapsed = null
             )
         }
     }
 
-    fun retreat(): BakingSession {
+    fun retreat(nowElapsed: Long, nowWallClock: Long): BakingSession {
         if (currentStepIndex == 0) return this
         return copy(
             currentStepIndex = currentStepIndex - 1,
-            stepStartedAtMillis = System.currentTimeMillis(),
+            startedAtElapsed = nowElapsed,
+            startedAtWallClock = nowWallClock,
             isPaused = false,
-            accumulatedPauseMs = 0,
+            pausedAtElapsed = null,
             completedAt = null
         )
     }
 
-    fun togglePause(): BakingSession {
-        val now = System.currentTimeMillis()
+    /**
+     * Продолжение сдвигает начало шага на всю длину паузы — и по монотонным
+     * часам, и по стенным: оба поля означают один момент, «когда пошёл отсчёт
+     * этого шага», и разъехаться им нельзя, иначе [rebasedTo] после ребута
+     * вернёт паузу обратно в счёт.
+     */
+    fun togglePause(nowElapsed: Long): BakingSession {
         return if (!isPaused) {
-            copy(isPaused = true, accumulatedPauseMs = now)
+            copy(isPaused = true, pausedAtElapsed = nowElapsed)
         } else {
-            val pauseDuration = if (accumulatedPauseMs > 0) now - accumulatedPauseMs else 0L
-            copy(isPaused = false, stepStartedAtMillis = stepStartedAtMillis + pauseDuration, accumulatedPauseMs = 0)
+            val pauseDuration = pausedAtElapsed?.let { (nowElapsed - it).coerceAtLeast(0) } ?: 0L
+            copy(
+                isPaused = false,
+                startedAtElapsed = startedAtElapsed + pauseDuration,
+                startedAtWallClock = startedAtWallClock + pauseDuration,
+                pausedAtElapsed = null
+            )
         }
     }
 }

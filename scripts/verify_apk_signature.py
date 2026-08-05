@@ -10,8 +10,46 @@ import subprocess
 from pathlib import Path
 
 FINGERPRINT_PATTERN = re.compile(r"^[0-9a-f]{64}$")
-DIGEST_LINE = re.compile(r"Signer #(\d+) certificate SHA-256 digest:\s*([0-9a-fA-F:]+)")
-SIGNER_COUNT_LINE = re.compile(r"Number of signers:\s*(\d+)")
+
+# apksigner labels a certificate block either by signer index ("Signer #1") or,
+# once the APK carries a v3.1 block, by the SDK range that signer covers
+# ("Signer (minSdkVersion=33, maxSdkVersion=2147483647)"), optionally annotated
+# with "(dev release=true)". Both forms are accepted; every other SHA-256 line
+# apksigner can emit -- public key digests, source stamps, lineage entries --
+# must stay unmatched, so the whole line has to fit this grammar.
+SIGNER_LABEL = r"""
+    Signer
+    (?:
+        \s*\#\s*(?P<index>\d+)
+        |
+        \s*\(\s*minSdkVersion\s*=\s*\d+
+            (?:\s*\(\s*dev\s+release\s*=\s*[A-Za-z]+\s*\))?
+            \s*,\s*maxSdkVersion\s*=\s*\d+\s*\)
+    )
+"""
+# Contiguous or colon grouped hex; normalize_fingerprint enforces the length.
+HEX_DIGEST = r"[0-9a-fA-F]+(?::[0-9a-fA-F]+)*"
+DIGEST_LINE = re.compile(
+    rf"{SIGNER_LABEL}\s+certificate\s+SHA-?256\s+digest\s*:\s*(?P<digest>{HEX_DIGEST})",
+    re.IGNORECASE | re.VERBOSE,
+)
+SIGNER_COUNT_LINE = re.compile(r"Number\s+of\s+signers\s*:\s*(?P<count>\d+)", re.IGNORECASE)
+LONG_HEX_RUN = re.compile(r"[0-9a-fA-F]{16,}")
+
+
+def digest_labels(lines: list[str]) -> list[str]:
+    # Names the digest labels apksigner actually printed so an unknown output
+    # format is diagnosable from the release log. Only the text left of the
+    # colon is kept, and any hex run in it is masked, so no digest is logged.
+    labels: list[str] = []
+    for line in lines:
+        head, separator, _ = line.partition(":")
+        if not separator or "digest" not in head.lower():
+            continue
+        label = LONG_HEX_RUN.sub("<hex>", head.strip())
+        if label and label not in labels:
+            labels.append(label)
+    return labels
 
 
 def normalize_fingerprint(value: str) -> str:
@@ -32,19 +70,26 @@ def signer_fingerprint_from_streams(stdout: str | None, stderr: str | None) -> s
 
 
 def parse_signer_fingerprint(output: str) -> str:
-    counts = [int(value) for value in SIGNER_COUNT_LINE.findall(output)]
-    if len(set(counts)) > 1:
+    # The signer count is looked for anywhere in the output, so a stray count
+    # can only ever tighten the check. A certificate digest, in contrast, has to
+    # fill a line completely: apksigner appends nothing to those lines, so a
+    # partial match could only come from text that is not the signer.
+    counts = {int(count) for count in SIGNER_COUNT_LINE.findall(output)}
+    lines = [raw_line.strip() for raw_line in output.splitlines()]
+    digests = [match for match in (DIGEST_LINE.fullmatch(line) for line in lines) if match]
+    if len(counts) > 1:
         raise ValueError("contradictory apksigner signer count lines")
-    if counts and counts[0] != 1:
+    if counts and 1 not in counts:
         raise ValueError("expected exactly one APK signer")
-    matches = DIGEST_LINE.findall(output)
-    if not matches:
-        raise ValueError("expected exactly one APK signer certificate digest")
-    if any(int(number) != 1 for number, _ in matches):
+    if not digests:
+        labels = digest_labels(lines)
+        seen = f"; apksigner printed: {', '.join(labels)}" if labels else ""
+        raise ValueError(f"expected exactly one APK signer certificate digest{seen}")
+    if any(match["index"] is not None and int(match["index"]) != 1 for match in digests):
         raise ValueError("unexpected additional APK signer certificate digest")
-    fingerprints = {normalize_fingerprint(digest) for _, digest in matches}
+    fingerprints = {normalize_fingerprint(match["digest"]) for match in digests}
     if len(fingerprints) != 1:
-        raise ValueError("conflicting Signer #1 certificate digests")
+        raise ValueError("conflicting APK signer certificate digests")
     return next(iter(fingerprints))
 
 

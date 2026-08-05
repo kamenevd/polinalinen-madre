@@ -87,7 +87,107 @@ class ReleaseTrustTests(unittest.TestCase):
             f"Signer #1 certificate SHA-256 digest: {'ab' * 32}\n"
             f"Signer #1 certificate SHA-256 digest: {'cd' * 32}\n"
         )
-        with self.assertRaisesRegex(ValueError, "conflicting Signer #1"):
+        with self.assertRaisesRegex(ValueError, "conflicting APK signer certificate digests"):
+            verify_apk_signature.parse_signer_fingerprint(output)
+
+    def test_sdk_range_signer_label_is_accepted(self):
+        # With a v3.1 block apksigner labels the certificate by the SDK range it
+        # covers instead of by signer index, and prints no "#N" at all.
+        fingerprint = "ab" * 32
+        output = (
+            "Verifies\n"
+            "Verified using v3 scheme (APK Signature Scheme v3): true\n"
+            "Verified using v3.1 scheme (APK Signature Scheme v3.1): true\n"
+            "Number of signers: 1\n"
+            "Signer (minSdkVersion=24, maxSdkVersion=32) certificate DN: CN=Madre\n"
+            f"Signer (minSdkVersion=24, maxSdkVersion=32) certificate SHA-256 digest: {fingerprint}\n"
+            "Signer (minSdkVersion=33, maxSdkVersion=2147483647) certificate DN: CN=Madre\n"
+            f"Signer (minSdkVersion=33, maxSdkVersion=2147483647) certificate SHA-256 digest: {fingerprint}\n"
+        )
+        self.assertEqual(fingerprint, verify_apk_signature.parse_signer_fingerprint(output))
+
+    def test_dev_release_annotated_sdk_range_label_is_accepted(self):
+        fingerprint = "ab" * 32
+        output = (
+            "Number of signers: 1\n"
+            "Signer (minSdkVersion=33 (dev release=true), maxSdkVersion=2147483647) "
+            f"certificate SHA-256 digest: {fingerprint}\n"
+        )
+        self.assertEqual(fingerprint, verify_apk_signature.parse_signer_fingerprint(output))
+
+    def test_spacing_case_and_line_ending_variations_are_accepted(self):
+        fingerprint = "ab" * 32
+        colon_separated = ":".join(fingerprint[index : index + 2] for index in range(0, 64, 2))
+        output = (
+            "  number of signers :\t1\r\n"
+            f"\tsigner # 1  certificate\tSHA256  digest :  {colon_separated.upper()}  \r\n"
+        )
+        self.assertEqual(fingerprint, verify_apk_signature.parse_signer_fingerprint(output))
+
+    def test_rotated_certificate_per_sdk_range_is_rejected(self):
+        # Key rotation genuinely pins two certificates; the release must not pass.
+        output = (
+            "Number of signers: 1\n"
+            f"Signer (minSdkVersion=24, maxSdkVersion=32) certificate SHA-256 digest: {'ab' * 32}\n"
+            "Signer (minSdkVersion=33, maxSdkVersion=2147483647) "
+            f"certificate SHA-256 digest: {'cd' * 32}\n"
+        )
+        with self.assertRaisesRegex(ValueError, "conflicting APK signer certificate digests"):
+            verify_apk_signature.parse_signer_fingerprint(output)
+
+    def test_public_key_digest_is_not_mistaken_for_the_certificate(self):
+        output = (
+            "Number of signers: 1\n"
+            f"Signer #1 public key SHA-256 digest: {'cd' * 32}\n"
+        )
+        with self.assertRaisesRegex(ValueError, "exactly one APK signer certificate digest"):
+            verify_apk_signature.parse_signer_fingerprint(output)
+
+    def test_source_stamp_certificate_is_not_accepted_as_the_signer(self):
+        output = (
+            "Number of signers: 1\n"
+            f"Source Stamp Signer certificate SHA-256 digest: {'cd' * 32}\n"
+        )
+        with self.assertRaisesRegex(ValueError, "exactly one APK signer certificate digest"):
+            verify_apk_signature.parse_signer_fingerprint(output)
+
+    def test_lineage_certificate_is_not_accepted_as_the_signer(self):
+        output = (
+            "Number of signers: 1\n"
+            f"Signer #1 in lineage certificate SHA-256 digest: {'cd' * 32}\n"
+        )
+        with self.assertRaisesRegex(ValueError, "exactly one APK signer certificate digest"):
+            verify_apk_signature.parse_signer_fingerprint(output)
+
+    def test_unrelated_sha256_text_is_not_accepted(self):
+        output = (
+            "Number of signers: 1\n"
+            f"SHA-256: {'cd' * 32}\n"
+            f"{'cd' * 32}\n"
+            f"apk sha-256 digest: {'cd' * 32}\n"
+        )
+        with self.assertRaisesRegex(ValueError, "exactly one APK signer certificate digest"):
+            verify_apk_signature.parse_signer_fingerprint(output)
+
+    def test_trailing_text_on_a_digest_line_is_rejected(self):
+        output = (
+            "Number of signers: 1\n"
+            f"Signer #1 certificate SHA-256 digest: {'ab' * 32} (untrusted)\n"
+        )
+        with self.assertRaisesRegex(ValueError, "exactly one APK signer certificate digest"):
+            verify_apk_signature.parse_signer_fingerprint(output)
+
+    def test_rejection_names_the_labels_without_leaking_a_digest(self):
+        fingerprint = "cd" * 32
+        output = f"Number of signers: 1\nSigner #1 public key SHA-256 digest: {fingerprint}\n"
+        with self.assertRaises(ValueError) as raised:
+            verify_apk_signature.parse_signer_fingerprint(output)
+        self.assertIn("Signer #1 public key SHA-256 digest", str(raised.exception))
+        self.assertNotIn(fingerprint, str(raised.exception))
+
+    def test_truncated_digest_is_rejected(self):
+        output = f"Number of signers: 1\nSigner #1 certificate SHA-256 digest: {'ab' * 20}\n"
+        with self.assertRaisesRegex(ValueError, "64 hexadecimal characters"):
             verify_apk_signature.parse_signer_fingerprint(output)
 
     def test_missing_digest_is_rejected(self):

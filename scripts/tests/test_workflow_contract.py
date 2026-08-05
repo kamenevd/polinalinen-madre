@@ -2,6 +2,8 @@ import re
 import unittest
 from pathlib import Path
 
+from scripts import verify_apk_signature
+
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -47,6 +49,20 @@ class WorkflowContractTests(unittest.TestCase):
         ):
             self.assertIn(required, text)
         self.assertNotIn("assembleDebug", text)
+
+    def test_release_workflow_pins_the_build_tools_the_verifier_expects(self):
+        text = self.read(".github/workflows/release.yml")
+        pinned = re.findall(r'^\s*MADRE_BUILD_TOOLS_VERSION:\s*"([^"]+)"', text, re.MULTILINE)
+        self.assertEqual(1, len(pinned), "release workflow must pin build tools exactly once")
+        self.assertEqual(verify_apk_signature.PINNED_BUILD_TOOLS_VERSION, pinned[0])
+        # The runner image is not trusted to ship the pinned build tools already.
+        self.assertIn("sdkmanager", text)
+        self.assertIn('"build-tools;${MADRE_BUILD_TOOLS_VERSION}"', text)
+
+    def test_verifier_never_selects_build_tools_by_scanning_the_sdk(self):
+        source = self.read("scripts/verify_apk_signature.py")
+        self.assertNotIn("glob(", source)
+        self.assertIn("PINNED_BUILD_TOOLS_VERSION", source)
 
     def test_release_build_never_falls_back_to_debug_signing(self):
         text = self.read("app/build.gradle.kts")

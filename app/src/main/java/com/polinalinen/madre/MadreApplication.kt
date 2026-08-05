@@ -2,6 +2,7 @@ package com.polinalinen.madre
 
 import android.app.Application
 import com.polinalinen.madre.data.db.MadreDatabase
+import com.polinalinen.madre.data.repository.ActiveBakeRepository
 import com.polinalinen.madre.data.repository.BakeHistoryRepository
 import com.polinalinen.madre.data.repository.FamilySettingsRepository
 import com.polinalinen.madre.data.repository.RecipeRepository
@@ -41,6 +42,9 @@ class MadreApplication : Application() {
     val recipeRepository: RecipeRepository by lazy { RecipeRepository(this) }
     val sourdoughRepository: SourdoughRepository by lazy { SourdoughRepository(database) }
     val bakeHistoryRepository: BakeHistoryRepository by lazy { BakeHistoryRepository(database) }
+    // Cycle 15: незавершённые выпечки — их читает BakeRestoreWorker после
+    // перезагрузки телефона, поэтому репозиторий нужен и без единого экрана.
+    val activeBakeRepository: ActiveBakeRepository by lazy { ActiveBakeRepository(database) }
     val familySettingsRepository: FamilySettingsRepository by lazy { FamilySettingsRepository(database) }
     // Cycle 5: общая книга на PocketBase — клиент и очередь фоновой отправки.
     val madreApi: MadreApi by lazy { MadreApiFactory.create() }

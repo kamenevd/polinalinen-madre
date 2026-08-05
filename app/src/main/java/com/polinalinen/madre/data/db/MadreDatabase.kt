@@ -14,6 +14,7 @@ import androidx.room.TypeConverters
 import androidx.room.Update
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.polinalinen.madre.data.db.entities.ActiveBakeEntity
 import com.polinalinen.madre.data.db.entities.BakeRecordEntity
 import com.polinalinen.madre.data.db.entities.FamilySettingEntity
 import com.polinalinen.madre.data.db.entities.FeedingEntity
@@ -99,6 +100,24 @@ interface BakeRecordDao {
     // вклеивается позже, когда запись формуляра уже создана.
     @Query("UPDATE bake_records SET photoPath = :path WHERE id = :recordId")
     suspend fun attachPhoto(recordId: Long, path: String)
+}
+
+/**
+ * Cycle 15: незавершённые выпечки. Читается один раз после ребута
+ * (notifications/BakeRestoreWorker), пишется на каждом переходе шага — потому
+ * suspend, а не Flow: наблюдать за этой таблицей некому, живой отсчёт идёт в
+ * BakingViewModel.
+ */
+@Dao
+interface ActiveBakeDao {
+    @Query("SELECT * FROM active_bakes")
+    suspend fun getAll(): List<ActiveBakeEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(bake: ActiveBakeEntity)
+
+    @Query("DELETE FROM active_bakes WHERE sessionId = :sessionId")
+    suspend fun delete(sessionId: Long)
 }
 
 @Dao
@@ -204,6 +223,28 @@ private val MIGRATION_6_7 = object : Migration(6, 7) {
     }
 }
 
+// v7 → v8 (Cycle 15, 05.08.2026): новая таблица active_bakes — незавершённые
+// выпечки, которые BootReceiver восстанавливает после перезагрузки телефона.
+// Только CREATE: старые данные не трогаются, на устройствах без активной
+// выпечки таблица просто остаётся пустой.
+private val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `active_bakes` (" +
+                "`sessionId` INTEGER NOT NULL, " +
+                "`recipeId` TEXT NOT NULL, " +
+                "`recipeName` TEXT NOT NULL, " +
+                "`stepTitle` TEXT NOT NULL, " +
+                "`stepIndex` INTEGER NOT NULL, " +
+                "`stepDurationMinutes` INTEGER NOT NULL, " +
+                "`isWaitStep` INTEGER NOT NULL, " +
+                "`startedAtWallClock` INTEGER NOT NULL, " +
+                "`pausedAtWallClock` INTEGER, " +
+                "PRIMARY KEY(`sessionId`))"
+        )
+    }
+}
+
 /**
  * Cycle 11: «Пометы на полях» и «Конверт на будущее» убраны из приложения, но
  * margin_notes и sealed_notes ОСТАЮТСЯ объявленными сущностями — намеренно.
@@ -218,11 +259,12 @@ private val MIGRATION_6_7 = object : Migration(6, 7) {
         SourdoughConfigEntity::class,
         FeedingEntity::class,
         BakeRecordEntity::class,
+        ActiveBakeEntity::class,
         MarginNoteEntity::class,
         SealedNoteEntity::class,
         FamilySettingEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -231,6 +273,7 @@ abstract class MadreDatabase : RoomDatabase() {
     abstract fun sourdoughConfigDao(): SourdoughConfigDao
     abstract fun feedingDao(): FeedingDao
     abstract fun bakeRecordDao(): BakeRecordDao
+    abstract fun activeBakeDao(): ActiveBakeDao
     abstract fun familySettingDao(): FamilySettingDao
 
     companion object {
@@ -241,7 +284,7 @@ abstract class MadreDatabase : RoomDatabase() {
          */
         val MIGRATIONS: Array<Migration> = arrayOf(
             MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
-            MIGRATION_6_7,
+            MIGRATION_6_7, MIGRATION_7_8,
         )
 
         // Room создаётся один раз через Application (см. MadreApplication.kt),

@@ -212,10 +212,50 @@ class MigrationTest {
         db.close()
     }
 
+    /**
+     * v7 → v8: новая таблица active_bakes (Cycle 15) — незавершённые выпечки,
+     * которые BootReceiver поднимает после перезагрузки телефона. Миграция
+     * только создаёт таблицу, и главное здесь — что она ничего не трогает в
+     * уже накопленной истории.
+     */
+    @Test
+    @Throws(IOException::class)
+    fun migrate_7_to_8() {
+        helper.createDatabase(TEST_DB, 7).use { db ->
+            db.execSQL(
+                "INSERT INTO bake_records " +
+                    "(id, recipeId, recipeName, portions, completedAtMillis, photoPath) " +
+                    "VALUES (1, 'pane', 'Пане', 2, 1700000000000, 'bake_photos/bake_1_33.jpg')"
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 8, true, *MadreDatabase.MIGRATIONS)
+
+        assertThat(db.tableNames()).contains("active_bakes")
+        assertThat(db.columnsOf("active_bakes")).containsExactly(
+            "sessionId",
+            "recipeId",
+            "recipeName",
+            "stepTitle",
+            "stepIndex",
+            "stepDurationMinutes",
+            "isWaitStep",
+            "startedAtWallClock",
+            "pausedAtWallClock",
+        )
+        // На телефоне без активной выпечки таблица просто пуста — это не сбой.
+        assertThat(db.queryLong("SELECT COUNT(*) FROM active_bakes")).isEqualTo(0)
+        // Формуляр не пострадал.
+        assertThat(db.queryLong("SELECT COUNT(*) FROM bake_records")).isEqualTo(1)
+        assertThat(db.queryNullableString("SELECT photoPath FROM bake_records WHERE id = 1"))
+            .isEqualTo("bake_photos/bake_1_33.jpg")
+        db.close()
+    }
+
     /** Полная дорога до сегодняшней версии — на ней стоит и migrate_1_to_6. */
     @Test
     @Throws(IOException::class)
-    fun migrate_1_to_7() {
+    fun migrate_1_to_8() {
         helper.createDatabase(TEST_DB, 1).use { db ->
             db.execSQL(
                 "INSERT INTO users (id, name, isActive, createdAtMillis) " +
@@ -235,7 +275,7 @@ class MigrationTest {
             )
         }
 
-        val db = helper.runMigrationsAndValidate(TEST_DB, 7, true, *MadreDatabase.MIGRATIONS)
+        val db = helper.runMigrationsAndValidate(TEST_DB, 8, true, *MadreDatabase.MIGRATIONS)
 
         // Снимок, вклеенный ещё в первой версии книги, открывается и сегодня.
         assertThat(db.queryNullableString("SELECT photoPath FROM feedings WHERE id = 1"))

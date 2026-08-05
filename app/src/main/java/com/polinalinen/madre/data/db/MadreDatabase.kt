@@ -176,6 +176,34 @@ private val MIGRATION_5_6 = object : Migration(5, 6) {
     }
 }
 
+// v6 → v7 (Cycle 15, 05.08.2026): photoPath перестаёт быть абсолютным путём.
+// filesDir у приложения не вечен — он переезжает между /data/data/… и
+// /data/user/N/… (второй профиль, рабочий профиль, перенос данных), и после
+// такого переезда абсолютный путь указывает в никуда: книга теряет
+// фотокарточки целыми страницами. Схема не меняется, меняются только данные.
+//
+// SQLite не умеет REVERSE, поэтому «отрезать всё до имени файла» приходится
+// через якорь. Якорь — папка снимка, а не префикс filesDir: захардкоженный
+// /data/user/0/… промахнётся мимо второго профиля (/data/user/10/…), а
+// '/bake_photos/' стоит в пути всегда, потому что этот каталог назначает
+// PhotoStore.PhotoKind.
+//
+// Строки, которые якорь не поймал (чужая раскладка, ручная правка), остаются
+// абсолютными — и это нормально: PhotoStore.resolve читает такие по-старому.
+private val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        listOf("feedings" to "feeding_photos", "bake_records" to "bake_photos")
+            .forEach { (table, dir) ->
+                val anchor = "/$dir/"
+                db.execSQL(
+                    "UPDATE `$table` SET `photoPath` = '$dir/' || " +
+                        "SUBSTR(`photoPath`, INSTR(`photoPath`, '$anchor') + ${anchor.length}) " +
+                        "WHERE `photoPath` IS NOT NULL AND INSTR(`photoPath`, '$anchor') > 0"
+                )
+            }
+    }
+}
+
 /**
  * Cycle 11: «Пометы на полях» и «Конверт на будущее» убраны из приложения, но
  * margin_notes и sealed_notes ОСТАЮТСЯ объявленными сущностями — намеренно.
@@ -194,7 +222,7 @@ private val MIGRATION_5_6 = object : Migration(5, 6) {
         SealedNoteEntity::class,
         FamilySettingEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -213,6 +241,7 @@ abstract class MadreDatabase : RoomDatabase() {
          */
         val MIGRATIONS: Array<Migration> = arrayOf(
             MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
+            MIGRATION_6_7,
         )
 
         // Room создаётся один раз через Application (см. MadreApplication.kt),

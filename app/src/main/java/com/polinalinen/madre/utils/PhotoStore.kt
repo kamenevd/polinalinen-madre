@@ -12,7 +12,8 @@ import java.io.File
  * «Старое фото» (DESIGN-V4.md Cycle 6, AgedPhoto): PhotoPicker и камера выдают
  * временный content-URI, доступ к которому не переживает процесс — поэтому в
  * БД (BakeRecord.photoPath, FeedingEntity.photoPath) никогда не попадает URI,
- * только абсолютный путь файла внутри приложения.
+ * только путь к файлу внутри приложения — с Cycle 15 относительно filesDir,
+ * см. [commitBitmap] и [resolve].
  *
  * Cycle 11 разделил дорогу снимка на два шага, потому что между выбором кадра
  * и вклейкой встал редактор оформления (ui/photo/PhotoDesigner):
@@ -69,14 +70,49 @@ object PhotoStore {
         return path
     }
 
-    /** Сохраняет готовый кадр редактора; возвращает абсолютный путь или null. */
+    /**
+     * Сохраняет готовый кадр редактора; возвращает ОТНОСИТЕЛЬНЫЙ путь
+     * («bake_photos/bake_12_1690000000000.jpg») или null.
+     *
+     * Cycle 15: раньше в Room уезжал absolutePath, а он у приложения не вечен —
+     * filesDir переезжает между /data/data/… и /data/user/N/… (второй профиль,
+     * рабочий профиль, перенос данных). Абсолютный путь после такого переезда
+     * указывает в никуда, и книга теряет фотокарточки целыми страницами.
+     * Поэтому в БД ложится путь ОТНОСИТЕЛЬНО filesDir, а собирает его обратно
+     * [resolve] — уже по сегодняшнему filesDir.
+     */
     fun commitBitmap(context: Context, bitmap: Bitmap, kind: PhotoKind, key: Long): String? = runCatching {
-        val dir = File(context.filesDir, kind.dirName).apply { mkdirs() }
-        val file = File(dir, "${kind.prefix}_${key}_${System.currentTimeMillis()}.jpg")
+        val relative = relativePath(kind, key)
+        val file = File(context.filesDir, relative).apply { parentFile?.mkdirs() }
         file.outputStream().use { out -> bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out) }
         stripGpsExif(file)
-        file.absolutePath
+        relative
     }.getOrNull()
+
+    /** Имя новой фотокарточки относительно filesDir — единая точка истины. */
+    fun relativePath(kind: PhotoKind, key: Long): String =
+        "${kind.dirName}/${kind.prefix}_${key}_${System.currentTimeMillis()}.jpg"
+
+    /**
+     * Путь из БД → файл на диске. Старые записи (до Cycle 15 и те, что не
+     * поймала MIGRATION_6_7) хранят абсолютный путь — их отдаём как есть, иначе
+     * получилось бы filesDir + «/data/user/0/…». Всё остальное — относительно
+     * filesDir.
+     */
+    fun resolve(context: Context, relativeOrAbsolutePath: String): File =
+        if (relativeOrAbsolutePath.startsWith("/")) {
+            File(relativeOrAbsolutePath) // legacy absolute path
+        } else {
+            File(context.filesDir, relativeOrAbsolutePath)
+        }
+
+    /**
+     * Фотокарточку правда можно открыть. Исключения гасим: снимок мог лежать на
+     * вынутой карте памяти, и разворот Полки не должен падать из-за одной
+     * пропавшей фотографии.
+     */
+    fun isReadable(context: Context, path: String): Boolean =
+        runCatching { resolve(context, path).let { it.isFile && it.canRead() } }.getOrDefault(false)
 
     /**
      * Вычищает координаты съёмки из EXIF готового файла.

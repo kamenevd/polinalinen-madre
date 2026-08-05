@@ -1,7 +1,6 @@
 package com.polinalinen.madre.model
 
 import com.polinalinen.madre.data.db.entities.BakeRecordEntity
-import java.io.File
 import java.time.Instant
 import java.time.ZoneId
 
@@ -40,11 +39,17 @@ object ChapterPhotos {
      * ни одного не осталось — глава честно возвращается к списку попыток.
      *
      * [isReadable] отделён от логики, чтобы отбор проверялся без диска.
+     *
+     * Cycle 15: значения по умолчанию у [isReadable] намеренно НЕТ. Пути в
+     * bake_records теперь относительные (см. PhotoStore.resolve), а модель не
+     * знает filesDir — прежний File(path) молча считал бы «файла нет» для всех
+     * снимков сразу, и Полка осталась бы без единой фотографии. Пусть проверку
+     * приносит тот, у кого есть Context.
      */
     fun of(
         records: List<BakeRecordEntity>,
         recipeId: String,
-        isReadable: (String) -> Boolean = ::isReadableFile,
+        isReadable: (String) -> Boolean,
     ): List<ChapterPhoto> =
         records.asSequence()
             .filter { it.recipeId == recipeId }
@@ -70,16 +75,8 @@ object ChapterPhotos {
     fun cover(
         records: List<BakeRecordEntity>,
         recipeId: String,
-        isReadable: (String) -> Boolean = ::isReadableFile,
+        isReadable: (String) -> Boolean,
     ): ChapterPhoto? = of(records, recipeId, isReadable).firstOrNull()
-
-    /**
-     * Файл на месте и его правда можно прочитать. Исключения гасим: снимок мог
-     * лежать на вынутой карте памяти, и разворот Полки не должен падать из-за
-     * одной пропавшей фотокарточки.
-     */
-    private fun isReadableFile(path: String): Boolean =
-        runCatching { File(path).let { it.isFile && it.canRead() } }.getOrDefault(false)
 
     /** Viewer открывается на последнем снимке — он же первый в списке. */
     fun startIndex(size: Int): Int = 0

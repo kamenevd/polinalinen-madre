@@ -57,7 +57,7 @@ import com.polinalinen.madre.ui.theme.AppColors
 import androidx.compose.ui.platform.LocalContext
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import java.io.File
+import com.polinalinen.madre.utils.PhotoStore
 import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
@@ -90,6 +90,9 @@ fun BookStatsScreen(
     onBack: () -> Unit,
 ) {
     val colors = AppColors.current
+    // Пути к фотокарточкам в Room относительные — их нужно собирать
+    // относительно filesDir (PhotoStore.resolve), а для этого нужен Context.
+    val context = LocalContext.current
     // Что открыто — переживает поворот экрана и убийство активити в фоне.
     // Хранится ИДЕНТИФИКАТОРОМ, а не рецептом: Bundle умеет строку и число, а
     // Recipe со всем таймлайном ему не отдать. Раньше здесь стоял remember, и
@@ -202,7 +205,9 @@ fun BookStatsScreen(
                         // Bitmap: декодирует Coil, и только то, что видно на
                         // экране. Отбор (включая проверку файла) — в
                         // ChapterPhotos, чтобы плитка и viewer видели одно и то же.
-                        val photos = remember(records, r.id) { ChapterPhotos.of(records, r.id) }
+                        val photos = remember(records, r.id) {
+                            ChapterPhotos.of(records, r.id) { PhotoStore.isReadable(context, it) }
+                        }
                         val cover = photos.firstOrNull()
                         ChapterTile(
                             name = r.name,
@@ -248,7 +253,9 @@ fun BookStatsScreen(
     // а не в композиции viewer'а.
     val chapter = openedChapter
     if (chapter != null) {
-        val chapterPhotos = remember(records, chapter.id) { ChapterPhotos.of(records, chapter.id) }
+        val chapterPhotos = remember(records, chapter.id) {
+            ChapterPhotos.of(records, chapter.id) { PhotoStore.isReadable(context, it) }
+        }
         // Пока viewer был открыт, последний снимок могли удалить с телефона.
         // Пустой fullscreen тогда не показываем — глава уходит в список попыток.
         if (chapterPhotos.isEmpty()) {
@@ -359,7 +366,9 @@ private fun ChapterTile(
     val context = LocalContext.current
     // Файл могли удалить из галереи телефона — тогда это глава без снимка,
     // а не глава с пустой рамкой.
-    val coverFile = remember(cover?.path) { cover?.path?.let(::File)?.takeIf { it.isFile } }
+    val coverFile = remember(cover?.path) {
+        cover?.path?.let { PhotoStore.resolve(context, it) }?.takeIf { it.isFile }
+    }
     Column(modifier.testTag(tileTag).clickable(enabled = count > 0, onClick = onClick)) {
         Box(
             Modifier

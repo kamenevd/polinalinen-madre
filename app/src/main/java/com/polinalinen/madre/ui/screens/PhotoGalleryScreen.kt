@@ -33,7 +33,7 @@ import coil.request.ImageRequest
 import com.polinalinen.madre.ui.components.BackLabel
 import com.polinalinen.madre.ui.components.FullscreenPhotoViewer
 import com.polinalinen.madre.ui.theme.AppColors
-import java.io.File
+import com.polinalinen.madre.utils.PhotoStore
 
 /** One local photo from either a feeding or a completed bake. */
 data class GalleryPhoto(
@@ -88,7 +88,7 @@ fun PhotoGalleryScreen(
                     GalleryTile(
                         photo = photo,
                         context = context,
-                        onClick = { if (File(photo.path).isFile) opened = photo },
+                        onClick = { if (PhotoStore.isReadable(context, photo.path)) opened = photo },
                     )
                 }
             }
@@ -111,7 +111,7 @@ private fun GalleryTile(
     onClick: () -> Unit,
 ) {
     val colors = AppColors.current
-    val file = remember(photo.path) { File(photo.path) }
+    val file = remember(photo.path) { PhotoStore.resolve(context, photo.path) }
     Box(
         Modifier
             .fillMaxWidth()

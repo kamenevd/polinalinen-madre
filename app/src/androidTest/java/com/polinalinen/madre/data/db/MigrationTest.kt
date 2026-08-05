@@ -136,6 +136,115 @@ class MigrationTest {
         db.close()
     }
 
+    /**
+     * v6 → v7: photoPath из абсолютного становится относительным filesDir.
+     *
+     * Проверяем обе живые раскладки (/data/data/… и /data/user/N/…) и обе
+     * таблицы, а заодно — что миграция не трогает то, чего не понимает:
+     * непойманная строка обязана остаться как есть, её потом прочитает
+     * PhotoStore.resolve по legacy-ветке.
+     */
+    @Test
+    @Throws(IOException::class)
+    fun migrate_6_to_7() {
+        val foreignPath = "/mnt/sdcard/DCIM/old_bake.jpg"
+        helper.createDatabase(TEST_DB, 6).use { db ->
+            db.execSQL(
+                "INSERT INTO sourdough_configs " +
+                    "(id, userId, name, intervalHours, remindersEnabled, lastFeedingMillis) " +
+                    "VALUES (1, 1, 'Мадре', 12, 1, 1700000000000)"
+            )
+            // Кормление на основном профиле…
+            db.execSQL(
+                "INSERT INTO feedings " +
+                    "(id, sourdoughConfigId, timestampMillis, flourGrams, waterGrams, " +
+                    "storageLocation, notes, photoPath) VALUES " +
+                    "(1, 1, 1700000000000, 50, 50, 'ROOM', NULL, " +
+                    "'/data/user/0/com.polinalinen.madre/files/feeding_photos/feed_1_11.jpg')"
+            )
+            // …и на старой раскладке /data/data.
+            db.execSQL(
+                "INSERT INTO feedings " +
+                    "(id, sourdoughConfigId, timestampMillis, flourGrams, waterGrams, " +
+                    "storageLocation, notes, photoPath) VALUES " +
+                    "(2, 1, 1700000000000, 50, 50, 'ROOM', NULL, " +
+                    "'/data/data/com.polinalinen.madre/files/feeding_photos/feed_2_22.jpg')"
+            )
+            // Кормление без снимка — его миграция трогать не должна вовсе.
+            db.execSQL(
+                "INSERT INTO feedings " +
+                    "(id, sourdoughConfigId, timestampMillis, flourGrams, waterGrams, " +
+                    "storageLocation, notes, photoPath) " +
+                    "VALUES (3, 1, 1700000000000, 50, 50, 'ROOM', NULL, NULL)"
+            )
+            // Второй профиль: именно тот случай, мимо которого промахнулся бы
+            // захардкоженный префикс /data/user/0/.
+            db.execSQL(
+                "INSERT INTO bake_records " +
+                    "(id, recipeId, recipeName, portions, completedAtMillis, photoPath) VALUES " +
+                    "(1, 'pane', 'Пане', 2, 1700000000000, " +
+                    "'/data/user/10/com.polinalinen.madre/files/bake_photos/bake_1_33.jpg')"
+            )
+            // Путь, который якорь не поймает: остаётся нетронутым.
+            db.execSQL(
+                "INSERT INTO bake_records " +
+                    "(id, recipeId, recipeName, portions, completedAtMillis, photoPath) " +
+                    "VALUES (2, 'pane', 'Пане', 2, 1700000000000, '$foreignPath')"
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 7, true, *MadreDatabase.MIGRATIONS)
+
+        assertThat(db.queryNullableString("SELECT photoPath FROM feedings WHERE id = 1"))
+            .isEqualTo("feeding_photos/feed_1_11.jpg")
+        assertThat(db.queryNullableString("SELECT photoPath FROM feedings WHERE id = 2"))
+            .isEqualTo("feeding_photos/feed_2_22.jpg")
+        assertThat(db.queryNullableString("SELECT photoPath FROM feedings WHERE id = 3"))
+            .isNull()
+        assertThat(db.queryNullableString("SELECT photoPath FROM bake_records WHERE id = 1"))
+            .isEqualTo("bake_photos/bake_1_33.jpg")
+        assertThat(db.queryNullableString("SELECT photoPath FROM bake_records WHERE id = 2"))
+            .isEqualTo(foreignPath)
+
+        // Ни одна фотокарточка не потерялась по дороге.
+        assertThat(db.queryLong("SELECT COUNT(*) FROM feedings")).isEqualTo(3)
+        assertThat(db.queryLong("SELECT COUNT(*) FROM bake_records")).isEqualTo(2)
+        db.close()
+    }
+
+    /** Полная дорога до сегодняшней версии — на ней стоит и migrate_1_to_6. */
+    @Test
+    @Throws(IOException::class)
+    fun migrate_1_to_7() {
+        helper.createDatabase(TEST_DB, 1).use { db ->
+            db.execSQL(
+                "INSERT INTO users (id, name, isActive, createdAtMillis) " +
+                    "VALUES (1, 'Полина', 1, 1700000000000)"
+            )
+            db.execSQL(
+                "INSERT INTO sourdough_configs " +
+                    "(id, userId, name, intervalHours, remindersEnabled, lastFeedingMillis) " +
+                    "VALUES (1, 1, 'Мадре', 12, 1, 1700000000000)"
+            )
+            db.execSQL(
+                "INSERT INTO feedings " +
+                    "(id, sourdoughConfigId, timestampMillis, flourGrams, waterGrams, " +
+                    "storageLocation, notes, photoPath) VALUES " +
+                    "(1, 1, 1700000000000, 50, 50, 'ROOM', 'первое кормление', " +
+                    "'/data/user/0/com.polinalinen.madre/files/feeding_photos/feed_1_11.jpg')"
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 7, true, *MadreDatabase.MIGRATIONS)
+
+        // Снимок, вклеенный ещё в первой версии книги, открывается и сегодня.
+        assertThat(db.queryNullableString("SELECT photoPath FROM feedings WHERE id = 1"))
+            .isEqualTo("feeding_photos/feed_1_11.jpg")
+        assertThat(db.queryNullableString("SELECT notes FROM feedings WHERE id = 1"))
+            .isEqualTo("первое кормление")
+        db.close()
+    }
+
     private companion object {
         const val TEST_DB = "migration-test.db"
     }

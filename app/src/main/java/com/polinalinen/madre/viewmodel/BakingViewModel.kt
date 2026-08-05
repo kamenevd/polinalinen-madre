@@ -148,19 +148,20 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * «Старое фото» (Cycle 6 → Cycle 11): вклеить готовый снимок в запись
-     * формуляра этой выпечки. На вход приходит АБСОЛЮТНЫЙ путь файла в
-     * filesDir — копированием, поворотом и оформлением занимается
-     * ui/photo/PhotoAttachment, а content-URI до Room не доходит вовсе.
+     * формуляра этой выпечки. На вход приходит путь ОТНОСИТЕЛЬНО filesDir
+     * (Cycle 15, PhotoStore.commit) — копированием, поворотом и оформлением
+     * занимается ui/photo/PhotoAttachment, а content-URI до Room не доходит
+     * вовсе. Обратно в файл его собирает PhotoStore.resolve.
      *
      * Запись формуляра создаётся асинхронно в advanceStep, но к моменту, когда
      * человек выбрал и оформил кадр, insert давно завершён — bakeRecordIds
      * уже заполнен.
      */
-    fun attachBakePhoto(sessionId: Long, absolutePath: String) {
-        if (absolutePath.isBlank()) return
-        _bakePhotoPaths.update { it + (sessionId to absolutePath) }
+    fun attachBakePhoto(sessionId: Long, path: String) {
+        if (path.isBlank()) return
+        _bakePhotoPaths.update { it + (sessionId to path) }
         val recordId = bakeRecordIds[sessionId] ?: return
-        viewModelScope.launch { bakeHistoryRepository.attachPhoto(recordId, absolutePath) }
+        viewModelScope.launch { bakeHistoryRepository.attachPhoto(recordId, path) }
     }
 
     /**

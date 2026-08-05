@@ -34,7 +34,7 @@ import coil.request.ImageRequest
 import com.polinalinen.madre.model.ChapterPhoto
 import com.polinalinen.madre.model.ChapterPhotos
 import com.polinalinen.madre.ui.theme.AppColors
-import java.io.File
+import com.polinalinen.madre.utils.PhotoStore
 
 /** Всё, на что смотрят снаружи: тег страницы для тестов листания. */
 object ChapterPhotoViewer {
@@ -144,7 +144,7 @@ fun ChapterPhotoViewer(
 private fun ChapterPhotoPage(photo: ChapterPhoto) {
     val colors = AppColors.current
     val context = LocalContext.current
-    val file = remember(photo.path) { File(photo.path) }
+    val file = remember(photo.path) { PhotoStore.resolve(context, photo.path) }
     val caption = ChapterPhotos.caption(photo)
 
     Box(

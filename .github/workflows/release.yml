@@ -13,6 +13,13 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  # apksigner is pinned to the Build Tools that AGP uses to sign the release, so
+  # the runner image shipping a newer SDK cannot change the verifier's apksigner
+  # or its output format. Must stay equal to PINNED_BUILD_TOOLS_VERSION in
+  # scripts/verify_apk_signature.py; test_workflow_contract.py enforces that.
+  MADRE_BUILD_TOOLS_VERSION: "34.0.0"
+
 jobs:
   release:
     name: Build and publish signed release
@@ -35,6 +42,15 @@ jobs:
           java-version: "17"
       - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
       - uses: gradle/actions/setup-gradle@48b5f213c81028ace310571dc5ec0fbbca0b2947 # v4
+
+      - name: Install pinned build tools
+        run: |
+          test -n "${ANDROID_HOME}"
+          if [ ! -x "${ANDROID_HOME}/build-tools/${MADRE_BUILD_TOOLS_VERSION}/apksigner" ]; then
+            yes | "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" \
+              "build-tools;${MADRE_BUILD_TOOLS_VERSION}"
+          fi
+          test -x "${ANDROID_HOME}/build-tools/${MADRE_BUILD_TOOLS_VERSION}/apksigner"
 
       - name: Verify tag, state and signing inputs
         env:

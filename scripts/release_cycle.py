@@ -18,6 +18,8 @@ from typing import Any
 
 PRE_RELEASE_GATES = ("plan", "tdd", "build", "review", "visual", "runtime")
 SAFE_VERSION = re.compile(r"^[0-9A-Za-z][0-9A-Za-z._-]*$")
+# Shape of the tags the signed release workflow publishes: v1.0, v1.10, v5.4.2-cycle14.
+RELEASE_TAG = re.compile(r"v\d+(?:\.\d+)*(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?")
 
 
 class ReleaseError(ValueError):
@@ -82,32 +84,53 @@ def ensure_version_code_increases(current: int, previous: int | None) -> None:
         raise ReleaseError(f"versionCode {current} must be greater than previous release {previous}")
 
 
-def previous_release_version_code(repo_root: Path) -> int | None:
-    latest = subprocess.run(
-        [
-            "git",
-            "for-each-ref",
-            "--sort=-creatordate",
-            "--format=%(refname:short)",
-            "--count=1",
-            "refs/tags",
-        ],
-        cwd=repo_root,
-        text=True,
-        check=True,
-        capture_output=True,
-    )
-    tag = latest.stdout.strip()
-    if not tag:
+def is_release_tag(tag: str) -> bool:
+    return bool(RELEASE_TAG.fullmatch(tag))
+
+
+def normalize_tag(tag: str | None) -> str | None:
+    """Accept either a tag name or the ref form GitHub hands the workflow."""
+    if tag is None:
         return None
-    shown = subprocess.run(
-        ["git", "show", f"{tag}:app/build.gradle.kts"],
+    name = tag.strip().removeprefix("refs/tags/")
+    return name or None
+
+
+def previous_release_version_code(repo_root: Path, current_tag: str | None = None) -> int | None:
+    """versionCode of the newest release tag other than the one being released.
+
+    A tag-triggered release must not read its own tag as the previous release, so the
+    tag being released is excluded explicitly. Tags that are not release tags, or whose
+    app/build.gradle.kts is missing or ambiguous, are skipped instead of being trusted:
+    they carry no release versionCode this build could be compared against. This never
+    relaxes monotonicity -- ensure_version_code_increases still refuses a build that does
+    not beat the baseline, and refuses any versionCode past 1 when there is no baseline.
+    """
+    excluded = normalize_tag(current_tag)
+    listed = subprocess.run(
+        ["git", "for-each-ref", "--sort=-creatordate", "--format=%(refname:short)", "refs/tags"],
         cwd=repo_root,
         text=True,
         check=True,
         capture_output=True,
     )
-    return parse_gradle_version(shown.stdout)[0]
+    for line in listed.stdout.splitlines():
+        tag = line.strip()
+        if not tag or tag == excluded or not is_release_tag(tag):
+            continue
+        shown = subprocess.run(
+            ["git", "show", f"{tag}:app/build.gradle.kts"],
+            cwd=repo_root,
+            text=True,
+            capture_output=True,
+        )
+        if shown.returncode != 0:
+            continue
+        try:
+            return parse_gradle_version(shown.stdout)[0]
+        except ReleaseError:
+            continue
+    return None
 
 
 def sha256_file(path: Path) -> str:
@@ -249,7 +272,13 @@ def atomic_json(path: Path, payload: dict[str, Any]) -> None:
         raise
 
 
-def package(repo_root: Path, state_path: Path, apk_path: Path, output_dir: Path) -> Path:
+def package(
+    repo_root: Path,
+    state_path: Path,
+    apk_path: Path,
+    output_dir: Path,
+    current_tag: str | None = None,
+) -> Path:
     state = json.loads(state_path.read_text(encoding="utf-8"))
     ensure_releasable(state)
     version = state["cycle"]["version"]
@@ -258,7 +287,9 @@ def package(repo_root: Path, state_path: Path, apk_path: Path, output_dir: Path)
     version_code, gradle_version = parse_gradle_version(gradle_path.read_text(encoding="utf-8"))
     if gradle_version != version:
         raise ReleaseError(f"Gradle version {gradle_version} does not match cycle {version}")
-    ensure_version_code_increases(version_code, previous_release_version_code(repo_root))
+    ensure_version_code_increases(
+        version_code, previous_release_version_code(repo_root, current_tag)
+    )
     if not apk_path.is_file():
         raise ReleaseError(f"APK does not exist: {apk_path}")
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -288,6 +319,11 @@ def build_parser() -> argparse.ArgumentParser:
     pack.add_argument("--repo-root", type=Path, default=Path.cwd())
     pack.add_argument("--apk", type=Path, required=True)
     pack.add_argument("--output", type=Path, default=Path("dist"))
+    pack.add_argument(
+        "--current-tag",
+        default=None,
+        help="tag being released; excluded when picking the previous release baseline",
+    )
     verify = sub.add_parser("verify")
     verify.add_argument("manifest", type=Path)
     return parser
@@ -308,7 +344,13 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "package":
         repo_root = ensure_git_repo_root(args.repo_root)
-        manifest = package(repo_root, args.state.resolve(), args.apk.resolve(), args.output.resolve())
+        manifest = package(
+            repo_root,
+            args.state.resolve(),
+            args.apk.resolve(),
+            args.output.resolve(),
+            args.current_tag,
+        )
         print(manifest)
         return 0
     manifest = json.loads(args.manifest.read_text(encoding="utf-8"))

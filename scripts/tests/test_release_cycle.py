@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import tarfile
 import tempfile
@@ -6,6 +7,17 @@ import unittest
 from pathlib import Path
 
 from scripts import release_cycle
+
+
+def gradle_text(code, name):
+    return (
+        "android {\n"
+        "    defaultConfig {\n"
+        f"        versionCode = {code}\n"
+        f'        versionName = "{name}"\n'
+        "    }\n"
+        "}\n"
+    )
 
 
 class ReleaseCycleTests(unittest.TestCase):
@@ -19,6 +31,26 @@ class ReleaseCycleTests(unittest.TestCase):
             "cycle": {"number": 11, "version": "5.1.0-cycle11", "stage": "releasable"},
             "gates": gates,
         }
+
+    def init_repo(self, root):
+        subprocess.run(["git", "init", "-q", "-b", "main"], cwd=root, check=True)
+        subprocess.run(["git", "config", "user.email", "release@example.com"], cwd=root, check=True)
+        subprocess.run(["git", "config", "user.name", "Release Test"], cwd=root, check=True)
+
+    def tag_commit(self, root, tag, gradle, day):
+        """Commit `gradle` (None deletes app/build.gradle.kts) and tag it on a distinct date."""
+        path = root / "app" / "build.gradle.kts"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if gradle is None:
+            path.unlink(missing_ok=True)
+        else:
+            path.write_text(gradle, encoding="utf-8")
+        (root / "marker.txt").write_text(tag, encoding="utf-8")
+        stamp = f"2026-01-{day:02d}T00:00:00+00:00"
+        env = {**os.environ, "GIT_AUTHOR_DATE": stamp, "GIT_COMMITTER_DATE": stamp}
+        subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", tag], cwd=root, check=True, env=env)
+        subprocess.run(["git", "tag", tag], cwd=root, check=True, env=env)
 
     def test_parse_gradle_version(self):
         text = 'versionCode = 12\nversionName = "5.1.0-cycle11"\n'
@@ -44,6 +76,82 @@ class ReleaseCycleTests(unittest.TestCase):
         release_cycle.ensure_version_code_increases(1, None)
         with self.assertRaisesRegex(release_cycle.ReleaseError, "previous release tag"):
             release_cycle.ensure_version_code_increases(14, None)
+
+    def test_previous_release_excludes_the_tag_being_released(self):
+        # Regression: a tag-triggered release read its own tag as the previous
+        # release and rejected its own versionCode (v5.4.2: 20 vs previous 20).
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.init_repo(root)
+            self.tag_commit(root, "v5.4.1-cycle14", gradle_text(19, "5.4.1-cycle14"), 1)
+            self.tag_commit(root, "v5.4.2-cycle14", gradle_text(20, "5.4.2-cycle14"), 2)
+            self.assertEqual(20, release_cycle.previous_release_version_code(root))
+            self.assertEqual(
+                19, release_cycle.previous_release_version_code(root, "v5.4.2-cycle14")
+            )
+            self.assertEqual(
+                19, release_cycle.previous_release_version_code(root, "refs/tags/v5.4.2-cycle14")
+            )
+
+    def test_previous_release_compares_against_the_prior_tag(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.init_repo(root)
+            self.tag_commit(root, "v5.4.1-cycle14", gradle_text(19, "5.4.1-cycle14"), 1)
+            self.tag_commit(root, "v5.4.2-cycle14", gradle_text(20, "5.4.2-cycle14"), 2)
+            previous = release_cycle.previous_release_version_code(root, "v5.4.2-cycle14")
+            release_cycle.ensure_version_code_increases(20, previous)
+            with self.assertRaisesRegex(release_cycle.ReleaseError, "must be greater"):
+                release_cycle.ensure_version_code_increases(19, previous)
+            with self.assertRaisesRegex(release_cycle.ReleaseError, "must be greater"):
+                release_cycle.ensure_version_code_increases(18, previous)
+
+    def test_previous_release_is_absent_when_only_the_current_tag_exists(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.init_repo(root)
+            self.tag_commit(root, "v1.0.0-cycle1", gradle_text(1, "1.0.0-cycle1"), 1)
+            self.assertIsNone(release_cycle.previous_release_version_code(root, "v1.0.0-cycle1"))
+            # Fail-closed: no previous release still blocks anything past the first build.
+            with self.assertRaisesRegex(release_cycle.ReleaseError, "previous release tag"):
+                release_cycle.ensure_version_code_increases(2, None)
+
+    def test_previous_release_is_absent_without_any_tag(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.init_repo(root)
+            self.tag_commit(root, "start", gradle_text(1, "1.0.0-cycle1"), 1)
+            subprocess.run(["git", "tag", "-d", "start"], cwd=root, check=True, capture_output=True)
+            self.assertIsNone(release_cycle.previous_release_version_code(root, "v1.0.0-cycle1"))
+
+    def test_previous_release_ignores_malformed_and_unrelated_tags(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.init_repo(root)
+            self.tag_commit(root, "v5.4.0-cycle14", gradle_text(18, "5.4.0-cycle14"), 1)
+            # Not a release tag name at all.
+            self.tag_commit(root, "nightly-2026-01-02", gradle_text(99, "9.9.9"), 2)
+            # Release-shaped tag whose app metadata cannot be parsed.
+            self.tag_commit(root, "v9.9.8", "versionCode = 1\nversionCode = 2\n", 3)
+            # Release-shaped tag with no app build file at all.
+            self.tag_commit(root, "v9.9.9", None, 4)
+            self.assertEqual(
+                18, release_cycle.previous_release_version_code(root, "v5.4.2-cycle14")
+            )
+
+    def test_release_tag_pattern_accepts_shipped_tags_only(self):
+        for tag in ("v1.0", "v1.10", "v5.3.1-cycle13", "v5.4.2-cycle14"):
+            self.assertTrue(release_cycle.is_release_tag(tag), tag)
+        for tag in ("", "v", "nightly", "release-2026", "v5.4.2-cycle14^{}", "5.4.2"):
+            self.assertFalse(release_cycle.is_release_tag(tag), tag)
+
+    def test_package_cli_accepts_the_tag_being_released(self):
+        args = release_cycle.build_parser().parse_args(
+            ["package", "--apk", "app.apk", "--current-tag", "v5.4.3-cycle14"]
+        )
+        self.assertEqual("v5.4.3-cycle14", args.current_tag)
+        default = release_cycle.build_parser().parse_args(["package", "--apk", "app.apk"])
+        self.assertIsNone(default.current_tag)
 
     def test_incomplete_gate_blocks_release(self):
         state = self.releasable_state()

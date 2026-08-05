@@ -74,8 +74,39 @@ object PhotoStore {
         val dir = File(context.filesDir, kind.dirName).apply { mkdirs() }
         val file = File(dir, "${kind.prefix}_${key}_${System.currentTimeMillis()}.jpg")
         file.outputStream().use { out -> bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out) }
+        stripGpsExif(file)
         file.absolutePath
     }.getOrNull()
+
+    /**
+     * Вычищает координаты съёмки из EXIF готового файла.
+     *
+     * Сегодня это страховка, а не заплата на утечку: [commitBitmap] пересобирает
+     * кадр через Bitmap.compress, а тот пишет JPEG вообще без EXIF — GPS туда
+     * не доезжает уже сейчас. Но фотокарточка уходит в общий доступ (гостевая
+     * страница, экспорт книги), и цена ошибки — домашний адрес семьи. Поэтому
+     * чистка стоит на самом выходе: если путь сохранения когда-нибудь станет
+     * побайтовым копированием оригинала, координаты всё равно не пройдут.
+     *
+     * [commit] отдельно вызывать не нужно — он сохраняет ровно через [commitBitmap].
+     */
+    fun stripGpsExif(file: File): Boolean = runCatching {
+        val exif = ExifInterface(file.path)
+        GPS_TAGS.forEach { tag -> exif.setAttribute(tag, null) }
+        exif.saveAttributes()
+        true
+    }.getOrDefault(false)
+
+    private val GPS_TAGS = listOf(
+        ExifInterface.TAG_GPS_LATITUDE,
+        ExifInterface.TAG_GPS_LATITUDE_REF,
+        ExifInterface.TAG_GPS_LONGITUDE,
+        ExifInterface.TAG_GPS_LONGITUDE_REF,
+        ExifInterface.TAG_GPS_ALTITUDE,
+        ExifInterface.TAG_GPS_ALTITUDE_REF,
+        ExifInterface.TAG_GPS_TIMESTAMP,
+        ExifInterface.TAG_GPS_DATESTAMP,
+    )
 
     /** Убирает временный файл. Вызывается и на «отмена», и после удачной вклейки. */
     fun discard(staged: File?) {

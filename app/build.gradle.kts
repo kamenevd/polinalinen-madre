@@ -178,8 +178,8 @@ dependencies {
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.0")
     testImplementation("androidx.test.ext:junit:1.1.5")
     testImplementation("org.robolectric:robolectric:4.16.1")
-    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.47.0")
-    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.47.0")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.70.0")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.70.0")
     // Cycle 12: Compose-взаимодействия проверяются на Robolectric, а не только
     // на устройстве. Эмулятора в этой сборочной среде нет, а правила «отмена
     // спрашивает» и «мишень не меньше 48dp» проверять глазами нельзя.

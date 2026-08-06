@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -12,9 +13,9 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.polinalinen.madre.data.db.entities.BakeRecordEntity
-import com.polinalinen.madre.model.MonthRhythm
 import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.ui.components.ChapterPhotoViewer
+import com.polinalinen.madre.ui.components.YearHeatmapTags
 import com.polinalinen.madre.ui.theme.MadreTheme
 import org.junit.Rule
 import org.junit.Test
@@ -27,12 +28,13 @@ import java.time.YearMonth
 import java.time.ZoneId
 
 /**
- * Cycle 14: Полка — календарь текущего месяца и главы с лицами.
+ * Cycle 15: Полка — ритм ГОДА (был календарь месяца) и главы с лицами.
  *
- * Проверяется проводка, а не арифметика (она в MonthRhythmTest/ChapterPhotosTest):
- * календарь показывает ЭТОТ месяц целиком, глава со снимком открывается во весь
- * экран, глава без единого читаемого снимка уходит в список попыток, а открытая
- * глава переживает пересоздание активити.
+ * Проверяется проводка, а не арифметика (она в YearRhythmTest/ChapterPhotosTest):
+ * карта года на экране и подписана легендой, итог под ней считает и выпечки, и
+ * кормления, глава со снимком открывается во весь экран, глава без единого
+ * читаемого снимка уходит в список попыток, а открытая глава переживает
+ * пересоздание активити.
  *
  * Файлы здесь настоящие (TemporaryFolder): вся суть отбора снимков в том, что
  * запись в книге и файл на диске — разные вещи, и подделанная проверка файла
@@ -72,12 +74,13 @@ class BookStatsScreenUiTest {
         name: String,
         photoPath: String?,
         day: Int = 1,
+        date: LocalDate = thisMonth.atDay(day),
     ) = BakeRecordEntity(
         id = id,
         recipeId = recipeId,
         recipeName = name,
         portions = 1,
-        completedAtMillis = millisOn(thisMonth.atDay(day)),
+        completedAtMillis = millisOn(date),
         photoPath = photoPath,
     )
 
@@ -89,46 +92,76 @@ class BookStatsScreenUiTest {
         rule.waitForIdle()
     }
 
-    private fun shelf(records: List<BakeRecordEntity>): @androidx.compose.runtime.Composable () -> Unit = {
+    private fun shelf(
+        records: List<BakeRecordEntity>,
+        feedingMillis: List<Long> = emptyList(),
+    ): @androidx.compose.runtime.Composable () -> Unit = {
         MadreTheme {
             BookStatsScreen(
                 ownerLabel = "вы",
                 isMe = true,
                 recipes = listOf(recipe("bread", "Бородинский"), recipe("focaccia", "Фокачча")),
                 records = records,
+                feedingMillis = feedingMillis,
                 onBack = {},
             )
         }
     }
 
-    private fun open(records: List<BakeRecordEntity>) {
-        rule.setContent { shelf(records)() }
+    private fun open(records: List<BakeRecordEntity>, feedingMillis: List<Long> = emptyList()) {
+        rule.setContent { shelf(records, feedingMillis)() }
     }
 
     @Test
-    fun `the rhythm names the month it is showing`() {
+    fun `the rhythm of the year is on the page`() {
         open(emptyList())
-        rule.onNodeWithText(MonthRhythm.title(thisMonth)).assertIsDisplayed()
+        rule.onNodeWithTag(YearHeatmapTags.WEEKS).assertIsDisplayed()
     }
 
-    /** Календарь показывает месяц целиком — включая последнее его число. */
+    /** Тон клетки без легенды не значит ничего — легенда часть карты, а не декор. */
     @Test
-    fun `the whole month is on the page, quiet days and all`() {
+    fun `the year explains its own shading`() {
         open(emptyList())
-        rule.onNodeWithText("${thisMonth.lengthOfMonth()}").assertIsDisplayed()
-        rule.onNodeWithText("1").assertIsDisplayed()
+        rule.onNodeWithText("меньше").assertIsDisplayed()
+        rule.onNodeWithText("больше").assertIsDisplayed()
     }
 
+    /** Год открывается на текущей неделе: человек пришёл смотреть, как дела сейчас. */
     @Test
-    fun `an empty month says so instead of drawing a lie`() {
+    fun `the year opens on the week we are in`() {
         open(emptyList())
-        rule.onNodeWithText("в этом месяце здесь пока не пекли").assertIsDisplayed()
+        rule.onNodeWithContentDescription("${LocalDate.now()}: пусто").assertIsDisplayed()
     }
 
     @Test
-    fun `a month with bakes counts them under the calendar`() {
+    fun `an empty year says so instead of drawing a lie`() {
+        open(emptyList())
+        rule.onNodeWithText("за год здесь пока ни одной записи").assertIsDisplayed()
+    }
+
+    @Test
+    fun `a year with bakes counts them under the map`() {
         open(listOf(record(1, "bread", "Бородинский", photoPath = null)))
-        rule.onNodeWithText("в этом месяце: 1 выпечка").assertIsDisplayed()
+        rule.onNodeWithText("за год: 1 запись в 1 день").assertIsDisplayed()
+    }
+
+    /**
+     * Главное в правке Cycle 15: кормления живут в этой карте наравне с
+     * выпечкой. Закваску кормят чаще, чем пекут, и без кормлений год у
+     * человека, который просто держит закваску живой, выглядел бы пустым.
+     *
+     * Дни берутся от сегодняшнего, а не «первое и второе число»: в первых
+     * числах месяца второе число — ещё будущее, и такой тест краснел бы раз
+     * в месяц не по делу.
+     */
+    @Test
+    fun `feedings count into the rhythm too`() {
+        val yesterday = LocalDate.now().minusDays(1)
+        open(
+            records = listOf(record(1, "bread", "Бородинский", photoPath = null, date = yesterday)),
+            feedingMillis = listOf(millisOn(LocalDate.now())),
+        )
+        rule.onNodeWithText("за год: 2 записи в 2 дня").assertIsDisplayed()
     }
 
     @Test

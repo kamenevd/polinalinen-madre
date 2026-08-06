@@ -39,10 +39,9 @@ import androidx.compose.ui.unit.sp
 import com.polinalinen.madre.data.db.entities.BakeRecordEntity
 import com.polinalinen.madre.model.ChapterPhoto
 import com.polinalinen.madre.model.ChapterPhotos
-import com.polinalinen.madre.model.MonthGrid
-import com.polinalinen.madre.model.MonthRhythm
 import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.model.RuDate
+import com.polinalinen.madre.model.YearRhythm
 import com.polinalinen.madre.ui.components.AgedPhoto
 import com.polinalinen.madre.ui.components.ChapterPhotoViewer
 import com.polinalinen.madre.ui.components.BackLabel
@@ -52,6 +51,7 @@ import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.HeavyRule
 import com.polinalinen.madre.ui.components.PageLabel
 import com.polinalinen.madre.ui.components.Stamp
+import com.polinalinen.madre.ui.components.YearHeatmap
 import androidx.compose.ui.platform.testTag
 import com.polinalinen.madre.ui.theme.AppColors
 import androidx.compose.ui.platform.LocalContext
@@ -60,7 +60,6 @@ import coil.request.ImageRequest
 import com.polinalinen.madre.utils.PhotoStore
 import java.time.Instant
 import java.time.LocalDate
-import java.time.YearMonth
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 
@@ -87,6 +86,12 @@ fun BookStatsScreen(
     isMe: Boolean,
     recipes: List<Recipe>,
     records: List<BakeRecordEntity>,
+    /**
+     * Cycle 15: когда кормили закваску. В ритм года входит наравне с выпечкой —
+     * день, в который закваску покормили, не тихий день. Для чужой книги
+     * пусто: кормлений друга у нас нет.
+     */
+    feedingMillis: List<Long> = emptyList(),
     onBack: () -> Unit,
 ) {
     val colors = AppColors.current
@@ -120,12 +125,16 @@ fun BookStatsScreen(
     val topRecipeName = remember(records) { topRecipe(records) }
     val avgInterval = remember(dates) { avgIntervalDays(dates) }
     val weekday = remember(dates) { if (dates.size >= 3) commonWeekday(dates) else null }
-    // Cycle 14: ритм выпечки — календарь ТЕКУЩЕГО месяца, а не двенадцать
-    // безымянных квадратов «по неделям», по которым нельзя было сказать ни
-    // числа, ни месяца, и в которых июль сливался с августом.
-    val month = remember { YearMonth.now() }
-    val monthGrid = remember(records, month) {
-        MonthRhythm.build(records.map { it.completedAtMillis }, month, ZoneId.systemDefault())
+    // Cycle 15: ритм ГОДА вместо календаря одного месяца. Месяц отвечал на
+    // «когда в этом месяце», но первого числа обнулялся, и привычки — полос,
+    // провалов, брошенной после отпуска закваски — в нём было не увидеть.
+    val today = remember { LocalDate.now() }
+    val yearGrid = remember(records, feedingMillis, today) {
+        YearRhythm.build(
+            records.map { it.completedAtMillis } + feedingMillis,
+            today,
+            ZoneId.systemDefault(),
+        )
     }
 
     // Главы едут строками по три: список рецептов задан книгой, но растёт с
@@ -176,8 +185,21 @@ fun BookStatsScreen(
                 FormularRow("Печёт", if (avgInterval != null) "раз в $avgInterval ${dayWord(avgInterval)}" else "рано считать")
             }
 
-            PageLabel("Ритм выпечки", color = colors.espresso, modifier = Modifier.padding(horizontal = 22.dp, vertical = 8.dp))
-            MonthHeatmap(monthGrid)
+            PageLabel("Ритм года", color = colors.espresso, modifier = Modifier.padding(horizontal = 22.dp, vertical = 8.dp))
+            YearHeatmap(yearGrid)
+            Text(
+                if (yearGrid.totalEvents == 0) {
+                    "за год здесь пока ни одной записи"
+                } else {
+                    "за год: ${yearGrid.totalEvents} ${entryWord(yearGrid.totalEvents)} " +
+                        "в ${yearGrid.activeDays} ${dayWord(yearGrid.activeDays)}"
+                },
+                color = colors.cocoa,
+                fontFamily = FontFamily.Serif,
+                fontStyle = FontStyle.Italic,
+                fontSize = 11.5.sp,
+                modifier = Modifier.padding(horizontal = 22.dp).padding(top = 8.dp),
+            )
             Text(
                 weekday?.let { "чаще всего — по $it" } ?: if (dates.isEmpty()) "здесь пока тихо — ни одной записи" else "пока рано искать закономерность",
                 color = colors.cocoa,
@@ -413,102 +435,6 @@ private fun ChapterTile(
     }
 }
 
-/**
- * Cycle 14: календарь текущего месяца — весь, с тихими днями.
- *
- * Дни, когда не пекли, — тоже часть ритма, поэтому они здесь стоят пустыми
- * клетками, а не выпадают из картинки. Сетка фиксированная, шесть строк
- * максимум: ленивый список внутри ленивого списка тут не нужен и вреден.
- */
-@Composable
-private fun MonthHeatmap(grid: MonthGrid) {
-    val colors = AppColors.current
-    // Клетки календаря: пустые места перед первым числом + все дни месяца.
-    val cells: List<MonthDayCell> = remember(grid) {
-        List(grid.leadingBlanks) { MonthDayCell.Blank } + grid.days.map { MonthDayCell.Day(it.date.dayOfMonth, it.bakes) }
-    }
-
-    Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp)) {
-        Text(
-            MonthRhythm.title(grid.month),
-            color = colors.espresso,
-            fontFamily = FontFamily.Serif,
-            fontSize = 14.sp,
-            modifier = Modifier.padding(bottom = 6.dp),
-        )
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            MonthRhythm.WEEKDAY_LETTERS.forEach { letter ->
-                Text(
-                    letter,
-                    color = colors.cocoa,
-                    fontFamily = FontFamily.SansSerif,
-                    fontSize = 9.sp,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        }
-        cells.chunked(WEEK_LENGTH).forEach { week ->
-            Row(
-                Modifier.fillMaxWidth().padding(top = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                week.forEach { cell ->
-                    when (cell) {
-                        is MonthDayCell.Blank -> Spacer(Modifier.weight(1f).aspectRatio(1f))
-                        is MonthDayCell.Day -> Box(
-                            Modifier
-                                .weight(1f)
-                                .aspectRatio(1f)
-                                .drawBehind {
-                                    drawRect(heatTone(MonthRhythm.intensity(cell.bakes, grid.maxBakes), colors))
-                                },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                "${cell.dayOfMonth}",
-                                color = if (cell.bakes > 0) colors.cream else colors.cocoa,
-                                fontFamily = FontFamily.SansSerif,
-                                fontSize = 8.sp,
-                            )
-                        }
-                    }
-                }
-                // Хвост последней недели — пустые места, чтобы клетки не
-                // растянулись на всю ширину.
-                repeat(WEEK_LENGTH - week.size) { Spacer(Modifier.weight(1f)) }
-            }
-        }
-        Text(
-            if (grid.totalBakes == 0) {
-                "в этом месяце здесь пока не пекли"
-            } else {
-                "в этом месяце: ${grid.totalBakes} ${bakeWord(grid.totalBakes)}"
-            },
-            color = colors.cocoa,
-            fontFamily = FontFamily.Serif,
-            fontStyle = FontStyle.Italic,
-            fontSize = 11.5.sp,
-            modifier = Modifier.padding(top = 8.dp),
-        )
-    }
-}
-
-/** Клетка календаря: либо день месяца, либо пустое место перед первым числом. */
-private sealed interface MonthDayCell {
-    data object Blank : MonthDayCell
-    data class Day(val dayOfMonth: Int, val bakes: Int) : MonthDayCell
-}
-
-private fun heatTone(level: Int, colors: com.polinalinen.madre.ui.theme.MadreExtendedColors) = when (level) {
-    0 -> colors.parchment
-    1 -> colors.caramel
-    2 -> colors.crust
-    else -> colors.amberDeep
-}
-
-private const val WEEK_LENGTH = 7
-
 /** Во сколько пикселей просить у Coil обложку главы — плитка около 110dp. */
 private const val TILE_PX = 320
 
@@ -543,6 +469,16 @@ internal fun dayWord(n: Int) = when {
     n % 10 == 1 && n % 100 != 11 -> "день"
     n % 10 in 2..4 && n % 100 !in 12..14 -> "дня"
     else -> "дней"
+}
+
+/**
+ * «21 запись», но «11 записей». В ритме года лежат и выпечки, и кормления —
+ * называть их всех выпечками было бы неправдой.
+ */
+internal fun entryWord(n: Int) = when {
+    n % 10 == 1 && n % 100 != 11 -> "запись"
+    n % 10 in 2..4 && n % 100 !in 12..14 -> "записи"
+    else -> "записей"
 }
 
 /** «21 выпечка», но «11 выпечек». */

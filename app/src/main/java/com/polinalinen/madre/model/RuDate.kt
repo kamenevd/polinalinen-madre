@@ -21,9 +21,17 @@ object RuDate {
     /** «август 2026» — именительный падеж, как в шапке календаря. */
     fun monthAndYear(month: YearMonth): String = "${NOMINATIVE[month.monthValue - 1]} ${month.year}"
 
+    /** «авг» — подпись над колонкой года, где на целое слово места нет. */
+    fun monthShort(monthValue: Int): String = SHORT[monthValue - 1]
+
     private val NOMINATIVE = listOf(
         "январь", "февраль", "март", "апрель", "май", "июнь",
         "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь",
+    )
+
+    private val SHORT = listOf(
+        "янв", "фев", "мар", "апр", "май", "июн",
+        "июл", "авг", "сен", "окт", "ноя", "дек",
     )
 
     private val GENITIVE = listOf(

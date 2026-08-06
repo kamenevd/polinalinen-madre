@@ -81,12 +81,21 @@ fun Modifier.lightPage(watermark: String? = null, mirrored: Boolean = false): Mo
             override fun onSensorChanged(event: SensorEvent) {
                 SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values)
                 SensorManager.getOrientation(rotationMatrix, orientation)
-                spec = LightPage.specFor(pitchRad = orientation[1], rollRad = orientation[2])
+                val newSpec = LightPage.specFor(pitchRad = orientation[1], rollRad = orientation[2])
+                val current = spec
+                // Cycle 16: порог ~2° (0.035 рад) — микродрожание руки не двигает блик.
+                if (current == null ||
+                    abs(newSpec.cxFraction - current.cxFraction) > 0.02f ||
+                    abs(newSpec.cyFraction - current.cyFraction) > 0.02f ||
+                    abs(newSpec.alpha - current.alpha) > 0.005f
+                ) {
+                    spec = newSpec
+                }
             }
 
             override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
         }
-        sensorManager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_UI)
+        sensorManager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_NORMAL)
         onDispose { sensorManager.unregisterListener(listener) }
     }
 
@@ -98,11 +107,11 @@ fun Modifier.lightPage(watermark: String? = null, mirrored: Boolean = false): Mo
         }
     }
 
+    // Cycle 16: оригинальная логика отрисовки, throttle датчика выше.
     drawWithContent {
         drawContent()
         val s = spec ?: return@drawWithContent
         val center = Offset(size.width * s.cxFraction, size.height * s.cyFraction)
-        // Блик — мягкое световое пятно Cream, скользящее по бумаге за наклоном.
         drawRect(
             brush = Brush.radialGradient(
                 colors = listOf(Cream.copy(alpha = s.alpha), Color.Transparent),
@@ -111,7 +120,6 @@ fun Modifier.lightPage(watermark: String? = null, mirrored: Boolean = false): Mo
             ),
         )
         if (watermark != null) {
-            // Водяной знак виден ровно настолько, насколько страница «на свету».
             watermarkPaint.textSize = 30.sp.toPx()
             watermarkPaint.alpha = (s.alpha * 255).toInt()
             val canvas = drawContext.canvas.nativeCanvas

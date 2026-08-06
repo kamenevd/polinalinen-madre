@@ -23,6 +23,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -56,6 +58,41 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
     /** Секунд до конца текущего шага — отдельное число на каждую активную сессию. */
     private val _remainingSeconds = MutableStateFlow<Map<Long, Long>>(emptyMap())
     val remainingSeconds: StateFlow<Map<Long, Long>> = _remainingSeconds.asStateFlow()
+
+    // Cycle 16: срез той же карты по одной сессии. Экран, читающий карту целиком,
+    // перерисовывался раз в секунду весь — вместе со списком рецептов на первой
+    // полосе. Здесь поток отдаёт одно число и гасит повторы, так что подписчик
+    // просыпается ровно тогда, когда меняется ЕГО секунда.
+    private val remainingFlows = mutableMapOf<Long, StateFlow<Long>>()
+
+    /**
+     * Остаток текущего шага одной выпечки. Экземпляр потока на сессию один:
+     * два виджета на странице таймера (цифры и записка про масло) подписываются
+     * на него же, а не заводят по своему `map` на каждую рекомпозицию.
+     */
+    fun remainingFor(sessionId: Long): StateFlow<Long> = remainingFlows.getOrPut(sessionId) {
+        _remainingSeconds
+            .map { it[sessionId] ?: 0L }
+            .distinctUntilChanged()
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                _remainingSeconds.value[sessionId] ?: 0L,
+            )
+    }
+
+    /**
+     * К какой выпечке ведёт ляссе — к той, которой ближе всего до следующего шага.
+     * Считается здесь, а не на первой полосе: остаток пересчитывается раз в
+     * секунду, а цель ляссе за всю выпечку меняется хорошо если однажды, и
+     * первой полосе незачем просыпаться на каждый тик ради неизменного ответа.
+     */
+    val nearestSessionId: StateFlow<Long?> =
+        combine(_sessions, _remainingSeconds) { sessions, remaining ->
+            sessions.minByOrNull { remaining[it.id] ?: Long.MAX_VALUE }?.id
+        }
+            .distinctUntilChanged()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     // Сколько выпечек бросили незавершёнными в этой сессии приложения — источник
     // триггера «отменённая выпечка» для клякс (DESIGN-V4.md Cycle 3, InkBlot).
@@ -246,6 +283,9 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
         // Пауза сдвигает конец шага — снимок обязан узнать об этом сразу, иначе
         // после ребута выпечка вернётся с чужим сроком.
         rememberActiveBake(id)
+        // И шторка тоже: с Cycle 16 тик на паузе молчит, значит слово «пауза»
+        // (и снятие его) доносит сюда сам переход, а не следующая секунда.
+        publishProgress()
     }
 
     /** Завершает и убирает ИМЕННО эту сессию — остальные активные продолжают идти нетронутыми. */
@@ -254,6 +294,7 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
         forgetActiveBake(id)
         _sessions.update { list -> list.filterNot { it.id == id } }
         _remainingSeconds.update { it - id }
+        remainingFlows.remove(id)
         // Выпечка закрыта — её ключи в журнале больше ни к чему, а уже
         // показанные уведомления о шагах надо снять. До Cycle 12 они
         // оставались висеть: «время вышло» от выпечки, которой давно нет.
@@ -292,11 +333,13 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
                     val remaining = s.remainingSeconds(BakingClock.elapsed())
                     _remainingSeconds.update { it + (id to remaining) }
                     notifyProgress(s, remaining)
+                    // Слепок для шторки — только на идущем тике. Cycle 16: на
+                    // паузе он собирался те же раз в секунду и слово в слово
+                    // повторял предыдущий. Честность строки «пауза» от этого не
+                    // зависит: её публикует togglePause в момент перехода, и
+                    // дальше в шторке стоит ровно то, что происходит на деле.
+                    publishProgress()
                 }
-                // Слепок для шторки — на каждом тике, включая паузу: строка в
-                // уведомлении должна честно сказать «пауза», а не замереть на
-                // последнем отсчёте, будто выпечка продолжается.
-                publishProgress()
                 delay(1000)
             }
         }

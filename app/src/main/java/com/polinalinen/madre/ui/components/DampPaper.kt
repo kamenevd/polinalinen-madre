@@ -1,8 +1,6 @@
 package com.polinalinen.madre.ui.components
 
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -21,11 +19,15 @@ import kotlin.random.Random
  */
 private data class Blotch(val x: Float, val y: Float, val radius: Float, val weight: Float)
 
-fun Modifier.dampPaper(alpha: Float, seed: Long = 17L): Modifier = composed {
-    if (alpha <= 0f) return@composed Modifier
-    val blotches = remember(seed) {
+// Cycle 16: без composed {}. И раскладка разводов, и кисти считаются в блоке
+// кэша drawWithCache: он и заменяет remember(seed), и держит шесть градиентов
+// собранными, пока не сменится размер или alpha. Разводы детерминированы от
+// seed, поэтому пересчёт даёт ту же картинку — мигать нечему.
+fun Modifier.dampPaper(alpha: Float, seed: Long = 17L): Modifier {
+    if (alpha <= 0f) return this
+    return drawWithCache {
         val rng = Random(seed)
-        List(5) {
+        val blotches = List(5) {
             Blotch(
                 // Разводы жмутся к левой/правой кромке — середина страницы сухая.
                 x = if (rng.nextBoolean()) rng.nextFloat() * 0.12f else 1f - rng.nextFloat() * 0.12f,
@@ -34,12 +36,6 @@ fun Modifier.dampPaper(alpha: Float, seed: Long = 17L): Modifier = composed {
                 weight = 0.6f + rng.nextFloat() * 0.4f,
             )
         }
-    }
-    // Cycle 16: кисти строятся в drawWithCache, а не в теле отрисовки. Разводы
-    // детерминированы от seed и не двигаются, поэтому шесть градиентов зависят
-    // только от размера и от alpha — пересобирать их на каждый кадр не за чем.
-    // Блок кэша перезапускается сам, когда меняется размер или сама alpha.
-    drawWithCache {
         val topHeight = 80.dp.toPx()
         // Отсыревший верхний срез — там книга ближе всего к окну.
         val topBrush = Brush.verticalGradient(

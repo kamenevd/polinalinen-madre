@@ -34,6 +34,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -69,6 +70,16 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+
+/**
+ * Ярлыки для тестов: первая полоса длинная, и до строки оглавления надо
+ * ещё доехать — без ярлыка её в композиции просто нет.
+ */
+object Home {
+    const val LIST_TAG = "home-list"
+
+    fun chapterRowTag(recipeId: String): String = "home-chapter-$recipeId"
+}
 
 /**
  * Главная — «Первая полоса» (DESIGN-V4.md, экран 1).
@@ -135,7 +146,7 @@ fun HomeScreen(
                 .breathingPage(phase, amplitude = BookBreath.HOME_AMPLITUDE)
                 .dampPaper(weatherNote?.dampAlpha ?: 0f)
         ) {
-            LazyColumn(modifier = Modifier.statusBarsPadding()) {
+            LazyColumn(modifier = Modifier.statusBarsPadding().testTag(Home.LIST_TAG)) {
                 item { Masthead(season, onOpenSettings, onOpenShelf) }
                 item { MadreLine(madreHeadline, starterName, onOpenStarter) }
                 item {
@@ -402,6 +413,7 @@ private fun ChapterRow(
     Box(
         Modifier
             .fillMaxWidth()
+            .testTag(Home.chapterRowTag(recipe.id))
             .clickable { onClick() }
             .drawBehind { if (wornAlpha > 0f) drawRect(colors.espresso.copy(alpha = wornAlpha)) }
     ) {

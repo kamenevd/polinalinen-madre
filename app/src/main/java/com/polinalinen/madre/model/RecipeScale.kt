@@ -45,6 +45,25 @@ object RecipeScale {
 
     fun clampPortions(portions: Int): Int = portions.coerceIn(MIN_PORTIONS, MAX_PORTIONS)
 
+    /**
+     * Секции, из которых получается тесто, — всё, кроме начинок и кремов.
+     *
+     * Публично, потому что инвариант «сумма показанного = обещанный выход»
+     * (RecipeScaleInvariantTest) обязан складывать РОВНО те же строки, что
+     * складывает [yieldGrams]. Свой список секций в тесте означал бы, что
+     * тест и книга расходятся молча.
+     */
+    fun doughSections(recipe: Recipe): Map<String, List<Ingredient>> =
+        recipe.ingredients.filterKeys { it.lowercase() !in NON_DOUGH_SECTIONS }
+
+    /**
+     * Финальное тесто — секция, которая ссылается на опару. null означает, что
+     * ссылок в рецепте нет вовсе: тогда замешивать нечего кроме написанного, и
+     * все тестовые секции складываются как есть.
+     */
+    fun finalDoughSection(recipe: Recipe): List<Ingredient>? =
+        doughSections(recipe).values.firstOrNull { items -> items.any { it.refType != null } }
+
     fun factor(portions: Int): Double = clampPortions(portions).toDouble()
 
     /**
@@ -63,12 +82,8 @@ object RecipeScale {
      */
     fun yieldGrams(recipe: Recipe, portions: Int): Int {
         val scale = factor(portions)
-        val doughSections = recipe.ingredients.filterKeys { it.lowercase() !in NON_DOUGH_SECTIONS }
-        // Финальное тесто — секция, которая ссылается на опару. Если ссылок в
-        // рецепте нет вовсе, замешивать нечего кроме того, что написано: всё
-        // тестовые секции складываются как есть, дважды там ничего не стоит.
-        val finalSection = doughSections.values.firstOrNull { items -> items.any { it.refType != null } }
-            ?: return doughSections.values.flatten().sumOf { ownGrams(it, scale) }
+        val finalSection = finalDoughSection(recipe)
+            ?: return doughSections(recipe).values.flatten().sumOf { ownGrams(it, scale) }
 
         return finalSection.sumOf { ownGrams(it, scale) } +
             finalSection.filter { it.refType != null }.sumOf { refGrams(recipe, it, scale) }

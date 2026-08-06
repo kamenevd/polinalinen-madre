@@ -17,6 +17,8 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.node.CompositionLocalConsumerModifierNode
 import androidx.compose.ui.node.DrawModifierNode
 import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.node.ObserverModifierNode
+import androidx.compose.ui.node.observeReads
 import androidx.compose.ui.node.currentValueOf
 import androidx.compose.ui.node.invalidateDraw
 import androidx.compose.ui.platform.LocalContext
@@ -120,7 +122,7 @@ private data class LightPageElement(
 private class LightPageNode(
     private var watermark: String?,
     private var mirrored: Boolean,
-) : Modifier.Node(), DrawModifierNode, CompositionLocalConsumerModifierNode {
+) : Modifier.Node(), DrawModifierNode, CompositionLocalConsumerModifierNode, ObserverModifierNode {
 
     private var sensorManager: SensorManager? = null
     private var sensor: Sensor? = null
@@ -161,7 +163,25 @@ private class LightPageNode(
     }
 
     override fun onAttach() {
-        val context = currentValueOf(LocalContext)
+        // Первое чтение LocalContext и подписка на его изменения разом.
+        onObservedReadsChanged()
+    }
+
+    /**
+     * Читать LocalContext прямо в onAttach нельзя: колбэки узла не знают про
+     * snapshot-чтения, и узел, переживший смену контекста, остался бы подписан
+     * на датчик от старого. Поэтому чтение обёрнуто в observeReads — сменился
+     * контекст, Compose позовёт сюда снова, и мы переподпишемся.
+     */
+    override fun onObservedReadsChanged() {
+        observeReads {
+            val context = currentValueOf(LocalContext)
+            unsubscribe()
+            subscribe(context)
+        }
+    }
+
+    private fun subscribe(context: Context) {
         val manager = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
         val rotation = manager?.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
         // Датчика нет — молчим: ни подписки, ни блика, ни водяного знака.
@@ -171,10 +191,14 @@ private class LightPageNode(
         manager.registerListener(listener, rotation, SensorManager.SENSOR_DELAY_NORMAL)
     }
 
-    override fun onDetach() {
+    private fun unsubscribe() {
         sensorManager?.unregisterListener(listener)
         sensorManager = null
         sensor = null
+    }
+
+    override fun onDetach() {
+        unsubscribe()
         spec = null
         sheen = null
         sheenSpec = null

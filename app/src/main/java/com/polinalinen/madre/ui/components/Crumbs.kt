@@ -4,21 +4,20 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.ContentDrawScope
+import androidx.compose.ui.input.pointer.PointerInputScope
+import androidx.compose.ui.input.pointer.SuspendingPointerInputModifierNode
+import androidx.compose.ui.node.DelegatingNode
+import androidx.compose.ui.node.DrawModifierNode
+import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.node.invalidateDraw
+import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.rotate
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.polinalinen.madre.ui.theme.AmberDeep
 import com.polinalinen.madre.ui.theme.Cocoa
@@ -119,44 +118,101 @@ object Crumbs {
  * «листе», а не уезжают со скроллом. Горизонтальный свайп длиннее 48dp
  * запускает анимацию смахивания; вертикальный скролл жест не трогает.
  */
-fun Modifier.crumbs(bakeCount: Int, seed: Long): Modifier = composed {
-    val crumbCount = Crumbs.crumbCount(bakeCount)
-    if (crumbCount == 0) return@composed Modifier
+fun Modifier.crumbs(bakeCount: Int, seed: Long): Modifier {
+    if (Crumbs.crumbCount(bakeCount) == 0) return this
+    return this then CrumbsElement(bakeCount, seed)
+}
 
-    // bakeCount в ключе: после новой выпечки страница присыпается заново.
-    val particles = remember(seed, bakeCount) {
-        Crumbs.scatter(seed * 31 + bakeCount, crumbCount, Crumbs.dustCount(bakeCount))
+/** Сколько длится полёт смахнутых крошек. */
+private const val CRUMB_SWEEP_MS = 850
+
+/**
+ * Cycle 16: собственный узел вместо composed {}. Крошки — один из двух «живых»
+ * слоёв книги, и свести их к drawWithCache было нельзя: тут не «посчитать раз от
+ * размера», а жест, анимация полёта и флаг «уже смахнули».
+ */
+private data class CrumbsElement(
+    private val bakeCount: Int,
+    private val seed: Long,
+) : ModifierNodeElement<CrumbsNode>() {
+
+    override fun create(): CrumbsNode = CrumbsNode(bakeCount, seed)
+
+    override fun update(node: CrumbsNode) {
+        node.update(bakeCount, seed)
     }
-    val sweep = remember(seed, bakeCount) { Animatable(0f) }
-    var direction by remember { mutableFloatStateOf(1f) }
-    var swept by remember(seed, bakeCount) { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
 
-    this
-        .pointerInput(swept, seed, bakeCount) {
-            if (swept) return@pointerInput
-            var dragged = 0f
-            detectHorizontalDragGestures(
-                onDragStart = { dragged = 0f },
-                onHorizontalDrag = { _, amount -> dragged += amount },
-                onDragEnd = {
-                    if (abs(dragged) > 48.dp.toPx() && !sweep.isRunning) {
-                        direction = if (dragged > 0f) 1f else -1f
-                        scope.launch {
-                            sweep.animateTo(1f, tween(850, easing = LinearEasing))
-                            swept = true
+    override fun InspectorInfo.inspectableProperties() {
+        name = "crumbs"
+        properties["bakeCount"] = bakeCount
+        properties["seed"] = seed
+    }
+}
+
+private class CrumbsNode(
+    private var bakeCount: Int,
+    private var seed: Long,
+) : DelegatingNode(), DrawModifierNode {
+
+    private var particles = scatterFor(bakeCount, seed)
+    private var sweep = Animatable(0f)
+    private var direction = 1f
+    private var swept = false
+
+    private val pointer = delegate(SuspendingPointerInputModifierNode { awaitSweep() })
+
+    private fun scatterFor(bakeCount: Int, seed: Long) =
+        Crumbs.scatter(seed * 31 + bakeCount, Crumbs.crumbCount(bakeCount), Crumbs.dustCount(bakeCount))
+
+    /**
+     * После новой выпечки страница присыпается заново — ровно то, что раньше
+     * делали ключи remember(seed, bakeCount): и раскладка, и «уже смахнули»
+     * начинаются с чистого листа.
+     */
+    fun update(bakeCount: Int, seed: Long) {
+        if (this.bakeCount == bakeCount && this.seed == seed) return
+        this.bakeCount = bakeCount
+        this.seed = seed
+        particles = scatterFor(bakeCount, seed)
+        sweep = Animatable(0f)
+        swept = false
+        pointer.resetPointerInputHandler()
+        invalidateDraw()
+    }
+
+    private suspend fun PointerInputScope.awaitSweep() {
+        // Смахнутая страница жест больше не ловит: подметать нечего.
+        if (swept) return
+        var dragged = 0f
+        detectHorizontalDragGestures(
+            onDragStart = { dragged = 0f },
+            onHorizontalDrag = { _, amount -> dragged += amount },
+            onDragEnd = {
+                if (abs(dragged) > 48.dp.toPx() && !sweep.isRunning) {
+                    direction = if (dragged > 0f) 1f else -1f
+                    coroutineScope.launch {
+                        // Кадр анимации перерисовывается явно: узел рисует по
+                        // sweep.value, и ждать, что чтение само себя пригласит
+                        // на перерисовку, здесь не за чем.
+                        sweep.animateTo(1f, tween(CRUMB_SWEEP_MS, easing = LinearEasing)) {
+                            invalidateDraw()
                         }
+                        swept = true
+                        pointer.resetPointerInputHandler()
+                        invalidateDraw()
                     }
-                },
-            )
-        }
-        .drawWithContent {
-            drawContent()
-            if (swept) return@drawWithContent
-            val progress = sweep.value
-            val alpha = Crumbs.sweepAlpha(progress)
-            particles.forEach { p -> drawCrumb(p, progress, direction, alpha) }
-        }
+                }
+            },
+        )
+    }
+
+    override fun ContentDrawScope.draw() {
+        drawContent()
+        if (swept) return
+        val progress = sweep.value
+        val alpha = Crumbs.sweepAlpha(progress)
+        particles.forEach { p -> drawCrumb(p, progress, direction, alpha) }
+    }
 }
 
 private val CrumbTones = listOf(Cocoa, Crust, AmberDeep, Flour)

@@ -14,6 +14,7 @@ import androidx.room.TypeConverters
 import androidx.room.Update
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.polinalinen.madre.data.db.entities.ActiveBakeEntity
 import com.polinalinen.madre.data.db.entities.BakeRecordEntity
 import com.polinalinen.madre.data.db.entities.FamilySettingEntity
 import com.polinalinen.madre.data.db.entities.FeedingEntity
@@ -101,6 +102,24 @@ interface BakeRecordDao {
     suspend fun attachPhoto(recordId: Long, path: String)
 }
 
+/**
+ * Cycle 15: незавершённые выпечки. Читается один раз после ребута
+ * (notifications/BakeRestoreWorker), пишется на каждом переходе шага — потому
+ * suspend, а не Flow: наблюдать за этой таблицей некому, живой отсчёт идёт в
+ * BakingViewModel.
+ */
+@Dao
+interface ActiveBakeDao {
+    @Query("SELECT * FROM active_bakes")
+    suspend fun getAll(): List<ActiveBakeEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(bake: ActiveBakeEntity)
+
+    @Query("DELETE FROM active_bakes WHERE sessionId = :sessionId")
+    suspend fun delete(sessionId: Long)
+}
+
 @Dao
 interface FamilySettingDao {
     @Query("SELECT * FROM family_settings WHERE `key` = :key LIMIT 1")
@@ -176,6 +195,56 @@ private val MIGRATION_5_6 = object : Migration(5, 6) {
     }
 }
 
+// v6 → v7 (Cycle 15, 05.08.2026): photoPath перестаёт быть абсолютным путём.
+// filesDir у приложения не вечен — он переезжает между /data/data/… и
+// /data/user/N/… (второй профиль, рабочий профиль, перенос данных), и после
+// такого переезда абсолютный путь указывает в никуда: книга теряет
+// фотокарточки целыми страницами. Схема не меняется, меняются только данные.
+//
+// SQLite не умеет REVERSE, поэтому «отрезать всё до имени файла» приходится
+// через якорь. Якорь — папка снимка, а не префикс filesDir: захардкоженный
+// /data/user/0/… промахнётся мимо второго профиля (/data/user/10/…), а
+// '/bake_photos/' стоит в пути всегда, потому что этот каталог назначает
+// PhotoStore.PhotoKind.
+//
+// Строки, которые якорь не поймал (чужая раскладка, ручная правка), остаются
+// абсолютными — и это нормально: PhotoStore.resolve читает такие по-старому.
+private val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        listOf("feedings" to "feeding_photos", "bake_records" to "bake_photos")
+            .forEach { (table, dir) ->
+                val anchor = "/$dir/"
+                db.execSQL(
+                    "UPDATE `$table` SET `photoPath` = '$dir/' || " +
+                        "SUBSTR(`photoPath`, INSTR(`photoPath`, '$anchor') + ${anchor.length}) " +
+                        "WHERE `photoPath` IS NOT NULL AND INSTR(`photoPath`, '$anchor') > 0"
+                )
+            }
+    }
+}
+
+// v7 → v8 (Cycle 15, 05.08.2026): новая таблица active_bakes — незавершённые
+// выпечки, которые BootReceiver восстанавливает после перезагрузки телефона.
+// Только CREATE: старые данные не трогаются, на устройствах без активной
+// выпечки таблица просто остаётся пустой.
+private val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `active_bakes` (" +
+                "`sessionId` INTEGER NOT NULL, " +
+                "`recipeId` TEXT NOT NULL, " +
+                "`recipeName` TEXT NOT NULL, " +
+                "`stepTitle` TEXT NOT NULL, " +
+                "`stepIndex` INTEGER NOT NULL, " +
+                "`stepDurationMinutes` INTEGER NOT NULL, " +
+                "`isWaitStep` INTEGER NOT NULL, " +
+                "`startedAtWallClock` INTEGER NOT NULL, " +
+                "`pausedAtWallClock` INTEGER, " +
+                "PRIMARY KEY(`sessionId`))"
+        )
+    }
+}
+
 /**
  * Cycle 11: «Пометы на полях» и «Конверт на будущее» убраны из приложения, но
  * margin_notes и sealed_notes ОСТАЮТСЯ объявленными сущностями — намеренно.
@@ -190,11 +259,12 @@ private val MIGRATION_5_6 = object : Migration(5, 6) {
         SourdoughConfigEntity::class,
         FeedingEntity::class,
         BakeRecordEntity::class,
+        ActiveBakeEntity::class,
         MarginNoteEntity::class,
         SealedNoteEntity::class,
         FamilySettingEntity::class,
     ],
-    version = 6,
+    version = 8,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -203,15 +273,26 @@ abstract class MadreDatabase : RoomDatabase() {
     abstract fun sourdoughConfigDao(): SourdoughConfigDao
     abstract fun feedingDao(): FeedingDao
     abstract fun bakeRecordDao(): BakeRecordDao
+    abstract fun activeBakeDao(): ActiveBakeDao
     abstract fun familySettingDao(): FamilySettingDao
 
     companion object {
+        /**
+         * Единственный список миграций — его же берёт androidTest/MigrationTest.
+         * Если миграцию написать, но забыть здесь зарегистрировать, тест
+         * упадёт вместе с приложением, а не «пройдёт» на своей копии списка.
+         */
+        val MIGRATIONS: Array<Migration> = arrayOf(
+            MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
+            MIGRATION_6_7, MIGRATION_7_8,
+        )
+
         // Room создаётся один раз через Application (см. MadreApplication.kt),
         // а не через lazy-singleton в ViewModel — закрывает баг v3 #1
         // (db.close() в onCleared() → crash при повторном входе).
         fun build(context: Context): MadreDatabase =
             Room.databaseBuilder(context.applicationContext, MadreDatabase::class.java, "madre.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                .addMigrations(*MIGRATIONS)
                 .build()
     }
 }

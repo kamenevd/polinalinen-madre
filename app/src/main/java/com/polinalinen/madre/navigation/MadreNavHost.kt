@@ -269,6 +269,9 @@ fun MadreNavHost(
                     isMe = true,
                     recipes = recipesForStats,
                     records = bakeRecords,
+                    // Cycle 15: ритм года считает и кормления — закваску кормят
+                    // чаще, чем пекут, и без них год выглядел бы пустым.
+                    feedingMillis = remember(feedingHistory) { feedingHistory.map { it.timestampMillis } },
                     onBack = { navController.popBackStack() },
                 )
             }

@@ -20,14 +20,22 @@ import java.util.concurrent.TimeUnit
  * дошлёт сам (retry-политика — SyncPolicy). Очередь на запись — уникальное
  * имя + KEEP: повторный вызов с тем же ключом (например, кнопка «Поделиться»
  * после автоотправки) не создаёт дубликат записи на сервере.
+ *
+ * Cycle 15: то же обещание, но и за пределами очереди — каждая запись несёт
+ * client_event_id ([SyncEventId]). Уникальное имя работы защищает, только пока
+ * работа ещё в очереди этого устройства; повтор после успешного POST с
+ * потерянным ответом, доотправка из старой очереди или переустановка ему уже
+ * не видны, а серверу по ключу — видны.
  */
 class SyncRepository(private val context: Context) {
 
     private val gson = Gson()
 
     fun shareBakeStat(sessionKey: Long, recipeId: String, recipeName: String, portions: Int, bakedAtMillis: Long) {
+        val deviceId = DeviceIdentity.id(context)
         val record = BakeStatRecord(
-            deviceId = DeviceIdentity.id(context),
+            deviceId = deviceId,
+            clientEventId = SyncEventId.forBake(deviceId, sessionKey),
             recipeId = recipeId,
             recipeName = recipeName,
             portions = portions,
@@ -37,8 +45,10 @@ class SyncRepository(private val context: Context) {
     }
 
     fun shareFeedingStat(feedingId: Long, flourGrams: Int, waterGrams: Int, fedAtMillis: Long) {
+        val deviceId = DeviceIdentity.id(context)
         val record = FeedingStatRecord(
-            deviceId = DeviceIdentity.id(context),
+            deviceId = deviceId,
+            clientEventId = SyncEventId.forFeeding(deviceId, feedingId),
             flourGrams = flourGrams,
             waterGrams = waterGrams,
             fedAt = PocketBaseDates.toIso(fedAtMillis),

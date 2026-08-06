@@ -25,9 +25,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.Text
+import androidx.compose.ui.platform.LocalContext
 import coil.compose.AsyncImage
 import com.polinalinen.madre.ui.theme.AppColors
-import java.io.File
+import com.polinalinen.madre.utils.PhotoStore
 
 /**
  * Cycle 12: фотокарточку можно наконец рассмотреть.
@@ -88,7 +89,7 @@ fun FullscreenPhotoViewer(
             contentAlignment = Alignment.Center,
         ) {
             AsyncImage(
-                model = File(photoPath),
+                model = PhotoStore.resolve(LocalContext.current, photoPath),
                 contentDescription = caption ?: "Фотокарточка во весь экран",
                 contentScale = ContentScale.Fit,
                 modifier = Modifier

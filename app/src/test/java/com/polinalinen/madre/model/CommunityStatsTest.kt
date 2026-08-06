@@ -16,6 +16,7 @@ class CommunityStatsTest {
 
     private fun record(device: String, recipe: String, daysAgo: Long, bakedAt: String? = null) = BakeStatRecord(
         deviceId = device,
+        clientEventId = "$device-$recipe-$daysAgo",
         recipeId = recipe.lowercase(),
         recipeName = recipe,
         portions = 1,

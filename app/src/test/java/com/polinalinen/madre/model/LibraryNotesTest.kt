@@ -17,7 +17,7 @@ class LibraryNotesTest {
         MarginNoteSyncRecord(deviceId = deviceId, recipeId = "r1", text = text, writtenAt = "2026-07-20 10:00:00Z")
 
     private fun bake(deviceId: String) =
-        BakeStatRecord(deviceId = deviceId, recipeId = "r1", recipeName = "Хлеб", portions = 1, bakedAt = "2026-07-20 10:00:00Z")
+        BakeStatRecord(deviceId = deviceId, recipeId = "r1", recipeName = "Хлеб", portions = 1, bakedAt = "2026-07-20 10:00:00Z", clientEventId = "test")
 
     @Test
     fun `empty notes give an empty margin — the page stays silent`() {

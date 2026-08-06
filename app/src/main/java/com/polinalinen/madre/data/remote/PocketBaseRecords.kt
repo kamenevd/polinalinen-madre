@@ -14,9 +14,21 @@ import java.util.TimeZone
  * Здесь только форма данных и работа со строковыми датами PocketBase —
  * никакой сети (сеть — MadreApi, очередь — sync/SyncRepository).
  */
+/**
+ * Cycle 15: [clientEventId] — ключ идемпотентности. Считается из устройства и
+ * номера события (sync/SyncEventId), поэтому одна и та же выпечка даёт ровно ту
+ * же строку, сколько бы раз её ни отправили: повтор из очереди WorkManager,
+ * второе нажатие «Поделиться», доотправка после переустановки. Уникальность
+ * ключа проверяет сервер — клиент только обязуется его не выдумывать заново.
+ *
+ * У записей, поставленных в очередь ДО Cycle 15, этого поля в JSON нет: Gson
+ * разберёт их с null, и сервер примет такую запись, как принимал раньше — без
+ * дедупликации, но и без падения.
+ */
 data class BakeStatRecord(
     @SerializedName("id") val id: String? = null,
     @SerializedName("device_id") val deviceId: String,
+    @SerializedName("client_event_id") val clientEventId: String,
     @SerializedName("recipe_id") val recipeId: String,
     @SerializedName("recipe_name") val recipeName: String,
     @SerializedName("portions") val portions: Int,
@@ -26,6 +38,7 @@ data class BakeStatRecord(
 data class FeedingStatRecord(
     @SerializedName("id") val id: String? = null,
     @SerializedName("device_id") val deviceId: String,
+    @SerializedName("client_event_id") val clientEventId: String,
     @SerializedName("flour_grams") val flourGrams: Int,
     @SerializedName("water_grams") val waterGrams: Int,
     @SerializedName("fed_at") val fedAt: String,

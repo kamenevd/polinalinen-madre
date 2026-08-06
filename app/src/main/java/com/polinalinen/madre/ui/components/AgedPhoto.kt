@@ -20,12 +20,13 @@ import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.polinalinen.madre.ui.theme.AppColors
-import java.io.File
+import com.polinalinen.madre.utils.PhotoStore
 
 /**
  * DESIGN-V4.md Cycle 6, фича «Старое фото» (AgedPhoto): вклеенная фотокарточка
@@ -148,7 +149,7 @@ fun AgedPhoto(
                 }
         ) {
             AsyncImage(
-                model = File(photoPath),
+                model = PhotoStore.resolve(LocalContext.current, photoPath),
                 contentDescription = caption ?: "Вклеенная фотокарточка выпечки",
                 contentScale = ContentScale.Crop,
                 colorFilter = ColorFilter.colorMatrix(matrix),

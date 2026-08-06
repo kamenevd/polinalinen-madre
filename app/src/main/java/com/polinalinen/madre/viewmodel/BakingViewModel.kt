@@ -3,10 +3,15 @@ package com.polinalinen.madre.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkManager
 import com.polinalinen.madre.MadreApplication
+import com.polinalinen.madre.data.db.entities.ActiveBakeEntity
+import com.polinalinen.madre.model.BakingClock
 import com.polinalinen.madre.model.BakingSession
 import com.polinalinen.madre.model.Recipe
+import com.polinalinen.madre.model.StepType
 import com.polinalinen.madre.notifications.BakingNotificationPlanner
+import com.polinalinen.madre.notifications.BootRestorePlanner
 import com.polinalinen.madre.notifications.BakingProgress
 import com.polinalinen.madre.notifications.BakingProgressService
 import com.polinalinen.madre.notifications.MadreNotifier
@@ -39,6 +44,7 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
     private val madreApp = app as MadreApplication
     private val recipeRepository = madreApp.recipeRepository
     private val bakeHistoryRepository = madreApp.bakeHistoryRepository
+    private val activeBakeRepository = madreApp.activeBakeRepository
     private val syncRepository = madreApp.syncRepository
 
     private val _recipes = MutableStateFlow<List<Recipe>>(emptyList())
@@ -86,6 +92,15 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         viewModelScope.launch { _recipes.value = recipeRepository.getRecipes() }
+        // Cycle 15: номера сессий продолжают счёт с того места, где его бросил
+        // прошлый процесс. Иначе новая выпечка получила бы id 1 и затёрла в
+        // active_bakes строку той, что как раз и ждёт восстановления после
+        // ребута. Номера при этом остаются маленькими (+1 за выпечку) —
+        // BakingProgress.notificationId складывает их с ID_BASE.
+        viewModelScope.launch {
+            val known = activeBakeRepository.all().maxOfOrNull { it.sessionId + 1 } ?: return@launch
+            nextSessionId = maxOf(nextSessionId, known)
+        }
     }
 
     fun session(id: Long): BakingSession? = _sessions.value.find { it.id == id }
@@ -93,7 +108,8 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
     /** Возвращает id новой сессии — экран таймера должен открыться именно на ней. */
     fun startBaking(recipe: Recipe, scaleFactor: Double): Long {
         val id = nextSessionId++
-        _sessions.update { it + BakingSession(id = id, recipe = recipe, scaleFactor = scaleFactor) }
+        _sessions.update { it + BakingSession.start(id = id, recipe = recipe, scaleFactor = scaleFactor) }
+        rememberActiveBake(id)
         restartTimer(id)
         // Слепок публикуется ДО подъёма сервиса, а не после: сервис читает
         // список сразу при создании, и пустой список для него означает «всё,
@@ -107,10 +123,13 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun advanceStep(id: Long) {
-        _sessions.update { list -> list.map { if (it.id == id) it.advance() else it } }
+        val nowElapsed = BakingClock.elapsed()
+        val nowWallClock = BakingClock.wallClock()
+        _sessions.update { list -> list.map { if (it.id == id) it.advance(nowElapsed, nowWallClock) else it } }
         val s = session(id)
         if (s?.isCompleted == true) {
             stopTimer(id)
+            forgetActiveBake(id)
             // Выпечка дошла до конца — строка хода ей больше не нужна, даже
             // если человек ещё стоит на странице «Готово» и вклеивает фото.
             publishProgress()
@@ -126,8 +145,48 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
             // использует тот же ключ).
             shareBakeStats(id)
         } else {
+            rememberActiveBake(id)
             restartTimer(id)
         }
+    }
+
+    /**
+     * Cycle 15: снимок текущего шага в active_bakes — по нему BootReceiver
+     * восстановит срок после перезагрузки телефона. Пишется на каждом переходе
+     * шага и на паузе, то есть ровно тогда, когда меняется срок его конца.
+     *
+     * Отметка паузы переводится в стенные часы: монотонных после ребута не
+     * существует. Перевод точный — [BakingSession.togglePause] держит обе
+     * отметки начала шага в одном моменте.
+     */
+    private fun rememberActiveBake(id: Long) {
+        val s = session(id) ?: return
+        val step = s.currentStep
+        val snapshot = ActiveBakeEntity(
+            sessionId = s.id,
+            recipeId = s.recipe.id,
+            recipeName = s.recipe.name,
+            stepTitle = step.title,
+            stepIndex = s.currentStepIndex,
+            stepDurationMinutes = step.durationMinutes,
+            isWaitStep = step.type == StepType.WAIT,
+            startedAtWallClock = s.startedAtWallClock,
+            pausedAtWallClock = s.pausedAtElapsed?.let {
+                s.startedAtWallClock + (it - s.startedAtElapsed)
+            },
+        )
+        viewModelScope.launch { activeBakeRepository.remember(snapshot) }
+    }
+
+    /**
+     * Выпечка закончена или брошена — восстанавливать после ребута нечего.
+     * Снимаем и уже назначенный срок: уведомление «время вышло» от выпечки,
+     * которой больше нет, — тот же обман, что и застывшая строка в шторке.
+     */
+    private fun forgetActiveBake(id: Long) {
+        WorkManager.getInstance(getApplication())
+            .cancelUniqueWork(BootRestorePlanner.uniqueWorkName(id))
+        viewModelScope.launch { activeBakeRepository.forget(id) }
     }
 
     /**
@@ -148,19 +207,20 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * «Старое фото» (Cycle 6 → Cycle 11): вклеить готовый снимок в запись
-     * формуляра этой выпечки. На вход приходит АБСОЛЮТНЫЙ путь файла в
-     * filesDir — копированием, поворотом и оформлением занимается
-     * ui/photo/PhotoAttachment, а content-URI до Room не доходит вовсе.
+     * формуляра этой выпечки. На вход приходит путь ОТНОСИТЕЛЬНО filesDir
+     * (Cycle 15, PhotoStore.commit) — копированием, поворотом и оформлением
+     * занимается ui/photo/PhotoAttachment, а content-URI до Room не доходит
+     * вовсе. Обратно в файл его собирает PhotoStore.resolve.
      *
      * Запись формуляра создаётся асинхронно в advanceStep, но к моменту, когда
      * человек выбрал и оформил кадр, insert давно завершён — bakeRecordIds
      * уже заполнен.
      */
-    fun attachBakePhoto(sessionId: Long, absolutePath: String) {
-        if (absolutePath.isBlank()) return
-        _bakePhotoPaths.update { it + (sessionId to absolutePath) }
+    fun attachBakePhoto(sessionId: Long, path: String) {
+        if (path.isBlank()) return
+        _bakePhotoPaths.update { it + (sessionId to path) }
         val recordId = bakeRecordIds[sessionId] ?: return
-        viewModelScope.launch { bakeHistoryRepository.attachPhoto(recordId, absolutePath) }
+        viewModelScope.launch { bakeHistoryRepository.attachPhoto(recordId, path) }
     }
 
     /**
@@ -173,17 +233,25 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun stepBack(id: Long) {
-        _sessions.update { list -> list.map { if (it.id == id) it.retreat() else it } }
+        val nowElapsed = BakingClock.elapsed()
+        val nowWallClock = BakingClock.wallClock()
+        _sessions.update { list -> list.map { if (it.id == id) it.retreat(nowElapsed, nowWallClock) else it } }
+        rememberActiveBake(id)
         restartTimer(id)
     }
 
     fun togglePause(id: Long) {
-        _sessions.update { list -> list.map { if (it.id == id) it.togglePause() else it } }
+        val nowElapsed = BakingClock.elapsed()
+        _sessions.update { list -> list.map { if (it.id == id) it.togglePause(nowElapsed) else it } }
+        // Пауза сдвигает конец шага — снимок обязан узнать об этом сразу, иначе
+        // после ребута выпечка вернётся с чужим сроком.
+        rememberActiveBake(id)
     }
 
     /** Завершает и убирает ИМЕННО эту сессию — остальные активные продолжают идти нетронутыми. */
     fun exitSession(id: Long) {
         stopTimer(id)
+        forgetActiveBake(id)
         _sessions.update { list -> list.filterNot { it.id == id } }
         _remainingSeconds.update { it - id }
         // Выпечка закрыта — её ключи в журнале больше ни к чему, а уже
@@ -218,9 +286,10 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
             while (true) {
                 val s = session(id) ?: break
                 if (!s.isPaused && !s.isCompleted) {
-                    val elapsed = (System.currentTimeMillis() - s.stepStartedAtMillis) / 1000
-                    val total = s.currentStep.durationMinutes * 60L
-                    val remaining = (total - elapsed).coerceAtLeast(0)
+                    // Монотонные часы, а не стенные: смена пояса или переход на
+                    // летнее время не должны отнимать у теста час расстойки
+                    // (и не должны дарить его).
+                    val remaining = s.remainingSeconds(BakingClock.elapsed())
                     _remainingSeconds.update { it + (id to remaining) }
                     notifyProgress(s, remaining)
                 }

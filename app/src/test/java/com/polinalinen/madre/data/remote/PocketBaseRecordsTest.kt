@@ -23,6 +23,7 @@ class PocketBaseRecordsTest {
                 recipeName = "Чиабатта",
                 portions = 2,
                 bakedAt = "2026-07-24 10:00:00Z",
+                clientEventId = "test",
             )
         )
         assertThat(json).contains("\"device_id\":\"dev-1\"")
@@ -36,7 +37,7 @@ class PocketBaseRecordsTest {
     @Test
     fun `feeding stat and margin note serialize to snake_case`() {
         val feeding = gson.toJson(
-            FeedingStatRecord(deviceId = "d", flourGrams = 50, waterGrams = 50, fedAt = "2026-07-24 10:00:00Z")
+            FeedingStatRecord(deviceId = "d", flourGrams = 50, waterGrams = 50, fedAt = "2026-07-24 10:00:00Z", clientEventId = "test")
         )
         assertThat(feeding).contains("\"flour_grams\":50")
         assertThat(feeding).contains("\"water_grams\":50")

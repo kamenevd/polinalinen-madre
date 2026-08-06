@@ -16,6 +16,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Cycle 15: активная выпечка переживает перезагрузку телефона. Отсчёт
+         шага живёт в процессе приложения, и после ребута заново поставить срок
+         некому — кроме BOOT_COMPLETED (см. notifications/BootReceiver). -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
@@ -60,6 +64,19 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- Cycle 15: единственный BroadcastReceiver в книге. exported="true"
+             здесь обязателен — шлёт его система, а не приложение; сам receiver
+             ничего не делает, кроме постановки восстановления в WorkManager,
+             и чужой intent с другим action он молча отбрасывает. -->
+        <receiver
+            android:name=".notifications.BootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
 
         <!-- Cycle 11 (2026-07-26): уведомления наконец сделаны — но не через
              BroadcastReceiver и не через AlarmManager, как планировалось в

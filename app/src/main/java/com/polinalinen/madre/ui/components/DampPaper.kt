@@ -3,8 +3,9 @@ package com.polinalinen.madre.ui.components
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
-import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -34,29 +35,40 @@ fun Modifier.dampPaper(alpha: Float, seed: Long = 17L): Modifier = composed {
             )
         }
     }
-    drawWithContent {
-        drawContent()
+    // Cycle 16: кисти строятся в drawWithCache, а не в теле отрисовки. Разводы
+    // детерминированы от seed и не двигаются, поэтому шесть градиентов зависят
+    // только от размера и от alpha — пересобирать их на каждый кадр не за чем.
+    // Блок кэша перезапускается сам, когда меняется размер или сама alpha.
+    drawWithCache {
+        val topHeight = 80.dp.toPx()
         // Отсыревший верхний срез — там книга ближе всего к окну.
-        drawRect(
-            brush = Brush.verticalGradient(
-                colors = listOf(Cool.copy(alpha = alpha * 0.55f), Color.Transparent),
-                startY = 0f,
-                endY = 80.dp.toPx(),
-            ),
-            size = androidx.compose.ui.geometry.Size(size.width, 80.dp.toPx()),
+        val topBrush = Brush.verticalGradient(
+            colors = listOf(Cool.copy(alpha = alpha * 0.55f), Color.Transparent),
+            startY = 0f,
+            endY = topHeight,
         )
-        blotches.forEach { b ->
+        val stains = blotches.map { b ->
             val center = Offset(b.x * size.width, b.y * size.height)
             val radius = b.radius.dp.toPx() * 0.5f
-            drawCircle(
+            Stain(
+                center = center,
+                radius = radius,
                 brush = Brush.radialGradient(
                     colors = listOf(Cool.copy(alpha = alpha * b.weight), Color.Transparent),
                     center = center,
                     radius = radius,
                 ),
-                radius = radius,
-                center = center,
             )
+        }
+        onDrawWithContent {
+            drawContent()
+            drawRect(brush = topBrush, size = Size(size.width, topHeight))
+            stains.forEach { s ->
+                drawCircle(brush = s.brush, radius = s.radius, center = s.center)
+            }
         }
     }
 }
+
+/** Готовый развод: центр, радиус и уже собранная кисть — всё, что нужно кадру. */
+private data class Stain(val center: Offset, val radius: Float, val brush: Brush)

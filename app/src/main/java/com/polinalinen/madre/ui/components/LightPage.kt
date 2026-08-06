@@ -13,7 +13,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
-import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -107,27 +107,35 @@ fun Modifier.lightPage(watermark: String? = null, mirrored: Boolean = false): Mo
         }
     }
 
-    // Cycle 16: оригинальная логика отрисовки, throttle датчика выше.
-    drawWithContent {
-        drawContent()
-        val s = spec ?: return@drawWithContent
-        val center = Offset(size.width * s.cxFraction, size.height * s.cyFraction)
-        drawRect(
-            brush = Brush.radialGradient(
-                colors = listOf(Cream.copy(alpha = s.alpha), Color.Transparent),
-                center = center,
+    // Cycle 16: кисть блика строится в drawWithCache, а не на каждый кадр.
+    // Блок кэша читает spec, поэтому перезапускается ровно тогда, когда блик
+    // правда сдвинулся — то есть на порог из onSensorChanged выше, а не на
+    // каждое событие датчика и тем более не на каждую отрисовку страницы.
+    drawWithCache {
+        val s = spec
+        val sheen = s?.let {
+            Brush.radialGradient(
+                colors = listOf(Cream.copy(alpha = it.alpha), Color.Transparent),
+                center = Offset(size.width * it.cxFraction, size.height * it.cyFraction),
                 radius = size.maxDimension * 0.6f,
-            ),
-        )
-        if (watermark != null) {
-            watermarkPaint.textSize = 30.sp.toPx()
-            watermarkPaint.alpha = (s.alpha * 255).toInt()
-            val canvas = drawContext.canvas.nativeCanvas
-            canvas.save()
-            if (mirrored) canvas.scale(-1f, 1f, size.width / 2, size.height / 2)
-            canvas.rotate(-14f, size.width / 2, size.height / 2)
-            canvas.drawText(watermark, size.width / 2, size.height / 2, watermarkPaint)
-            canvas.restore()
+            )
+        }
+        onDrawWithContent {
+            drawContent()
+            if (s == null || sheen == null) return@onDrawWithContent
+            // Блик — мягкое световое пятно Cream, скользящее по бумаге за наклоном.
+            drawRect(brush = sheen)
+            if (watermark != null) {
+                // Водяной знак виден ровно настолько, насколько страница «на свету».
+                watermarkPaint.textSize = 30.sp.toPx()
+                watermarkPaint.alpha = (s.alpha * 255).toInt()
+                val canvas = drawContext.canvas.nativeCanvas
+                canvas.save()
+                if (mirrored) canvas.scale(-1f, 1f, size.width / 2, size.height / 2)
+                canvas.rotate(-14f, size.width / 2, size.height / 2)
+                canvas.drawText(watermark, size.width / 2, size.height / 2, watermarkPaint)
+                canvas.restore()
+            }
         }
     }
 }

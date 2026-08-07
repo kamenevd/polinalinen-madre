@@ -3,7 +3,10 @@ package com.polinalinen.madre.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import androidx.work.workDataOf
 import com.polinalinen.madre.MadreApplication
 import com.polinalinen.madre.data.db.entities.ActiveBakeEntity
 import com.polinalinen.madre.model.BakingClock
@@ -11,12 +14,14 @@ import com.polinalinen.madre.model.BakingSession
 import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.model.StepType
 import com.polinalinen.madre.notifications.BakingNotificationPlanner
+import com.polinalinen.madre.notifications.BakeStepEndWorker
 import com.polinalinen.madre.notifications.BootRestorePlanner
 import com.polinalinen.madre.notifications.BakingProgress
 import com.polinalinen.madre.notifications.BakingProgressService
 import com.polinalinen.madre.notifications.MadreNotifier
 import com.polinalinen.madre.notifications.NotificationLedger
 import com.polinalinen.madre.ui.components.CoffeeRing
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,6 +34,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * v4 BakingViewModel — holds a LIST of independent baking sessions, not one.
@@ -118,8 +124,21 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
     // Complete-экране, легла именно в свою строку bake_records.
     private val bakeRecordIds = mutableMapOf<Long, Long>()
 
+    /**
+     * Cycle 17: есть ли куда делиться. Без аккаунта общей книги не существует,
+     * и кнопка «Поделиться статистикой» до сих пор всё равно нажималась — с
+     * ответом «статистика отправлена в общую книгу», которого не случалось ни
+     * разу. Кнопки при false просто нет: неактивная кнопка на этом экране
+     * объясняла бы себя дольше, чем строка в «Выходных данных», куда за
+     * аккаунтом и ходят.
+     */
+    private val _sharingAvailable = MutableStateFlow(false)
+    val sharingAvailable: StateFlow<Boolean> = _sharingAvailable.asStateFlow()
+
     private val timerJobs = mutableMapOf<Long, Job>()
     private var nextSessionId = 1L
+    /** Cycle 17: startBaking ждёт посева id и restore из active_bakes. */
+    private val sessionIdsReady = kotlinx.coroutines.CompletableDeferred<Unit>()
 
     // Cycle 11: уведомления по ходу выпечки. Журнал и нотификатор — поля этой
     // ViewModel, а не статические синглтоны: живут ровно столько, сколько живут
@@ -128,15 +147,47 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
     private val notificationLedger = NotificationLedger()
 
     init {
-        viewModelScope.launch { _recipes.value = recipeRepository.getRecipes() }
-        // Cycle 15: номера сессий продолжают счёт с того места, где его бросил
-        // прошлый процесс. Иначе новая выпечка получила бы id 1 и затёрла в
-        // active_bakes строку той, что как раз и ждёт восстановления после
-        // ребута. Номера при этом остаются маленькими (+1 за выпечку) —
-        // BakingProgress.notificationId складывает их с ID_BASE.
         viewModelScope.launch {
-            val known = activeBakeRepository.all().maxOfOrNull { it.sessionId + 1 } ?: return@launch
-            nextSessionId = maxOf(nextSessionId, known)
+            val recipes = recipeRepository.getRecipes()
+            _recipes.value = recipes
+            // Cycle 15/17: посеять nextSessionId И восстановить UI-сессии из
+            // active_bakes (policy A) до того, как startBaking выдаст новый id.
+            val saved = activeBakeRepository.all()
+            nextSessionId = maxOf(nextSessionId, saved.maxOfOrNull { it.sessionId + 1 } ?: 1L)
+            val byId = recipes.associateBy { it.id }
+            val nowElapsed = BakingClock.elapsed()
+            val nowWall = BakingClock.wallClock()
+            val restored = saved.mapNotNull { row ->
+                val recipe = byId[row.recipeId] ?: return@mapNotNull null
+                BakingSession.restoreFromActive(
+                    sessionId = row.sessionId,
+                    recipe = recipe,
+                    stepIndex = row.stepIndex,
+                    startedAtWallClock = row.startedAtWallClock,
+                    pausedAtWallClock = row.pausedAtWallClock,
+                    nowElapsed = nowElapsed,
+                    nowWallClock = nowWall,
+                )
+            }
+            if (restored.isNotEmpty()) {
+                _sessions.value = restored
+                restored.forEach { s ->
+                    val rem = s.remainingSeconds(nowElapsed)
+                    _remainingSeconds.update { it + (s.id to rem) }
+                    if (!s.isCompleted) restartTimer(s.id)
+                }
+                publishProgress()
+                if (restored.any { !it.isCompleted }) {
+                    BakingProgressService.start(getApplication())
+                }
+            }
+            sessionIdsReady.complete(Unit)
+        }
+        // Токен под Keystore — диск, читаем на IO.
+        viewModelScope.launch {
+            _sharingAvailable.value = withContext(Dispatchers.IO) {
+                !madreApp.authTokenStore.read().isNullOrBlank()
+            }
         }
     }
 
@@ -144,6 +195,12 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Возвращает id новой сессии — экран таймера должен открыться именно на ней. */
     fun startBaking(recipe: Recipe, scaleFactor: Double): Long {
+        // Cycle 17: не выдавать id=1, пока init не прочитал active_bakes.
+        if (!sessionIdsReady.isCompleted) {
+            // Явный wait нельзя на main без suspend API; блокируем через runBlocking
+            // только если init ещё в полёте — обычно уже complete.
+            kotlinx.coroutines.runBlocking { sessionIdsReady.await() }
+        }
         val id = nextSessionId++
         _sessions.update { it + BakingSession.start(id = id, recipe = recipe, scaleFactor = scaleFactor) }
         rememberActiveBake(id)
@@ -172,15 +229,18 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
             publishProgress()
             // Формуляр книги и хитмэп на Полке читают именно эту таблицу — пишем
             // один раз, ровно в момент завершения (не раньше, не задним числом).
+            //
+            // Cycle 17: отправка в общую книгу переехала ВНУТРЬ этой корутины.
+            // Раньше она стояла следующей строкой снаружи и потому уходила
+            // раньше, чем insert возвращал id: ключ события брался из номера
+            // сессии просто потому, что id записи в тот момент ещё не
+            // существовало. Отсюда и росла подмена ключей (см. SyncEventId.forBake).
             viewModelScope.launch {
-                bakeRecordIds[id] =
+                val recordId =
                     bakeHistoryRepository.record(s.recipe.id, s.recipe.name, s.scaleFactor.toInt().coerceAtLeast(1))
+                bakeRecordIds[id] = recordId
+                shareBakeStats(id)
             }
-            // Cycle 5: та же выпечка уходит в общую книгу (PocketBase) через
-            // WorkManager — без сети долетит позже, дубликаты гасятся unique
-            // work name по id сессии (кнопка «Поделиться» на Complete-экране
-            // использует тот же ключ).
-            shareBakeStats(id)
         } else {
             rememberActiveBake(id)
             restartTimer(id)
@@ -212,7 +272,43 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
                 s.startedAtWallClock + (it - s.startedAtElapsed)
             },
         )
-        viewModelScope.launch { activeBakeRepository.remember(snapshot) }
+        viewModelScope.launch {
+            activeBakeRepository.remember(snapshot)
+            scheduleStepDeadline(snapshot)
+        }
+    }
+
+    /**
+     * Cycle 17: срок шага в WorkManager на КАЖДОМ переходе, не только после
+     * BOOT. Иначе смерть процесса без ребута съедает «время вышло».
+     */
+    private fun scheduleStepDeadline(bake: com.polinalinen.madre.data.db.entities.ActiveBakeEntity) {
+        val decision = BootRestorePlanner.decide(bake, System.currentTimeMillis())
+        val wm = WorkManager.getInstance(getApplication())
+        when (decision) {
+            is BootRestorePlanner.Decision.Forget -> Unit
+            is BootRestorePlanner.Decision.Keep -> {
+                wm.cancelUniqueWork(BootRestorePlanner.uniqueWorkName(bake.sessionId))
+            }
+            is BootRestorePlanner.Decision.Notify -> {
+                val request = OneTimeWorkRequestBuilder<BakeStepEndWorker>()
+                    .setInitialDelay(decision.delayMillis, java.util.concurrent.TimeUnit.MILLISECONDS)
+                    .setInputData(
+                        workDataOf(
+                            BakeStepEndWorker.KEY_SESSION_ID to bake.sessionId,
+                            BakeStepEndWorker.KEY_STEP_INDEX to bake.stepIndex,
+                            BakeStepEndWorker.KEY_RECIPE_NAME to bake.recipeName,
+                            BakeStepEndWorker.KEY_STEP_TITLE to bake.stepTitle,
+                        )
+                    )
+                    .build()
+                wm.enqueueUniqueWork(
+                    BootRestorePlanner.uniqueWorkName(bake.sessionId),
+                    ExistingWorkPolicy.REPLACE,
+                    request,
+                )
+            }
+        }
     }
 
     /**
@@ -227,14 +323,23 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Отправить статистику этой выпечки в общую книгу (Cycle 5). Идемпотентно:
-     * unique work name «sync-bake-<sessionId>» + KEEP — повторный вызов, пока
-     * запись ещё в очереди, второй записи на сервере не создаст.
+     * Отправить статистику этой выпечки в общую книгу (Cycle 5). Идемпотентно
+     * дважды: unique work name «sync-bake-record-<recordId>» + KEEP гасит
+     * повтор, пока запись ещё в очереди этого устройства, а client_event_id —
+     * повтор, который очереди уже не виден (доставленный POST с потерянным
+     * ответом, доотправка после переустановки).
+     *
+     * Cycle 17: ключ считается от id строки формуляра, поэтому до записи в
+     * bake_records отправлять нечего — [advanceStep] зовёт этот метод сразу
+     * после insert'а, а кнопка «Поделиться» на Complete-экране всегда
+     * нажимается позже. Записи нет — молчим: выдумать ключ значит вернуть ту
+     * самую подмену, ради которой всё это и переписано.
      */
     fun shareBakeStats(id: Long) {
         val s = session(id) ?: return
+        val recordId = bakeRecordIds[id] ?: return
         syncRepository.shareBakeStat(
-            sessionKey = id,
+            recordId = recordId,
             recipeId = s.recipe.id,
             recipeName = s.recipe.name,
             portions = s.scaleFactor.toInt().coerceAtLeast(1),
@@ -385,8 +490,9 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
      * тик таймера идёт раз в секунду, а уведомление на пару «сессия + шаг»
      * уходит ровно одно.
      *
-     * ЧЕСТНО: таймер живёт в этой ViewModel, то есть уведомления приходят,
-     * пока процесс приложения жив. Убитую систему выпечку они не разбудят —
+     * Cycle 17: UI-таймер по-прежнему в ViewModel, но срок шага дублируется в
+     * WorkManager (scheduleStepDeadline), а сессии поднимаются из active_bakes.
+     * Полный живой тик 1 Гц без процесса всё ещё невозможен —
      * это не фоновая гарантированная доставка (в отличие от напоминания о
      * кормлении, которое едет через WorkManager).
      */

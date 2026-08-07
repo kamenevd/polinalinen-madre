@@ -24,6 +24,15 @@ class DocumentationContractTests(unittest.TestCase):
         current = manifest["cycle"]["number"]
         self.assertIn(f"## Cycle {current}", self.read("DESIGN-V4.md"))
 
+    def test_design_documents_every_cycle_up_to_current(self):
+        """No silent skips: every integer 1..current must have ## Cycle N."""
+        current = json.loads(self.read("workflow/CYCLE.yaml"))["cycle"]["number"]
+        cycles = [int(v) for v in re.findall(r"^## Cycle (\d+)\b", self.read("DESIGN-V4.md"), re.MULTILINE)]
+        self.assertEqual(list(range(1, current + 1)), cycles)
+
+    def test_adr_0003_missing_evidence_exists(self):
+        self.assertTrue((ROOT / "docs/adr/0003-missing-cycle-evidence.md").is_file())
+
     def test_resolved_page_number_is_removed_from_screen_contract(self):
         screen_contract = self.read("DESIGN-V4.md").split("## Решённые вопросы", 1)[0]
         self.assertNotIn("СТР. N", screen_contract)

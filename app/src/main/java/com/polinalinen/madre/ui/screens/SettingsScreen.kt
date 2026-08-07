@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import android.content.Context
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -59,6 +60,7 @@ import com.polinalinen.madre.ui.components.BookButtonVariant
 import com.polinalinen.madre.ui.components.Bookplate
 import com.polinalinen.madre.ui.components.MinTouchTarget
 import com.polinalinen.madre.ui.components.BookSpine
+import com.polinalinen.madre.sync.SyncStatus
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.HeavyRule
 import com.polinalinen.madre.ui.components.PageLabel
@@ -67,6 +69,8 @@ import com.polinalinen.madre.ui.theme.AppColors
 import com.polinalinen.madre.ui.theme.CalmModeSetting
 import com.polinalinen.madre.viewmodel.FamilySettingsViewModel
 import com.polinalinen.madre.viewmodel.FamilyBookViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Настройки — «Выходные данные» (колофон книги, DESIGN-V4.md экран 8).
@@ -147,6 +151,7 @@ fun SettingsScreen(
                 onSignOut = familyBookViewModel::signOut,
                 onCodeHandled = familyBookViewModel::clearInviteCode,
             )
+            SyncStatusLine(Modifier.padding(horizontal = 22.dp, vertical = 4.dp))
             HairRule(Modifier.padding(horizontal = 22.dp))
 
             SettingsField(
@@ -216,6 +221,40 @@ fun SettingsScreen(
             NotificationPermissionSection()
         }
     }
+}
+
+/**
+ * Cycle 17: чем кончилась последняя отправка в общую книгу.
+ *
+ * Отправка идёт из WorkManager, уже после того как человек ушёл с экрана
+ * «Испечено», — сказать ему о неудаче в тот момент нечем, кроме тоста посреди
+ * чужого приложения. Здесь же он и так читает, что в книге работает, а что
+ * нет. Молчит всё остальное время: «доставлено» — не новость, а шум.
+ *
+ * Читается один раз на открытие колофона — это SharedPreferences, а не поток
+ * событий, и обновлять строку раз в секунду не за чем следить.
+ */
+@Composable
+private fun SyncStatusLine(modifier: Modifier = Modifier) {
+    val colors = AppColors.current
+    val context = LocalContext.current
+    var line by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        line = withContext(Dispatchers.IO) {
+            val prefs = context.getSharedPreferences(SyncStatus.PREFS, Context.MODE_PRIVATE)
+            SyncStatus.line(SyncStatus.read(prefs))
+        }
+    }
+    val text = line ?: return
+
+    Text(
+        text,
+        color = colors.cocoa,
+        fontFamily = FontFamily.Serif,
+        fontStyle = FontStyle.Italic,
+        fontSize = 12.sp,
+        modifier = modifier,
+    )
 }
 
 /** Optional online family book. The local Room book remains available in every state. */

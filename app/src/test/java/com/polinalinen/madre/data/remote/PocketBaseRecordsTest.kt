@@ -35,20 +35,16 @@ class PocketBaseRecordsTest {
     }
 
     @Test
-    fun `feeding stat and margin note serialize to snake_case`() {
+    fun `feeding stat serializes to snake_case`() {
         val feeding = gson.toJson(
             FeedingStatRecord(deviceId = "d", flourGrams = 50, waterGrams = 50, fedAt = "2026-07-24 10:00:00Z", clientEventId = "test")
         )
         assertThat(feeding).contains("\"flour_grams\":50")
         assertThat(feeding).contains("\"water_grams\":50")
         assertThat(feeding).contains("\"fed_at\"")
-
-        val note = gson.toJson(
-            MarginNoteSyncRecord(deviceId = "d", recipeId = "r", text = "меньше соли", writtenAt = "2026-07-24 10:00:00Z")
-        )
-        assertThat(note).contains("\"text\":\"меньше соли\"")
-        assertThat(note).contains("\"written_at\"")
+        assertThat(feeding).contains("\"client_event_id\":\"test\"")
     }
+
 
     @Test
     fun `records page parses pocketbase listing`() {

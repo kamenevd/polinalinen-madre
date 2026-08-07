@@ -7,3 +7,5 @@ ADR фиксируют решения, которые иначе снова ст
 
 Статусы: Proposed → Accepted → Superseded / Rejected. Изменение принятого
 решения создаёт новый ADR со ссылкой на старый; история не переписывается.
+- `0003-missing-cycle-evidence.md` — missing cycle15/16 gate artifacts
+- `0004-distribution-and-targetsdk.md` — GitHub Releases, targetSdk 35

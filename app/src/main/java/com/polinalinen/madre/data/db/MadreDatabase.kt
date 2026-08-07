@@ -75,6 +75,9 @@ interface SourdoughConfigDao {
 
 @Dao
 interface FeedingDao {
+    @Query("SELECT photoPath FROM feedings WHERE photoPath IS NOT NULL")
+    suspend fun allPhotoPaths(): List<String>
+
     @Query("SELECT * FROM feedings WHERE sourdoughConfigId = :configId ORDER BY timestampMillis DESC")
     fun observeHistory(configId: Long): Flow<List<FeedingEntity>>
 
@@ -90,6 +93,9 @@ interface FeedingDao {
 
 @Dao
 interface BakeRecordDao {
+    @Query("SELECT photoPath FROM bake_records WHERE photoPath IS NOT NULL")
+    suspend fun allPhotoPaths(): List<String>
+
     @Query("SELECT * FROM bake_records ORDER BY completedAtMillis DESC")
     fun observeAll(): Flow<List<BakeRecordEntity>>
 
@@ -100,6 +106,9 @@ interface BakeRecordDao {
     // вклеивается позже, когда запись формуляра уже создана.
     @Query("UPDATE bake_records SET photoPath = :path WHERE id = :recordId")
     suspend fun attachPhoto(recordId: Long, path: String)
+
+    @Query("SELECT photoPath FROM bake_records WHERE id = :recordId")
+    suspend fun photoPath(recordId: Long): String?
 }
 
 /**

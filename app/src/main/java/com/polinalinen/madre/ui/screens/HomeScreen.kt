@@ -513,9 +513,13 @@ private fun MoodBookmark(spec: MoodBookmarkSpec, totalBakes: Int = 0, modifier: 
 
 /**
  * «Общая статистика» (DESIGN-V4.md Cycle 5) — газетный подвал перед колофоном:
- * сколько семей ведут такую же книгу и что пекли на этой неделе. Данные —
- * bake_stats других устройств (CommunityStatsViewModel); без сети секция
- * не исчезает, а честно говорит, что общая книга сейчас не видна.
+ * сколько ещё телефонов в семье пишут в эту книгу и что пекли на неделе.
+ * Данные — bake_stats других устройств (CommunityStatsViewModel); без сети
+ * секция не исчезает, а честно говорит, что общая книга сейчас не видна.
+ *
+ * Cycle 17: и про незнакомые семьи здесь больше ни слова. Сервер отдаёт
+ * только свою семью (см. CommunityStats), а подвал до сих пор считал те же
+ * записи «другими семьями, ведущими такую же книгу».
  */
 @Composable
 private fun CommunitySection(state: CommunityState, onRetry: () -> Unit) {
@@ -534,6 +538,16 @@ private fun CommunitySection(state: CommunityState, onRetry: () -> Unit) {
             )
             // Сети нет — и это не тупик: попытку можно повторить, не выходя
             // из книги. Раньше здесь была строка без единого действия.
+            // Аккаунта нет — общей книги не существует, и это законный
+            // выбор, а не поломка. Повторять здесь нечего: дорога внутрь одна
+            // и лежит через колофон.
+            state is CommunityState.SignedOut -> Text(
+                "общая книга не подключена — её открывают в «Выходных данных»",
+                color = colors.cocoa,
+                fontFamily = FontFamily.Serif,
+                fontStyle = FontStyle.Italic,
+                fontSize = 12.sp,
+            )
             state is CommunityState.Unreachable -> Column {
                 Text(
                     "общая книга сейчас не отвечает — ваша книга работает и без неё",
@@ -545,8 +559,8 @@ private fun CommunitySection(state: CommunityState, onRetry: () -> Unit) {
                 TextAction("заглянуть ещё раз", onClick = onRetry)
             }
             stats == null -> Unit
-            stats.familiesBaking == 0 -> Text(
-                "пока только ваша семья ведёт эту книгу — первая запись за вами",
+            stats.handsBaking == 0 -> Text(
+                "пока в общей книге только ваши записи — остальные подтянутся",
                 color = colors.cocoa,
                 fontFamily = FontFamily.Serif,
                 fontStyle = FontStyle.Italic,
@@ -555,14 +569,14 @@ private fun CommunitySection(state: CommunityState, onRetry: () -> Unit) {
             else -> Column {
                 Row(verticalAlignment = Alignment.Bottom) {
                     Text(
-                        "${stats.familiesBaking}",
+                        "${stats.handsBaking}",
                         color = colors.crust,
                         fontFamily = FontFamily.Serif,
                         fontWeight = FontWeight.Bold,
                         fontSize = 26.sp,
                     )
                     Text(
-                        "  ${familiesBakeWord(stats.familiesBaking)} ещё ${vedutWord(stats.familiesBaking)} такую же книгу",
+                        "  ещё ${handsWord(stats.handsBaking)} в семье ${bakeVerb(stats.handsBaking)} по этой книге",
                         color = colors.espresso,
                         fontFamily = FontFamily.Serif,
                         fontSize = 14.sp,
@@ -585,14 +599,14 @@ private fun CommunitySection(state: CommunityState, onRetry: () -> Unit) {
     }
 }
 
-private fun familiesBakeWord(n: Int) = when {
-    n % 100 in 11..14 -> "семей"
-    n % 10 == 1 -> "семья"
-    n % 10 in 2..4 -> "семьи"
-    else -> "семей"
+private fun handsWord(n: Int) = when {
+    n % 100 in 11..14 -> "телефонов"
+    n % 10 == 1 -> "телефон"
+    n % 10 in 2..4 -> "телефона"
+    else -> "телефонов"
 }
 
-private fun vedutWord(n: Int) = if (n % 10 == 1 && n % 100 !in 11..14) "ведёт" else "ведут"
+private fun bakeVerb(n: Int) = if (n % 10 == 1 && n % 100 !in 11..14) "печёт" else "пекут"
 
 // bakeWord живёт в BookStatsScreen.kt — одно склонение на весь пакет экранов.
 // Две одинаковые копии в одном пакете расходятся ровно в тот день, когда одну

@@ -40,13 +40,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.polinalinen.madre.BuildConfig
 import com.polinalinen.madre.R
-import com.polinalinen.madre.model.GuestPage
 import com.polinalinen.madre.ui.components.AgedPhoto
 import com.polinalinen.madre.ui.components.BookButton
 import com.polinalinen.madre.ui.components.BookButtonVariant
-import com.polinalinen.madre.ui.components.QrCode
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.TextAction
 import com.polinalinen.madre.ui.components.TracingPaper
@@ -84,6 +81,7 @@ fun BakingCompleteScreen(
     val sessions by viewModel.sessions.collectAsState()
     val session = sessionId?.let { id -> sessions.find { it.id == id } }
     val photoPaths by viewModel.bakePhotoPaths.collectAsState()
+    val sharingAvailable by viewModel.sharingAvailable.collectAsState()
     val photoPath = sessionId?.let { photoPaths[it] }
 
     // Камера и галерея — одна общая дорога (ui/photo/PhotoAttachment): выбор
@@ -203,8 +201,12 @@ fun BakingCompleteScreen(
             // Cycle 5: явная отправка в общую книгу. Статистика и так уходит
             // фоном при завершении (BakingViewModel.advanceStep), но кнопка
             // делает это видимым — повторное нажатие безопасно, очередь
-            // дедуплицируется по id сессии (unique work + KEEP).
-            if (sessionId != null && session != null) {
+            // дедуплицируется по id записи формуляра (unique work + KEEP).
+            //
+            // Cycle 17: без аккаунта кнопки нет вовсе. Отправлять её нажатие
+            // было некуда с самого Cycle 11 (коллекции закрыты миграцией), а
+            // экран всё это время отвечал «отправлено».
+            if (sessionId != null && session != null && sharingAvailable) {
                 var shared by rememberSaveable { mutableStateOf(false) }
                 ShareStatsButton(
                     shared = shared,
@@ -212,13 +214,6 @@ fun BakingCompleteScreen(
                         viewModel.shareBakeStats(sessionId)
                         shared = true
                     },
-                )
-                Spacer(Modifier.height(10.dp))
-                // «Гостевая страница» (Cycle 7, GuestPage): QR для гостей за
-                // столом — отзыв с их телефона, без установки приложения.
-                GuestPageSection(
-                    recipeId = session.recipe.id,
-                    recipeName = session.recipe.name,
                 )
                 Spacer(Modifier.height(10.dp))
             }
@@ -253,8 +248,10 @@ private fun WaxSeal(dateLabel: String, modifier: Modifier = Modifier) {
 private fun ShareStatsButton(shared: Boolean, onShare: () -> Unit, modifier: Modifier = Modifier) {
     val colors = AppColors.current
     if (shared) {
+        // «Отправлена» здесь было бы неправдой: запись уходит в очередь
+        // WorkManager и долетит, когда будет сеть, — иногда через час.
         Text(
-            "статистика отправлена в общую книгу",
+            "статистика ждёт очереди в общую книгу",
             color = colors.sage,
             fontFamily = FontFamily.Serif,
             fontStyle = FontStyle.Italic,
@@ -269,59 +266,6 @@ private fun ShareStatsButton(shared: Boolean, onShare: () -> Unit, modifier: Mod
             variant = BookButtonVariant.SECONDARY,
             modifier = modifier,
         )
-    }
-}
-
-/**
- * «Гостевая страница» (DESIGN-V4.md Cycle 7, фича GuestPage): вторичная
- * outline-кнопка, по нажатию разворачивается в QR — гость сканирует и
- * попадает на публичную форму PocketBase (server/pb_public/guest.html).
- * Отзыв потом проступит чужим почерком на гостевой странице рецепта.
- */
-@Composable
-private fun GuestPageSection(recipeId: String, recipeName: String, modifier: Modifier = Modifier) {
-    val colors = AppColors.current
-    var showQr by rememberSaveable { mutableStateOf(false) }
-    val url = GuestPage.guestUrl(BuildConfig.MADRE_API_URL, recipeId, recipeName)
-
-    if (!showQr) {
-        BookButton(
-            label = "Позвать гостей в книгу",
-            onClick = { showQr = true },
-            variant = BookButtonVariant.SECONDARY,
-            modifier = modifier,
-        )
-    } else {
-        Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-            // QR — как вклеенная карточка: подложка Cream с лёгким поворотом,
-            // тот же мотив, что фотокарточки. Поля подложки = тихая зона кода.
-            Box(
-                Modifier
-                    .rotate(1f)
-                    .drawBehind { drawRect(colors.cream) }
-                    .padding(14.dp),
-            ) {
-                QrCode(content = url)
-            }
-            Text(
-                "гости сканируют с телефона и оставляют пару слов —\nотзыв вклеится в гостевую страницу рецепта",
-                color = colors.cocoa,
-                fontFamily = FontFamily.Serif,
-                fontStyle = FontStyle.Italic,
-                fontSize = 11.sp,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 8.dp),
-            )
-            Text(
-                url,
-                color = colors.flour,
-                fontFamily = FontFamily.SansSerif,
-                fontSize = 9.sp,
-                letterSpacing = 0.5.sp,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-        }
     }
 }
 

@@ -4,12 +4,19 @@ import com.polinalinen.madre.data.remote.BakeStatRecord
 import com.polinalinen.madre.data.remote.PocketBaseDates
 
 /**
- * Сводка «общей книги» для главной (Cycle 5): считается из bake_stats ДРУГИХ
- * семей (свой device_id отфильтрован ещё запросом). Чистая функция от списка
- * записей — сеть и состояние живут в CommunityStatsViewModel.
+ * Сводка общей книги для главной (Cycle 5): считается из bake_stats других
+ * устройств (свой device_id отфильтрован ещё запросом). Чистая функция от
+ * списка записей — сеть и состояние живут в CommunityStatsViewModel.
+ *
+ * Cycle 17: «других СЕМЕЙ» здесь больше не написано, и поле переименовано.
+ * Коллекции bake_stats с миграции …_family_rules_for_stats отдают только
+ * записи своей семьи — чужих сервер не покажет вовсе. Пока это называлось
+ * [familiesBaking], главная честно печатала «ещё N семей ведут такую же
+ * книгу», подразумевая незнакомцев, которых в ответе не было ни одного.
  */
 data class CommunityStats(
-    val familiesBaking: Int,
+    /** Сколько ДРУГИХ устройств семьи пишут в эту книгу. */
+    val handsBaking: Int,
     val popularRecipeOfWeek: String?,
     val bakesThisWeek: Int,
 ) {
@@ -30,7 +37,7 @@ data class CommunityStats(
                 .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
                 .firstOrNull()?.key
             return CommunityStats(
-                familiesBaking = records.map { it.deviceId }.distinct().size,
+                handsBaking = records.map { it.deviceId }.distinct().size,
                 popularRecipeOfWeek = popular,
                 bakesThisWeek = weekRecords.size,
             )

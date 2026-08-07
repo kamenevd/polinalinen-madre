@@ -1,43 +1,43 @@
 {
   "schema_version": 1,
   "cycle": {
-    "number": 14,
-    "kind": "feature",
-    "version": "5.4.3-cycle14",
-    "branch": "cycle/14",
+    "number": 17,
+    "kind": "maintenance",
+    "version": "6.1.0-cycle17",
+    "branch": "maintenance/17",
     "stage": "releasable",
-    "created_at": "2026-08-04T00:00:00Z",
-    "updated_at": "2026-08-04T20:03:42Z"
+    "created_at": "2026-08-07T12:12:35Z",
+    "updated_at": "2026-08-07T13:02:22Z"
   },
   "features": [
     {
-      "id": "starter-name-and-recipe-scale",
-      "title": "Своя закваска и честный масштаб рецепта",
+      "id": "state-truth",
+      "title": "Правда о состоянии и контракт версий",
       "needs_generated_asset": false,
       "acceptance": [
-        "Имя закваски редактируется, переживает перезапуск и одинаково отображается в дневнике и напоминаниях.",
-        "Выбор количества порций масштабирует каждый ингредиент, выход, подписи шагов и историю без нулей, дублей или старых значений.",
-        "Технологические времена не меняются молча от порций; ограничения объёма показываются явно."
+        "CYCLE.yaml number=17 kind=maintenance version=6.1.0-cycle17 branch=maintenance/17",
+        "DESIGN-V4.md содержит ## Cycle 15, 16, 17 без пропусков; NEXT-STEPS указывает на Cycle 17",
+        "Python contract tests: gradle versionName == CYCLE version (после prepare-version / на maintenance допускается pre-bump match strategy documented); design documents every cycle up to current; python tests green"
       ]
     },
     {
-      "id": "single-timer-readable-notification",
-      "title": "Один ход выпечки и крупное уведомление",
+      "id": "family-sync-honesty",
+      "title": "Общая книга: family rules, auth sync, видимый отказ",
       "needs_generated_asset": false,
       "acceptance": [
-        "Экран и foreground notification используют единый таймер текущего шага; следующий шаг не создаёт второй countdown.",
-        "Уведомление содержит видимый обратный отсчёт и полный BigText, а тап открывает правильную сессию.",
-        "Pause, resume, finish, последний шаг и нулевое время покрыты тестами; одноразовые напоминания не дублируются."
+        "Новая PB migration: bake_stats/feeding_stats под family auth + client_event_id unique per collection; guest_notes/margin_notes_sync либо rules либо graveyard + client dead calls removed",
+        "SyncWorker отправляет bake/feeding stats только аутентифицированным клиентом; без аккаунта не изображает успех",
+        "SyncEventId.forBake использует bake_records.id; shareBakeStats внутри корутины после record(); 401/403 видны в Выходных данных"
       ]
     },
     {
-      "id": "monthly-rhythm-and-photo-chapters",
-      "title": "Месяц выпечки и фотоглавы",
+      "id": "data-loss-guards",
+      "title": "Защита данных: restore bake path, camera, IO, orphans",
       "needs_generated_asset": false,
       "acceptance": [
-        "Heatmap отображает весь текущий календарный месяц и правильную интенсивность по дням.",
-        "Плитка главы показывает последнее доступное фото либо честный fallback, без eager-декодирования галереи.",
-        "Viewer открывается на последнем фото главы, листает только её снимки, корректно обрабатывает границы, Back и broken-path."
+        "Явный выбор restore A или B записан в DESIGN-V4; WorkManager step deadline ставится на каждый переход шага",
+        "PhotoAttachment camera path в rememberSaveable; ChapterPhotos readability I/O не на main composition path",
+        "Orphan photo cleanup on replace + cheap P2/P3 fixes from review"
       ]
     }
   ],
@@ -46,37 +46,44 @@
       "status": "pass",
       "evidence": [
         "DESIGN-V4.md",
-        "workflow/CYCLE.yaml"
+        "workflow/CYCLE.yaml",
+        "docs/adr/0003-missing-cycle-evidence.md",
+        "workflow/evidence/cycle17/plan.md"
       ]
     },
     "tdd": {
       "status": "pass",
       "evidence": [
-        "workflow/evidence/cycle14/test-summary.json"
+        "workflow/evidence/cycle17/build-notes.md",
+        "CI Android quality"
       ]
     },
     "build": {
       "status": "pass",
       "evidence": [
-        "workflow/evidence/cycle14/test-summary.json"
+        "workflow/evidence/cycle17/build-notes.md",
+        "CI Android quality"
       ]
     },
     "review": {
       "status": "pass",
       "evidence": [
-        "workflow/evidence/cycle14/reviews.md"
+        "workflow/evidence/cycle17/build-notes.md",
+        "2026-08-07-review-cycle16.md remediation"
       ]
     },
     "visual": {
       "status": "pass",
       "evidence": [
-        "workflow/evidence/cycle14/test-summary.json"
+        "CI Android quality verifyRoborazzi",
+        "workflow/evidence/cycle17/build-notes.md"
       ]
     },
     "runtime": {
       "status": "pass",
       "evidence": [
-        "workflow/evidence/cycle14/runtime-e2e.md"
+        "CI Instrumented smoke",
+        "workflow/evidence/cycle17/build-notes.md"
       ]
     },
     "release": {
@@ -93,8 +100,12 @@
   },
   "blockers": [],
   "decisions": [
-    "Cycle 14 groups six product requests into three independently reviewable features.",
-    "Android controls whether a notification stays expanded; the app guarantees a readable compact line, BigText content and visible countdown but cannot force the system shade state.",
-    "Recipe scaling changes quantities and yield, not fermentation timings silently."
+    "Cycle 17 is maintenance after feature cycles 15+16 per WORKFLOW-V2 (two features then one maintenance).",
+    "No new decorative UX features in this cycle.",
+    "versionCode/versionName not hand-edited; release_cycle.py prepare-version owns the bump near release.",
+    "Live probe 2026-08-07: madre-api bake_stats/feeding_stats/margin returned HTTP 200 empty — may differ from lock migration; still ship versioned family rules migration.",
+    "Missing workflow/evidence for cycle15/16 closed via ADR-0003; no fabricated gate artifacts.",
+    "2026-08-07: CI required checks green on PR #20 before release prep.",
+    "Restore policy A accepted for active bake UI restore."
   ]
 }

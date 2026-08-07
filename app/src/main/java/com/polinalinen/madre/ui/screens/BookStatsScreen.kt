@@ -25,11 +25,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -227,8 +230,15 @@ fun BookStatsScreen(
                         // Bitmap: декодирует Coil, и только то, что видно на
                         // экране. Отбор (включая проверку файла) — в
                         // ChapterPhotos, чтобы плитка и viewer видели одно и то же.
-                        val photos = remember(records, r.id) {
-                            ChapterPhotos.of(records, r.id) { PhotoStore.isReadable(context, it) }
+                        // Сначала пути без syscall (навигация и плитка не ждут IO).
+                        // Читаемость файлов — на IO; удалённые снимки отвалятся следующим кадром.
+                        val photosSeed = remember(records, r.id) {
+                            ChapterPhotos.of(records, r.id) { true }
+                        }
+                        val photos by produceState(photosSeed, records, r.id) {
+                            value = withContext(Dispatchers.IO) {
+                                ChapterPhotos.of(records, r.id) { PhotoStore.isReadable(context, it) }
+                            }
                         }
                         val cover = photos.firstOrNull()
                         ChapterTile(
@@ -275,8 +285,13 @@ fun BookStatsScreen(
     // а не в композиции viewer'а.
     val chapter = openedChapter
     if (chapter != null) {
-        val chapterPhotos = remember(records, chapter.id) {
-            ChapterPhotos.of(records, chapter.id) { PhotoStore.isReadable(context, it) }
+        val chapterPhotosSeed = remember(records, chapter.id) {
+            ChapterPhotos.of(records, chapter.id) { true }
+        }
+        val chapterPhotos by produceState(chapterPhotosSeed, records, chapter.id) {
+            value = withContext(Dispatchers.IO) {
+                ChapterPhotos.of(records, chapter.id) { PhotoStore.isReadable(context, it) }
+            }
         }
         // Пока viewer был открыт, последний снимок могли удалить с телефона.
         // Пустой fullscreen тогда не показываем — глава уходит в список попыток.

@@ -8,10 +8,11 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import com.polinalinen.madre.ui.components.ConfirmDialog
@@ -21,6 +22,7 @@ import com.polinalinen.madre.utils.PhotoStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import android.content.ActivityNotFoundException
 import java.io.File
 
 /**
@@ -52,32 +54,18 @@ fun rememberPhotoAttachment(
     val attached by rememberUpdatedState(onAttached)
 
     var chooserVisible by remember { mutableStateOf(false) }
-    // Кадр, который сейчас лежит на столе оформления. Пока он не null —
-    // редактор открыт, а файл существует только в кэше.
-    var staged by remember { mutableStateOf<File?>(null) }
-    // Файл, в который пишет камера. Держим отдельно: TakePicture отдаёт лишь
-    // boolean, и без этой ссылки прочитать снимок будет неоткуда.
-    var pendingCameraFile by remember { mutableStateOf<File?>(null) }
+    // Cycle 17: пути, а не File, и rememberSaveable — камера часто убивает
+    // процесс, и remember терял кадр молча (success=true, file=null).
+    var stagedPath by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingCameraPath by rememberSaveable { mutableStateOf<String?>(null) }
+    val staged = stagedPath?.let { File(it) }
+    val pendingCameraFile = pendingCameraPath?.let { File(it) }
 
     val galleryPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
-            staged = withContext(Dispatchers.IO) { PhotoStore.stage(context, uri, kind) }
+            stagedPath = withContext(Dispatchers.IO) { PhotoStore.stage(context, uri, kind)?.absolutePath }
         }
-    }
-
-    val cameraCapture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
-        val file = pendingCameraFile
-        pendingCameraFile = null
-        // Пустой файл — это отменённая съёмка на части прошивок: success там
-        // приходит true, а JPEG так и не записан.
-        if (success && file != null && file.length() > 0L) staged = file else PhotoStore.discard(file)
-    }
-
-    fun launchCamera() {
-        val target = CameraCapture.outputUriFor(context, kind)
-        pendingCameraFile = target.tmp
-        cameraCapture.launch(target.uri)
     }
 
     // Cycle 12: отказ в камере перестал быть тишиной. Раньше человек нажимал
@@ -85,6 +73,26 @@ fun rememberPhotoAttachment(
     // будто кнопка сломана. Теперь она честно говорит, что произошло, и
     // предлагает галерею: снимок можно вклеить и без камеры.
     var cameraDenied by remember { mutableStateOf(false) }
+
+    val cameraCapture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        val file = pendingCameraPath?.let { File(it) }
+        pendingCameraPath = null
+        // Пустой файл — это отменённая съёмка на части прошивок: success там
+        // приходит true, а JPEG так и не записан.
+        if (success && file != null && file.length() > 0L) stagedPath = file.absolutePath else PhotoStore.discard(file)
+    }
+
+    fun launchCamera() {
+        val target = CameraCapture.outputUriFor(context, kind)
+        pendingCameraPath = target.tmp.absolutePath
+        try {
+            cameraCapture.launch(target.uri)
+        } catch (_: ActivityNotFoundException) {
+            pendingCameraPath = null
+            PhotoStore.discard(target.tmp)
+            cameraDenied = true
+        }
+    }
     val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) launchCamera() else cameraDenied = true
     }
@@ -123,11 +131,11 @@ fun rememberPhotoAttachment(
             kind = kind,
             key = key,
             onCancel = {
-                staged = null
+                stagedPath = null
                 PhotoStore.discard(file)
             },
             onSaved = { path ->
-                staged = null
+                stagedPath = null
                 PhotoStore.discard(file)
                 attached(path)
             },

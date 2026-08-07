@@ -171,6 +171,34 @@ data class BakingSession(
                 startedAtWallClock = BakingClock.wallClock(),
                 scaleFactor = scaleFactor,
             )
+
+        /**
+         * Cycle 17 policy A: собрать сессию из active_bakes после смерти процесса.
+         * Масштаб порций в снимке не хранится — 1.0; таймер и шаг важнее.
+         */
+        fun restoreFromActive(
+            sessionId: Long,
+            recipe: Recipe,
+            stepIndex: Int,
+            startedAtWallClock: Long,
+            pausedAtWallClock: Long?,
+            nowElapsed: Long,
+            nowWallClock: Long,
+            scaleFactor: Double = 1.0,
+        ): BakingSession {
+            val pauseOffset = pausedAtWallClock?.let { (it - startedAtWallClock).coerceAtLeast(0L) }
+            val seed = BakingSession(
+                id = sessionId,
+                recipe = recipe,
+                currentStepIndex = stepIndex.coerceIn(0, (recipe.timeline.size - 1).coerceAtLeast(0)),
+                startedAtElapsed = 0L,
+                startedAtWallClock = startedAtWallClock,
+                isPaused = pauseOffset != null,
+                pausedAtElapsed = pauseOffset,
+                scaleFactor = scaleFactor,
+            )
+            return seed.rebasedTo(nowElapsed, nowWallClock)
+        }
     }
 
     val currentStep: TimelineStep

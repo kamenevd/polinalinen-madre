@@ -17,6 +17,10 @@ import com.polinalinen.madre.data.remote.MadreApiFactory
 import com.polinalinen.madre.notifications.ActiveBakes
 import com.polinalinen.madre.sync.SyncRepository
 import com.polinalinen.madre.utils.LegacyPrefs
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * Единая точка создания Room/repository — синглтоны живут в Application,
@@ -25,11 +29,14 @@ import com.polinalinen.madre.utils.LegacyPrefs
  */
 class MadreApplication : Application() {
 
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+
     override fun onCreate() {
         super.onCreate()
-        // Cycle 12: «слипшихся страниц» в книге больше нет — их ключи в
-        // madre_prefs убираются один раз, тихо и без миграции Room.
-        LegacyPrefs.purge(getSharedPreferences("madre_prefs", MODE_PRIVATE))
+        appScope.launch {
+            LegacyPrefs.purge(getSharedPreferences("madre_prefs", MODE_PRIVATE))
+        }
     }
 
     /**
@@ -42,7 +49,7 @@ class MadreApplication : Application() {
     val database: MadreDatabase by lazy { MadreDatabase.build(this) }
     val recipeRepository: RecipeRepository by lazy { RecipeRepository(this) }
     val sourdoughRepository: SourdoughRepository by lazy { SourdoughRepository(database) }
-    val bakeHistoryRepository: BakeHistoryRepository by lazy { BakeHistoryRepository(database) }
+    val bakeHistoryRepository: BakeHistoryRepository by lazy { BakeHistoryRepository(this, database) }
     // Cycle 15: незавершённые выпечки — их читает BakeRestoreWorker после
     // перезагрузки телефона, поэтому репозиторий нужен и без единого экрана.
     val activeBakeRepository: ActiveBakeRepository by lazy { ActiveBakeRepository(database) }

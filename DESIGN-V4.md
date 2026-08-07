@@ -505,6 +505,8 @@ sync только под auth; bake idempotency key = `bake_records.id`; 401/403
 в «Выходных данных». Не изображать «Поделиться», если отправки нет.
 
 ### Фича 3: Защита данных человека (data-loss-guards)
+
+**Restore policy A (принято):** UI-сессии поднимаются из `active_bakes` при старте ViewModel; срок шага ставится в WorkManager на каждом переходе.
 P1: явная политика restore выпечки (A UI restore vs B честный «прервалась») +
 WorkManager deadline на каждый шаг; `rememberSaveable` для camera path;
 ChapterPhotos file checks off main composition path; orphan photo cleanup;

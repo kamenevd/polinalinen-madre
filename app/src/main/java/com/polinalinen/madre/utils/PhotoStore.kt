@@ -4,7 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
-import android.media.ExifInterface
+import androidx.exifinterface.media.ExifInterface
 import android.net.Uri
 import java.io.File
 
@@ -143,6 +143,34 @@ object PhotoStore {
         ExifInterface.TAG_GPS_TIMESTAMP,
         ExifInterface.TAG_GPS_DATESTAMP,
     )
+
+
+    /**
+     * Cycle 17: убрать файл фотокарточки, если на него больше нет ссылки.
+     * Вызывается при переклейке — иначе каждый новый JPEG остаётся в filesDir
+     * навсегда, а человек думает, что снимок «убрали».
+     */
+    fun deleteIfUnreferenced(context: Context, path: String?, stillReferenced: (String) -> Boolean) {
+        if (path.isNullOrBlank()) return
+        if (stillReferenced(path)) return
+        runCatching { resolve(context, path).takeIf { it.isFile }?.delete() }
+    }
+
+    /**
+     * Разовая уборка сирот в bake_photos / feeding_photos: файлы без пути в
+     * переданном множестве ссылок. Только IO; старт приложения не блокирует.
+     */
+    fun sweepOrphans(context: Context, referencedRelativeOrAbsolute: Set<String>) {
+        val keep = referencedRelativeOrAbsolute.mapNotNull { runCatching { resolve(context, it).canonicalPath }.getOrNull() }.toSet()
+        listOf(PhotoKind.BAKE, PhotoKind.FEEDING).forEach { kind ->
+            val dir = File(context.filesDir, kind.dirName)
+            if (!dir.isDirectory) return@forEach
+            dir.listFiles()?.forEach { file ->
+                val canon = runCatching { file.canonicalPath }.getOrNull() ?: return@forEach
+                if (canon !in keep) runCatching { file.delete() }
+            }
+        }
+    }
 
     /** Убирает временный файл. Вызывается и на «отмена», и после удачной вклейки. */
     fun discard(staged: File?) {

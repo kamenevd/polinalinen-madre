@@ -5,9 +5,9 @@
     "kind": "maintenance",
     "version": "6.1.0-cycle17",
     "branch": "maintenance/17",
-    "stage": "implementing",
+    "stage": "releasable",
     "created_at": "2026-08-07T12:12:35Z",
-    "updated_at": "2026-08-07T12:12:35Z"
+    "updated_at": "2026-08-07T13:02:22Z"
   },
   "features": [
     {
@@ -47,28 +47,44 @@
       "evidence": [
         "DESIGN-V4.md",
         "workflow/CYCLE.yaml",
-        "docs/adr/0003-missing-cycle-evidence.md"
+        "docs/adr/0003-missing-cycle-evidence.md",
+        "workflow/evidence/cycle17/plan.md"
       ]
     },
     "tdd": {
-      "status": "pending",
-      "evidence": []
+      "status": "pass",
+      "evidence": [
+        "workflow/evidence/cycle17/build-notes.md",
+        "CI Android quality"
+      ]
     },
     "build": {
-      "status": "pending",
-      "evidence": []
+      "status": "pass",
+      "evidence": [
+        "workflow/evidence/cycle17/build-notes.md",
+        "CI Android quality"
+      ]
     },
     "review": {
-      "status": "pending",
-      "evidence": []
+      "status": "pass",
+      "evidence": [
+        "workflow/evidence/cycle17/build-notes.md",
+        "2026-08-07-review-cycle16.md remediation"
+      ]
     },
     "visual": {
-      "status": "pending",
-      "evidence": []
+      "status": "pass",
+      "evidence": [
+        "CI Android quality verifyRoborazzi",
+        "workflow/evidence/cycle17/build-notes.md"
+      ]
     },
     "runtime": {
-      "status": "pending",
-      "evidence": []
+      "status": "pass",
+      "evidence": [
+        "CI Instrumented smoke",
+        "workflow/evidence/cycle17/build-notes.md"
+      ]
     },
     "release": {
       "status": "pending",
@@ -88,6 +104,8 @@
     "No new decorative UX features in this cycle.",
     "versionCode/versionName not hand-edited; release_cycle.py prepare-version owns the bump near release.",
     "Live probe 2026-08-07: madre-api bake_stats/feeding_stats/margin returned HTTP 200 empty — may differ from lock migration; still ship versioned family rules migration.",
-    "Missing workflow/evidence for cycle15/16 closed via ADR-0003; no fabricated gate artifacts."
+    "Missing workflow/evidence for cycle15/16 closed via ADR-0003; no fabricated gate artifacts.",
+    "2026-08-07: CI required checks green on PR #20 before release prep.",
+    "Restore policy A accepted for active bake UI restore."
   ]
 }

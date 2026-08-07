@@ -458,3 +458,61 @@ Acceptance:
 - **Уведомления по ключу получили свою полку id** (3 000 000+): голый
   `key.hashCode()` мог попасть в id напоминания о кормлении или строки хода
   чужой выпечки — и снять её.
+
+
+## Cycle 15 — стабильность, данные и покрытие (retrospective, 2026-08)
+
+Feature-цикл. Зафиксировано по коду и merge `#16` / `e56c065` (ретроспектива:
+раздел дописан в maintenance/17, отдельного evidence-каталога нет — ADR-0003).
+
+- Относительные пути фотографий через `PhotoStore.resolve` (абсолютные пути
+  ломались при переносе данных).
+- `active_bakes` и связанное переживание незавершённой выпечки на уровне Room
+  (полный UI-restore — открытый пункт, см. Cycle 17).
+- Year heatmap / ритм года, E2E navigation smoke против ICU-regex краша,
+  расширенное unit-покрытие, `CLAUDE.md` как живая архитектура.
+- Graveyard удалённых фич и запрет ослаблять тесты.
+
+## Cycle 16 — производительность (retrospective, 2026-08)
+
+Feature-цикл. Merge `#18` / `b809a86` (ретроспектива в maintenance/17, ADR-0003).
+
+- Тулчейн: Kotlin 2.4.10, AGP 9.3.1, KSP вместо kapt, Room 2.8.4, Compose BOM
+  2026.06, strong skipping по умолчанию.
+- Изоляция тика таймера (`remainingFor(sessionId)`, skip publish на паузе без
+  ложных изменений state).
+- Throttle `lightPage`: SENSOR_DELAY_NORMAL + порог микродрожания.
+- `RecipeDetailScreen` → LazyColumn; кэш кистей градиентов в `drawWithCache`;
+  `composed` → `Modifier.Node` для WornPage/CoffeeRing/DampPaper/Texture/
+  LightPage/Crumbs/DustLayer.
+- kotlinx-serialization 1.8.1 для Room migration tests.
+- Бюджет: max 2 активных визуальных эффекта на экран.
+
+## Cycle 17 — maintenance: правда, общая книга, защита данных (2026-08-07)
+
+Maintenance после двух feature-циклов. Источник: разбор снимка
+`madre-v6.1.0-cycle16` (2026-08-07). Новых декоративных механик нет.
+
+### Фича 1: Правда о состоянии (state-truth)
+Выровнять `CYCLE.yaml`, `DESIGN-V4.md`, `NEXT-STEPS.md`, ADR evidence gap,
+contract tests «Gradle ↔ CYCLE» и «DESIGN содержит каждый цикл до current».
+`versionCode`/`versionName` не править руками — только
+`release_cycle.py prepare-version` у release gate.
+
+### Фича 2: Честная общая книга (family-sync-honesty)
+P0: versioned PocketBase family rules + `client_event_id` unique; клиентский
+sync только под auth; bake idempotency key = `bake_records.id`; 401/403 видимы
+в «Выходных данных». Не изображать «Поделиться», если отправки нет.
+
+### Фича 3: Защита данных человека (data-loss-guards)
+P1: явная политика restore выпечки (A UI restore vs B честный «прервалась») +
+WorkManager deadline на каждый шаг; `rememberSaveable` для camera path;
+ChapterPhotos file checks off main composition path; orphan photo cleanup;
+дешёвые P2/P3 (VisibleForTesting, camera try, exifinterface, lifecycle timer,
+nextSessionId race, docs drift).
+
+### Live note (2026-08-07)
+Публичный `madre-api.kdnfx.space` на probe вернул HTTP 200 и пустые list для
+`bake_stats`/`feeding_stats`/`margin_notes_sync` — состояние может отличаться
+от lock-migration в репо. Всё равно нужна versioned migration family rules.
+

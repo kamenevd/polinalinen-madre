@@ -31,17 +31,21 @@ class SyncRepository(private val context: Context) {
 
     private val gson = Gson()
 
-    fun shareBakeStat(sessionKey: Long, recipeId: String, recipeName: String, portions: Int, bakedAtMillis: Long) {
+    /**
+     * @param recordId id строки bake_records — он же ключ события. Номер
+     *   сессии сюда больше не приходит: см. [SyncEventId.forBake].
+     */
+    fun shareBakeStat(recordId: Long, recipeId: String, recipeName: String, portions: Int, bakedAtMillis: Long) {
         val deviceId = DeviceIdentity.id(context)
         val record = BakeStatRecord(
             deviceId = deviceId,
-            clientEventId = SyncEventId.forBake(deviceId, sessionKey),
+            clientEventId = SyncEventId.forBake(deviceId, recordId),
             recipeId = recipeId,
             recipeName = recipeName,
             portions = portions,
             bakedAt = PocketBaseDates.toIso(bakedAtMillis),
         )
-        enqueue("sync-bake-$sessionKey", SyncWorker.KIND_BAKE, gson.toJson(record))
+        enqueue("sync-bake-record-$recordId", SyncWorker.KIND_BAKE, gson.toJson(record))
     }
 
     fun shareFeedingStat(feedingId: Long, flourGrams: Int, waterGrams: Int, fedAtMillis: Long) {

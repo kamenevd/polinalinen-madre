@@ -140,3 +140,10 @@ Room намеренно. Убрать сущность из `entities` — зн�
 
 Сущности `margin_notes` и `sealed_notes` в Room — тоже не кладбище, а
 обязательство перед уже установленными приложениями (см. выше).
+
+## Cycle 17 — legacy public guest/margin collections
+
+- `guest_notes`, `margin_notes_sync` client paths removed (UI gone since Cycle 11).
+- PocketBase migration `1784937780_family_rules_for_stats.js` keeps collections
+  locked or family-scoped; no public guest page.
+- Client no longer pretends share/library notes work without family auth.

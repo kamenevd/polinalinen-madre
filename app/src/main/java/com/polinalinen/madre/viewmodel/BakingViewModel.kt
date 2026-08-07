@@ -17,6 +17,7 @@ import com.polinalinen.madre.notifications.BakingProgressService
 import com.polinalinen.madre.notifications.MadreNotifier
 import com.polinalinen.madre.notifications.NotificationLedger
 import com.polinalinen.madre.ui.components.CoffeeRing
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,6 +30,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * v4 BakingViewModel — holds a LIST of independent baking sessions, not one.
@@ -118,6 +120,17 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
     // Complete-экране, легла именно в свою строку bake_records.
     private val bakeRecordIds = mutableMapOf<Long, Long>()
 
+    /**
+     * Cycle 17: есть ли куда делиться. Без аккаунта общей книги не существует,
+     * и кнопка «Поделиться статистикой» до сих пор всё равно нажималась — с
+     * ответом «статистика отправлена в общую книгу», которого не случалось ни
+     * разу. Кнопки при false просто нет: неактивная кнопка на этом экране
+     * объясняла бы себя дольше, чем строка в «Выходных данных», куда за
+     * аккаунтом и ходят.
+     */
+    private val _sharingAvailable = MutableStateFlow(false)
+    val sharingAvailable: StateFlow<Boolean> = _sharingAvailable.asStateFlow()
+
     private val timerJobs = mutableMapOf<Long, Job>()
     private var nextSessionId = 1L
 
@@ -137,6 +150,12 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val known = activeBakeRepository.all().maxOfOrNull { it.sessionId + 1 } ?: return@launch
             nextSessionId = maxOf(nextSessionId, known)
+        }
+        // Токен под Keystore — диск, читаем на IO.
+        viewModelScope.launch {
+            _sharingAvailable.value = withContext(Dispatchers.IO) {
+                !madreApp.authTokenStore.read().isNullOrBlank()
+            }
         }
     }
 
@@ -172,15 +191,18 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
             publishProgress()
             // Формуляр книги и хитмэп на Полке читают именно эту таблицу — пишем
             // один раз, ровно в момент завершения (не раньше, не задним числом).
+            //
+            // Cycle 17: отправка в общую книгу переехала ВНУТРЬ этой корутины.
+            // Раньше она стояла следующей строкой снаружи и потому уходила
+            // раньше, чем insert возвращал id: ключ события брался из номера
+            // сессии просто потому, что id записи в тот момент ещё не
+            // существовало. Отсюда и росла подмена ключей (см. SyncEventId.forBake).
             viewModelScope.launch {
-                bakeRecordIds[id] =
+                val recordId =
                     bakeHistoryRepository.record(s.recipe.id, s.recipe.name, s.scaleFactor.toInt().coerceAtLeast(1))
+                bakeRecordIds[id] = recordId
+                shareBakeStats(id)
             }
-            // Cycle 5: та же выпечка уходит в общую книгу (PocketBase) через
-            // WorkManager — без сети долетит позже, дубликаты гасятся unique
-            // work name по id сессии (кнопка «Поделиться» на Complete-экране
-            // использует тот же ключ).
-            shareBakeStats(id)
         } else {
             rememberActiveBake(id)
             restartTimer(id)
@@ -227,14 +249,23 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Отправить статистику этой выпечки в общую книгу (Cycle 5). Идемпотентно:
-     * unique work name «sync-bake-<sessionId>» + KEEP — повторный вызов, пока
-     * запись ещё в очереди, второй записи на сервере не создаст.
+     * Отправить статистику этой выпечки в общую книгу (Cycle 5). Идемпотентно
+     * дважды: unique work name «sync-bake-record-<recordId>» + KEEP гасит
+     * повтор, пока запись ещё в очереди этого устройства, а client_event_id —
+     * повтор, который очереди уже не виден (доставленный POST с потерянным
+     * ответом, доотправка после переустановки).
+     *
+     * Cycle 17: ключ считается от id строки формуляра, поэтому до записи в
+     * bake_records отправлять нечего — [advanceStep] зовёт этот метод сразу
+     * после insert'а, а кнопка «Поделиться» на Complete-экране всегда
+     * нажимается позже. Записи нет — молчим: выдумать ключ значит вернуть ту
+     * самую подмену, ради которой всё это и переписано.
      */
     fun shareBakeStats(id: Long) {
         val s = session(id) ?: return
+        val recordId = bakeRecordIds[id] ?: return
         syncRepository.shareBakeStat(
-            sessionKey = id,
+            recordId = recordId,
             recipeId = s.recipe.id,
             recipeName = s.recipe.name,
             portions = s.scaleFactor.toInt().coerceAtLeast(1),

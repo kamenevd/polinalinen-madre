@@ -7,60 +7,54 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.Query
 
 /**
- * PocketBase на домашнем сервере (Cycle 5). Базовый адрес — только из
- * BuildConfig.MADRE_API_URL, коллекции: bake_stats, feeding_stats,
- * margin_notes_sync. Auth нет сознательно: сервер виден только из домашней
- * сети (см. network_security_config.xml — cleartext ровно для этого хоста).
+ * Статистика общей книги на PocketBase `https://madre-api.kdnfx.space`:
+ * коллекции bake_stats и feeding_stats.
+ *
+ * Cycle 17: под входом, как и всё остальное на этом сервере. До сих пор здесь
+ * не было ни строки про токен — Cycle 5 писал в открытые коллекции домашнего
+ * сервера, а миграция lock_legacy_collections закрыла их наглухо ещё в
+ * Cycle 11. Отправка после этого не доходила ни разу, но приложение продолжало
+ * показывать «отправлено»: ровно тот обман, который запрещает hard rule 8.
+ * Теперь коллекции живут по семье (backend/pb_migrations/…_family_rules_for_stats),
+ * и без токена сюда ходить незачем — вызывающий обязан его иметь.
+ *
+ * Токен едет заголовком Authorization без префикса Bearer — как его отдаёт
+ * PocketBase, и как его уже передаёт [FamilyBookApi].
+ *
+ * Cycle 17 убрал отсюда margin_notes_sync и guest_notes — см. docs/graveyard.md
+ * («Библиотечная книга» и «Гостевая страница»).
  */
 interface MadreApi {
 
     @POST("api/collections/bake_stats/records")
-    suspend fun postBakeStat(@Body record: BakeStatRecord): BakeStatRecord
+    suspend fun postBakeStat(
+        @Header("Authorization") token: String,
+        @Body record: BakeStatRecord,
+    ): BakeStatRecord
 
     /**
-     * Статистика ДРУГИХ семей: вызывающий передаёт
-     * [PocketBaseFilter.excludeDevice] со своим device_id.
+     * Выпечки СВОЕЙ семьи: сервер и так не отдаст чужих, а вызывающий сужает
+     * выборку до других устройств ([PocketBaseFilter.excludeDevice]) — свои
+     * выпечки книга и без сети знает лучше.
      */
     @GET("api/collections/bake_stats/records")
     suspend fun listBakeStats(
+        @Header("Authorization") token: String,
         @Query("filter") filter: String,
         @Query("sort") sort: String = "-baked_at",
         @Query("perPage") perPage: Int = 200,
     ): RecordsPage<BakeStatRecord>
 
     @POST("api/collections/feeding_stats/records")
-    suspend fun postFeedingStat(@Body record: FeedingStatRecord): FeedingStatRecord
-
-    @POST("api/collections/margin_notes_sync/records")
-    suspend fun postMarginNote(@Body record: MarginNoteSyncRecord): MarginNoteSyncRecord
-
-    /**
-     * «Библиотечная книга» (Cycle 6): заметки ДРУГИХ семей на полях рецепта —
-     * вызывающий передаёт [PocketBaseFilter.recipeExcludingDevice].
-     */
-    @GET("api/collections/margin_notes_sync/records")
-    suspend fun listMarginNotes(
-        @Query("filter") filter: String,
-        @Query("sort") sort: String = "-written_at",
-        @Query("perPage") perPage: Int = 100,
-    ): RecordsPage<MarginNoteSyncRecord>
-
-    /**
-     * «Гостевая страница» (Cycle 7): отзывы гостей рецепта — вызывающий
-     * передаёт [PocketBaseFilter.forRecipe]. POST-а тут нет сознательно:
-     * гости пишут через публичную HTML-форму на самом PocketBase
-     * (server/pb_public/guest.html), приложение только читает.
-     */
-    @GET("api/collections/guest_notes/records")
-    suspend fun listGuestNotes(
-        @Query("filter") filter: String,
-        @Query("sort") sort: String = "-created_at",
-        @Query("perPage") perPage: Int = 100,
-    ): RecordsPage<GuestNoteRecord>
+    suspend fun postFeedingStat(
+        @Header("Authorization") token: String,
+        @Body record: FeedingStatRecord,
+    ): FeedingStatRecord
 }
 
 object MadreApiFactory {

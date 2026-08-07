@@ -44,8 +44,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
-import com.polinalinen.madre.model.GuestNote
-import com.polinalinen.madre.model.LibraryNote
 import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.model.RecipeScale
 import com.polinalinen.madre.model.RecipeScaler
@@ -67,8 +65,6 @@ import com.polinalinen.madre.ui.theme.AppColors
 import com.polinalinen.madre.ui.theme.LocalCalmMode
 import com.polinalinen.madre.utils.heroResFor
 import com.polinalinen.madre.viewmodel.BakingViewModel
-import com.polinalinen.madre.viewmodel.GuestNotesViewModel
-import com.polinalinen.madre.viewmodel.LibraryNotesViewModel
 
 /**
  * Рецепт — «Разворот» (DESIGN-V4.md, экран 2).
@@ -82,8 +78,6 @@ fun RecipeDetailScreen(
     onBack: () -> Unit,
     onStartBaking: (sessionId: Long) -> Unit,
     viewModel: BakingViewModel = viewModel(),
-    libraryNotesViewModel: LibraryNotesViewModel = viewModel(),
-    guestNotesViewModel: GuestNotesViewModel = viewModel(),
 ) {
     val colors = AppColors.current
     val recipes by viewModel.recipes.collectAsState()
@@ -123,15 +117,6 @@ fun RecipeDetailScreen(
     // прерывали — пишет BakingViewModel.cancelSession в те же madre_prefs.
     val coffeeRingCount = remember(recipeId) {
         prefs.getInt(CoffeeRing.prefsKey(recipeId), 0)
-    }
-
-    // «Библиотечная книга» (Cycle 6, LibraryNotes) — заметки чужих семей.
-    val libraryNotes by libraryNotesViewModel.notes.collectAsState()
-    // «Гостевая страница» (Cycle 7, GuestPage) — отзывы гостей из guest_notes.
-    val guestNotes by guestNotesViewModel.notes.collectAsState()
-    LaunchedEffect(recipeId) {
-        libraryNotesViewModel.load(recipeId)
-        guestNotesViewModel.load(recipeId)
     }
 
     Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
@@ -257,20 +242,6 @@ fun RecipeDetailScreen(
                 }
             }
 
-            item(key = "library-notes") {
-                LibraryNotesSection(
-                    notes = libraryNotes,
-                    modifier = Modifier.padding(top = 14.dp),
-                )
-            }
-
-            item(key = "guest-notes") {
-                GuestNotesSection(
-                    notes = guestNotes,
-                    modifier = Modifier.padding(top = 18.dp),
-                )
-            }
-
             item(key = "cta") {
                 Spacer(Modifier.height(14.dp))
                 // Что именно сейчас начнётся — прямо над кнопкой. Порции выбирают
@@ -340,100 +311,6 @@ private fun MissingRecipePage(loading: Boolean, onBack: () -> Unit) {
                     fontSize = 18.sp,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 )
-            }
-        }
-    }
-}
-
-/**
- * «Библиотечная книга» — DESIGN-V4.md Cycle 6, фича LibraryNotes: заметки
- * других семей, читавших этот же рецепт. Раньше они проступали внутри секции
- * «На полях»; в Cycle 11 своих помет на полях у книги больше нет, и у чужой
- * руки появился свой раздел. Без сети список пуст, и блок молчит целиком —
- * пустых заголовков книга не показывает.
- */
-@Composable
-private fun LibraryNotesSection(notes: List<LibraryNote>, modifier: Modifier = Modifier) {
-    if (notes.isEmpty()) return
-    val colors = AppColors.current
-
-    Column(modifier.fillMaxWidth().padding(horizontal = 22.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            HairRule(Modifier.weight(1f))
-            PageLabel("Из других книг", color = colors.espresso, modifier = Modifier.padding(horizontal = 10.dp))
-            HairRule(Modifier.weight(1f))
-        }
-        Column(Modifier.padding(top = 12.dp)) {
-            notes.forEach { note ->
-                Column(Modifier.padding(vertical = 4.dp).rotate(note.slantDeg)) {
-                    Text(
-                        note.text,
-                        color = colors.espresso.copy(alpha = 0.4f),
-                        fontFamily = FontFamily.Cursive,
-                        fontSize = 16.sp,
-                        lineHeight = 22.sp,
-                    )
-                    Text(
-                        "— ${note.familyLabel}",
-                        color = colors.cocoa.copy(alpha = 0.4f),
-                        fontFamily = FontFamily.SansSerif,
-                        fontSize = 9.sp,
-                        letterSpacing = 1.5.sp,
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
- * «Гостевая страница» — DESIGN-V4.md Cycle 7, фича GuestPage: отзывы гостей,
- * оставленные с их телефонов через QR (BakingCompleteScreen) и публичную
- * форму PocketBase. Каждый гость пишет своей рукой: наклон и оттенок чернил
- * детерминированы от имени (GuestPage.slantFor/inkFor). Пока отзывов нет —
- * секция молчит целиком (тот же принцип, что LibraryNotes: без сети книга
- * не ругается и не показывает пустых разделов).
- */
-@Composable
-private fun GuestNotesSection(notes: List<GuestNote>, modifier: Modifier = Modifier) {
-    if (notes.isEmpty()) return
-    val colors = AppColors.current
-    val inks = listOf(colors.espresso, colors.cocoa)
-
-    Column(modifier.fillMaxWidth().padding(horizontal = 22.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            HairRule(Modifier.weight(1f))
-            PageLabel("Гостевая страница", color = colors.espresso, modifier = Modifier.padding(horizontal = 10.dp))
-            HairRule(Modifier.weight(1f))
-        }
-        Text(
-            "пара слов от тех, кто пробовал этот хлеб за нашим столом",
-            color = colors.cocoa,
-            fontFamily = FontFamily.Serif,
-            fontStyle = FontStyle.Italic,
-            fontSize = 11.sp,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-        )
-        Column(Modifier.padding(top = 10.dp)) {
-            notes.forEach { note ->
-                Column(Modifier.padding(vertical = 6.dp).rotate(note.slantDeg)) {
-                    Text(
-                        note.text,
-                        color = inks[note.inkIndex],
-                        fontFamily = FontFamily.Cursive,
-                        fontSize = 16.sp,
-                        lineHeight = 22.sp,
-                    )
-                    Text(
-                        "— ${note.authorLabel}",
-                        color = colors.cocoa,
-                        fontFamily = FontFamily.SansSerif,
-                        fontSize = 9.sp,
-                        letterSpacing = 1.5.sp,
-                        modifier = Modifier.padding(top = 2.dp),
-                    )
-                }
             }
         }
     }

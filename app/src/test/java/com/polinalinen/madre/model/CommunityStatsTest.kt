@@ -6,7 +6,7 @@ import com.polinalinen.madre.data.remote.PocketBaseDates
 import org.junit.Test
 
 /**
- * Cycle 5, «Общая статистика»: семьи считаются по уникальным device_id,
+ * Cycle 5, «Общая статистика»: чужие руки считаются по уникальным device_id,
  * «рецепт недели» — только из выпечек последних 7 дней, при равенстве —
  * детерминированно (алфавит), битые даты не роняют подсчёт.
  */
@@ -24,12 +24,12 @@ class CommunityStatsTest {
     )
 
     @Test
-    fun `families counted by distinct device ids across all records`() {
+    fun `hands counted by distinct device ids across all records`() {
         val stats = CommunityStats.from(
             listOf(record("a", "Багет", 1), record("a", "Багет", 2), record("b", "Ржаной", 30)),
             now,
         )
-        assertThat(stats.familiesBaking).isEqualTo(2)
+        assertThat(stats.handsBaking).isEqualTo(2)
     }
 
     @Test
@@ -66,6 +66,6 @@ class CommunityStatsTest {
         )
         assertThat(stats.popularRecipeOfWeek).isNull()
         assertThat(stats.bakesThisWeek).isEqualTo(0)
-        assertThat(stats.familiesBaking).isEqualTo(2)
+        assertThat(stats.handsBaking).isEqualTo(2)
     }
 }

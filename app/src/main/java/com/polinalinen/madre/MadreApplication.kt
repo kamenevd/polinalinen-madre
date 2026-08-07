@@ -7,6 +7,7 @@ import com.polinalinen.madre.data.repository.BakeHistoryRepository
 import com.polinalinen.madre.data.repository.FamilySettingsRepository
 import com.polinalinen.madre.data.repository.RecipeRepository
 import com.polinalinen.madre.data.repository.SourdoughRepository
+import com.polinalinen.madre.account.AuthTokenStore
 import com.polinalinen.madre.account.FamilyAccountRepository
 import com.polinalinen.madre.account.KeystoreTokenCipher
 import com.polinalinen.madre.account.SecureTokenStore
@@ -48,11 +49,19 @@ class MadreApplication : Application() {
     val familySettingsRepository: FamilySettingsRepository by lazy { FamilySettingsRepository(database) }
     // Cycle 5: общая книга на PocketBase — клиент и очередь фоновой отправки.
     val madreApi: MadreApi by lazy { MadreApiFactory.create() }
+    /**
+     * Cycle 17: вход у книги ОДИН, и хранилище токена тоже одно. Читателей у
+     * него стало трое — семейная книга, статистика на главной и фоновая
+     * отправка, — и каждый заводил бы свой SecureTokenStore. Три экземпляра
+     * поверх одного Keystore работали бы ровно до первого расхождения в том,
+     * когда токен считается протухшим.
+     */
+    val authTokenStore: AuthTokenStore by lazy { SecureTokenStore(this, KeystoreTokenCipher()) }
     /** Optional account wiring; local Room data never depends on this client. */
     val familyAccountRepository: FamilyAccountRepository by lazy {
         FamilyAccountRepository(
             api = FamilyBookApiFactory.create(),
-            tokens = SecureTokenStore(this, KeystoreTokenCipher()),
+            tokens = authTokenStore,
         )
     }
     val syncRepository: SyncRepository by lazy { SyncRepository(this) }

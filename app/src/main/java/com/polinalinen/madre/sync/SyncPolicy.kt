@@ -23,4 +23,20 @@ object SyncPolicy {
             else -> SyncOutcome.GIVE_UP
         }
     }
+
+    /**
+     * Cycle 17: тот же отказ, но словами колофона ([SyncStatus.line]).
+     *
+     * Отдельно от [classify] потому, что вопросы разные: «повторять ли» и «что
+     * сказать человеку» отвечаются по-разному на одном и том же ответе. 401
+     * повторять бесполезно (GIVE_UP), но человеку есть что сделать — войти
+     * заново; 503 повторять стоит, а говорить — нечего, кроме «подождём».
+     */
+    fun stateFor(error: Throwable): SyncStatus.State = when {
+        error is HttpException && error.code() in listOf(401, 403) -> SyncStatus.State.DENIED
+        error is HttpException && error.code() in 500..599 -> SyncStatus.State.UNREACHABLE
+        error is HttpException -> SyncStatus.State.REJECTED
+        error is IOException -> SyncStatus.State.UNREACHABLE
+        else -> SyncStatus.State.REJECTED
+    }
 }

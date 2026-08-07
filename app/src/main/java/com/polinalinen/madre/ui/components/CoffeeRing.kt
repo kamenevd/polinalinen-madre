@@ -1,9 +1,7 @@
 package com.polinalinen.madre.ui.components
 
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
-import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -75,16 +73,18 @@ object CoffeeRing {
  * пролит поверх печати и потёртостей, но крошки и пыль легли позже. След
  * ничего не перехватывает — это просто высохшее пятно.
  */
-fun Modifier.coffeeRings(cancelledCount: Int, seed: Long): Modifier = composed {
+// Cycle 16: без composed {} — спеки колец детерминированы от seed, и считать их
+// в блоке кэша drawWithCache дешевле, чем поднимать Composer ради remember.
+fun Modifier.coffeeRings(cancelledCount: Int, seed: Long): Modifier {
     val count = CoffeeRing.ringCount(cancelledCount)
-    if (count == 0) return@composed Modifier
+    if (count == 0) return this
 
-    val specs = remember(seed, count) {
-        List(count) { CoffeeRing.specFor(seed * 31 + it) }
-    }
-    this.drawWithContent {
-        drawContent()
-        specs.forEach { drawCoffeeRing(it) }
+    return drawWithCache {
+        val specs = List(count) { CoffeeRing.specFor(seed * 31 + it) }
+        onDrawWithContent {
+            drawContent()
+            specs.forEach { drawCoffeeRing(it) }
+        }
     }
 }
 

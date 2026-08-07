@@ -4,20 +4,19 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.ContentDrawScope
+import androidx.compose.ui.input.pointer.PointerInputScope
+import androidx.compose.ui.input.pointer.SuspendingPointerInputModifierNode
+import androidx.compose.ui.node.DelegatingNode
+import androidx.compose.ui.node.DrawModifierNode
+import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.node.invalidateDraw
+import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.polinalinen.madre.ui.theme.Cocoa
 import com.polinalinen.madre.ui.theme.Flour
@@ -117,45 +116,96 @@ object DustLayer {
  * первый свайп смахивает крошки, второй — пыль; двумя движениями, как и
  * прибираются в настоящей книге. Вертикальный скролл не затрагивается.
  */
-fun Modifier.dustLayer(daysSinceOpened: Int, seed: Long): Modifier = composed {
-    val moteCount = DustLayer.moteCount(daysSinceOpened)
-    if (moteCount == 0) return@composed Modifier
+fun Modifier.dustLayer(daysSinceOpened: Int, seed: Long): Modifier {
+    if (DustLayer.moteCount(daysSinceOpened) == 0) return this
+    return this then DustLayerElement(daysSinceOpened, seed)
+}
 
-    val motes = remember(seed, daysSinceOpened) {
-        DustLayer.scatter(seed * 17 + daysSinceOpened, moteCount)
+/** Сколько длится полёт смахнутой пыли — она легче крошек и оседает быстрее. */
+private const val DUST_SWEEP_MS = 650
+
+/**
+ * Cycle 16: собственный узел вместо composed {} — по той же причине, что у
+ * крошек: жест, анимация и флаг «уже смахнули» в блок кэша не убираются.
+ */
+private data class DustLayerElement(
+    private val daysSinceOpened: Int,
+    private val seed: Long,
+) : ModifierNodeElement<DustLayerNode>() {
+
+    override fun create(): DustLayerNode = DustLayerNode(daysSinceOpened, seed)
+
+    override fun update(node: DustLayerNode) {
+        node.update(daysSinceOpened, seed)
     }
-    val veil = DustLayer.veilAlpha(daysSinceOpened)
-    val sweep = remember(seed, daysSinceOpened) { Animatable(0f) }
-    var direction by remember { mutableFloatStateOf(1f) }
-    var swept by remember(seed, daysSinceOpened) { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
 
-    this
-        .pointerInput(swept, seed, daysSinceOpened) {
-            if (swept) return@pointerInput
-            var dragged = 0f
-            detectHorizontalDragGestures(
-                onDragStart = { dragged = 0f },
-                onHorizontalDrag = { _, amount -> dragged += amount },
-                onDragEnd = {
-                    if (abs(dragged) > 48.dp.toPx() && !sweep.isRunning) {
-                        direction = if (dragged > 0f) 1f else -1f
-                        scope.launch {
-                            sweep.animateTo(1f, tween(650, easing = LinearEasing))
-                            swept = true
+    override fun InspectorInfo.inspectableProperties() {
+        name = "dustLayer"
+        properties["daysSinceOpened"] = daysSinceOpened
+        properties["seed"] = seed
+    }
+}
+
+private class DustLayerNode(
+    private var daysSinceOpened: Int,
+    private var seed: Long,
+) : DelegatingNode(), DrawModifierNode {
+
+    private var motes = scatterFor(daysSinceOpened, seed)
+    private var veil = DustLayer.veilAlpha(daysSinceOpened)
+    private var sweep = Animatable(0f)
+    private var direction = 1f
+    private var swept = false
+
+    private val pointer = delegate(SuspendingPointerInputModifierNode { awaitSweep() })
+
+    private fun scatterFor(daysSinceOpened: Int, seed: Long) =
+        DustLayer.scatter(seed * 17 + daysSinceOpened, DustLayer.moteCount(daysSinceOpened))
+
+    /** Главу открыли снова — пыль пересыпается заново (ключи remember прежде). */
+    fun update(daysSinceOpened: Int, seed: Long) {
+        if (this.daysSinceOpened == daysSinceOpened && this.seed == seed) return
+        this.daysSinceOpened = daysSinceOpened
+        this.seed = seed
+        motes = scatterFor(daysSinceOpened, seed)
+        veil = DustLayer.veilAlpha(daysSinceOpened)
+        sweep = Animatable(0f)
+        swept = false
+        pointer.resetPointerInputHandler()
+        invalidateDraw()
+    }
+
+    private suspend fun PointerInputScope.awaitSweep() {
+        // Смахнутая страница жест больше не ловит: подметать нечего.
+        if (swept) return
+        var dragged = 0f
+        detectHorizontalDragGestures(
+            onDragStart = { dragged = 0f },
+            onHorizontalDrag = { _, amount -> dragged += amount },
+            onDragEnd = {
+                if (abs(dragged) > 48.dp.toPx() && !sweep.isRunning) {
+                    direction = if (dragged > 0f) 1f else -1f
+                    coroutineScope.launch {
+                        sweep.animateTo(1f, tween(DUST_SWEEP_MS, easing = LinearEasing)) {
+                            invalidateDraw()
                         }
+                        swept = true
+                        pointer.resetPointerInputHandler()
+                        invalidateDraw()
                     }
-                },
-            )
-        }
-        .drawWithContent {
-            drawContent()
-            if (swept) return@drawWithContent
-            val progress = sweep.value
-            val alpha = DustLayer.sweepAlpha(progress)
-            drawVeil(veil * alpha)
-            motes.forEach { m -> drawMote(m, progress, direction, alpha) }
-        }
+                }
+            },
+        )
+    }
+
+    override fun ContentDrawScope.draw() {
+        drawContent()
+        if (swept) return
+        val progress = sweep.value
+        val alpha = DustLayer.sweepAlpha(progress)
+        drawVeil(veil * alpha)
+        motes.forEach { m -> drawMote(m, progress, direction, alpha) }
+    }
 }
 
 /** Пелена: сверху гуще (пыль оседает с верхнего обреза), к низу сходит на нет. */

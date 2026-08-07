@@ -124,14 +124,16 @@ fun HomeScreen(
     // «Общая статистика» (Cycle 5) — сводка bake_stats других семей из PocketBase.
     val communityState by communityViewModel.state.collectAsState()
     val sessions by viewModel.sessions.collectAsState()
-    val remaining by viewModel.remainingSeconds.collectAsState()
     // «Затёртая страница» (Cycle 4, WornPages) — часто печёные главы темнеют.
     val bakeCounts by viewModel.bakeCounts.collectAsState()
     // «Ветхое ляссе» (Cycle 9, AgedRibbon): лента стареет со всей книгой —
     // возраст считаем по общему числу выпечек всех глав.
     val totalBakes = bakeCounts.values.sum()
-    // Ляссе ведёт к той выпечке, что ближе всего к следующему шагу.
-    val nearestSessionId = sessions.minByOrNull { remaining[it.id] ?: Long.MAX_VALUE }?.id
+    // Ляссе ведёт к той выпечке, что ближе всего к следующему шагу. Сам остаток
+    // первая полоса не читает и читать не должна: талон выпечки показывает шаг,
+    // а не секунды, а карта остатков меняется раз в секунду — на ней всё
+    // оглавление перерисовывалось бы вместе с ней (Cycle 16).
+    val nearestSessionId by viewModel.nearestSessionId.collectAsState()
     // «Мадре советует» — рецепт попроще, пока закваска на пике и время дорого.
     val recommendedRecipeId = recipes.minByOrNull { if (it.difficulty > 0) it.difficulty else Int.MAX_VALUE }?.id
     // «Сезонная глава» (Cycle 3) — ярлык у даты + отметка на одном рецепте оглавления.
@@ -206,12 +208,13 @@ fun HomeScreen(
             // Ляссе поверх страницы — только пока идёт хотя бы одна выпечка.
             // Если выпечки нет — вместо неё mood-ляссе «Мадре советует» (приоритет
             // у baking-ляссе, они никогда не показываются вместе).
-            if (nearestSessionId != null) {
+            val nearest = nearestSessionId
+            if (nearest != null) {
                 RibbonBookmark(
                     Modifier
                         .align(Alignment.TopEnd)
                         .padding(end = 34.dp)
-                        .clickable { onOpenTimer(nearestSessionId) },
+                        .clickable { onOpenTimer(nearest) },
                     totalBakes = totalBakes,
                 )
             } else {

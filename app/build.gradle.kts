@@ -1,7 +1,9 @@
 plugins {
+    // kotlin.android здесь не применяется намеренно: с AGP 9 поддержка Kotlin
+    // встроена в сам AGP, и плагин поверх неё роняет конфигурацию.
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
-    id("org.jetbrains.kotlin.kapt")
+    id("org.jetbrains.kotlin.plugin.compose")
+    id("com.google.devtools.ksp")
     id("io.github.takahirom.roborazzi")
 }
 
@@ -69,9 +71,8 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
+    // jvmTarget с AGP 9 задаётся через kotlin { compilerOptions }, блока
+    // android.kotlinOptions больше нет.
 
     lint {
         abortOnError = true
@@ -82,10 +83,6 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
-    }
-
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.5"
     }
 
     testOptions {
@@ -104,16 +101,20 @@ android {
     }
 }
 
-// Схема Room выгружается в app/schemas и лежит в git: без неё
-// MigrationTestHelper (androidTest/data/db/MigrationTest.kt) не может открыть
-// БД старой версии и проверить миграции на настоящих данных.
-kapt {
-    arguments {
-        arg("room.schemaLocation", "$projectDir/schemas")
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }
 
-val verifyReleaseSigning by tasks.registering(Exec::class) {
+// Схема Room выгружается в app/schemas и лежит в git: без неё
+// MigrationTestHelper (androidTest/data/db/MigrationTest.kt) не может открыть
+// БД старой версии и проверить миграции на настоящих данных.
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
+val verifyReleaseSigning = tasks.register<Exec>("verifyReleaseSigning") {
     commandLine("python3", rootProject.file("scripts/check_release_signing.py"))
 }
 
@@ -125,8 +126,19 @@ roborazzi {
     outputDir.set(file("src/test/snapshots"))
 }
 
+configurations.all {
+    // Cycle 16: Room 2.8.4 транзитивно фиксирует kotlinx-serialization-core
+    // на 1.7.3 через {strictly}, а json подтягивается 1.8.1 — на устройстве
+    // это AbstractMethodError в MigrationTestHelper. Выравниваем на 1.8.1.
+    resolutionStrategy.force("org.jetbrains.kotlinx:kotlinx-serialization-core:1.8.1")
+    resolutionStrategy.force("org.jetbrains.kotlinx:kotlinx-serialization-core-jvm:1.8.1")
+    resolutionStrategy.force("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
+    resolutionStrategy.force("org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:1.8.1")
+    resolutionStrategy.force("org.jetbrains.kotlinx:kotlinx-serialization-bom:1.8.1")
+}
+
 dependencies {
-    val composeBom = platform("androidx.compose:compose-bom:2024.06.00")
+    val composeBom = platform("androidx.compose:compose-bom:2026.06.01")
     implementation(composeBom)
     testImplementation(composeBom)
     androidTestImplementation(composeBom)
@@ -151,11 +163,12 @@ dependencies {
     // Serialization (recipes.json)
     implementation("com.google.code.gson:gson:2.10.1")
 
-    // Room Database
-    val roomVersion = "2.6.1"
+    // Room Database. 2.8.x — первая линейка, чей процессор умеет KSP2;
+    // 2.6.1 на Kotlin 2.4 просто не запускается.
+    val roomVersion = "2.8.4"
     implementation("androidx.room:room-runtime:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion")
-    kapt("androidx.room:room-compiler:$roomVersion")
+    ksp("androidx.room:room-compiler:$roomVersion")
 
     // WorkManager — sourdough напоминания (закрывает баг v3 #2: CoroutineScope в BroadcastReceiver)
     implementation("androidx.work:work-runtime-ktx:2.9.0")
@@ -178,8 +191,8 @@ dependencies {
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.0")
     testImplementation("androidx.test.ext:junit:1.1.5")
     testImplementation("org.robolectric:robolectric:4.16.1")
-    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.47.0")
-    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.47.0")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.70.0")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.70.0")
     // Cycle 12: Compose-взаимодействия проверяются на Robolectric, а не только
     // на устройстве. Эмулятора в этой сборочной среде нет, а правила «отмена
     // спрашивает» и «мишень не меньше 48dp» проверять глазами нельзя.
@@ -193,7 +206,11 @@ dependencies {
     // Cycle 15: миграции Room проверяются на настоящей SQLite, а не на глаз.
     // История схем лежит в app/schemas — MigrationTestHelper поднимает БД
     // нужной версии оттуда.
+    // Cycle 16: Room 2.8.4 тянет kotlinx-serialization-core 1.7.3, а json — 1.8.1.
+    // GeneratedSerializer.typeParametersSerializers() появился в 1.8.x, и
+    // MigrationTestHelper на устройстве падал с AbstractMethodError.
     androidTestImplementation("androidx.room:room-testing:$roomVersion")
+    androidTestImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
     androidTestImplementation("com.google.truth:truth:1.2.0")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

@@ -1,9 +1,7 @@
 package com.polinalinen.madre.ui.components
 
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
-import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -56,17 +54,21 @@ object WornPage {
  * а не уезжает вместе с текстом. Рисование — детерминированное от [seed]
  * (id рецепта), чтобы потёртости не мигали при рекомпозиции.
  */
-fun Modifier.wornPage(bakeCount: Int, seed: Long): Modifier = composed {
-    if (!WornPage.showsEdgeDarkening(bakeCount)) return@composed Modifier
-    val jitter = remember(seed) {
+// Cycle 16: без composed {}. Ему здесь был нужен ровно один remember(seed), а
+// тот же результат даёт блок кэша drawWithCache — он тоже считается один раз, но
+// без временного Composer на каждый вызов модификатора. Дрожание всё так же
+// детерминировано от seed, поэтому даже пересчёт (смена размера) даст те же числа.
+fun Modifier.wornPage(bakeCount: Int, seed: Long): Modifier {
+    if (!WornPage.showsEdgeDarkening(bakeCount)) return this
+    return drawWithCache {
         val rng = Random(seed)
-        List(6) { rng.nextFloat() }
-    }
-    drawWithContent {
-        drawContent()
-        drawEdgeDarkening(WornPage.edgeAlpha(bakeCount))
-        if (WornPage.showsFingerprint(bakeCount)) drawFingerprint(jitter)
-        if (WornPage.showsSpineWear(bakeCount)) drawSpineWear(jitter)
+        val jitter = List(6) { rng.nextFloat() }
+        onDrawWithContent {
+            drawContent()
+            drawEdgeDarkening(WornPage.edgeAlpha(bakeCount))
+            if (WornPage.showsFingerprint(bakeCount)) drawFingerprint(jitter)
+            if (WornPage.showsSpineWear(bakeCount)) drawSpineWear(jitter)
+        }
     }
 }
 

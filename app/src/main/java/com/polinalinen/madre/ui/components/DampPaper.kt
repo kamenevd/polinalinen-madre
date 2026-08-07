@@ -1,10 +1,9 @@
 package com.polinalinen.madre.ui.components
 
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
-import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -20,11 +19,15 @@ import kotlin.random.Random
  */
 private data class Blotch(val x: Float, val y: Float, val radius: Float, val weight: Float)
 
-fun Modifier.dampPaper(alpha: Float, seed: Long = 17L): Modifier = composed {
-    if (alpha <= 0f) return@composed Modifier
-    val blotches = remember(seed) {
+// Cycle 16: без composed {}. И раскладка разводов, и кисти считаются в блоке
+// кэша drawWithCache: он и заменяет remember(seed), и держит шесть градиентов
+// собранными, пока не сменится размер или alpha. Разводы детерминированы от
+// seed, поэтому пересчёт даёт ту же картинку — мигать нечему.
+fun Modifier.dampPaper(alpha: Float, seed: Long = 17L): Modifier {
+    if (alpha <= 0f) return this
+    return drawWithCache {
         val rng = Random(seed)
-        List(5) {
+        val blotches = List(5) {
             Blotch(
                 // Разводы жмутся к левой/правой кромке — середина страницы сухая.
                 x = if (rng.nextBoolean()) rng.nextFloat() * 0.12f else 1f - rng.nextFloat() * 0.12f,
@@ -33,30 +36,35 @@ fun Modifier.dampPaper(alpha: Float, seed: Long = 17L): Modifier = composed {
                 weight = 0.6f + rng.nextFloat() * 0.4f,
             )
         }
-    }
-    drawWithContent {
-        drawContent()
+        val topHeight = 80.dp.toPx()
         // Отсыревший верхний срез — там книга ближе всего к окну.
-        drawRect(
-            brush = Brush.verticalGradient(
-                colors = listOf(Cool.copy(alpha = alpha * 0.55f), Color.Transparent),
-                startY = 0f,
-                endY = 80.dp.toPx(),
-            ),
-            size = androidx.compose.ui.geometry.Size(size.width, 80.dp.toPx()),
+        val topBrush = Brush.verticalGradient(
+            colors = listOf(Cool.copy(alpha = alpha * 0.55f), Color.Transparent),
+            startY = 0f,
+            endY = topHeight,
         )
-        blotches.forEach { b ->
+        val stains = blotches.map { b ->
             val center = Offset(b.x * size.width, b.y * size.height)
             val radius = b.radius.dp.toPx() * 0.5f
-            drawCircle(
+            Stain(
+                center = center,
+                radius = radius,
                 brush = Brush.radialGradient(
                     colors = listOf(Cool.copy(alpha = alpha * b.weight), Color.Transparent),
                     center = center,
                     radius = radius,
                 ),
-                radius = radius,
-                center = center,
             )
+        }
+        onDrawWithContent {
+            drawContent()
+            drawRect(brush = topBrush, size = Size(size.width, topHeight))
+            stains.forEach { s ->
+                drawCircle(brush = s.brush, radius = s.radius, center = s.center)
+            }
         }
     }
 }
+
+/** Готовый развод: центр, радиус и уже собранная кисть — всё, что нужно кадру. */
+private data class Stain(val center: Offset, val radius: Float, val brush: Brush)

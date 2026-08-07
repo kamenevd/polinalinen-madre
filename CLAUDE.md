@@ -4,7 +4,7 @@
 закваски, общая книга на семью. Android, только светлая тема, весь текст —
 по-русски.
 
-Документ описывает архитектуру **на Cycle 15**. Если коммит меняет
+Документ описывает архитектуру **на Cycle 16**. Если коммит меняет
 архитектуру — CLAUDE.md обновляется **в том же коммите**, а не «потом».
 
 ---
@@ -13,14 +13,42 @@
 
 | Слой | Чем |
 |---|---|
-| Язык | Kotlin 1.9.20 (kapt для Room) |
-| UI | Jetpack Compose, BOM 2024.06.00, compiler ext 1.5.5 |
+| Язык | Kotlin 2.4.10 (KSP 2.3.11 для Room) |
+| UI | Jetpack Compose, BOM 2026.06.01, компилятор — плагин `kotlin.plugin.compose` |
 | Навигация | Navigation Compose, `NavController` + маршруты-строки |
-| Данные | Room 2.6.1 (`madre.db`), `exportSchema = true` |
+| Данные | Room 2.8.4 (`madre.db`), `exportSchema = true` |
 | Сеть | Retrofit + Gson → PocketBase, Open-Meteo для погоды |
 | Фон | WorkManager + один foreground service |
 | Архитектура | MVVM: Application → repositories → ViewModel → Compose |
-| AGP | 8.2.0, compileSdk 35 |
+| AGP | 9.3.1, compileSdk 35, Gradle 9.6.1 |
+
+### Тулчейн (Cycle 16)
+
+С AGP 9 поддержка Kotlin **встроена в сам AGP**: плагин
+`org.jetbrains.kotlin.android` в `app/build.gradle.kts` не применяется —
+сборка падает на конфигурации, если его вернуть. В корневом
+`build.gradle.kts` он объявлен с `apply false` и только затем, чтобы поднять
+KGP на classpath с 2.2.10 (версия внутри AGP) до 2.4.10.
+
+Отсюда же следствия:
+
+- `android.kotlinOptions` больше нет — `jvmTarget` задаётся в
+  `kotlin { compilerOptions { … } }`;
+- `composeOptions.kotlinCompilerExtensionVersion` больше нет — версией
+  Compose-компилятора управляет плагин `org.jetbrains.kotlin.plugin.compose`,
+  его версия обязана совпадать с версией Kotlin;
+- kapt заменён на KSP (`ksp("androidx.room:room-compiler")`), аргумент
+  `room.schemaLocation` переехал из блока `kapt {}` в `ksp {}`.
+
+**Strong skipping включён** — с Kotlin 2.0.20 это поведение Compose-компилятора
+по умолчанию, отдельного флага не нужно. Проверяется не на глаз:
+`composeCompiler { metricsDestination }` пишет `app-module.json`, где есть
+`"featureFlags": { "StrongSkipping": true }`.
+
+Room подняли до 2.8.4 вынужденно: процессор 2.6.1 не работает с KSP2.
+`identityHash` схемы версии 8 при этом **не изменился** — лежащая на телефонах
+`madre.db` открывается той же миграционной историей. Room 2.8 не переписывает
+файл схемы, если хэш совпал, поэтому `app/schemas` остались как были.
 
 Sealed-class навигации из v3 **нет** и не должно появиться: она была размазана
 по `when`-веткам внутри `AnimatedContent`.
@@ -161,7 +189,7 @@ PocketBase на `https://madre-api.kdnfx.space` — общая книга на �
 |---|---|---|
 | Unit + вычисления | `app/src/test/` | JUnit 4 + Truth |
 | Compose-взаимодействия | `app/src/test/` | Robolectric + `ui-test-junit4` |
-| Золотые скриншоты | `app/src/test/…/ui/visual` | Roborazzi 1.47.0 |
+| Золотые скриншоты | `app/src/test/…/ui/visual` | Roborazzi 1.70.0 |
 | Миграции Room | `app/src/androidTest/` | `MigrationTestHelper` на настоящей SQLite |
 | Навигация на устройстве | `app/src/androidTest/` | `NavigationSmokeTest` |
 

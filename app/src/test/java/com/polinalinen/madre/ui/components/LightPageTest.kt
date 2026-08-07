@@ -63,4 +63,33 @@ class LightPageTest {
     fun `same tilt always produces the same spec`() {
         assertThat(LightPage.specFor(0.3f, -0.2f)).isEqualTo(LightPage.specFor(0.3f, -0.2f))
     }
+
+    // Cycle 16: порог, отсекающий микродрожание руки. Раньше он был вписан
+    // прямо в слушатель датчика и проверялся только глазами, на телефоне.
+
+    @Test
+    fun `первый замер всегда осмысленный — блику неоткуда сдвигаться`() {
+        assertThat(LightPage.isMeaningfulChange(null, LightPage.specFor(0f, 0f))).isTrue()
+    }
+
+    @Test
+    fun `дрожание руки не двигает блик`() {
+        val current = LightPage.specFor(pitchRad = 0.30f, rollRad = -0.20f)
+        // Наклон на сотую радиана — это меньше градуса: рука, а не жест.
+        val jitter = LightPage.specFor(pitchRad = 0.3015f, rollRad = -0.2015f)
+        assertThat(LightPage.isMeaningfulChange(current, jitter)).isFalse()
+    }
+
+    @Test
+    fun `настоящий наклон блик двигает`() {
+        val current = LightPage.specFor(pitchRad = 0.0f, rollRad = 0.0f)
+        val tilted = LightPage.specFor(pitchRad = 0.0f, rollRad = 0.3f)
+        assertThat(LightPage.isMeaningfulChange(current, tilted)).isTrue()
+    }
+
+    @Test
+    fun `один и тот же наклон не считается изменением`() {
+        val spec = LightPage.specFor(0.3f, -0.2f)
+        assertThat(LightPage.isMeaningfulChange(spec, spec)).isFalse()
+    }
 }

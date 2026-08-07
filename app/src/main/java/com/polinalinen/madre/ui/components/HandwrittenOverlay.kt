@@ -26,6 +26,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -171,7 +172,12 @@ fun HandwrittenEditSurface(
     val colors = AppColors.current
     val context = androidx.compose.ui.platform.LocalContext.current
 
-    var editing by remember { mutableStateOf(false) }
+    // Cycle 16: rememberSaveable, а не remember. Рецепт переехал на LazyColumn,
+    // и блок «рецепт целиком» теперь выкидывается из композиции, когда уезжает
+    // за край экрана. С обычным remember режим правки молча выключался сам,
+    // стоило прокрутить страницу вверх и вернуться. Штрихи это переживали
+    // (они пишутся на диск на каждое изменение), а вот включённый карандаш — нет.
+    var editing by rememberSaveable(recipeId) { mutableStateOf(false) }
     var history by remember(recipeId) { mutableStateOf(HandwrittenEdit.StrokeHistory()) }
     var currentStroke by remember { mutableStateOf<List<Offset>>(emptyList()) }
     var legacyLayer by remember(recipeId) { mutableStateOf<ImageBitmap?>(null) }

@@ -1,8 +1,7 @@
 package com.polinalinen.madre.ui.components
 
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -18,7 +17,10 @@ import kotlin.random.Random
  *
  * Woven cloth: сетка тонких диагональных линий в две стороны — имитация плетения мешковины.
  */
-fun Modifier.wovenClothTexture(tint: Color = Espresso, alpha: Float = 0.035f): Modifier = composed {
+// Cycle 16: composed {} здесь не делал вообще ничего — внутри не было ни одного
+// composable-вызова, только drawWithContent, который и сам Modifier.Node.
+// Обёртка стоила временного Composer на каждый вызов и не давала взамен ничего.
+fun Modifier.wovenClothTexture(tint: Color = Espresso, alpha: Float = 0.035f): Modifier =
     drawWithContent {
         drawContent()
         val step = 10.dp.toPx()
@@ -47,27 +49,27 @@ fun Modifier.wovenClothTexture(tint: Color = Espresso, alpha: Float = 0.035f): M
             }
         }
     }
-}
 
 /**
  * v4-screen-inventory "Decorative elements": scattered flour dust particles.
  * Используется один раз на Home (за greeting), НЕ на каждой карточке — иначе шумно.
  */
-fun Modifier.flourDust(count: Int = 14, tint: Color = Espresso, seed: Int = 42): Modifier = composed {
-    val points = remember(seed) {
+// Cycle 16: без composed {} — раскладка крупинок детерминирована от seed и
+// считается в блоке кэша drawWithCache вместо remember.
+fun Modifier.flourDust(count: Int = 14, tint: Color = Espresso, seed: Int = 42): Modifier =
+    drawWithCache {
         val random = Random(seed)
-        List(count) {
+        val points = List(count) {
             Triple(random.nextFloat(), random.nextFloat(), random.nextFloat() * 2.5f + 0.5f)
         }
-    }
-    drawWithContent {
-        drawContent()
-        points.forEach { (fx, fy, radiusDp) ->
-            drawCircle(
-                color = tint.copy(alpha = 0.05f),
-                radius = radiusDp.dp.toPx(),
-                center = Offset(fx * size.width, fy * size.height),
-            )
+        onDrawWithContent {
+            drawContent()
+            points.forEach { (fx, fy, radiusDp) ->
+                drawCircle(
+                    color = tint.copy(alpha = 0.05f),
+                    radius = radiusDp.dp.toPx(),
+                    center = Offset(fx * size.width, fy * size.height),
+                )
+            }
         }
     }
-}

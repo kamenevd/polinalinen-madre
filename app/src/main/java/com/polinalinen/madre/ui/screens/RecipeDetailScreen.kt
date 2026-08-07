@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
@@ -14,9 +15,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -164,107 +164,133 @@ fun RecipeDetailScreen(
                 .coffeeRings(coffeeRingCount, seed = recipeId.hashCode().toLong())
                 .wornPage(bakeCount, seed = recipeId.hashCode().toLong())
         ) {
-        Column(
-            Modifier
-                .statusBarsPadding()
-                .verticalScroll(rememberScrollState())
-                .padding(bottom = 24.dp)
+        // Cycle 16: LazyColumn вместо Column(verticalScroll). Ключи — стабильные
+        // строки, а не индексы: список блоков зависит от того, пришли ли заметки
+        // из сети, и по индексу «гостевая страница» однажды получила бы состояние
+        // «из других книг».
+        LazyColumn(
+            modifier = Modifier.statusBarsPadding(),
+            // Тот же нижний отступ, что раньше давал .padding(bottom) внутри
+            // скролла: он едет вместе с контентом, а не подрезает viewport.
+            contentPadding = PaddingValues(bottom = 24.dp),
         ) {
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                BackLabel("Оглавление", onClick = onBack)
-                PageLabel("Рецепт № %02d".format(chapterIndex))
+            item(key = "header") {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    BackLabel("Оглавление", onClick = onBack)
+                    PageLabel("Рецепт № %02d".format(chapterIndex))
+                }
             }
 
-            Text(
-                recipe.name,
-                color = colors.espresso,
-                fontFamily = FontFamily.Serif,
-                fontWeight = FontWeight.Bold,
-                fontSize = 32.sp,
-                lineHeight = 36.sp,
-                modifier = Modifier.padding(horizontal = 22.dp),
-            )
-            Text(
-                recipe.description,
-                color = colors.cocoa,
-                fontFamily = FontFamily.Serif,
-                fontStyle = FontStyle.Italic,
-                fontSize = 13.sp,
-                modifier = Modifier.padding(horizontal = 22.dp, vertical = 6.dp),
-            )
+            item(key = "title") {
+                Text(
+                    recipe.name,
+                    color = colors.espresso,
+                    fontFamily = FontFamily.Serif,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 32.sp,
+                    lineHeight = 36.sp,
+                    modifier = Modifier.padding(horizontal = 22.dp),
+                )
+            }
 
-            StatsFooter(recipe)
+            item(key = "description") {
+                Text(
+                    recipe.description,
+                    color = colors.cocoa,
+                    fontFamily = FontFamily.Serif,
+                    fontStyle = FontStyle.Italic,
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(horizontal = 22.dp, vertical = 6.dp),
+                )
+            }
 
-            PortionSelector(
-                portions = portions,
-                onSelect = { portions = RecipeScale.clampPortions(it) },
-                modifier = Modifier.padding(horizontal = 22.dp, vertical = 8.dp),
-            )
+            item(key = "stats") { StatsFooter(recipe) }
 
-            ScaleNotes(recipe = recipe, portions = portions)
+            item(key = "portions") {
+                PortionSelector(
+                    portions = portions,
+                    onSelect = { portions = RecipeScale.clampPortions(it) },
+                    modifier = Modifier.padding(horizontal = 22.dp, vertical = 8.dp),
+                )
+            }
 
-            PastedPhoto(recipe, Modifier.padding(horizontal = 22.dp, vertical = 10.dp))
+            item(key = "scale-notes") { ScaleNotes(recipe = recipe, portions = portions) }
 
+            item(key = "photo") {
+                PastedPhoto(recipe, Modifier.padding(horizontal = 22.dp, vertical = 10.dp))
+            }
+
+            // Секция ингредиентов — один item целиком, а не item на строку:
+            // отточия внутри секции меряются по её ширине, и разрезать их
+            // на самостоятельные элементы значит менять вёрстку ради оптики.
             recipe.ingredients.forEach { (section, items) ->
-                val sectionTitle = when (section) {
-                    "sponge" -> "Опара"
-                    "main" -> "Тесто"
-                    else -> section
-                }
-                PageLabel(sectionTitle, Modifier.padding(start = 22.dp, top = 14.dp), color = colors.espresso)
-                Column(Modifier.padding(horizontal = 22.dp, vertical = 4.dp)) {
-                    items.forEach { ingredient ->
-                        val text = RecipeScaler.scaledDisplayText(ingredient, scaleFactor)
-                        // Каждая строка пересчитывается от текущего scaleFactor —
-                        // старых значений на странице не остаётся ни в одной.
-                        // Отточие: имя слева, граммы справа. Если формат нераздельный — одной строкой.
-                        val parts = text.split(" г ", limit = 2)
-                        if (parts.size == 2 && parts[0].toDoubleOrNull() != null) {
-                            DottedLeaderRow(name = parts[1], value = "${parts[0]} г")
-                        } else {
-                            Text(
-                                text,
-                                color = colors.espresso,
-                                fontFamily = FontFamily.Serif,
-                                fontSize = 14.sp,
-                                modifier = Modifier.padding(vertical = 5.dp),
-                            )
+                item(key = "ingredients-$section") {
+                    val sectionTitle = when (section) {
+                        "sponge" -> "Опара"
+                        "main" -> "Тесто"
+                        else -> section
+                    }
+                    PageLabel(sectionTitle, Modifier.padding(start = 22.dp, top = 14.dp), color = colors.espresso)
+                    Column(Modifier.padding(horizontal = 22.dp, vertical = 4.dp)) {
+                        items.forEach { ingredient ->
+                            val text = RecipeScaler.scaledDisplayText(ingredient, scaleFactor)
+                            // Каждая строка пересчитывается от текущего scaleFactor —
+                            // старых значений на странице не остаётся ни в одной.
+                            // Отточие: имя слева, граммы справа. Если формат нераздельный — одной строкой.
+                            val parts = text.split(" г ", limit = 2)
+                            if (parts.size == 2 && parts[0].toDoubleOrNull() != null) {
+                                DottedLeaderRow(name = parts[1], value = "${parts[0]} г")
+                            } else {
+                                Text(
+                                    text,
+                                    color = colors.espresso,
+                                    fontFamily = FontFamily.Serif,
+                                    fontSize = 14.sp,
+                                    modifier = Modifier.padding(vertical = 5.dp),
+                                )
+                            }
                         }
                     }
                 }
             }
 
-            LibraryNotesSection(
-                notes = libraryNotes,
-                modifier = Modifier.padding(top = 14.dp),
-            )
-
-            GuestNotesSection(
-                notes = guestNotes,
-                modifier = Modifier.padding(top = 18.dp),
-            )
-
-            Spacer(Modifier.height(14.dp))
-            // Что именно сейчас начнётся — прямо над кнопкой. Порции выбирают
-            // в начале страницы, а нажимают «Начать выпечку» в конце, через
-            // весь список ингредиентов: без этой строки легко уехать в
-            // трёхчасовую выпечку не на ту семью.
-            Box(Modifier.padding(horizontal = 22.dp)) {
-                BookButton(
-                    label = "Начать выпечку",
-                    onClick = {
-                        val sessionId = viewModel.startBaking(recipe, scaleFactor)
-                        onStartBaking(sessionId)
-                    },
-                    // Часы считаются от плана рецепта, а не от порций: время
-                    // этапов от количества семей не зависит (RecipeScale.TIMING_NOTE).
-                    caption = "×$portions ${familyWord(portions)} · " +
-                        "${RecipeScale.totalMinutes(recipe, portions) / 60} ч · " +
-                        "${recipe.timeline.size} шагов — таймер поведёт за руку",
+            item(key = "library-notes") {
+                LibraryNotesSection(
+                    notes = libraryNotes,
+                    modifier = Modifier.padding(top = 14.dp),
                 )
+            }
+
+            item(key = "guest-notes") {
+                GuestNotesSection(
+                    notes = guestNotes,
+                    modifier = Modifier.padding(top = 18.dp),
+                )
+            }
+
+            item(key = "cta") {
+                Spacer(Modifier.height(14.dp))
+                // Что именно сейчас начнётся — прямо над кнопкой. Порции выбирают
+                // в начале страницы, а нажимают «Начать выпечку» в конце, через
+                // весь список ингредиентов: без этой строки легко уехать в
+                // трёхчасовую выпечку не на ту семью.
+                Box(Modifier.padding(horizontal = 22.dp)) {
+                    BookButton(
+                        label = "Начать выпечку",
+                        onClick = {
+                            val sessionId = viewModel.startBaking(recipe, scaleFactor)
+                            onStartBaking(sessionId)
+                        },
+                        // Часы считаются от плана рецепта, а не от порций: время
+                        // этапов от количества семей не зависит (RecipeScale.TIMING_NOTE).
+                        caption = "×$portions ${familyWord(portions)} · " +
+                            "${RecipeScale.totalMinutes(recipe, portions) / 60} ч · " +
+                            "${recipe.timeline.size} шагов — таймер поведёт за руку",
+                    )
+                }
             }
 
             // Просьба Полины (2026-07-21, помнить и не убирать): весь рецепт должен
@@ -274,11 +300,18 @@ fun RecipeDetailScreen(
             // книжная версия не может разойтись с шагами или показать не те цифры.
             // «Правка от руки» (Cycle 4, HandwrittenEdit) — рукописные правки
             // поверх книжного текста; bitmap в internal storage, ключ — recipeId.
-            HandwrittenEditSurface(recipeId = recipeId, modifier = Modifier.padding(top = 32.dp)) {
-                FullRecipeSection(recipe, scaleFactor)
+            //
+            // Cycle 16: весь блок — ровно один item, и разбивать его по шагам
+            // нельзя. Рукописные штрихи хранятся в долях от размера этой самой
+            // поверхности (HandwrittenEdit, normalize/denormalize по matchParentSize):
+            // разрезав текст на элементы, мы поменяли бы систему координат, и
+            // всё уже написанное Полиной съехало бы по странице.
+            item(key = "full-recipe") {
+                HandwrittenEditSurface(recipeId = recipeId, modifier = Modifier.padding(top = 32.dp)) {
+                    FullRecipeSection(recipe, scaleFactor)
+                }
             }
         }
-
         }
     }
 }

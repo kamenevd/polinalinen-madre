@@ -130,11 +130,11 @@ configurations.all {
     // Cycle 16: Room 2.8.4 транзитивно фиксирует kotlinx-serialization-core
     // на 1.7.3 через {strictly}, а json подтягивается 1.8.1 — на устройстве
     // это AbstractMethodError в MigrationTestHelper. Выравниваем на 1.8.1.
-    resolutionStrategy.force("org.jetbrains.kotlinx:kotlinx-serialization-core:1.8.1")
-    resolutionStrategy.force("org.jetbrains.kotlinx:kotlinx-serialization-core-jvm:1.8.1")
-    resolutionStrategy.force("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
-    resolutionStrategy.force("org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:1.8.1")
-    resolutionStrategy.force("org.jetbrains.kotlinx:kotlinx-serialization-bom:1.8.1")
+    resolutionStrategy.force("org.jetbrains.kotlinx:kotlinx-serialization-core:1.11.0")
+    resolutionStrategy.force("org.jetbrains.kotlinx:kotlinx-serialization-core-jvm:1.11.0")
+    resolutionStrategy.force("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
+    resolutionStrategy.force("org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:1.11.0")
+    resolutionStrategy.force("org.jetbrains.kotlinx:kotlinx-serialization-bom:1.11.0")
 }
 
 dependencies {
@@ -211,7 +211,7 @@ dependencies {
     // GeneratedSerializer.typeParametersSerializers() появился в 1.8.x, и
     // MigrationTestHelper на устройстве падал с AbstractMethodError.
     androidTestImplementation("androidx.room:room-testing:$roomVersion")
-    androidTestImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
+    androidTestImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
     androidTestImplementation("com.google.truth:truth:1.2.0")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

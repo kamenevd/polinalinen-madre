@@ -14,7 +14,9 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
 import com.polinalinen.madre.ui.theme.MadreTheme
@@ -50,6 +52,27 @@ class BookControlsUiTest {
     fun `a quiet text action is a finger tall too`() {
         rule.setContent { MadreTheme { TextAction(label = "убрать", onClick = {}) } }
         rule.onNodeWithText("убрать").assertHeightIsAtLeast(48.dp)
+    }
+
+    /**
+     * Cycle 18: тихое действие — всё-таки действие, и читать его надо не
+     * прищуриваясь. 13sp набирались мельче любой подписи на странице, и
+     * «заглянуть ещё раз» под строкой об отвалившейся сети выглядело частью
+     * той же строки, а не выходом из неё.
+     *
+     * Размер снимается с настоящей раскладки текста, а не с константы рядом:
+     * константа, сверенная сама с собой, ничего не проверяет.
+     */
+    @Test
+    fun `a quiet text action is set at reading size`() {
+        rule.setContent { MadreTheme { TextAction(label = "заглянуть ещё раз", onClick = {}) } }
+        val layouts = mutableListOf<TextLayoutResult>()
+        rule.onNodeWithText("заглянуть ещё раз")
+            .fetchSemanticsNode()
+            .config[SemanticsActions.GetTextLayoutResult]
+            .action
+            ?.invoke(layouts)
+        assertThat(layouts.first().layoutInput.style.fontSize).isEqualTo(15.sp)
     }
 
     @Test

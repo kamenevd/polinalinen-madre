@@ -518,3 +518,49 @@ nextSessionId race, docs drift).
 `bake_stats`/`feeding_stats`/`margin_notes_sync` — состояние может отличаться
 от lock-migration в репо. Всё равно нужна versioned migration family rules.
 
+
+## Cycle 18 — язык кнопок и короткие пути (2026-08-09)
+
+Источник: блок B (madre-perf / UX). Блок A (perf) закрыт в Cycle 16; maintenance 17 = v6.1.0-cycle17.
+
+### Фича 1: Язык кнопок Живой книги (control-language)
+
+Три уровня:
+1. Главное действие страницы — `BookButton` PRIMARY (заливка). Ровно одно на экран где уместно.
+2. Второстепенное — `BookButton` SECONDARY (рамка).
+3. Тихое — `TextAction`: пунктирное подчёркивание цветом `crust`, fontSize **15sp** (сейчас 13sp), мишень 48dp, `Role.Button` + onClickLabel.
+
+Правило в CLAUDE.md: любой `.clickable` обязан быть BookButton / TextAction / BackLabel либо фотокарточкой с `Role.Button` + onClickLabel + minHeight 48dp.
+
+Acceptance: TextAction визуально отличается; правило в CLAUDE.md; тест семантики HomeScreen.
+
+Коммит: `feat: control-language`
+
+### Фича 2: Чистая главная без дублей и мёртвых блоков (home-path-cleanup)
+
+- Убрать `CommunitySection` с HomeScreen (B4) и мёртвые community VM вызовы если только для этой секции.
+- Единственный путь к таймеру — билет ActiveBakingTicket. RibbonBookmark — декоративный (без clickable к таймеру) (B2).
+- MoodBookmark: убрать phase-dependent clickable PEAK→рецепт / else→кормление (B3). Кормление — фича 3.
+
+Acceptance: нет CommunitySection; нет второго clickable-пути к таймеру; нет phase-dependent lasso.
+
+Коммит: `feat: home-path-cleanup`
+
+### Фича 3: Покормить в один тап и летопись без Полки (daily-feed-and-chronicle)
+
+- Под MadreLine — `BookButton` PRIMARY «Покормить {имя}» → onOpenFeeding (B5.1). Если только что кормили — honest inactive/secondary + относительное время.
+- FeedingReminder notification — action «Покормила» (B5.2). Unit-тест на action id / PendingIntent.
+- «Полка» на главной → сразу `BookStatsScreen` / bookStats("me"), без промежуточного ShelfScreen в ежедневном пути (B6).
+
+Acceptance: кормление = 1 тап; notification action тестируется; летопись = 1 тап; navigation smoke ок.
+
+Коммит: `feat: daily-feed-and-chronicle`
+
+### Ограничения
+
+- Не bump versionCode/versionName.
+- Не git push (оркестратор).
+- Не возвращать StuckPages/emoji; corners ≤4dp; max 2 эффекта на экран.
+- Red-first: тест → код → `./gradlew testDebugUnitTest` → commit.
+- В конце: `lintDebug verifyRoborazziDebug assembleDebug`.
+- Не трогать production PocketBase без compile blocker.

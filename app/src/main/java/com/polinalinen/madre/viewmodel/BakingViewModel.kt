@@ -28,7 +28,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -87,19 +86,10 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
             )
     }
 
-    /**
-     * К какой выпечке ведёт ляссе — к той, которой ближе всего до следующего шага.
-     * Считается здесь, а не на первой полосе: остаток пересчитывается раз в
-     * секунду, а цель ляссе за всю выпечку меняется хорошо если однажды, и
-     * первой полосе незачем просыпаться на каждый тик ради неизменного ответа.
-     */
-    val nearestSessionId: StateFlow<Long?> =
-        combine(_sessions, _remainingSeconds) { sessions, remaining ->
-            sessions.minByOrNull { remaining[it.id] ?: Long.MAX_VALUE }?.id
-        }
-            .distinctUntilChanged()
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
-
+    // Cycle 18: nearestSessionId убран вместе с нажатием на ляссе. Он отвечал
+    // на единственный вопрос — «к какой выпечке ведёт лента», — а лента больше
+    // никуда не ведёт: к своей выпечке ведёт её талон. Заодно ушёл combine,
+    // просыпавшийся на каждый тик остатка.
     // Сколько выпечек бросили незавершёнными в этой сессии приложения — источник
     // триггера «отменённая выпечка» для клякс (DESIGN-V4.md Cycle 3, InkBlot).
     // В памяти, не в Room: фича явно не требует новой таблицы, а клякса как

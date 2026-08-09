@@ -55,6 +55,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 fun MadreNavHost(
     navController: NavHostController = rememberNavController(),
     pendingSessionId: MutableStateFlow<Long?>? = null,
+    pendingFeeding: MutableStateFlow<Boolean>? = null,
 ) {
     val context = LocalContext.current
     val bakingViewModel: BakingViewModel = viewModel()
@@ -71,6 +72,20 @@ fun MadreNavHost(
             val id = requested ?: return@LaunchedEffect
             pendingSessionId.value = null
             navController.navigate(MadreDestinations.bakingTimer(id.toString())) {
+                popUpTo(MadreDestinations.HOME) { inclusive = false }
+            }
+        }
+    }
+
+    // Cycle 18: кнопка «Покормила» из шторки открывает форму кормления. Тот же
+    // приём, что и с выпечкой: намерение ждёт, пока NavHost готов, и гасится
+    // сразу после исполнения, чтобы поворот экрана не открыл форму дважды.
+    if (pendingFeeding != null) {
+        val requested by pendingFeeding.collectAsState()
+        LaunchedEffect(requested) {
+            if (!requested) return@LaunchedEffect
+            pendingFeeding.value = false
+            navController.navigate(MadreDestinations.FEEDING_FORM) {
                 popUpTo(MadreDestinations.HOME) { inclusive = false }
             }
         }
@@ -155,6 +170,7 @@ fun MadreNavHost(
                     madreHeadline = headline,
                     starterName = starterName,
                     phase = phase,
+                    lastFeedingMillis = sourdoughConfig?.lastFeedingMillis,
                     favoriteIds = favoriteIds,
                     onToggleFavorite = toggleFavorite,
                     onOpenRecipe = { id -> navController.navigate(MadreDestinations.recipeDetail(id)) },
@@ -162,7 +178,13 @@ fun MadreNavHost(
                     onOpenTimer = { sessionId -> navController.navigate(MadreDestinations.bakingTimer(sessionId.toString())) },
                     onOpenFeeding = { navController.navigate(MadreDestinations.FEEDING_FORM) },
                     onOpenSettings = { navController.navigate(MadreDestinations.SETTINGS) },
-                    onOpenShelf = { navController.navigate(MadreDestinations.SHELF) },
+                    // Cycle 18: «Полка» с первой полосы ведёт сразу в свою
+                    // летопись. Промежуточный разворот Полки показывал ровно
+                    // один корешок — свой, — и требовал второго нажатия на
+                    // каждодневной дороге. Сама Полка (MadreDestinations.SHELF)
+                    // осталась в графе и обретёт вход, когда книг станет больше
+                    // одной; до тех пор с первой полосы её не видно.
+                    onOpenShelf = { navController.navigate(MadreDestinations.bookStats("me")) },
                     viewModel = bakingViewModel,
                 )
             }

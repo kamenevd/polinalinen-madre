@@ -174,7 +174,10 @@ fun RibbonBookmark(
     width: Dp = 22.dp,
     length: Dp = 92.dp,
     color: Color = AppColors.current.terracotta,
-    description: String = "Открыть таймер активной выпечки",
+    // Cycle 18: лента ничего не обещает — она лежит на странице и показывает,
+    // что выпечка идёт. Раньше здесь было «Открыть таймер активной выпечки»,
+    // и это была правда: ляссе вело к таймеру второй дорогой мимо талона.
+    description: String = "Ляссе: выпечка идёт",
     totalBakes: Int = 0,
 ) {
     val parchment = AppColors.current.parchment

@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,14 +41,17 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.polinalinen.madre.model.CommunityStats
 import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.model.Season
 import com.polinalinen.madre.model.SeasonalEdition
 import com.polinalinen.madre.model.WeatherNote
+import com.polinalinen.madre.sourdough.FeedingCall
 import com.polinalinen.madre.sourdough.GrowthPhase
 import com.polinalinen.madre.sourdough.StarterName
+import com.polinalinen.madre.sourdough.hoursSinceFeeding
 import com.polinalinen.madre.ui.components.BookBreath
+import com.polinalinen.madre.ui.components.BookButton
+import com.polinalinen.madre.ui.components.BookButtonVariant
 import com.polinalinen.madre.ui.components.DogEar
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.HeavyRule
@@ -59,12 +61,11 @@ import com.polinalinen.madre.ui.components.Stamp
 import com.polinalinen.madre.ui.components.TicketFrame
 import com.polinalinen.madre.ui.components.WornPage
 import com.polinalinen.madre.ui.components.TextAction
+import com.polinalinen.madre.ui.components.bookAction
 import com.polinalinen.madre.ui.components.breathingPage
 import com.polinalinen.madre.ui.components.dampPaper
 import com.polinalinen.madre.ui.theme.AppColors
 import com.polinalinen.madre.viewmodel.BakingViewModel
-import com.polinalinen.madre.viewmodel.CommunityState
-import com.polinalinen.madre.viewmodel.CommunityStatsViewModel
 import com.polinalinen.madre.viewmodel.WeatherViewModel
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -90,6 +91,8 @@ fun HomeScreen(
     madreHeadline: String,
     starterName: String = StarterName.DEFAULT,
     phase: GrowthPhase,
+    /** Когда кормили в прошлый раз; null — дневник ещё пуст. */
+    lastFeedingMillis: Long? = null,
     favoriteIds: Set<String>,
     onToggleFavorite: (String) -> Unit,
     onOpenRecipe: (String) -> Unit,
@@ -99,7 +102,6 @@ fun HomeScreen(
     onOpenSettings: () -> Unit,
     onOpenShelf: () -> Unit,
     viewModel: BakingViewModel = viewModel(),
-    communityViewModel: CommunityStatsViewModel = viewModel(),
     weatherViewModel: WeatherViewModel = viewModel(),
 ) {
     val colors = AppColors.current
@@ -121,21 +123,12 @@ fun HomeScreen(
         if (hasLocationPermission) weatherViewModel.load()
     }
     val weatherNote by weatherViewModel.note.collectAsState()
-    // «Общая статистика» (Cycle 5) — сводка bake_stats других семей из PocketBase.
-    val communityState by communityViewModel.state.collectAsState()
     val sessions by viewModel.sessions.collectAsState()
     // «Затёртая страница» (Cycle 4, WornPages) — часто печёные главы темнеют.
     val bakeCounts by viewModel.bakeCounts.collectAsState()
     // «Ветхое ляссе» (Cycle 9, AgedRibbon): лента стареет со всей книгой —
     // возраст считаем по общему числу выпечек всех глав.
     val totalBakes = bakeCounts.values.sum()
-    // Ляссе ведёт к той выпечке, что ближе всего к следующему шагу. Сам остаток
-    // первая полоса не читает и читать не должна: талон выпечки показывает шаг,
-    // а не секунды, а карта остатков меняется раз в секунду — на ней всё
-    // оглавление перерисовывалось бы вместе с ней (Cycle 16).
-    val nearestSessionId by viewModel.nearestSessionId.collectAsState()
-    // «Мадре советует» — рецепт попроще, пока закваска на пике и время дорого.
-    val recommendedRecipeId = recipes.minByOrNull { if (it.difficulty > 0) it.difficulty else Int.MAX_VALUE }?.id
     // «Сезонная глава» (Cycle 3) — ярлык у даты + отметка на одном рецепте оглавления.
     val season = SeasonalEdition.seasonForMonth(Calendar.getInstance().get(Calendar.MONTH) + 1)
     val seasonalRecipeId = SeasonalEdition.recipeIdFor(season)
@@ -151,6 +144,7 @@ fun HomeScreen(
             LazyColumn(modifier = Modifier.statusBarsPadding().testTag(Home.LIST_TAG)) {
                 item { Masthead(season, onOpenSettings, onOpenShelf) }
                 item { MadreLine(madreHeadline, starterName, onOpenStarter) }
+                item { FeedingCallButton(starterName, phase, lastFeedingMillis, onOpenFeeding) }
                 item {
                     WeatherMargin(
                         note = weatherNote,
@@ -164,7 +158,11 @@ fun HomeScreen(
                 // готовиться несколько одновременно (2026-07-21).
                 items(sessions, key = { it.id }) { s ->
                     Box(Modifier.padding(horizontal = 22.dp, vertical = 6.dp)) {
-                        TicketFrame(Modifier.fillMaxWidth().clickable { onOpenTimer(s.id) }) {
+                        TicketFrame(
+                            Modifier
+                                .fillMaxWidth()
+                                .then(bookAction("Открыть выпечку «${s.recipe.name}»") { onOpenTimer(s.id) })
+                        ) {
                             ActiveBakingTicket(
                                 recipeName = s.recipe.name,
                                 stepIndex = s.currentStepIndex,
@@ -202,39 +200,50 @@ fun HomeScreen(
                         onToggleFavorite = { onToggleFavorite(recipe.id) },
                     )
                 }
-                item { CommunitySection(communityState, onRetry = communityViewModel::refresh) }
                 item { Colophon() }
             }
-            // Ляссе поверх страницы — только пока идёт хотя бы одна выпечка.
-            // Если выпечки нет — вместо неё mood-ляссе «Мадре советует» (приоритет
-            // у baking-ляссе, они никогда не показываются вместе).
-            val nearest = nearestSessionId
-            if (nearest != null) {
-                RibbonBookmark(
-                    Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(end = 34.dp)
-                        .clickable { onOpenTimer(nearest) },
-                    totalBakes = totalBakes,
-                )
-            } else {
-                moodBookmarkSpec(phase)?.let { spec ->
-                    MoodBookmark(
-                        spec = spec,
-                        totalBakes = totalBakes,
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(end = 34.dp)
-                            .clickable {
-                                if (phase == GrowthPhase.PEAK) {
-                                    recommendedRecipeId?.let(onOpenRecipe)
-                                } else {
-                                    onOpenFeeding()
-                                }
-                            },
-                    )
-                }
-            }
+            PageRibbon(
+                hasActiveBake = sessions.isNotEmpty(),
+                phase = phase,
+                totalBakes = totalBakes,
+                modifier = Modifier.align(Alignment.TopEnd).padding(end = 34.dp),
+            )
+        }
+    }
+}
+
+/**
+ * Ляссе поверх первой полосы — только одно за раз: пока идёт хотя бы одна
+ * выпечка, это лента выпечки, иначе mood-ляссе «Мадре советует» (в фазах
+ * LAG/GROWING/EMPTY не показывается вовсе).
+ *
+ * Cycle 18: обе ленты — украшение страницы, и ничего больше.
+ *
+ * Baking-ляссе вело к таймеру второй дорогой мимо талона, причём не к той
+ * выпечке, на которую человек смотрит, а к ближайшей по времени: с двумя
+ * противнями в печи тап по ленте уводил не туда. Mood-ляссе решало за
+ * человека само — на пике открывало рецепт попроще, в остальных фазах
+ * кормление, — а о том, какая сейчас фаза, в момент нажатия знала только
+ * книга. Теперь к выпечке ведёт её талон, к кормлению — кнопка под строкой
+ * от Мадре, а лента лежит на странице и показывает, что происходит.
+ *
+ * Вынесено из [HomeScreen] отдельным composable не ради длины функции: так
+ * «лента ничего не обещает» проверяется тестом напрямую, без Room, без
+ * ViewModel и без восстановления незавершённой выпечки — на них проверка
+ * первой полосы разъезжалась от одного лишь соседства с другими тестами.
+ */
+@Composable
+internal fun PageRibbon(
+    hasActiveBake: Boolean,
+    phase: GrowthPhase,
+    totalBakes: Int,
+    modifier: Modifier = Modifier,
+) {
+    if (hasActiveBake) {
+        RibbonBookmark(modifier, totalBakes = totalBakes)
+    } else {
+        moodBookmarkSpec(phase)?.let { spec ->
+            MoodBookmark(spec = spec, totalBakes = totalBakes, modifier = modifier)
         }
     }
 }
@@ -278,16 +287,13 @@ private fun Masthead(
             HeavyRule(Modifier.weight(1f))
         }
         // Cycle 12: два выхода с первой полосы — названные и видимые.
-        //
-        // До этого «Полка» пряталась под надписью «Домашняя пекарня Полины», а
-        // «Настройки» — под самим словом МАДРЕ. Ни то, ни другое ничем не
-        // выдавало себя как кнопку: попасть туда можно было только случайно,
-        // а тап по заголовку книги, уводящий в настройки, ещё и сбивал с толку.
+        // Cycle 18 MoA: «Полка» → «Летопись» — ведёт сразу в свою книгу-формуляр,
+        // не в промежуточный разворот корешков (там пока нечего выбирать).
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 22.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            TextAction("Полка", onClick = onOpenShelf)
+            TextAction("Летопись", onClick = onOpenShelf)
             TextAction("Настройки", onClick = onOpenSettings)
         }
     }
@@ -296,7 +302,12 @@ private fun Masthead(
 @Composable
 private fun MadreLine(headline: String, starterName: String, onOpenStarter: () -> Unit) {
     val colors = AppColors.current
-    Column(Modifier.fillMaxWidth().clickable { onOpenStarter() }.padding(horizontal = 22.dp, vertical = 6.dp)) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .then(bookAction("Открыть дневник закваски") { onOpenStarter() })
+            .padding(horizontal = 22.dp, vertical = 6.dp)
+    ) {
         PageLabel(StarterName.homeLabel(starterName))
         Text(
             "«$headline»",
@@ -307,6 +318,42 @@ private fun MadreLine(headline: String, starterName: String, onOpenStarter: () -
             modifier = Modifier.padding(top = 2.dp),
         )
     }
+}
+
+/**
+ * «Покормить» — главное действие дня, сразу под строкой от Мадре
+ * (DESIGN-V4.md Cycle 18).
+ *
+ * Кормление — единственное, что делают в этой книге каждый день, а дорога к
+ * нему шла через три экрана: первая полоса → дневник → форма. Теперь один тап.
+ *
+ * Пока кормить пора — это единственная кнопка заливкой на всей полосе. Когда
+ * кормили недавно, она не гаснет и не исчезает: кормить закваску раньше срока
+ * человек вправе, и запрещать ему это книге не за что. Меняется только голос —
+ * рамка вместо заливки — и под кнопкой появляется, когда кормили. Время
+ * относительное и настоящее: если его нет, подписи тоже нет (см.
+ * [FeedingCall.sinceLabel]).
+ */
+@Composable
+private fun FeedingCallButton(
+    starterName: String,
+    phase: GrowthPhase,
+    lastFeedingMillis: Long?,
+    onOpenFeeding: () -> Unit,
+) {
+    val fresh = FeedingCall.isFresh(phase)
+    val caption = if (fresh) {
+        FeedingCall.sinceLabel(lastFeedingMillis?.let { hoursSinceFeeding(it) })
+    } else {
+        null
+    }
+    BookButton(
+        label = FeedingCall.label(starterName),
+        onClick = onOpenFeeding,
+        variant = if (fresh) BookButtonVariant.SECONDARY else BookButtonVariant.PRIMARY,
+        caption = caption,
+        modifier = Modifier.padding(horizontal = 22.dp, vertical = 8.dp),
+    )
 }
 
 /**
@@ -329,15 +376,13 @@ private fun WeatherMargin(note: WeatherNote?, showInvite: Boolean, onInvite: () 
                 .padding(horizontal = 22.dp, vertical = 4.dp)
                 .rotate(-1.2f),
         )
-        showInvite -> Text(
-            "впустить погоду за окном",
-            color = colors.crust,
-            fontFamily = FontFamily.SansSerif,
-            fontSize = 10.sp,
-            letterSpacing = 2.sp,
-            modifier = Modifier
-                .padding(horizontal = 22.dp, vertical = 4.dp)
-                .clickable { onInvite() },
+        // Cycle 18: приглашение было надписью 10sp высотой в ноготь — тихим
+        // оно и осталось, но теперь это тихое действие книги, а не строка,
+        // про которую надо догадаться, что она нажимается.
+        showInvite -> TextAction(
+            label = "впустить погоду за окном",
+            onClick = onInvite,
+            modifier = Modifier.padding(horizontal = 14.dp),
         )
     }
 }
@@ -417,7 +462,7 @@ private fun ChapterRow(
         Modifier
             .fillMaxWidth()
             .testTag(Home.chapterRowTag(recipe.id))
-            .clickable { onClick() }
+            .then(bookAction("Открыть главу «${recipe.name}»") { onClick() })
             .drawBehind { if (wornAlpha > 0f) drawRect(colors.espresso.copy(alpha = wornAlpha)) }
     ) {
         Row(
@@ -461,7 +506,11 @@ private fun ChapterRow(
             isFavorite = isFavorite,
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .clickable { onToggleFavorite() }
+                .then(
+                    bookAction(
+                        if (isFavorite) "Убрать главу из избранного" else "Отметить главу как любимую"
+                    ) { onToggleFavorite() }
+                )
                 .padding(6.dp),
         )
         HairRule(Modifier.align(Alignment.BottomCenter).padding(horizontal = 22.dp))
@@ -478,18 +527,21 @@ private data class MoodBookmarkSpec(val color: Color, val label: String, val des
 @Composable
 private fun moodBookmarkSpec(phase: GrowthPhase): MoodBookmarkSpec? {
     val colors = AppColors.current
+    // Cycle 18: описания рассказывают о закваске, а не о нажатии — ляссе
+    // больше никуда не ведёт. «— открыть рецепт» и «— покормить» обещали
+    // дорогу, которая зависела от фазы и была не видна глазом.
     return when (phase) {
         GrowthPhase.PEAK -> MoodBookmarkSpec(
             colors.sage, "Мадре советует: пеките сейчас!",
-            "Закваска на пике — открыть рецепт",
+            "Закваска на пике",
         )
         GrowthPhase.DECLINING -> MoodBookmarkSpec(
             colors.crust, "Покормите меня сначала…",
-            "Закваска просит еды — покормить",
+            "Закваска просит еды",
         )
         GrowthPhase.HUNGRY -> MoodBookmarkSpec(
             colors.terracotta, "Я проголодалась…",
-            "Закваска давно не кормлена — покормить",
+            "Закваска давно не кормлена",
         )
         else -> null
     }
@@ -512,105 +564,12 @@ private fun MoodBookmark(spec: MoodBookmarkSpec, totalBakes: Int = 0, modifier: 
 }
 
 /**
- * «Общая статистика» (DESIGN-V4.md Cycle 5) — газетный подвал перед колофоном:
- * сколько ещё телефонов в семье пишут в эту книгу и что пекли на неделе.
- * Данные — bake_stats других устройств (CommunityStatsViewModel); без сети
- * секция не исчезает, а честно говорит, что общая книга сейчас не видна.
- *
- * Cycle 17: и про незнакомые семьи здесь больше ни слова. Сервер отдаёт
- * только свою семью (см. CommunityStats), а подвал до сих пор считал те же
- * записи «другими семьями, ведущими такую же книгу».
+ * «Общая статистика» жила подвалом первой полосы с Cycle 5 и умерла в
+ * Cycle 18 — см. docs/graveyard.md. Единственным её читателем был этот экран,
+ * поэтому CommunityStatsViewModel и CommunityStats.from сейчас не показывает
+ * никто; они оставлены как есть, и это записано в graveyard, чтобы следующий
+ * цикл решил их судьбу осознанно, а не наткнулся на них случайно.
  */
-@Composable
-private fun CommunitySection(state: CommunityState, onRetry: () -> Unit) {
-    val colors = AppColors.current
-    val stats = (state as? CommunityState.Loaded)?.stats
-    Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp)) {
-        PageLabel("Общая статистика", color = colors.espresso)
-        Spacer(Modifier.height(10.dp))
-        when {
-            state is CommunityState.Loading -> Text(
-                "заглядываем в общую книгу…",
-                color = colors.cocoa,
-                fontFamily = FontFamily.Serif,
-                fontStyle = FontStyle.Italic,
-                fontSize = 12.sp,
-            )
-            // Сети нет — и это не тупик: попытку можно повторить, не выходя
-            // из книги. Раньше здесь была строка без единого действия.
-            // Аккаунта нет — общей книги не существует, и это законный
-            // выбор, а не поломка. Повторять здесь нечего: дорога внутрь одна
-            // и лежит через колофон.
-            state is CommunityState.SignedOut -> Text(
-                "общая книга не подключена — её открывают в «Выходных данных»",
-                color = colors.cocoa,
-                fontFamily = FontFamily.Serif,
-                fontStyle = FontStyle.Italic,
-                fontSize = 12.sp,
-            )
-            state is CommunityState.Unreachable -> Column {
-                Text(
-                    "общая книга сейчас не отвечает — ваша книга работает и без неё",
-                    color = colors.cocoa,
-                    fontFamily = FontFamily.Serif,
-                    fontStyle = FontStyle.Italic,
-                    fontSize = 12.sp,
-                )
-                TextAction("заглянуть ещё раз", onClick = onRetry)
-            }
-            stats == null -> Unit
-            stats.handsBaking == 0 -> Text(
-                "пока в общей книге только ваши записи — остальные подтянутся",
-                color = colors.cocoa,
-                fontFamily = FontFamily.Serif,
-                fontStyle = FontStyle.Italic,
-                fontSize = 12.sp,
-            )
-            else -> Column {
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text(
-                        "${stats.handsBaking}",
-                        color = colors.crust,
-                        fontFamily = FontFamily.Serif,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 26.sp,
-                    )
-                    Text(
-                        "  ещё ${handsWord(stats.handsBaking)} в семье ${bakeVerb(stats.handsBaking)} по этой книге",
-                        color = colors.espresso,
-                        fontFamily = FontFamily.Serif,
-                        fontSize = 14.sp,
-                        modifier = Modifier.padding(bottom = 3.dp),
-                    )
-                }
-                if (stats.popularRecipeOfWeek != null) {
-                    Text(
-                        "рецепт недели — «${stats.popularRecipeOfWeek}», " +
-                            "${stats.bakesThisWeek} ${bakeWord(stats.bakesThisWeek)} за семь дней",
-                        color = colors.cocoa,
-                        fontFamily = FontFamily.Serif,
-                        fontStyle = FontStyle.Italic,
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
-                }
-            }
-        }
-    }
-}
-
-private fun handsWord(n: Int) = when {
-    n % 100 in 11..14 -> "телефонов"
-    n % 10 == 1 -> "телефон"
-    n % 10 in 2..4 -> "телефона"
-    else -> "телефонов"
-}
-
-private fun bakeVerb(n: Int) = if (n % 10 == 1 && n % 100 !in 11..14) "печёт" else "пекут"
-
-// bakeWord живёт в BookStatsScreen.kt — одно склонение на весь пакет экранов.
-// Две одинаковые копии в одном пакете расходятся ровно в тот день, когда одну
-// из них поправят.
 
 @Composable
 private fun Colophon() {

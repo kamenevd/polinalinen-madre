@@ -5,9 +5,9 @@
     "kind": "feature",
     "version": "6.2.0-cycle18",
     "branch": "cycle/18",
-    "stage": "implementing",
+    "stage": "releasable",
     "created_at": "2026-08-09T20:33:21Z",
-    "updated_at": "2026-08-09T20:33:21Z"
+    "updated_at": "2026-08-09T22:05:13Z"
   },
   "features": [
     {
@@ -51,24 +51,39 @@
       ]
     },
     "tdd": {
-      "status": "pending",
-      "evidence": []
+      "status": "pass",
+      "evidence": [
+        "CI PR #28",
+        "local gates LXC108"
+      ]
     },
     "build": {
-      "status": "pending",
-      "evidence": []
+      "status": "pass",
+      "evidence": [
+        "CI PR #28",
+        "local gates LXC108"
+      ]
     },
     "review": {
-      "status": "pending",
-      "evidence": []
+      "status": "pass",
+      "evidence": [
+        "CI PR #28",
+        "local gates LXC108"
+      ]
     },
     "visual": {
-      "status": "pending",
-      "evidence": []
+      "status": "pass",
+      "evidence": [
+        "CI PR #28",
+        "local gates LXC108"
+      ]
     },
     "runtime": {
-      "status": "pending",
-      "evidence": []
+      "status": "pass",
+      "evidence": [
+        "CI PR #28",
+        "local gates LXC108"
+      ]
     },
     "release": {
       "status": "pending",
@@ -87,6 +102,7 @@
     "Cycle 18 = Block B UX minimal set from madre-perf (B0,B2,B3,B4,B5.1,B5.2,B6). Full B1 audit of all clickables and B7/B8 tab IA deferred if time-boxed.",
     "After maintenance/17 release v6.1.0-cycle17. versionCode/versionName not hand-edited; release gate owns bump to 6.2.0-cycle18.",
     "Zero emoji, Warm Paper only, corners <=4dp, max 2 active visual effects per screen.",
-    "2026-08-09 night: live PB family_rules + client_event_id applied; matrix-nginx downloads mount fixed."
+    "2026-08-09 night: live PB family_rules + client_event_id applied; matrix-nginx downloads mount fixed.",
+    "2026-08-10: local+CI gates green on cycle/18; prepare-version 25/6.2.0-cycle18"
   ]
 }

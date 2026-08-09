@@ -19,6 +19,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
@@ -141,6 +143,13 @@ fun BookButton(
  * Тихое текстовое действие — «убрать», «заменить фотокарточку», «повторить».
  * Выглядит как приписка на полях, но мишень у него всё та же, 48dp: до
  * Cycle 12 это была строка 12sp высотой в два пальца ногтя.
+ *
+ * Cycle 18: приписка на полях — всё-таки действие, и отличать её от подписи
+ * надо не по догадке. Кегль поднят до [TextActionSize] (наравне с основным
+ * текстом страницы), а под словами идёт пунктир цветом Crust — рукописное
+ * подчёркивание, а не material-ссылка. Двух признаков сразу — размера и
+ * пунктира — хватает, чтобы «заглянуть ещё раз» не читалось продолжением
+ * строки, над которой оно стоит.
  */
 @Composable
 fun TextAction(
@@ -150,24 +159,65 @@ fun TextAction(
     enabled: Boolean = true,
 ) {
     val colors = AppColors.current
-    val gate = remember { TapGate() }
+    val ink = if (enabled) colors.crust else colors.flour
     Box(
         modifier
-            .defaultMinSize(minHeight = MinTouchTarget)
-            .clickable(enabled = enabled, onClickLabel = label, role = Role.Button) {
-                if (gate.accept(System.currentTimeMillis())) onClick()
-            }
+            .then(bookAction(label = label, enabled = enabled, onClick = onClick))
             .padding(horizontal = 8.dp, vertical = 14.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             label,
-            color = if (enabled) colors.crust else colors.flour,
+            color = ink,
             fontFamily = FontFamily.Serif,
             fontStyle = FontStyle.Italic,
-            fontSize = 13.sp,
+            fontSize = TextActionSize,
+            modifier = Modifier.drawBehind {
+                val thickness = 1.dp.toPx()
+                val y = size.height - thickness
+                drawLine(
+                    color = ink,
+                    start = Offset(0f, y),
+                    end = Offset(size.width, y),
+                    strokeWidth = thickness,
+                    pathEffect = PathEffect.dashPathEffect(
+                        floatArrayOf(3.dp.toPx(), 2.dp.toPx()),
+                        0f,
+                    ),
+                )
+            },
         )
     }
+}
+
+/** Кегль тихого действия — тот же, что у основного текста страницы. */
+val TextActionSize = 15.sp
+
+/**
+ * Cycle 18: нажатие там, где кнопки с рамкой быть не может, — строка
+ * оглавления, талон выпечки, загнутый уголок, фотокарточка.
+ *
+ * Голый `Modifier.clickable` на такой площади соблюдал ровно одно правило из
+ * трёх: он работал. Роль для TalkBack не объявлялась, что случится — не
+ * говорилось, а размер мишени выходил каким получится у содержимого. Здесь всё
+ * три сведены в одно место, вместе с [TapGate]: двойной тап по строке
+ * оглавления открывал главу дважды и клал второй разворот поверх первого.
+ *
+ * Ставится через `then`, чтобы порядок был виден на месте вызова:
+ * `Modifier.fillMaxWidth().then(bookAction("Открыть главу") { … })`.
+ */
+@Composable
+fun bookAction(
+    label: String,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+): Modifier {
+    val gate = remember { TapGate() }
+    return Modifier
+        .defaultMinSize(minHeight = MinTouchTarget)
+        .clickable(enabled = enabled, onClickLabel = label, role = Role.Button) {
+            if (gate.accept(System.currentTimeMillis())) onClick()
+        }
 }
 
 /**
@@ -177,9 +227,7 @@ fun TextAction(
 @Composable
 fun BackLabel(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Box(
-        modifier
-            .defaultMinSize(minHeight = MinTouchTarget)
-            .clickable(onClickLabel = "Назад: $text", role = Role.Button) { onClick() },
+        modifier.then(bookAction(label = "Назад: $text", onClick = onClick)),
         contentAlignment = Alignment.CenterStart,
     ) {
         PageLabel("← $text")

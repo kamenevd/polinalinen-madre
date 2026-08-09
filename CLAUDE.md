@@ -267,6 +267,20 @@ Compose-тесты гоняются на Robolectric намеренно: эму�
    причина смерти.
 8. **Не изображать работающую фичу.** Кнопка, которая не нажимается, и
    заглушка, притворяющаяся данными, — хуже честной строки «этого пока нет».
+9. **Голого `Modifier.clickable` в книге нет.** Всякое нажатие — это
+   `BookButton` (главное/второстепенное), `TextAction` (тихое), `BackLabel`
+   либо площадь с `Modifier.then(bookAction(label) { … })`: строка оглавления,
+   талон, фотокарточка. Все четыре дают `Role.Button`, `onClickLabel` и мишень
+   не меньше 48dp — три правила, которые голый `clickable` не даёт ни одного.
+   Новый `clickable` в diff'е — повод откатить правку.
+
+   Первая полоса приведена к этому в Cycle 18 и держится тестом
+   `HomeControlsUiTest`. Остальные экраны — ещё нет: `PhotoDesigner`,
+   `PhotoSourceChooser`, `Bookplate`, `AgedPhoto`, `HandwrittenOverlay`,
+   `BakingCompleteScreen`, `FeedingFormScreen`, `StarterDiaryScreen`,
+   `BookStatsScreen` и `PhotoGalleryScreen` держат старые `clickable`. Правило
+   на них распространяется при следующей правке этих файлов; отдельный обход
+   всей книги отложен сознательно (`workflow/CYCLE.yaml`, decisions).
 
 Палитра, типографика и правила экранов — `DESIGN-V4.md`.
 Регламент циклов — `docs/WORKFLOW-V2.md`.

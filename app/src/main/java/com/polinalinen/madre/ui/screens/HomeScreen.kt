@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -59,6 +58,7 @@ import com.polinalinen.madre.ui.components.Stamp
 import com.polinalinen.madre.ui.components.TicketFrame
 import com.polinalinen.madre.ui.components.WornPage
 import com.polinalinen.madre.ui.components.TextAction
+import com.polinalinen.madre.ui.components.bookAction
 import com.polinalinen.madre.ui.components.breathingPage
 import com.polinalinen.madre.ui.components.dampPaper
 import com.polinalinen.madre.ui.theme.AppColors
@@ -164,7 +164,11 @@ fun HomeScreen(
                 // готовиться несколько одновременно (2026-07-21).
                 items(sessions, key = { it.id }) { s ->
                     Box(Modifier.padding(horizontal = 22.dp, vertical = 6.dp)) {
-                        TicketFrame(Modifier.fillMaxWidth().clickable { onOpenTimer(s.id) }) {
+                        TicketFrame(
+                            Modifier
+                                .fillMaxWidth()
+                                .then(bookAction("Открыть выпечку «${s.recipe.name}»") { onOpenTimer(s.id) })
+                        ) {
                             ActiveBakingTicket(
                                 recipeName = s.recipe.name,
                                 stepIndex = s.currentStepIndex,
@@ -214,7 +218,7 @@ fun HomeScreen(
                     Modifier
                         .align(Alignment.TopEnd)
                         .padding(end = 34.dp)
-                        .clickable { onOpenTimer(nearest) },
+                        .then(bookAction("Открыть таймер активной выпечки") { onOpenTimer(nearest) }),
                     totalBakes = totalBakes,
                 )
             } else {
@@ -225,13 +229,15 @@ fun HomeScreen(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .padding(end = 34.dp)
-                            .clickable {
-                                if (phase == GrowthPhase.PEAK) {
-                                    recommendedRecipeId?.let(onOpenRecipe)
-                                } else {
-                                    onOpenFeeding()
+                            .then(
+                                bookAction(spec.description) {
+                                    if (phase == GrowthPhase.PEAK) {
+                                        recommendedRecipeId?.let(onOpenRecipe)
+                                    } else {
+                                        onOpenFeeding()
+                                    }
                                 }
-                            },
+                            ),
                     )
                 }
             }
@@ -296,7 +302,12 @@ private fun Masthead(
 @Composable
 private fun MadreLine(headline: String, starterName: String, onOpenStarter: () -> Unit) {
     val colors = AppColors.current
-    Column(Modifier.fillMaxWidth().clickable { onOpenStarter() }.padding(horizontal = 22.dp, vertical = 6.dp)) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .then(bookAction("Открыть дневник закваски") { onOpenStarter() })
+            .padding(horizontal = 22.dp, vertical = 6.dp)
+    ) {
         PageLabel(StarterName.homeLabel(starterName))
         Text(
             "«$headline»",
@@ -329,15 +340,13 @@ private fun WeatherMargin(note: WeatherNote?, showInvite: Boolean, onInvite: () 
                 .padding(horizontal = 22.dp, vertical = 4.dp)
                 .rotate(-1.2f),
         )
-        showInvite -> Text(
-            "впустить погоду за окном",
-            color = colors.crust,
-            fontFamily = FontFamily.SansSerif,
-            fontSize = 10.sp,
-            letterSpacing = 2.sp,
-            modifier = Modifier
-                .padding(horizontal = 22.dp, vertical = 4.dp)
-                .clickable { onInvite() },
+        // Cycle 18: приглашение было надписью 10sp высотой в ноготь — тихим
+        // оно и осталось, но теперь это тихое действие книги, а не строка,
+        // про которую надо догадаться, что она нажимается.
+        showInvite -> TextAction(
+            label = "впустить погоду за окном",
+            onClick = onInvite,
+            modifier = Modifier.padding(horizontal = 14.dp),
         )
     }
 }
@@ -417,7 +426,7 @@ private fun ChapterRow(
         Modifier
             .fillMaxWidth()
             .testTag(Home.chapterRowTag(recipe.id))
-            .clickable { onClick() }
+            .then(bookAction("Открыть главу «${recipe.name}»") { onClick() })
             .drawBehind { if (wornAlpha > 0f) drawRect(colors.espresso.copy(alpha = wornAlpha)) }
     ) {
         Row(
@@ -461,7 +470,11 @@ private fun ChapterRow(
             isFavorite = isFavorite,
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .clickable { onToggleFavorite() }
+                .then(
+                    bookAction(
+                        if (isFavorite) "Убрать главу из избранного" else "Отметить главу как любимую"
+                    ) { onToggleFavorite() }
+                )
                 .padding(6.dp),
         )
         HairRule(Modifier.align(Alignment.BottomCenter).padding(horizontal = 22.dp))

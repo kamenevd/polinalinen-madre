@@ -8,15 +8,11 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
-import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import com.polinalinen.madre.MadreApplication
-import com.polinalinen.madre.data.repository.RecipeRepository
 import com.polinalinen.madre.sourdough.GrowthPhase
-import com.polinalinen.madre.ui.theme.MadreTheme
-import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -45,36 +41,15 @@ class HomeControlsUiTest {
     @get:Rule
     val rule = createComposeRule()
 
-    /** Те же рецепты, что читает книга, — из тех же assets. */
-    private val recipes by lazy {
-        runBlocking {
-            RecipeRepository(ApplicationProvider.getApplicationContext()).getRecipes()
-        }
-    }
+    private val recipes by lazy { frontPageRecipes() }
 
     private fun showHome() {
-        rule.setContent {
-            MadreTheme {
-                HomeScreen(
-                    madreHeadline = "я проголодалась!",
-                    starterName = "Мадре",
-                    // HUNGRY — чтобы на полосе оказалось и mood-ляссе: без
-                    // фазы «голодная» его в композиции просто нет.
-                    phase = GrowthPhase.HUNGRY,
-                    favoriteIds = emptySet(),
-                    onToggleFavorite = {},
-                    onOpenRecipe = {},
-                    onOpenStarter = {},
-                    onOpenTimer = {},
-                    onOpenFeeding = {},
-                    onOpenSettings = {},
-                    onOpenShelf = {},
-                )
-            }
-        }
+        // HUNGRY — чтобы на полосе оказалось и mood-ляссе: без фазы «голодная»
+        // его в композиции просто нет.
+        rule.showFrontPage(phase = GrowthPhase.HUNGRY)
         // Оглавление приезжает из assets асинхронно: до того, как рецепты
         // прочитаны, половины нажимаемых мест на полосе ещё нет.
-        rule.waitUntil(TIMEOUT_MS) {
+        rule.awaitOnPage("оглавление") {
             recipes.isNotEmpty() &&
                 rule.onAllNodesWithTag(Home.chapterRowTag(recipes.first().id))
                     .fetchSemanticsNodes().isNotEmpty()
@@ -130,10 +105,5 @@ class HomeControlsUiTest {
             val heightDp = node.size.height / density
             assertWithMessage("${describe(node)}: высота мишени, dp").that(heightDp).isAtLeast(48f)
         }
-    }
-
-    private companion object {
-        /** Чтение assets на холодном старте — секунды, а не миллисекунды. */
-        const val TIMEOUT_MS = 15_000L
     }
 }

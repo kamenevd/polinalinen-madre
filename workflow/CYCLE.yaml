@@ -1,43 +1,43 @@
 {
   "schema_version": 1,
   "cycle": {
-    "number": 17,
-    "kind": "maintenance",
-    "version": "6.1.0-cycle17",
-    "branch": "maintenance/17",
-    "stage": "releasable",
-    "created_at": "2026-08-07T12:12:35Z",
-    "updated_at": "2026-08-07T13:02:22Z"
+    "number": 18,
+    "kind": "feature",
+    "version": "6.2.0-cycle18",
+    "branch": "cycle/18",
+    "stage": "implementing",
+    "created_at": "2026-08-09T20:33:21Z",
+    "updated_at": "2026-08-09T20:33:21Z"
   },
   "features": [
     {
-      "id": "state-truth",
-      "title": "Правда о состоянии и контракт версий",
+      "id": "control-language",
+      "title": "Язык кнопок Живой книги",
       "needs_generated_asset": false,
       "acceptance": [
-        "CYCLE.yaml number=17 kind=maintenance version=6.1.0-cycle17 branch=maintenance/17",
-        "DESIGN-V4.md содержит ## Cycle 15, 16, 17 без пропусков; NEXT-STEPS указывает на Cycle 17",
-        "Python contract tests: gradle versionName == CYCLE version (после prepare-version / на maintenance допускается pre-bump match strategy documented); design documents every cycle up to current; python tests green"
+        "TextAction: пунктирное подчёркивание crust + fontSize 15sp; BookButton PRIMARY/SECONDARY — канон главного/второстепенного",
+        "CLAUDE.md: любой .clickable — BookButton, TextAction/BackLabel либо фотокарточка с Role.Button + onClickLabel + min 48dp",
+        "Compose/Robolectric-тест HomeScreen ловит onClick без label или мишень < 48dp"
       ]
     },
     {
-      "id": "family-sync-honesty",
-      "title": "Общая книга: family rules, auth sync, видимый отказ",
+      "id": "home-path-cleanup",
+      "title": "Чистая главная без дублей и мёртвых блоков",
       "needs_generated_asset": false,
       "acceptance": [
-        "Новая PB migration: bake_stats/feeding_stats под family auth + client_event_id unique per collection; guest_notes/margin_notes_sync либо rules либо graveyard + client dead calls removed",
-        "SyncWorker отправляет bake/feeding stats только аутентифицированным клиентом; без аккаунта не изображает успех",
-        "SyncEventId.forBake использует bake_records.id; shareBakeStats внутри корутины после record(); 401/403 видны в Выходных данных"
+        "CommunitySection и communityViewModel убраны с HomeScreen",
+        "Единственный путь к таймеру с главной — ActiveBakingTicket; RibbonBookmark без clickable-действия к таймеру",
+        "MoodBookmark больше не phase-dependent clickable (PEAK→рецепт / else→кормление)"
       ]
     },
     {
-      "id": "data-loss-guards",
-      "title": "Защита данных: restore bake path, camera, IO, orphans",
+      "id": "daily-feed-and-chronicle",
+      "title": "Покормить в один тап и летопись без Полки",
       "needs_generated_asset": false,
       "acceptance": [
-        "Явный выбор restore A или B записан в DESIGN-V4; WorkManager step deadline ставится на каждый переход шага",
-        "PhotoAttachment camera path в rememberSaveable; ChapterPhotos readability I/O не на main composition path",
-        "Orphan photo cleanup on replace + cheap P2/P3 fixes from review"
+        "На HomeScreen под MadreLine — BookButton PRIMARY «Покормить {имя}» (или честный inactive после недавнего кормления)",
+        "FeedingReminder notification action «Покормила» покрыт unit-тестом",
+        "TextAction «Полка» ведёт сразу в BookStatsScreen(me); navigation smoke зелёный"
       ]
     }
   ],
@@ -47,44 +47,28 @@
       "evidence": [
         "DESIGN-V4.md",
         "workflow/CYCLE.yaml",
-        "docs/adr/0003-missing-cycle-evidence.md",
-        "workflow/evidence/cycle17/plan.md"
+        "workflow/evidence/cycle18/plan.md"
       ]
     },
     "tdd": {
-      "status": "pass",
-      "evidence": [
-        "workflow/evidence/cycle17/build-notes.md",
-        "CI Android quality"
-      ]
+      "status": "pending",
+      "evidence": []
     },
     "build": {
-      "status": "pass",
-      "evidence": [
-        "workflow/evidence/cycle17/build-notes.md",
-        "CI Android quality"
-      ]
+      "status": "pending",
+      "evidence": []
     },
     "review": {
-      "status": "pass",
-      "evidence": [
-        "workflow/evidence/cycle17/build-notes.md",
-        "2026-08-07-review-cycle16.md remediation"
-      ]
+      "status": "pending",
+      "evidence": []
     },
     "visual": {
-      "status": "pass",
-      "evidence": [
-        "CI Android quality verifyRoborazzi",
-        "workflow/evidence/cycle17/build-notes.md"
-      ]
+      "status": "pending",
+      "evidence": []
     },
     "runtime": {
-      "status": "pass",
-      "evidence": [
-        "CI Instrumented smoke",
-        "workflow/evidence/cycle17/build-notes.md"
-      ]
+      "status": "pending",
+      "evidence": []
     },
     "release": {
       "status": "pending",
@@ -100,12 +84,9 @@
   },
   "blockers": [],
   "decisions": [
-    "Cycle 17 is maintenance after feature cycles 15+16 per WORKFLOW-V2 (two features then one maintenance).",
-    "No new decorative UX features in this cycle.",
-    "versionCode/versionName not hand-edited; release_cycle.py prepare-version owns the bump near release.",
-    "Live probe 2026-08-07: madre-api bake_stats/feeding_stats/margin returned HTTP 200 empty — may differ from lock migration; still ship versioned family rules migration.",
-    "Missing workflow/evidence for cycle15/16 closed via ADR-0003; no fabricated gate artifacts.",
-    "2026-08-07: CI required checks green on PR #20 before release prep.",
-    "Restore policy A accepted for active bake UI restore."
+    "Cycle 18 = Block B UX minimal set from madre-perf (B0,B2,B3,B4,B5.1,B5.2,B6). Full B1 audit of all clickables and B7/B8 tab IA deferred if time-boxed.",
+    "After maintenance/17 release v6.1.0-cycle17. versionCode/versionName not hand-edited; release gate owns bump to 6.2.0-cycle18.",
+    "Zero emoji, Warm Paper only, corners <=4dp, max 2 active visual effects per screen.",
+    "2026-08-09 night: live PB family_rules + client_event_id applied; matrix-nginx downloads mount fixed."
   ]
 }

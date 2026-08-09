@@ -287,16 +287,13 @@ private fun Masthead(
             HeavyRule(Modifier.weight(1f))
         }
         // Cycle 12: два выхода с первой полосы — названные и видимые.
-        //
-        // До этого «Полка» пряталась под надписью «Домашняя пекарня Полины», а
-        // «Настройки» — под самим словом МАДРЕ. Ни то, ни другое ничем не
-        // выдавало себя как кнопку: попасть туда можно было только случайно,
-        // а тап по заголовку книги, уводящий в настройки, ещё и сбивал с толку.
+        // Cycle 18 MoA: «Полка» → «Летопись» — ведёт сразу в свою книгу-формуляр,
+        // не в промежуточный разворот корешков (там пока нечего выбирать).
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 22.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            TextAction("Полка", onClick = onOpenShelf)
+            TextAction("Летопись", onClick = onOpenShelf)
             TextAction("Настройки", onClick = onOpenSettings)
         }
     }

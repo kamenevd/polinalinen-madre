@@ -64,7 +64,7 @@ class ShelfShortcutTest {
             }
         }
 
-        rule.onNodeWithText("Полка").performClick()
+        rule.onNodeWithText("Летопись").performClick()
         rule.waitForIdle()
 
         assertThat(navController.currentBackStackEntry?.destination?.route)
@@ -87,7 +87,7 @@ class ShelfShortcutTest {
             }
         }
 
-        rule.onNodeWithText("Полка").performClick()
+        rule.onNodeWithText("Летопись").performClick()
         rule.waitForIdle()
         navController.popBackStack()
         rule.waitForIdle()

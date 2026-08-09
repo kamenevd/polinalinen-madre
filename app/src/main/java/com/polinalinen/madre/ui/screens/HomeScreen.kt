@@ -45,9 +45,13 @@ import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.model.Season
 import com.polinalinen.madre.model.SeasonalEdition
 import com.polinalinen.madre.model.WeatherNote
+import com.polinalinen.madre.sourdough.FeedingCall
 import com.polinalinen.madre.sourdough.GrowthPhase
 import com.polinalinen.madre.sourdough.StarterName
+import com.polinalinen.madre.sourdough.hoursSinceFeeding
 import com.polinalinen.madre.ui.components.BookBreath
+import com.polinalinen.madre.ui.components.BookButton
+import com.polinalinen.madre.ui.components.BookButtonVariant
 import com.polinalinen.madre.ui.components.DogEar
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.HeavyRule
@@ -87,6 +91,8 @@ fun HomeScreen(
     madreHeadline: String,
     starterName: String = StarterName.DEFAULT,
     phase: GrowthPhase,
+    /** Когда кормили в прошлый раз; null — дневник ещё пуст. */
+    lastFeedingMillis: Long? = null,
     favoriteIds: Set<String>,
     onToggleFavorite: (String) -> Unit,
     onOpenRecipe: (String) -> Unit,
@@ -138,6 +144,7 @@ fun HomeScreen(
             LazyColumn(modifier = Modifier.statusBarsPadding().testTag(Home.LIST_TAG)) {
                 item { Masthead(season, onOpenSettings, onOpenShelf) }
                 item { MadreLine(madreHeadline, starterName, onOpenStarter) }
+                item { FeedingCallButton(starterName, phase, lastFeedingMillis, onOpenFeeding) }
                 item {
                     WeatherMargin(
                         note = weatherNote,
@@ -314,6 +321,42 @@ private fun MadreLine(headline: String, starterName: String, onOpenStarter: () -
             modifier = Modifier.padding(top = 2.dp),
         )
     }
+}
+
+/**
+ * «Покормить» — главное действие дня, сразу под строкой от Мадре
+ * (DESIGN-V4.md Cycle 18).
+ *
+ * Кормление — единственное, что делают в этой книге каждый день, а дорога к
+ * нему шла через три экрана: первая полоса → дневник → форма. Теперь один тап.
+ *
+ * Пока кормить пора — это единственная кнопка заливкой на всей полосе. Когда
+ * кормили недавно, она не гаснет и не исчезает: кормить закваску раньше срока
+ * человек вправе, и запрещать ему это книге не за что. Меняется только голос —
+ * рамка вместо заливки — и под кнопкой появляется, когда кормили. Время
+ * относительное и настоящее: если его нет, подписи тоже нет (см.
+ * [FeedingCall.sinceLabel]).
+ */
+@Composable
+private fun FeedingCallButton(
+    starterName: String,
+    phase: GrowthPhase,
+    lastFeedingMillis: Long?,
+    onOpenFeeding: () -> Unit,
+) {
+    val fresh = FeedingCall.isFresh(phase)
+    val caption = if (fresh) {
+        FeedingCall.sinceLabel(lastFeedingMillis?.let { hoursSinceFeeding(it) })
+    } else {
+        null
+    }
+    BookButton(
+        label = FeedingCall.label(starterName),
+        onClick = onOpenFeeding,
+        variant = if (fresh) BookButtonVariant.SECONDARY else BookButtonVariant.PRIMARY,
+        caption = caption,
+        modifier = Modifier.padding(horizontal = 22.dp, vertical = 8.dp),
+    )
 }
 
 /**

@@ -32,6 +32,12 @@ class MainActivity : ComponentActivity() {
      */
     private val pendingSessionId = MutableStateFlow<Long?>(null)
 
+    /**
+     * Cycle 18: попросили открыть форму кормления — по кнопке «Покормила» из
+     * шторки. Ждёт NavHost тем же способом, что и [pendingSessionId].
+     */
+    private val pendingFeeding = MutableStateFlow(false)
+
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
@@ -45,12 +51,15 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        readSessionFrom(intent)
+        readIntent(intent)
         askForNotificationsOnce()
 
         setContent {
             MadreTheme {
-                MadreNavHost(pendingSessionId = pendingSessionId)
+                MadreNavHost(
+                    pendingSessionId = pendingSessionId,
+                    pendingFeeding = pendingFeeding,
+                )
             }
         }
     }
@@ -58,12 +67,13 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        readSessionFrom(intent)
+        readIntent(intent)
     }
 
-    private fun readSessionFrom(intent: Intent?) {
+    private fun readIntent(intent: Intent?) {
         val id = intent?.getLongExtra(EXTRA_SESSION_ID, -1L) ?: -1L
         if (id >= 0L) pendingSessionId.value = id
+        if (intent?.getBooleanExtra(EXTRA_OPEN_FEEDING, false) == true) pendingFeeding.value = true
     }
 
     /**
@@ -86,6 +96,9 @@ class MainActivity : ComponentActivity() {
     companion object {
         /** Какую выпечку открыть по тапу на уведомление о ходе выпечки. */
         const val EXTRA_SESSION_ID = "madre.session_id"
+
+        /** Открыть форму кормления — приходит с кнопкой «Покормила» из шторки. */
+        const val EXTRA_OPEN_FEEDING = "madre.open_feeding"
 
         private const val KEY_NOTIFICATIONS_ASKED = "notifications_permission_asked"
         private const val KEY_NOTIFICATIONS_GRANTED = "notifications_permission_granted"

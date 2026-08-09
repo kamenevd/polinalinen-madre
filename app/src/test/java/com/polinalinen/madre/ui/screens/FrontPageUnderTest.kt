@@ -52,6 +52,8 @@ internal fun frontPageRecipes(): List<Recipe> = runBlocking {
 
 internal fun ComposeContentTestRule.showFrontPage(
     phase: GrowthPhase = GrowthPhase.HUNGRY,
+    starterName: String = "Мадре",
+    lastFeedingMillis: Long? = null,
     onOpenRecipe: (String) -> Unit = {},
     onOpenStarter: () -> Unit = {},
     onOpenTimer: (Long) -> Unit = {},
@@ -63,8 +65,9 @@ internal fun ComposeContentTestRule.showFrontPage(
         MadreTheme {
             HomeScreen(
                 madreHeadline = "я проголодалась!",
-                starterName = "Мадре",
+                starterName = starterName,
                 phase = phase,
+                lastFeedingMillis = lastFeedingMillis,
                 favoriteIds = emptySet(),
                 onToggleFavorite = {},
                 onOpenRecipe = onOpenRecipe,

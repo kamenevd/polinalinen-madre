@@ -26,9 +26,26 @@ import com.polinalinen.madre.R
  */
 class MadreNotifier(private val context: Context) {
 
-    /** Кормление закваски — негромкий, но заметный канал. */
+    /**
+     * Кормление закваски — негромкий, но заметный канал.
+     *
+     * Cycle 18: с кнопкой «Покормила», ведущей сразу на форму кормления. Без
+     * неё дорога из шторки в дневник шла через три экрана.
+     */
     fun postFeedingReminder(title: String, text: String) {
-        post(CHANNEL_SOURDOUGH, "Закваска", tag = null, id = ID_FEEDING, title = title, text = text)
+        post(
+            channelId = CHANNEL_SOURDOUGH,
+            channelName = "Закваска",
+            tag = null,
+            id = ID_FEEDING,
+            title = title,
+            text = text,
+            action = NotificationCompat.Action.Builder(
+                0,
+                FeedingReminderAction.LABEL,
+                FeedingReminderAction.pendingIntent(context),
+            ).build(),
+        )
     }
 
     /**
@@ -74,6 +91,7 @@ class MadreNotifier(private val context: Context) {
         id: Int,
         title: String,
         text: String,
+        action: NotificationCompat.Action? = null,
     ) {
         if (!canPost()) return
         ensureChannel(channelId, channelName)
@@ -84,6 +102,7 @@ class MadreNotifier(private val context: Context) {
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
+            .apply { if (action != null) addAction(action) }
             .build()
         notifySafely(id, notification, tag)
     }

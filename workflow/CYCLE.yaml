@@ -1,43 +1,44 @@
 {
   "schema_version": 1,
   "cycle": {
-    "number": 18,
+    "number": 19,
     "kind": "feature",
-    "version": "6.2.0-cycle18",
-    "branch": "cycle/18",
-    "stage": "releasable",
-    "created_at": "2026-08-09T20:33:21Z",
-    "updated_at": "2026-08-09T22:05:13Z"
+    "version": "6.3.0-cycle19",
+    "branch": "cycle/19",
+    "stage": "implementing",
+    "created_at": "2026-08-10T15:40:00Z",
+    "updated_at": "2026-08-10T17:40:00Z"
   },
   "features": [
     {
-      "id": "control-language",
-      "title": "Язык кнопок Живой книги",
+      "id": "hero-release-keep",
+      "title": "Hero-фотокарточки снова в release",
       "needs_generated_asset": false,
       "acceptance": [
-        "TextAction: пунктирное подчёркивание crust + fontSize 15sp; BookButton PRIMARY/SECONDARY — канон главного/второстепенного",
-        "CLAUDE.md: любой .clickable — BookButton, TextAction/BackLabel либо фотокарточка с Role.Button + onClickLabel + min 48dp",
-        "Compose/Robolectric-тест HomeScreen ловит onClick без label или мишень < 48dp"
+        "heroResFor(recipeId) — явный when на R.drawable.hero_*, без getIdentifier",
+        "Unit-тест: все 11 id из книги → non-null drawable id",
+        "Release APK содержит 11 hero webp (проверка unzip)"
       ]
     },
     {
-      "id": "home-path-cleanup",
-      "title": "Чистая главная без дублей и мёртвых блоков",
+      "id": "russian-ingredient-headers",
+      "title": "Русские заголовки секций ингредиентов",
       "needs_generated_asset": false,
       "acceptance": [
-        "CommunitySection и communityViewModel убраны с HomeScreen",
-        "Единственный путь к таймеру с главной — ActiveBakingTicket; RibbonBookmark без clickable-действия к таймеру",
-        "MoodBookmark больше не phase-dependent clickable (PEAK→рецепт / else→кормление)"
+        "ingredientSectionTitle: sponge/main/dough/filling/cream/sponge1/sponge2 → русские ярлыки",
+        "RecipeDetailScreen не показывает сырой english key секции",
+        "Unit-тест на ключи из recipes.json"
       ]
     },
     {
-      "id": "daily-feed-and-chronicle",
-      "title": "Покормить в один тап и летопись без Полки",
+      "id": "toc-and-herbarium",
+      "title": "Оглавление без «все N» + гербарий избранного",
       "needs_generated_asset": false,
       "acceptance": [
-        "На HomeScreen под MadreLine — BookButton PRIMARY «Покормить {имя}» (или честный inactive после недавнего кормления)",
-        "FeedingReminder notification action «Покормила» покрыт unit-тестом",
-        "TextAction «Полка» ведёт сразу в BookStatsScreen(me); navigation smoke зелёный"
+        "На HomeScreen нет строки «все ${recipes.size}»",
+        "Избранное = HerbariumMark (засушенный цветок), DogEar — alias",
+        "a11y: «Вложить цветок в гербарий» / «В гербарии — нажмите, чтобы убрать»",
+        "Иконка: ic_launcher_foreground — книга + буханка (Warm Paper)"
       ]
     }
   ],
@@ -47,43 +48,34 @@
       "evidence": [
         "DESIGN-V4.md",
         "workflow/CYCLE.yaml",
-        "workflow/evidence/cycle18/plan.md"
+        "workflow/evidence/cycle19/plan.md"
       ]
     },
     "tdd": {
       "status": "pass",
       "evidence": [
-        "CI PR #28",
-        "local gates LXC108"
+        "LXC108 testDebugUnitTest 567/0",
+        "RecipeAssetsTest"
       ]
     },
     "build": {
       "status": "pass",
       "evidence": [
-        "CI PR #28",
-        "local gates LXC108"
+        "LXC108 assembleRelease+bundleRelease signed",
+        "APK 2.7MB 13 webp"
       ]
     },
     "review": {
-      "status": "pass",
-      "evidence": [
-        "CI PR #28",
-        "local gates LXC108"
-      ]
+      "status": "pending",
+      "evidence": []
     },
     "visual": {
-      "status": "pass",
-      "evidence": [
-        "CI PR #28",
-        "local gates LXC108"
-      ]
+      "status": "pending",
+      "evidence": []
     },
     "runtime": {
-      "status": "pass",
-      "evidence": [
-        "CI PR #28",
-        "local gates LXC108"
-      ]
+      "status": "pending",
+      "evidence": []
     },
     "release": {
       "status": "pending",
@@ -92,17 +84,16 @@
   },
   "reviews": [],
   "artifacts": {
-    "apk": null,
+    "apk": "https://kdnfx.space/downloads/madre-cycle19-preview.apk",
     "source_archive": null,
-    "sha256": null,
+    "sha256": "7004989b67bb12ee058097cfb404693d5f7cab7893ffb58ff4e462705490bcdd",
     "release_url": null
   },
   "blockers": [],
   "decisions": [
-    "Cycle 18 = Block B UX minimal set from madre-perf (B0,B2,B3,B4,B5.1,B5.2,B6). Full B1 audit of all clickables and B7/B8 tab IA deferred if time-boxed.",
-    "After maintenance/17 release v6.1.0-cycle17. versionCode/versionName not hand-edited; release gate owns bump to 6.2.0-cycle18.",
-    "Zero emoji, Warm Paper only, corners <=4dp, max 2 active visual effects per screen.",
-    "2026-08-09 night: live PB family_rules + client_event_id applied; matrix-nginx downloads mount fixed.",
-    "2026-08-10: local+CI gates green on cycle/18; prepare-version 25/6.2.0-cycle18"
+    "Hero fix: explicit R.drawable map; tools:keep as belt-and-suspenders.",
+    "Herbarium is static Canvas + spring only — no third live effect on Home.",
+    "versionCode/versionName not hand-edited; release_cycle.py owns 6.3.0-cycle19 bump.",
+    "RuStore AAB prepared as preview; console upload needs Dima developer account after merge."
   ]
 }

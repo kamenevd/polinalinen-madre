@@ -250,43 +250,93 @@ fun RibbonBookmark(
 }
 
 /**
- * Загнутый уголок страницы = избранное. favoriteProgress 0..1 (анимируется).
- * Рисуется в правом верхнем углу строки оглавления.
+ * Гербарий (Cycle 19, возврат фичи 20): избранная глава — засушенный цветок
+ * между страницами оглавления, а не загнутый уголок.
  *
- * Touch target (2026-07-21, a11y-правка): визуальный уголок — 26dp, меньше
- * рекомендованных 48dp. Как и в RibbonBookmark, раздуваем только invisible
- * hit-area через внешний Box — Canvas остаётся исходного размера в том же углу.
+ * Touch target 48dp: визуальный цветок ~26dp, hit-area раздута через Box.
+ * progress 0 — едва заметный контур «пустое место для цветка»; 1 — полный
+ * отпечаток с лепестками и стеблем.
  */
 @Composable
-fun DogEar(isFavorite: Boolean, modifier: Modifier = Modifier, size: Dp = 26.dp) {
+fun HerbariumMark(isFavorite: Boolean, modifier: Modifier = Modifier, size: Dp = 26.dp) {
     val colors = AppColors.current
     val progress by animateFloatAsState(
         targetValue = if (isFavorite) 1f else 0f,
-        animationSpec = spring(dampingRatio = 0.6f),
-        label = "dogEar",
+        animationSpec = spring(dampingRatio = 0.62f),
+        label = "herbarium",
     )
-    val description = if (isFavorite) "В избранном — нажмите, чтобы убрать" else "Добавить в избранное"
+    val description = if (isFavorite) {
+        "В гербарии — нажмите, чтобы убрать"
+    } else {
+        "Вложить цветок в гербарий"
+    }
     Box(
         modifier
             .size(maxOf(size, 48.dp))
             .semantics { contentDescription = description },
-        contentAlignment = Alignment.TopEnd,
+        contentAlignment = Alignment.Center,
     ) {
         Canvas(Modifier.size(size)) {
-            if (progress > 0.01f) {
-                val s = this.size.width * progress
-                val fold = Path().apply {
-                    moveTo(this@Canvas.size.width - s, 0f)
-                    lineTo(this@Canvas.size.width, 0f)
-                    lineTo(this@Canvas.size.width, s)
+            val w = this.size.width
+            val h = this.size.height
+            val cx = w * 0.52f
+            val cy = h * 0.42f
+            val alpha = 0.22f + 0.78f * progress
+            val petal = lerp(colors.flour, colors.terracotta, 0.35f + 0.45f * progress).copy(alpha = alpha)
+            val center = lerp(colors.parchment, colors.crust, 0.55f * progress).copy(alpha = alpha)
+            val stem = lerp(colors.flour, colors.sage, 0.5f + 0.3f * progress).copy(alpha = alpha * 0.9f)
+            val outline = colors.cocoa.copy(alpha = 0.18f + 0.35f * progress)
+
+            // Стебель
+            val stemPath = Path().apply {
+                moveTo(cx, cy + w * 0.08f)
+                quadraticBezierTo(cx - w * 0.06f, cy + h * 0.28f, cx + w * 0.02f, h * 0.92f)
+            }
+            drawPath(stemPath, stem, style = Stroke(width = 1.6f * (0.5f + 0.5f * progress)))
+
+            // Листик
+            if (progress > 0.15f) {
+                val leaf = Path().apply {
+                    val lx = cx - w * 0.02f
+                    val ly = cy + h * 0.22f
+                    moveTo(lx, ly)
+                    quadraticBezierTo(lx - w * 0.22f, ly + h * 0.02f, lx - w * 0.08f, ly + h * 0.18f)
+                    quadraticBezierTo(lx + w * 0.02f, ly + h * 0.1f, lx, ly)
                     close()
                 }
-                // Тень сгиба + сам загиб (чуть темнее бумаги)
-                drawPath(fold, colors.parchment)
-                drawPath(fold, colors.flour, style = Stroke(width = 1f))
+                drawPath(leaf, stem.copy(alpha = alpha * 0.75f))
+                drawPath(leaf, outline, style = Stroke(width = 0.8f))
+            }
+
+            // 5 лепестков вокруг центра
+            val pr = w * (0.12f + 0.1f * progress)
+            val dist = w * (0.16f + 0.04f * progress)
+            for (i in 0 until 5) {
+                val ang = Math.toRadians((-90.0 + i * 72.0))
+                val px = cx + (kotlin.math.cos(ang) * dist).toFloat()
+                val py = cy + (kotlin.math.sin(ang) * dist).toFloat()
+                drawCircle(petal, pr, Offset(px, py))
+                drawCircle(outline, pr, Offset(px, py), style = Stroke(width = 0.9f))
+            }
+            drawCircle(center, w * (0.07f + 0.03f * progress), Offset(cx, cy))
+            drawCircle(outline, w * (0.07f + 0.03f * progress), Offset(cx, cy), style = Stroke(width = 0.9f))
+
+            // Бледный отпечаток-«пыльца» когда любимое
+            if (progress > 0.85f) {
+                drawCircle(
+                    colors.crust.copy(alpha = 0.08f),
+                    w * 0.42f,
+                    Offset(cx, cy),
+                )
             }
         }
     }
+}
+
+/** Старое имя — оставляем как alias, чтобы не ломать внешние ссылки/тесты. */
+@Composable
+fun DogEar(isFavorite: Boolean, modifier: Modifier = Modifier, size: Dp = 26.dp) {
+    HerbariumMark(isFavorite = isFavorite, modifier = modifier, size = size)
 }
 
 /**

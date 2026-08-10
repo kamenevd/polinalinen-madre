@@ -174,20 +174,11 @@ fun HomeScreen(
                     }
                 }
                 item {
-                    Row(
-                        Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 16.dp, bottom = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.Bottom,
-                    ) {
-                        PageLabel("Оглавление", color = colors.espresso)
-                        Text(
-                            "все ${recipes.size}",
-                            color = colors.crust,
-                            fontFamily = FontFamily.Serif,
-                            fontStyle = FontStyle.Italic,
-                            fontSize = 12.sp,
-                        )
-                    }
+                    PageLabel(
+                        "Оглавление",
+                        color = colors.espresso,
+                        modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 16.dp, bottom = 4.dp),
+                    )
                 }
                 items(recipes, key = { it.id }) { recipe ->
                     ChapterRow(
@@ -501,14 +492,14 @@ private fun ChapterRow(
                 }
             }
         }
-        // Загнутый уголок — избранное (механика #3). Touch target 48dp через padding.
+        // Гербарий — избранное (Cycle 19, возврат фичи 20). Touch target 48dp.
         DogEar(
             isFavorite = isFavorite,
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .then(
                     bookAction(
-                        if (isFavorite) "Убрать главу из избранного" else "Отметить главу как любимую"
+                        if (isFavorite) "Убрать цветок из гербария" else "Вложить цветок в гербарий"
                     ) { onToggleFavorite() }
                 )
                 .padding(6.dp),

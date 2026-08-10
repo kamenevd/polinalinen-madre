@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fallback if any dynamic lookup remains; primary keep is R.drawable refs. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/hero_*,@drawable/ic_launcher_foreground"
+    tools:discard="" />

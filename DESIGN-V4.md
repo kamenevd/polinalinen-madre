@@ -564,3 +564,23 @@ Acceptance: кормление = 1 тап; notification action тестируе�
 - Red-first: тест → код → `./gradlew testDebugUnitTest` → commit.
 - В конце: `lintDebug verifyRoborazziDebug assembleDebug`.
 - Не трогать production PocketBase без compile blocker.
+
+## Cycle 19 — polish к релизу RuStore (10.08.2026)
+
+### Фича A: Hero снова в release (HeroReleaseKeep)
+Причина: `getIdentifier("hero_$id")` + `isShrinkResources` вырезал все
+hero_*.webp из signed APK — на развороте фотокарточка пропадала.
+Фикс: явная карта `R.drawable.hero_*` в `heroResFor`.
+Коммит: fix: keep hero drawables in release
+
+### Фича B: Русские заголовки секций (RussianSections)
+Заголовки ингредиентов только по-русски: Опара / Опара 1–2 / Тесто /
+Начинка / Крем. Никакого `dough`/`filling` на странице.
+Коммит: fix: russian ingredient section titles
+
+### Фича C: Оглавление и гербарий (TocHerbarium)
+Убрано «все N» у оглавления. Избранное снова гербарий — засушенный
+цветок между страницами (`HerbariumMark`), не загнутый уголок.
+Иконка приложения: раскрытая книга + буханка на Warm Paper.
+Коммит: feat: herbarium favorites and app icon
+

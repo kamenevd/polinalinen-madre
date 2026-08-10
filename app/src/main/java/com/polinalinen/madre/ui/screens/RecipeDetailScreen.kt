@@ -64,6 +64,7 @@ import com.polinalinen.madre.ui.components.wornPage
 import com.polinalinen.madre.ui.theme.AppColors
 import com.polinalinen.madre.ui.theme.LocalCalmMode
 import com.polinalinen.madre.utils.heroResFor
+import com.polinalinen.madre.utils.ingredientSectionTitle
 import com.polinalinen.madre.viewmodel.BakingViewModel
 
 /**
@@ -213,11 +214,7 @@ fun RecipeDetailScreen(
             // на самостоятельные элементы значит менять вёрстку ради оптики.
             recipe.ingredients.forEach { (section, items) ->
                 item(key = "ingredients-$section") {
-                    val sectionTitle = when (section) {
-                        "sponge" -> "Опара"
-                        "main" -> "Тесто"
-                        else -> section
-                    }
+                    val sectionTitle = ingredientSectionTitle(section)
                     PageLabel(sectionTitle, Modifier.padding(start = 22.dp, top = 14.dp), color = colors.espresso)
                     Column(Modifier.padding(horizontal = 22.dp, vertical = 4.dp)) {
                         items.forEach { ingredient ->
@@ -558,8 +555,7 @@ internal fun portionLabel(n: Int): String = "печём на $n ${familyWord(n)}
 @Composable
 private fun PastedPhoto(recipe: Recipe, modifier: Modifier = Modifier) {
     val colors = AppColors.current
-    val context = LocalContext.current
-    val resId = heroResFor(context, recipe.id) ?: return
+    val resId = heroResFor(recipe.id) ?: return
     Box(
         modifier
             .fillMaxWidth()

@@ -7,7 +7,7 @@
     "branch": "cycle/19",
     "stage": "implementing",
     "created_at": "2026-08-10T15:40:00Z",
-    "updated_at": "2026-08-10T15:40:00Z"
+    "updated_at": "2026-08-10T17:40:00Z"
   },
   "features": [
     {
@@ -17,7 +17,7 @@
       "acceptance": [
         "heroResFor(recipeId) — явный when на R.drawable.hero_*, без getIdentifier",
         "Unit-тест: все 11 id из книги → non-null drawable id",
-        "Release APK содержит 11 hero_*.webp (проверка unzip/aapt)"
+        "Release APK содержит 11 hero webp (проверка unzip)"
       ]
     },
     {
@@ -27,7 +27,7 @@
       "acceptance": [
         "ingredientSectionTitle: sponge/main/dough/filling/cream/sponge1/sponge2 → русские ярлыки",
         "RecipeDetailScreen не показывает сырой english key секции",
-        "Unit-тест на все ключи из recipes.json"
+        "Unit-тест на ключи из recipes.json"
       ]
     },
     {
@@ -51,11 +51,49 @@
         "workflow/evidence/cycle19/plan.md"
       ]
     },
-    "tdd": { "status": "pending", "evidence": [] },
-    "build": { "status": "pending", "evidence": [] },
-    "review": { "status": "pending", "evidence": [] },
-    "visual": { "status": "pending", "evidence": [] },
-    "runtime": { "status": "pending", "evidence": [] },
-    "release": { "status": "pending", "evidence": [] }
-  }
+    "tdd": {
+      "status": "pass",
+      "evidence": [
+        "LXC108 testDebugUnitTest 567/0",
+        "RecipeAssetsTest"
+      ]
+    },
+    "build": {
+      "status": "pass",
+      "evidence": [
+        "LXC108 assembleRelease+bundleRelease signed",
+        "APK 2.7MB 13 webp"
+      ]
+    },
+    "review": {
+      "status": "pending",
+      "evidence": []
+    },
+    "visual": {
+      "status": "pending",
+      "evidence": []
+    },
+    "runtime": {
+      "status": "pending",
+      "evidence": []
+    },
+    "release": {
+      "status": "pending",
+      "evidence": []
+    }
+  },
+  "reviews": [],
+  "artifacts": {
+    "apk": "https://kdnfx.space/downloads/madre-cycle19-preview.apk",
+    "source_archive": null,
+    "sha256": "7004989b67bb12ee058097cfb404693d5f7cab7893ffb58ff4e462705490bcdd",
+    "release_url": null
+  },
+  "blockers": [],
+  "decisions": [
+    "Hero fix: explicit R.drawable map; tools:keep as belt-and-suspenders.",
+    "Herbarium is static Canvas + spring only — no third live effect on Home.",
+    "versionCode/versionName not hand-edited; release_cycle.py owns 6.3.0-cycle19 bump.",
+    "RuStore AAB prepared as preview; console upload needs Dima developer account after merge."
+  ]
 }

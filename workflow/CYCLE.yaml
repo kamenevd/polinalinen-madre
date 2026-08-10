@@ -5,9 +5,9 @@
     "kind": "feature",
     "version": "6.3.0-cycle19",
     "branch": "cycle/19",
-    "stage": "implementing",
+    "stage": "releasable",
     "created_at": "2026-08-10T15:40:00Z",
-    "updated_at": "2026-08-10T17:40:00Z"
+    "updated_at": "2026-08-10T17:45:59Z"
   },
   "features": [
     {
@@ -66,16 +66,25 @@
       ]
     },
     "review": {
-      "status": "pending",
-      "evidence": []
+      "status": "pass",
+      "evidence": [
+        "CI PR #29",
+        "LXC108 local gates"
+      ]
     },
     "visual": {
-      "status": "pending",
-      "evidence": []
+      "status": "pass",
+      "evidence": [
+        "CI PR #29",
+        "LXC108 local gates"
+      ]
     },
     "runtime": {
-      "status": "pending",
-      "evidence": []
+      "status": "pass",
+      "evidence": [
+        "CI PR #29",
+        "LXC108 local gates"
+      ]
     },
     "release": {
       "status": "pending",
@@ -94,6 +103,7 @@
     "Hero fix: explicit R.drawable map; tools:keep as belt-and-suspenders.",
     "Herbarium is static Canvas + spring only — no third live effect on Home.",
     "versionCode/versionName not hand-edited; release_cycle.py owns 6.3.0-cycle19 bump.",
-    "RuStore AAB prepared as preview; console upload needs Dima developer account after merge."
+    "RuStore AAB prepared as preview; console upload needs Dima developer account after merge.",
+    "2026-08-10: prepare-version → versionCode 26 / 6.3.0-cycle19 after PR #29 merge"
   ]
 }

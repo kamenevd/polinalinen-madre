@@ -130,14 +130,16 @@ object RecipeScale {
     }
 
     /**
-     * Ограничение объёма — явно и с настоящими числами, а не «много теста».
+     * Ограничение духовки — только про заходы и объём противня.
+     * Граммы выхода живут в [yieldText]; повторять их здесь — дубль на странице
+     * («выход ≈ 2190 г» и тут же «теста выйдет 2190 г»).
      * null — всё влезает за раз, и молчать здесь честно.
      */
     fun capacityNote(recipe: Recipe, portions: Int): String? {
         val batches = batches(recipe, portions)
         if (batches <= 1) return null
-        return "теста выйдет ${yieldGrams(recipe, portions)} г — в домашнюю духовку за раз " +
-            "входит около $OVEN_BATCH_GRAMS г: пеките в $batches ${batchWord(batches)}"
+        return "в домашнюю духовку за раз входит около $OVEN_BATCH_GRAMS г: " +
+            "пеките в $batches ${batchWord(batches)}"
     }
 
     /**

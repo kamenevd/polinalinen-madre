@@ -176,11 +176,25 @@ class RecipeScaleTest {
     fun `a batch too big for one oven says so, with the real numbers`() {
         val recipe = recipeOf(flour(500.0), water(350.0))
         // 850 г × 3 = 2550 г — в домашнюю духовку за раз столько не входит.
+        // Граммы — только в yieldText; capacityNote не дублирует их.
+        assertThat(RecipeScale.yieldText(recipe, 3)).isEqualTo("выход ≈ 2550 г теста")
         val note = RecipeScale.capacityNote(recipe, 3)
         assertThat(note).isNotNull()
-        assertThat(note).contains("2550")
+        assertThat(note).doesNotContain("2550")
+        assertThat(note).doesNotContain("выход")
         assertThat(note).contains("${RecipeScale.OVEN_BATCH_GRAMS}")
         assertThat(note).contains("2 захода")
+    }
+
+    @Test
+    fun `capacity note never repeats the yield grams already on the page`() {
+        val recipe = recipeOf(flour(500.0), water(350.0))
+        val grams = RecipeScale.yieldGrams(recipe, 2)
+        assertThat(grams).isGreaterThan(RecipeScale.OVEN_BATCH_GRAMS)
+        val note = RecipeScale.capacityNote(recipe, 2)
+        assertThat(note).isNotNull()
+        assertThat(note).doesNotContain("$grams")
+        assertThat(note).startsWith("в домашнюю духовку")
     }
 
     @Test

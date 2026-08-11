@@ -52,7 +52,13 @@ class CalmModeSetting(private val store: FlagStore) {
         const val KEY = "calm_mode"
         const val DEFAULT = true
 
-        fun label(calm: Boolean): String = if (calm) "спокойное" else "полное"
+        /**
+         * Cycle 19: «полное» → «живое». Два варианта стоят в настройках рядом,
+         * и пара «спокойное · полное» требовала подписи, чтобы понять, чего
+         * именно «полное». «Спокойное · живое» называет разницу само: крутятся
+         * декорации или стоят.
+         */
+        fun label(calm: Boolean): String = if (calm) "спокойное" else "живое"
     }
 }
 

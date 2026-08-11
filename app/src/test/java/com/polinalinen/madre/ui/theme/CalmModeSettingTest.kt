@@ -54,9 +54,14 @@ class CalmModeSettingTest {
         assertThat(CalmModeSetting.KEY).isEqualTo("calm_mode")
     }
 
+    /**
+     * Cycle 19: «полное» → «живое». Пара «спокойное · полное» требовала
+     * подписи, чтобы понять, чего именно «полное»; «спокойное · живое»
+     * называет разницу сама — крутятся декорации или стоят.
+     */
     @Test
     fun `the settings row reads as plain Russian`() {
         assertThat(CalmModeSetting.label(true)).isEqualTo("спокойное")
-        assertThat(CalmModeSetting.label(false)).isEqualTo("полное")
+        assertThat(CalmModeSetting.label(false)).isEqualTo("живое")
     }
 }

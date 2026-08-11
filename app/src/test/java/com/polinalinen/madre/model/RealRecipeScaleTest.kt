@@ -85,7 +85,12 @@ class RealRecipeScaleTest {
         // Две порции в одну духовку правда не входят — тут книга говорит вслух.
         assertThat(RecipeScale.yieldGrams(buns, 2)).isEqualTo(2761)
         assertThat(RecipeScale.batches(buns, 2)).isEqualTo(2)
-        assertThat(RecipeScale.capacityNote(buns, 2)).contains("2761")
+        // Граммы — в yieldText; capacityNote только про духовку/заходы.
+        assertThat(RecipeScale.yieldText(buns, 2)).contains("2761")
+        val note = RecipeScale.capacityNote(buns, 2)
+        assertThat(note).isNotNull()
+        assertThat(note).doesNotContain("2761")
+        assertThat(note).contains("2 захода")
     }
 
     @Test

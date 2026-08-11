@@ -2,4 +2,25 @@
 <resources>
     <!-- Фон адаптивной иконки — тот же "Paper", что и фон приложения (Color.kt). -->
     <color name="ic_launcher_background">#FAF6F0</color>
+
+    <!--
+      Cycle 19: палитра своей карточки в шторке.
+
+      Второй палитры у книги нет — это те же значения, что в ui/theme/Color.kt.
+      Продублированы сюда потому, что RemoteViews живёт в чужом процессе и
+      Compose-токенов не видит; всякий раз, когда меняется Color.kt, меняются и
+      эти четыре строки.
+
+      Своя подложка (madre_notif_paper) обязательна: карточка лежит на
+      системной панели, а та в тёмной теме телефона чёрная — чернила книги на
+      ней стали бы невидимы. Тёмной темы у книги нет, но шторка книге не
+      принадлежит, и спорить с телефоном она не будет: просто кладёт свой
+      клочок бумаги поверх.
+    -->
+    <color name="madre_notif_paper">#FAF6F0</color>   <!-- Paper -->
+    <color name="madre_notif_ink">#2D1F14</color>     <!-- Espresso -->
+    <color name="madre_notif_cocoa">#6B5544</color>   <!-- Cocoa -->
+    <color name="madre_notif_crust">#C8763A</color>   <!-- Crust -->
+    <color name="madre_notif_urgent">#C45A4E</color>  <!-- Terracotta -->
+    <color name="madre_notif_flour">#D9CFC2</color>   <!-- Flour -->
 </resources>

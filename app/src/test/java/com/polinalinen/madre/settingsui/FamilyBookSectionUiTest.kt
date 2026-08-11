@@ -5,6 +5,7 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.polinalinen.madre.account.FamilyBookState
@@ -49,6 +50,11 @@ class FamilyBookSectionUiTest {
                 )
             }
         }
+
+        // Cycle 19: форма больше не развёрнута с порога — сперва её просят.
+        // Проверяемое правило от этого не изменилось: набранное переживает
+        // пересоздание активити, потому что лежит на rememberSaveable.
+        rule.onNodeWithText("Подключить семью…").performClick()
 
         rule.onAllNodes(hasSetTextAction())[0].performTextInput("anya@example.com")
         rule.onNodeWithText("anya@example.com").assertIsDisplayed()

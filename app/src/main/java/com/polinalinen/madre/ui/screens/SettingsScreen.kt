@@ -4,7 +4,6 @@ import android.content.Intent
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.provider.Settings
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.Column
@@ -37,7 +36,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -51,15 +49,16 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.polinalinen.madre.notifications.MadreNotifier
+import com.polinalinen.madre.sourdough.FeedingInterval
 import com.polinalinen.madre.sourdough.StarterName
 import com.polinalinen.madre.account.FamilyBookState
 import com.polinalinen.madre.account.InviteCode
 import com.polinalinen.madre.ui.components.BackLabel
+import com.polinalinen.madre.ui.components.bookAction
 import com.polinalinen.madre.ui.components.BookButton
 import com.polinalinen.madre.ui.components.BookButtonVariant
 import com.polinalinen.madre.ui.components.Bookplate
 import com.polinalinen.madre.ui.components.MinTouchTarget
-import com.polinalinen.madre.ui.components.BookSpine
 import com.polinalinen.madre.sync.SyncStatus
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.HeavyRule
@@ -81,8 +80,21 @@ import kotlinx.coroutines.withContext
  *
  * Cycle 11: «Кормить» и «Напоминания» перестали быть UI-стейтом этого экрана и
  * пишут в sourdough_configs (intervalHours / remindersEnabled) — тот же конфиг,
- * от которого считается фаза закваски и планируется напоминание. «Оформление» —
+ * от которого считается фаза закваски и планируется напоминание. «Вид» —
  * спокойный режим, madre_prefs (CalmModeSetting).
+ *
+ * Cycle 19: пять разделов вместо одной ленты. До этого страница была
+ * четырнадцатью строками подряд — имя, экслибрис, почта и пароль, закваска,
+ * кормление, напоминания, оформление, тираж, версия, корешок, — а в самом
+ * конце ещё эссе про уведомления, спорившее со строкой «Напоминания: вкл» на
+ * семь экранов выше. Ни одной новой настройки здесь не появилось: это
+ * перекладка, а не рост.
+ *
+ *  1. Я — как зовут читателя и как подписана книга
+ *  2. Закваска — имя, ритм кормления, напоминания
+ *  3. Общая книга — семья; пока не подключена, это одна строка и кнопка
+ *  4. Вид — спокойное или живое оформление
+ *  5. О книге — журнал и версия
  */
 @Composable
 fun SettingsScreen(
@@ -106,11 +118,9 @@ fun SettingsScreen(
     val familyName by familySettingsViewModel.familyName.collectAsState()
     val familyBookState by familyBookViewModel.state.collectAsState()
     LaunchedEffect(Unit) { familyBookViewModel.restore() }
-    // Ключи — те же, что понимает profileForInterval() (12/24/48/72/168):
-    // строка в колофоне и профиль закваски не могут разойтись.
-    val intervalHoursOptions = listOf(12, 24, 48, 72, 168)
-    val intervals = listOf("раз в 12 часов", "раз в 24 часа", "раз в 48 часов", "раз в 72 часа", "раз в неделю")
-    val intervalIdx = intervalHoursOptions.indexOf(intervalHours).takeIf { it >= 0 } ?: 1
+    // Книга в семье — значит, её имя живёт в карточке общей книги, и второму
+    // полю для того же имени тут делать нечего.
+    val inFamily = familyBookState.account?.hasFamily == true
 
     Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
         Column(
@@ -122,105 +132,340 @@ fun SettingsScreen(
             BackLabel("Первая полоса", onClick = onBack, modifier = Modifier.padding(horizontal = 22.dp))
 
             Text(
-                "Выходные данные",
+                "Настройки",
                 color = colors.espresso,
                 fontFamily = FontFamily.Serif,
                 fontWeight = FontWeight.Bold,
                 fontSize = 26.sp,
                 modifier = Modifier.padding(horizontal = 22.dp),
             )
-            Spacer(Modifier.height(14.dp))
+            Text(
+                "выходные данные книги",
+                color = colors.cocoa,
+                fontFamily = FontFamily.Serif,
+                fontStyle = FontStyle.Italic,
+                fontSize = 13.sp,
+                modifier = Modifier.padding(horizontal = 22.dp, vertical = 4.dp),
+            )
+            Spacer(Modifier.height(10.dp))
             HeavyRule(Modifier.padding(horizontal = 22.dp))
 
-            // Экслибрис — DESIGN-V4.md Cycle 3, фича Bookplate. Поверх остального
-            // колофона, отдельным орнаментальным блоком в самом начале страницы.
-            Bookplate(
-                familyName = familyName,
-                onSetName = familySettingsViewModel::setFamilyName,
-                modifier = Modifier.padding(horizontal = 22.dp, vertical = 18.dp),
-            )
-            HairRule(Modifier.padding(horizontal = 22.dp))
-
-            FamilyBookSection(
-                state = familyBookState,
-                onSignIn = familyBookViewModel::signIn,
-                onRegister = familyBookViewModel::register,
-                onCreateFamily = familyBookViewModel::createFamily,
-                onJoinFamily = familyBookViewModel::joinFamily,
-                onRotateInvite = familyBookViewModel::rotateInviteCode,
-                onSignOut = familyBookViewModel::signOut,
-                onCodeHandled = familyBookViewModel::clearInviteCode,
-            )
-            SyncStatusLine(Modifier.padding(horizontal = 22.dp, vertical = 4.dp))
-            HairRule(Modifier.padding(horizontal = 22.dp))
-
-            SettingsField(
-                label = "Ваше имя",
-                caption = "появится на титульной странице и на Полке",
-            ) {
-                NameField(value = myName, onChange = onMyNameChange, placeholder = "впишите, как вас называть")
-            }
-
-            HairRule(Modifier.padding(horizontal = 22.dp))
-            // Cycle 14: имя закваски — настоящая настройка, а не строка в коде.
-            // Пишется в sourdough_configs, то есть в тот же конфиг, от которого
-            // считается фаза и планируется напоминание: дневник, колофон и
-            // шторка не могут разойтись в написании одного имени.
-            SettingsField(
-                label = "Имя закваски",
-                caption = "так её зовут в дневнике, на фотокарточках кормлений и в напоминаниях",
-            ) {
-                StarterNameField(persisted = starterName, onChange = onStarterNameChange)
-            }
-            HairRule(Modifier.padding(horizontal = 22.dp))
-            SettingsRow(
-                label = "Кормить",
-                value = intervals[intervalIdx],
-                onClick = {
-                    val next = (intervalIdx + 1) % intervalHoursOptions.size
-                    onIntervalHoursChange(intervalHoursOptions[next])
-                },
-            )
-            HairRule(Modifier.padding(horizontal = 22.dp))
-            SettingsRow(
-                label = "Напоминания",
-                value = if (remindersEnabled) "вкл" else "выкл",
-                valueColor = if (remindersEnabled) colors.sage else colors.cocoa,
-                onClick = { onRemindersEnabledChange(!remindersEnabled) },
-            )
-            HairRule(Modifier.padding(horizontal = 22.dp))
-            // «Спокойный режим» (Cycle 11): текст честный — в спокойном
-            // оформлении отключаются именно непрерывные и интерактивные
-            // декорации, а не «часть красоты вообще».
-            SettingsRow(
-                label = "Оформление",
-                value = CalmModeSetting.label(calmMode),
-                onClick = { onCalmModeChange(!calmMode) },
-            )
-            SettingsCaption(
-                if (calmMode) {
-                    "спокойное: книга не крутит непрерывных декораций — ни пыли, ни крошек, " +
-                        "ни дыхания страницы. Прокрутка плавная, бумага, рамки и следы на " +
-                        "страницах остаются на месте."
-                } else {
-                    "полное: пыль на давно не открытых главах, крошки между страниц и дыхание " +
-                        "страницы включены. Красиво, но на длинных страницах прокрутка может " +
-                        "подтормаживать."
+            // ————— 1. Я —————
+            SettingsSection(Sections.ME, first = true) {
+                SettingsField(
+                    label = "Ваше имя",
+                    caption = "появится на титульной странице и на Полке",
+                ) {
+                    NameField(value = myName, onChange = onMyNameChange, placeholder = "впишите, как вас называть")
                 }
-            )
-            HairRule(Modifier.padding(horizontal = 22.dp))
-            SettingsRow(label = "Тираж", value = "одна семья", onClick = null)
-            HairRule(Modifier.padding(horizontal = 22.dp))
-            SettingsRow(label = "Версия", value = com.polinalinen.madre.BuildConfig.VERSION_NAME, onClick = null)
+                // Экслибрис — DESIGN-V4.md Cycle 3, фича Bookplate. Показывается,
+                // только пока семьи нет: у книги в семье имя одно, и оно приходит
+                // с сервера, а не набирается здесь второй раз.
+                if (!inFamily) {
+                    HairRule(Modifier.padding(horizontal = 22.dp))
+                    Bookplate(
+                        label = "Как подписана книга",
+                        familyName = familyName,
+                        onSetName = familySettingsViewModel::setFamilyName,
+                        modifier = Modifier.padding(horizontal = 22.dp, vertical = 18.dp),
+                    )
+                }
+            }
 
-            HairRule(Modifier.padding(horizontal = 22.dp))
-            BookSpineSection(bakeCount = bakeCount, feedingCount = feedingCount)
+            // ————— 2. Закваска —————
+            SettingsSection(Sections.STARTER) {
+                // Cycle 14: имя закваски — настоящая настройка, а не строка в коде.
+                // Пишется в sourdough_configs, то есть в тот же конфиг, от которого
+                // считается фаза и планируется напоминание: дневник, колофон и
+                // шторка не могут разойтись в написании одного имени.
+                SettingsField(
+                    label = "Имя закваски",
+                    caption = "так её зовут в дневнике, на фотокарточках кормлений и в напоминаниях",
+                ) {
+                    StarterNameField(persisted = starterName, onChange = onStarterNameChange)
+                }
+                HairRule(Modifier.padding(horizontal = 22.dp))
+                FeedingRhythmRow(intervalHours = intervalHours, onChange = onIntervalHoursChange)
+                HairRule(Modifier.padding(horizontal = 22.dp))
+                RemindersRow(
+                    remindersEnabled = remindersEnabled,
+                    onRemindersEnabledChange = onRemindersEnabledChange,
+                )
+            }
 
-            Spacer(Modifier.height(24.dp))
-            HeavyRule(Modifier.padding(horizontal = 22.dp))
-            NotificationPermissionSection()
+            // ————— 3. Общая книга —————
+            SettingsSection(Sections.FAMILY) {
+                FamilyBookSection(
+                    state = familyBookState,
+                    onSignIn = familyBookViewModel::signIn,
+                    onRegister = familyBookViewModel::register,
+                    onCreateFamily = familyBookViewModel::createFamily,
+                    onJoinFamily = familyBookViewModel::joinFamily,
+                    onRotateInvite = familyBookViewModel::rotateInviteCode,
+                    onSignOut = familyBookViewModel::signOut,
+                    onCodeHandled = familyBookViewModel::clearInviteCode,
+                )
+                SyncStatusLine(Modifier.padding(horizontal = 22.dp, vertical = 4.dp))
+            }
+
+            // ————— 4. Вид —————
+            SettingsSection(Sections.LOOK) {
+                // «Спокойный режим» (Cycle 11): текст честный — в спокойном
+                // оформлении отключаются именно непрерывные и интерактивные
+                // декорации, а не «часть красоты вообще».
+                CalmModeRow(calmMode = calmMode, onCalmModeChange = onCalmModeChange)
+                SettingsCaption(
+                    "в спокойном книга не крутит непрерывных декораций — ни пыли, ни крошек, " +
+                        "ни дыхания страницы; бумага, рамки и следы на страницах остаются на месте."
+                )
+            }
+
+            // ————— 5. О книге —————
+            SettingsSection(Sections.ABOUT) {
+                SettingsRow(
+                    label = "В журнале",
+                    value = "$bakeCount выпечек · $feedingCount кормлений",
+                    onClick = null,
+                )
+                HairRule(Modifier.padding(horizontal = 22.dp))
+                SettingsRow(
+                    label = "Версия",
+                    value = com.polinalinen.madre.BuildConfig.VERSION_NAME,
+                    onClick = null,
+                )
+            }
         }
     }
+}
+
+/**
+ * Названия разделов — в одном месте, потому что их читает не только экран.
+ * Тест на пять заголовков сверяется с этими же строками: разъехаться списку и
+ * проверке нельзя, иначе проверка перестанет что-либо значить.
+ */
+internal object Sections {
+    const val ME = "Я"
+    const val STARTER = "Закваска"
+    const val FAMILY = "Общая книга"
+    const val LOOK = "Вид"
+    const val ABOUT = "О книге"
+
+    val ALL = listOf(ME, STARTER, FAMILY, LOOK, ABOUT)
+}
+
+/**
+ * Раздел колофона: тяжёлая линейка, надзаголовок, содержимое. Первый раздел
+ * идёт без своей линейки — над ним уже стоит та, что отбивает заголовок
+ * страницы.
+ */
+@Composable
+private fun SettingsSection(
+    title: String,
+    first: Boolean = false,
+    content: @Composable () -> Unit,
+) {
+    val colors = AppColors.current
+    if (!first) {
+        Spacer(Modifier.height(26.dp))
+        HeavyRule(Modifier.padding(horizontal = 22.dp))
+    }
+    PageLabel(
+        title,
+        color = colors.espresso,
+        modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 18.dp, bottom = 4.dp),
+    )
+    content()
+}
+
+/**
+ * Cycle 19: «как часто кормить» вместо «Кормить: раз в 48 часов».
+ *
+ * До этого строка перебирала пять значений по кругу от нажатия к нажатию:
+ * чтобы вернуть предыдущее, нужно было пройти всю пятёрку, а увидеть весь
+ * список было негде вовсе. Теперь список открывается и показывает, из чего
+ * выбор, — включая то, что выбрано сейчас.
+ */
+@Composable
+private fun FeedingRhythmRow(intervalHours: Int, onChange: (Int) -> Unit) {
+    var picking by rememberSaveable { mutableStateOf(false) }
+    SettingsRow(
+        label = "Как часто кормить",
+        value = FeedingInterval.label(intervalHours),
+        onClick = { picking = true },
+    )
+    if (picking) {
+        SettingsChoiceDialog(
+            title = "Как часто кормить",
+            options = FeedingInterval.HOURS.map { it to FeedingInterval.label(it) },
+            selected = intervalHours,
+            onPick = {
+                onChange(it)
+                picking = false
+            },
+            onDismiss = { picking = false },
+        )
+    }
+}
+
+/**
+ * Cycle 19: напоминания и запрет телефона — одной строкой.
+ *
+ * Раньше «Напоминания: вкл» стояло здесь, а внизу страницы отдельная секция
+ * сообщала, что уведомления вообще запрещены. Две правды в одном колофоне, и
+ * ближняя к переключателю — ложная. Теперь если телефон молчит, это сказано
+ * ровно там, где человек ищет переключатель, и там же дорога обратно.
+ *
+ * Состояние перечитывается на каждое возвращение на экран: человек мог
+ * поменять его в системных настройках и вернуться.
+ */
+@Composable
+private fun RemindersRow(remindersEnabled: Boolean, onRemindersEnabledChange: (Boolean) -> Unit) {
+    val colors = AppColors.current
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var allowed by remember { mutableStateOf(MadreNotifier(context).canPost()) }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) allowed = MadreNotifier(context).canPost()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    if (allowed) {
+        SettingsRow(
+            label = "Напоминания",
+            value = if (remindersEnabled) "вкл" else "выкл",
+            valueColor = if (remindersEnabled) colors.sage else colors.cocoa,
+            onClick = { onRemindersEnabledChange(!remindersEnabled) },
+        )
+    } else {
+        // Переключать нечего: телефон запретил книге писать, и «вкл» здесь было
+        // бы обещанием, которого книга не сдержит.
+        SettingsRow(
+            label = "Напоминания",
+            value = "не разрешены телефоном",
+            valueColor = colors.terracotta,
+            onClick = null,
+        )
+        SettingsCaption(
+            "книга не разбудит вас, когда закончится расстойка, не напомнит про закваску " +
+                "и не покажет ход выпечки в шторке. Таймер на экране при этом работает как прежде."
+        )
+        BookButton(
+            label = "Разрешить уведомления",
+            variant = BookButtonVariant.SECONDARY,
+            modifier = Modifier.padding(horizontal = 22.dp, vertical = 4.dp),
+            onClick = {
+                val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                    .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                // Экран настроек уведомлений есть не на всех прошивках —
+                // если его нет, книга не должна падать из-за этого.
+                runCatching { context.startActivity(intent) }
+            },
+        )
+    }
+}
+
+/**
+ * Cycle 19: оба варианта оформления названы и стоят рядом.
+ *
+ * Строка-переключатель показывала одно слово и меняла его от нажатия: чтобы
+ * узнать, что бывает кроме «спокойного», нужно было нажать и посмотреть, что
+ * стало. Здесь оба слова видны сразу, выбранное подчёркнуто.
+ */
+@Composable
+private fun CalmModeRow(calmMode: Boolean, onCalmModeChange: (Boolean) -> Unit) {
+    val colors = AppColors.current
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 22.dp, vertical = 4.dp),
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("Оформление", color = colors.espresso, fontFamily = FontFamily.Serif, fontSize = 15.sp)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            listOf(true, false).forEach { calm ->
+                val label = CalmModeSetting.label(calm)
+                val chosen = calm == calmMode
+                Box(
+                    Modifier
+                        .then(bookAction(label = "Оформление: $label") { onCalmModeChange(calm) })
+                        .padding(start = 14.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        label,
+                        color = if (chosen) colors.espresso else colors.flour,
+                        fontFamily = FontFamily.Serif,
+                        fontSize = 15.sp,
+                        fontWeight = if (chosen) FontWeight.Bold else FontWeight.Normal,
+                        modifier = Modifier.drawBehind {
+                            if (!chosen) return@drawBehind
+                            val thickness = 1.5.dp.toPx()
+                            drawLine(
+                                color = colors.crust,
+                                start = androidx.compose.ui.geometry.Offset(0f, size.height + 2.dp.toPx()),
+                                end = androidx.compose.ui.geometry.Offset(size.width, size.height + 2.dp.toPx()),
+                                strokeWidth = thickness,
+                            )
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Выбор из нескольких значений — страницей книги, а не material-списком.
+ * Форма та же, что у [com.polinalinen.madre.ui.components.ConfirmDialog]:
+ * скругление 4dp, бумага Cream. Каждая строка — `bookAction`, то есть роль
+ * кнопки, подпись для TalkBack и мишень не меньше 48dp.
+ */
+@Composable
+private fun <T> SettingsChoiceDialog(
+    title: String,
+    options: List<Pair<T, String>>,
+    selected: T,
+    onPick: (T) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val colors = AppColors.current
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
+        containerColor = colors.cream,
+        title = {
+            Text(title, color = colors.espresso, fontFamily = FontFamily.Serif, fontSize = 20.sp)
+        },
+        text = {
+            Column(Modifier.fillMaxWidth()) {
+                options.forEach { (value, label) ->
+                    val chosen = value == selected
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .then(bookAction(label = label) { onPick(value) }),
+                        contentAlignment = Alignment.CenterStart,
+                    ) {
+                        Text(
+                            label,
+                            color = if (chosen) colors.crust else colors.espresso,
+                            fontFamily = FontFamily.Serif,
+                            fontSize = 16.sp,
+                            fontWeight = if (chosen) FontWeight.Bold else FontWeight.Normal,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextAction("Оставить как есть", onClick = onDismiss) },
+    )
 }
 
 /**
@@ -282,6 +527,14 @@ internal fun FamilyBookSection(
     val failed = state as? FamilyBookState.Failed
     val account = state.account
     val loading = state is FamilyBookState.Loading
+    // Cycle 19: пока семья не подключена, форма входа не разворачивается сама.
+    // Почта, пароль и подпись занимали треть колофона у всех, включая тех, кто
+    // общей книгой не пользуется и не собирается: это одна строка и кнопка.
+    var showForm by rememberSaveable { mutableStateOf(false) }
+    // Неудачная попытка входа — не повод свернуть набранное обратно: сообщение
+    // об ошибке над пустым местом не объяснило бы ничего. Именно раскрыть, а не
+    // «считать раскрытым»: иначе «Не сейчас» под формой перестал бы работать.
+    LaunchedEffect(failed) { if (failed != null) showForm = true }
 
     // Одноразовый код не должен пережить уход со страницы: как только секция
     // покидает композицию, просим ViewModel забыть открытый код из состояния.
@@ -289,15 +542,15 @@ internal fun FamilyBookSection(
         onDispose { onCodeHandled() }
     }
 
-    Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp)) {
-        PageLabel("Семейная книга", color = colors.espresso)
+    Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 8.dp)) {
         Text(
-            "ваша локальная книга остаётся на этом телефоне и открывается без аккаунта и сети",
+            "ваша книга остаётся на этом телефоне и открывается без аккаунта и сети. " +
+                "Общая книга — способ делиться выпечками с семьёй, а не условие работы.",
             color = colors.cocoa,
             fontFamily = FontFamily.Serif,
             fontStyle = FontStyle.Italic,
             fontSize = 11.5.sp,
-            modifier = Modifier.padding(top = 6.dp, bottom = 10.dp),
+            modifier = Modifier.padding(bottom = 10.dp),
         )
         if (failed != null) {
             Text(
@@ -310,6 +563,13 @@ internal fun FamilyBookSection(
         }
         when {
             loading -> Text("проверяем общую книгу", color = colors.cocoa, fontFamily = FontFamily.Serif, fontStyle = FontStyle.Italic)
+            account == null && !showForm -> {
+                BookButton(
+                    label = "Подключить семью…",
+                    variant = BookButtonVariant.SECONDARY,
+                    onClick = { showForm = true },
+                )
+            }
             account == null -> {
                 FamilyBookField("Почта", email) { email = it }
                 FamilyBookField("Пароль", password, masked = true) { password = it }
@@ -327,6 +587,7 @@ internal fun FamilyBookSection(
                     enabled = email.isNotBlank() && password.isNotBlank() && displayName.isNotBlank(),
                     onClick = { onRegister(email, password, displayName) },
                 )
+                TextAction("Не сейчас", onClick = { showForm = false })
             }
             !account.hasFamily -> {
                 Text("вы вошли как ${account.displayName.ifBlank { account.email }}", color = colors.espresso, fontFamily = FontFamily.Serif)
@@ -344,7 +605,7 @@ internal fun FamilyBookSection(
                     enabled = inviteCode.isNotBlank(),
                     onClick = { onJoinFamily(inviteCode) },
                 )
-                TextAction("Выйти из аккаунта", onClick = onSignOut)
+                TextAction("Выйти · книга на телефоне останется", onClick = onSignOut)
             }
             else -> {
                 Text(
@@ -387,7 +648,7 @@ internal fun FamilyBookSection(
                         onClick = onRotateInvite,
                     )
                 }
-                TextAction("Выйти из аккаунта", onClick = onSignOut)
+                TextAction("Выйти · книга на телефоне останется", onClick = onSignOut)
             }
         }
     }
@@ -414,102 +675,6 @@ private fun FamilyBookField(
         textStyle = TextStyle(fontFamily = FontFamily.Serif, fontSize = 15.sp),
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
     )
-}
-
-/**
- * Cycle 12: честное состояние уведомлений.
- *
- * До этого книга спрашивала разрешение при каждом холодном старте, ответ
- * выбрасывала (`{ _ -> }`) и нигде его не показывала. Человек, однажды
- * отказавший, потом просто не понимал, почему напоминания не приходят и куда
- * делся прогресс выпечки: настройки бодро говорили «Напоминания: вкл».
- *
- * Теперь состояние проверяется при каждом возвращении на экран (человек мог
- * поменять его в системных настройках и вернуться), и отказ — не тупик:
- * системные настройки уведомлений открываются отсюда одной кнопкой.
- */
-@Composable
-private fun NotificationPermissionSection() {
-    val colors = AppColors.current
-    val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
-    var allowed by remember { mutableStateOf(MadreNotifier(context).canPost()) }
-
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) allowed = MadreNotifier(context).canPost()
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
-
-    Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp)) {
-        PageLabel("Уведомления книги", color = colors.espresso)
-        Text(
-            if (allowed) {
-                "книге разрешено писать вам: напоминание покормить закваску, конец шага " +
-                    "ожидания, просьба достать масло и строка хода выпечки в шторке. " +
-                    "Напоминание о кормлении приходит примерно в срок — система будит " +
-                    "книгу, когда ей удобно, с точностью до нескольких минут."
-            } else {
-                "уведомления запрещены — книга молчит. Она не разбудит вас, когда " +
-                    "закончится расстойка, не напомнит про закваску и не покажет ход " +
-                    "выпечки в шторке. Таймер на экране при этом работает как прежде."
-            },
-            color = colors.cocoa,
-            fontFamily = FontFamily.Serif,
-            fontStyle = FontStyle.Italic,
-            fontSize = 11.5.sp,
-            modifier = Modifier.padding(top = 8.dp),
-        )
-        if (!allowed) {
-            Spacer(Modifier.height(12.dp))
-            BookButton(
-                label = "Открыть настройки уведомлений",
-                variant = BookButtonVariant.SECONDARY,
-                onClick = {
-                    val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-                        .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    // Экран настроек уведомлений есть не на всех прошивках —
-                    // если его нет, книга не должна падать из-за этого.
-                    runCatching { context.startActivity(intent) }
-                },
-            )
-        }
-    }
-}
-
-/**
- * «Состояние книги» — DESIGN-V4.md Cycle 2, фича «Растущий корешок» (SpineGrowth).
- * Корешок сбоку толстеет и «трётся» вместе с историей — bakeCount + feedingCount.
- */
-@Composable
-private fun BookSpineSection(bakeCount: Int, feedingCount: Int) {
-    val colors = AppColors.current
-    Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp)) {
-        PageLabel("Состояние книги", color = colors.espresso)
-        Row(Modifier.padding(top = 14.dp), verticalAlignment = Alignment.Bottom) {
-            BookSpine(bakeCount = bakeCount, feedingCount = feedingCount, height = 140.dp)
-            Column(Modifier.padding(start = 16.dp).height(140.dp), verticalArrangement = androidx.compose.foundation.layout.Arrangement.Bottom) {
-                Text(
-                    "$bakeCount выпечек · $feedingCount кормлений",
-                    color = colors.espresso,
-                    fontFamily = FontFamily.Serif,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
-                )
-                Text(
-                    "корешок растёт и обтрёпывается вместе с историей семьи",
-                    color = colors.cocoa,
-                    fontFamily = FontFamily.Serif,
-                    fontStyle = FontStyle.Italic,
-                    fontSize = 11.5.sp,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
-        }
-    }
 }
 
 /** Пояснение под строкой настроек — тем же голосом, что подписи в колофоне. */
@@ -617,16 +782,18 @@ private fun SettingsRow(label: String, value: String, onClick: (() -> Unit)?, va
     Row(
         Modifier
             .fillMaxWidth()
-            // Строка-переключатель («Кормить», «Напоминания», «Оформление») —
-            // такая же мишень, как кнопка: 48dp и объявленная роль.
+            // Cycle 19, hard rule №9: строка настройки — это bookAction, а не
+            // голый clickable. Роль кнопки, подпись для TalkBack и мишень не
+            // меньше 48dp приходят вместе, одним модификатором, вместе с
+            // защитой от двойного тапа.
             .defaultMinSize(minHeight = MinTouchTarget)
-            .let {
+            .then(
                 if (onClick != null) {
-                    it.clickable(onClickLabel = "$label: $value", role = Role.Button) { onClick() }
+                    bookAction(label = "$label: $value", onClick = onClick)
                 } else {
-                    it
+                    Modifier
                 }
-            }
+            )
             .padding(horizontal = 22.dp, vertical = 14.dp),
         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,

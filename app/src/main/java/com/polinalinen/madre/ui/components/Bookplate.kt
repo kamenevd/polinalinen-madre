@@ -52,10 +52,18 @@ fun Bookplate(
     familyName: String?,
     onSetName: (String) -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * Cycle 19: надзаголовок задаётся снаружи. В колофоне это «Как подписана
+     * книга» — вопрос, на который экслибрис отвечает; само слово «Экслибрис»
+     * ответом не было. Значение по умолчанию оставлено прежним: по нему
+     * снят золотой скриншот, и менять его заодно значило бы менять две вещи
+     * одной правкой.
+     */
+    label: String = "Экслибрис",
 ) {
     val colors = AppColors.current
     Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-        PageLabel("Экслибрис", color = colors.cocoa)
+        PageLabel(label, color = colors.cocoa)
         Column(
             Modifier
                 .padding(top = 10.dp)

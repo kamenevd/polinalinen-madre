@@ -7,7 +7,7 @@
     "branch": "cycle/19",
     "stage": "releasable",
     "created_at": "2026-08-10T15:40:00Z",
-    "updated_at": "2026-08-11T18:47:20Z"
+    "updated_at": "2026-08-11T18:58:02Z"
   },
   "features": [
     {
@@ -133,16 +133,21 @@
       ]
     },
     "release": {
-      "status": "pending",
-      "evidence": []
+      "status": "pass",
+      "evidence": [
+        "tag v6.3.1-cycle19",
+        "GH release https://github.com/kamenevd/polinalinen-madre/releases/tag/v6.3.1-cycle19",
+        "https://kdnfx.space/downloads/madre-v6.3.1-cycle19.apk",
+        "sha256 da8f732a8ea9980d23c7ecefcf51935a3fb0709d763be5aa4b2c846037f2df04"
+      ]
     }
   },
   "reviews": [],
   "artifacts": {
-    "apk": "https://kdnfx.space/downloads/madre-cycle19-preview.apk",
+    "apk": "https://kdnfx.space/downloads/madre-v6.3.1-cycle19.apk",
     "source_archive": null,
-    "sha256": "7004989b67bb12ee058097cfb404693d5f7cab7893ffb58ff4e462705490bcdd",
-    "release_url": null
+    "sha256": "da8f732a8ea9980d23c7ecefcf51935a3fb0709d763be5aa4b2c846037f2df04",
+    "release_url": "https://github.com/kamenevd/polinalinen-madre/releases/tag/v6.3.1-cycle19"
   },
   "blockers": [],
   "decisions": [

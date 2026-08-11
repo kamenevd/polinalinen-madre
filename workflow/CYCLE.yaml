@@ -3,11 +3,11 @@
   "cycle": {
     "number": 19,
     "kind": "feature",
-    "version": "6.3.0-cycle19",
+    "version": "6.3.1-cycle19",
     "branch": "cycle/19",
-    "stage": "implementing",
+    "stage": "releasable",
     "created_at": "2026-08-10T15:40:00Z",
-    "updated_at": "2026-08-11T09:00:00Z"
+    "updated_at": "2026-08-11T18:47:20Z"
   },
   "features": [
     {

@@ -32,8 +32,8 @@ android {
         minSdk = 26
         targetSdk = 35
         // versionCode is monotonic over the latest published release; release_cycle.py enforces it.
-        versionCode = 26
-        versionName = "6.3.0-cycle19"
+        versionCode = 27
+        versionName = "6.3.1-cycle19"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

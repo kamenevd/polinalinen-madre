@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cycle 19: развёрнутая карточка хода выпечки — страница книги в шторке.
+
+  ЧТО ЗДЕСЬ НЕ СЧИТАЕТСЯ. Ничего. Все строки приходят готовыми из
+  BakingNotificationContent — их там проверяет юнит-тест, а здесь их проверить
+  было бы нечем. RemoteViews только раскладывает.
+
+  ПОЧЕМУ CHRONOMETER, А НЕ TEXTVIEW. Текст в шторке замирает между
+  обновлениями, и человек видел бы прошлую секунду. Chronometer тикает сам,
+  своим временем от SystemClock.elapsedRealtime() — тем же монотонным, по
+  которому идёт таймер на странице.
+
+  КНОПОК ЗДЕСЬ НЕТ. «Пауза» и «Дальше» в шторке означали бы, что ходом выпечки
+  можно править вслепую, не глядя на страницу.
+
+  Раскрыть карточку силой Android не даёт, и книга такого не обещает: пока
+  человек её не развернул, он читает системную свёрнутую строку, и та
+  осмысленна сама по себе.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/notification_paper"
+    android:paddingStart="16dp"
+    android:paddingEnd="16dp"
+    android:paddingTop="14dp"
+    android:paddingBottom="16dp">
+
+    <!-- «Соня · Бородинский»: имя закваски и то, что печётся. -->
+    <TextView
+        android:id="@+id/notif_header"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:fontFamily="serif"
+        android:textSize="13sp"
+        android:textColor="@color/madre_notif_cocoa"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:text="" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="6dp">
+
+        <!-- «пауза» / «скоро». Скрыт, когда сказать нечего. -->
+        <TextView
+            android:id="@+id/notif_badge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="serif"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.08"
+            android:textColor="@color/madre_notif_urgent"
+            android:layout_marginEnd="8dp"
+            android:visibility="gone"
+            android:text="" />
+
+        <!-- «Расстойка · шаг 3 из 8». -->
+        <TextView
+            android:id="@+id/notif_step"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:fontFamily="serif"
+            android:textSize="15sp"
+            android:textColor="@color/madre_notif_ink"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:text="" />
+    </LinearLayout>
+
+    <!--
+      Крупный отсчёт. Живой — Chronometer; замерший (пауза, ноль) — соседний
+      TextView. Двух видов вместо одного потому, что остановленный Chronometer
+      показывает не «пауза», а последнее значение, и отличить стоящие цифры от
+      идущих было бы нечем.
+    -->
+    <Chronometer
+        android:id="@+id/notif_timer"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:fontFamily="serif"
+        android:textSize="30sp"
+        android:textColor="@color/madre_notif_ink"
+        android:includeFontPadding="false" />
+
+    <TextView
+        android:id="@+id/notif_timer_static"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:fontFamily="serif"
+        android:textSize="30sp"
+        android:textColor="@color/madre_notif_ink"
+        android:includeFontPadding="false"
+        android:visibility="gone"
+        android:text="" />
+
+    <!-- Ход по ВРЕМЕНИ всей выпечки, не по номеру шага. max = 1000. -->
+    <ProgressBar
+        android:id="@+id/notif_progress"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="7dp"
+        android:layout_marginTop="10dp"
+        android:max="1000"
+        android:progressDrawable="@drawable/notif_progress_paper" />
+
+    <!-- «дальше · Формовка». Своего времени у следующего шага нет. -->
+    <TextView
+        android:id="@+id/notif_next"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:fontFamily="serif"
+        android:textStyle="italic"
+        android:textSize="13sp"
+        android:textColor="@color/madre_notif_cocoa"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:text="" />
+</LinearLayout>

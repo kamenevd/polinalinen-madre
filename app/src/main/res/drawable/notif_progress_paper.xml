@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cycle 19: полоска хода внутри своей карточки.
+
+  Отдельная от notif_progress_system.xml намеренно: та серая, потому что лежит
+  в системной свёрнутой строке и не имеет права спорить с чужой темой. Эта
+  лежит на нашей бумаге, и цвета у неё книжные — мука под ходом, корочка по
+  пройденному.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@android:id/background">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/madre_notif_flour" />
+            <corners android:radius="2dp" />
+        </shape>
+    </item>
+    <item android:id="@android:id/progress">
+        <clip>
+            <shape android:shape="rectangle">
+                <solid android:color="@color/madre_notif_crust" />
+                <corners android:radius="2dp" />
+            </shape>
+        </clip>
+    </item>
+</layer-list>

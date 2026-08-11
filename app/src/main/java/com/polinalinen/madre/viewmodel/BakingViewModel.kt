@@ -20,6 +20,7 @@ import com.polinalinen.madre.notifications.BakingProgress
 import com.polinalinen.madre.notifications.BakingProgressService
 import com.polinalinen.madre.notifications.MadreNotifier
 import com.polinalinen.madre.notifications.NotificationLedger
+import com.polinalinen.madre.sourdough.StarterName
 import com.polinalinen.madre.ui.components.CoffeeRing
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -53,6 +54,7 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
     private val bakeHistoryRepository = madreApp.bakeHistoryRepository
     private val activeBakeRepository = madreApp.activeBakeRepository
     private val syncRepository = madreApp.syncRepository
+    private val sourdoughRepository = madreApp.sourdoughRepository
 
     private val _recipes = MutableStateFlow<List<Recipe>>(emptyList())
     val recipes: StateFlow<List<Recipe>> = _recipes.asStateFlow()
@@ -135,6 +137,32 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
     // сами сессии выпечки, и не протекают между тестами.
     private val notifier = MadreNotifier(app)
     private val notificationLedger = NotificationLedger()
+
+    /**
+     * Cycle 19: как зовут закваску — для шапки карточки в шторке.
+     *
+     * Берётся из тех же sourdough_configs, что читает колофон, а не заводится
+     * второй строкой в коде: имя у книги одно, и «Мадре · Бородинский» в шторке
+     * у человека, назвавшего закваску Соней, было бы неправдой. Простое поле, а
+     * не поток: читатель у него один — сборка слепка, — и та читает его в тот
+     * же момент, когда собирает всё остальное.
+     */
+    private var starterName: String = StarterName.DEFAULT
+
+    init {
+        viewModelScope.launch {
+            val config = sourdoughRepository.getOrCreateDefaultConfig()
+            sourdoughRepository.observeConfig(config.userId).collect { latest ->
+                val renamed = StarterName.sanitize(latest?.name.orEmpty())
+                if (renamed != starterName) {
+                    starterName = renamed
+                    // Переименовали — шапка в шторке меняется сразу, а не со
+                    // следующим тиком: на паузе следующего тика может и не быть.
+                    publishProgress()
+                }
+            }
+        }
+    }
 
     init {
         viewModelScope.launch {
@@ -455,6 +483,8 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
             BakingProgress(
                 sessionId = s.id,
                 recipeName = s.recipe.name,
+                // Cycle 19: имя закваски едет в шапку своей карточки в шторке.
+                starterName = starterName,
                 stepTitle = s.currentStep.title,
                 stepIndex = s.currentStepIndex,
                 stepCount = s.recipe.timeline.size,

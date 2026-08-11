@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cycle 19: клочок бумаги под своей карточкой хода выпечки.
+
+  Углы 4dp — то же правило, что и на страницах (hard rule №2): бумага, не
+  пластик. Подложка нужна не для красоты: системная панель шторки в тёмной
+  теме телефона чёрная, и без неё чернила книги были бы не видны.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/madre_notif_paper" />
+    <corners android:radius="4dp" />
+</shape>

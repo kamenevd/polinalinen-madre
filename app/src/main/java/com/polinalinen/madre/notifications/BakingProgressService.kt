@@ -8,8 +8,12 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.SystemClock
+import android.view.View
+import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.polinalinen.madre.MadreApplication
@@ -129,6 +133,12 @@ class BakingProgressService : LifecycleService() {
      * Раскрыта карточка или свёрнута, решает система: программного способа
      * держать её раскрытой у Android нет, и книга такого не обещает. Поэтому
      * свёрнутая строка осмысленна сама по себе, а полный текст ждёт в BigText.
+     *
+     * Cycle 19: у развёрнутой карточки появился свой вид — [bigCard]. Свёрнутая
+     * осталась системной намеренно: собственный вид в свёрнутом виде отнял бы у
+     * неё системный хронометр, единственные цифры, которые человек видит, не
+     * разворачивая шторку. BigTextStyle при этом остаётся на месте — на
+     * прошивке, которая своей карточки не покажет, читается он.
      */
     private fun buildNotification(bake: BakingProgress): Notification {
         val content = BakingNotificationContent.from(bake, System.currentTimeMillis())
@@ -136,6 +146,7 @@ class BakingProgressService : LifecycleService() {
             .setContentTitle(content.title)
             .setContentText(content.compact)
             .setStyle(NotificationCompat.BigTextStyle().bigText(content.bigText))
+            .setCustomBigContentView(bigCard(content, bake.remainingSeconds))
             .setProgress(BakingProgress.PROGRESS_MAX, content.progressPermille, false)
             .setShowWhen(content.usesChronometer)
             .setWhen(content.chronometerFinishAtMillis)
@@ -144,6 +155,64 @@ class BakingProgressService : LifecycleService() {
             .setContentIntent(openBakingIntent(bake.sessionId))
             .build()
     }
+
+    /**
+     * Cycle 19: развёрнутая карточка — страница книги, а не служебная строка.
+     *
+     * Ничего здесь не считается: все строки приходят готовыми из
+     * [BakingNotificationContent], где их проверяет юнит-тест. Раскладку
+     * RemoteViews проверить нечем, поэтому логике в ней делать нечего.
+     *
+     * Отсчёт — Chronometer, а не текст: текст замер бы между обновлениями, а
+     * обновления идут раз в секунду только пока жив процесс. База считается от
+     * [android.os.SystemClock.elapsedRealtime] — тех же монотонных часов, по
+     * которым идёт таймер на странице (стенные прыгают при синхронизации).
+     * На паузе и на нуле хронометр уступает место обычному тексту: остановленный
+     * Chronometer показал бы последнее значение, и отличить стоящие цифры от
+     * идущих было бы нечем.
+     */
+    private fun bigCard(content: BakingNotificationContent, remainingSeconds: Long): RemoteViews =
+        RemoteViews(packageName, R.layout.notification_baking_progress).apply {
+            setTextViewText(R.id.notif_header, content.headerLine)
+            setTextViewText(R.id.notif_step, content.stepLine)
+            setTextViewText(R.id.notif_next, content.nextLine)
+            setProgressBar(R.id.notif_progress, BakingProgress.PROGRESS_MAX, content.progressPermille, false)
+
+            if (content.badge == null) {
+                setViewVisibility(R.id.notif_badge, View.GONE)
+            } else {
+                setViewVisibility(R.id.notif_badge, View.VISIBLE)
+                setTextViewText(R.id.notif_badge, content.badge)
+                // «Пауза» — не тревога: краснеет только «скоро».
+                setTextColor(
+                    R.id.notif_badge,
+                    color(if (content.isUrgent) R.color.madre_notif_urgent else R.color.madre_notif_cocoa),
+                )
+            }
+
+            val ink = color(if (content.isUrgent) R.color.madre_notif_urgent else R.color.madre_notif_ink)
+            if (content.usesChronometer) {
+                setViewVisibility(R.id.notif_timer, View.VISIBLE)
+                setViewVisibility(R.id.notif_timer_static, View.GONE)
+                setChronometer(
+                    R.id.notif_timer,
+                    SystemClock.elapsedRealtime() + remainingSeconds * 1000L,
+                    null,
+                    true,
+                )
+                setChronometerCountDown(R.id.notif_timer, true)
+                setTextColor(R.id.notif_timer, ink)
+                setContentDescription(R.id.notif_timer, content.spokenTimer)
+            } else {
+                setViewVisibility(R.id.notif_timer, View.GONE)
+                setViewVisibility(R.id.notif_timer_static, View.VISIBLE)
+                setTextViewText(R.id.notif_timer_static, content.timerText)
+                setTextColor(R.id.notif_timer_static, ink)
+                setContentDescription(R.id.notif_timer_static, content.spokenTimer)
+            }
+        }
+
+    private fun color(res: Int): Int = ContextCompat.getColor(this, res)
 
     /** Первые доли секунды, пока не пришёл первый слепок. */
     private fun buildStartingNotification(): Notification =

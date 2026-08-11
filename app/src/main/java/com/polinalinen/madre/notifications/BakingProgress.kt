@@ -1,5 +1,6 @@
 package com.polinalinen.madre.notifications
 
+import com.polinalinen.madre.sourdough.StarterName
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,6 +17,15 @@ import kotlinx.coroutines.flow.asStateFlow
 data class BakingProgress(
     val sessionId: Long,
     val recipeName: String,
+    /**
+     * Cycle 19: как зовут закваску — для шапки карточки в шторке.
+     *
+     * Едет тем же слепком, что и всё остальное, и берётся из тех же
+     * sourdough_configs, что читает колофон. Своего источника у сервиса нет
+     * намеренно: два места, помнящие одно имя, рано или поздно разойдутся в
+     * его написании.
+     */
+    val starterName: String = StarterName.DEFAULT,
     val stepTitle: String,
     /** Номер текущего шага с нуля. */
     val stepIndex: Int,
@@ -57,6 +67,13 @@ data class BakingProgress(
      * 2:05, было невозможно. Один ход выпечки — один отсчёт; здесь его нет.
      */
     fun nextStepText(): String = BakingProgressFormatter.nextStepText(
+        stepIndex = stepIndex,
+        stepCount = stepCount,
+        nextStepTitle = nextStepTitle,
+    )
+
+    /** То же для своей карточки в шторке — со средней точкой. */
+    fun shadeNextLine(): String = BakingProgressFormatter.shadeNextLine(
         stepIndex = stepIndex,
         stepCount = stepCount,
         nextStepTitle = nextStepTitle,
@@ -142,15 +159,37 @@ data class BakingProgress(
  * шага не может быть своего отсчёта, пока идёт текущий.
  */
 object BakingProgressFormatter {
+
+    /** Строка BigText и страницы таймера: «дальше: Формовка». */
     fun nextStepText(
         stepIndex: Int,
         stepCount: Int,
         nextStepTitle: String?,
+    ): String = withPrefix("дальше: ", stepIndex, stepCount, nextStepTitle)
+
+    /**
+     * Cycle 19: та же мысль в своей карточке шторки, отбитая средней точкой —
+     * как шаг, ярлык и всё прочее на ней. Двоеточие там было бы единственным
+     * во всей карточке и читалось бы как начало списка.
+     */
+    fun shadeNextLine(
+        stepIndex: Int,
+        stepCount: Int,
+        nextStepTitle: String?,
+    ): String = withPrefix("дальше · ", stepIndex, stepCount, nextStepTitle)
+
+    private fun withPrefix(
+        prefix: String,
+        stepIndex: Int,
+        stepCount: Int,
+        nextStepTitle: String?,
     ): String = if (stepIndex >= stepCount - 1 || nextStepTitle.isNullOrBlank()) {
-        "последний шаг"
+        LAST_STEP
     } else {
-        "дальше: $nextStepTitle"
+        "$prefix$nextStepTitle"
     }
+
+    private const val LAST_STEP = "последний шаг"
 }
 
 /**

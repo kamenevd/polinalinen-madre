@@ -1,6 +1,7 @@
 package com.polinalinen.madre.notifications
 
 import com.google.common.truth.Truth.assertThat
+import com.polinalinen.madre.sourdough.StarterName
 import org.junit.Test
 
 /**
@@ -18,9 +19,11 @@ class BakingProgressTest {
         totalSeconds: Long = 3600,
         isPaused: Boolean = false,
         nextStepTitle: String? = "Складка",
+        starterName: String = StarterName.DEFAULT,
     ) = BakingProgress(
         sessionId = sessionId,
         recipeName = "Бородинский",
+        starterName = starterName,
         stepTitle = "Расстойка",
         stepIndex = stepIndex,
         stepCount = stepCount,
@@ -30,6 +33,17 @@ class BakingProgressTest {
         isPaused = isPaused,
         nextStepTitle = nextStepTitle,
     )
+
+    /**
+     * Cycle 19: имя закваски едет в шторку тем же слепком, что и всё остальное.
+     * Своего источника у сервиса нет и не будет — иначе шапка карточки и
+     * колофон разошлись бы в написании одного имени.
+     */
+    @Test
+    fun `a snapshot carries the starter name, and an unnamed one stays Мадре`() {
+        assertThat(progress().starterName).isEqualTo(StarterName.DEFAULT)
+        assertThat(progress(starterName = "Соня").starterName).isEqualTo("Соня")
+    }
 
     @Test
     fun `every bake keeps its own notification and nobody collides`() {

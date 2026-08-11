@@ -7,15 +7,12 @@
 - `docs/WORKFLOW-V2.md` — правила
 - `python3 scripts/cycle.py validate` — контракт
 
-**Текущий цикл:** Cycle 19 (`cycle/19`), feature polish.
-- Сделано и слито: hero release keep · русские секции · гербарий · иконка
-- **Остаток цикла** (`fix/cycle19-scale-dup`): пересчёт без повтора граммов ·
-  порядок на странице таймера · крупная строка хода в шторке · настройки в
-  пять блоков. Приёмка — `workflow/evidence/cycle19/plan-residual.md`.
-- Затем: gates → PR → RuStore AAB
+**Текущий:** Cycle 19 shipped as **v6.3.1-cycle19** (versionCode 27).
 
-Версию руками не бампать: `prepare-version` на Cycle 19 уже прошёл
-(versionCode 26 / 6.3.0-cycle19).
+APK: https://kdnfx.space/downloads/madre-v6.3.1-cycle19.apk  
+Release: https://github.com/kamenevd/polinalinen-madre/releases/tag/v6.3.1-cycle19
+
+Дальше по ритму (2 feature → maintenance): **maintenance/20**.
 
 Невосстановимые v3 №2/4/5 — `docs/adr/0002-unverifiable-v3-bug-list.md`.
 Evidence gap 15/16 — `docs/adr/0003-missing-cycle-evidence.md`.

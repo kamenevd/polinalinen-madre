@@ -381,10 +381,19 @@ class BakingProgressService : LifecycleService() {
          * противоположно. Любой другой отказ означает, что сервис остался без
          * переднего плана по нашей ошибке, — такое обязано упасть и быть
          * починено, а не превратиться в тихо неработающую выпечку.
+         *
+         * Класс сверяется по имени, а не через `is`: самого класса до Android 12
+         * в системе нет, и ссылка на него из кода с minSdk 26 — ошибка lint
+         * (NewApi), законная. Раньше её снимала проверка SDK_INT прямо рядом, но
+         * версия здесь — аргумент, а не «сейчас», иначе развилку было бы не
+         * проверить. Система бросает ровно этот класс, не наследника.
          */
         internal fun isForegroundRefusal(error: Throwable, sdk: Int): Boolean =
             sdk >= Build.VERSION_CODES.S &&
-                error is android.app.ForegroundServiceStartNotAllowedException
+                error.javaClass.name == FOREGROUND_START_NOT_ALLOWED
+
+        private const val FOREGROUND_START_NOT_ALLOWED =
+            "android.app.ForegroundServiceStartNotAllowedException"
 
         /**
          * Поднять сервис. Зовётся из BakingViewModel в момент, когда человек

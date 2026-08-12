@@ -32,10 +32,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -64,7 +62,6 @@ import com.polinalinen.madre.ui.components.PageLabel
 import com.polinalinen.madre.ui.components.RibbonBookmark
 import com.polinalinen.madre.ui.components.Stamp
 import com.polinalinen.madre.ui.components.TicketFrame
-import com.polinalinen.madre.ui.components.WornPage
 import com.polinalinen.madre.ui.components.TextAction
 import com.polinalinen.madre.ui.components.bookAction
 import com.polinalinen.madre.ui.components.breathingPage
@@ -467,19 +464,16 @@ private fun ChapterRow(
     recipe: Recipe,
     onClick: () -> Unit,
     isSeasonal: Boolean = false,
-    bakeCount: Int = 0,
+    @Suppress("UNUSED_PARAMETER") bakeCount: Int = 0,
 ) {
     val colors = AppColors.current
-    // Классическое оглавление: «Название ........ N» (Cycle 22).
-    // Избранное/DogEar убраны — книга читается как содержание, не как лента.
-    val wornAlpha = WornPage.tocAlpha(bakeCount)
+    // Оглавление: имя + лидеры Canvas + номер. Без серой WornPage-заливки.
     val a11y = TocLine.contentDescription(recipe.name, index)
     Box(
         Modifier
             .fillMaxWidth()
             .testTag(Home.chapterRowTag(recipe.id))
-            .then(bookAction(a11y) { onClick() })
-            .drawBehind { if (wornAlpha > 0f) drawRect(colors.espresso.copy(alpha = wornAlpha)) },
+            .then(bookAction(a11y) { onClick() }),
     ) {
         Row(
             Modifier
@@ -487,6 +481,8 @@ private fun ChapterRow(
                 .padding(horizontal = 22.dp, vertical = 12.dp),
             verticalAlignment = Alignment.Bottom,
         ) {
+            // weight(fill=false): имя берёт сколько нужно, но не съедает ряд целиком —
+            // иначе у длинных названий (3–11) лидерам остаётся 0 dp.
             Text(
                 recipe.name,
                 color = colors.espresso,
@@ -494,13 +490,14 @@ private fun ChapterRow(
                 fontSize = 17.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.wrapContentWidth(unbounded = false),
+                modifier = Modifier.weight(1f, fill = false),
             )
             TocLeaders(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(horizontal = 6.dp, vertical = 2.dp),
-                color = colors.flour,
+                    .padding(horizontal = 6.dp)
+                    .padding(bottom = 5.dp),
+                color = colors.cocoa.copy(alpha = 0.45f),
             )
             Text(
                 index.toString(),
@@ -527,20 +524,21 @@ private fun ChapterRow(
 }
 
 /**
- * Точки-лидеры между названием и номером страницы — как в бумажном оглавлении.
+ * Лидеры — пунктир Canvas на всю доступную ширину (не Text с ·.repeat:
+ * длинное имя сжимало weight до нуля и точки пропадали).
  */
 @Composable
 private fun TocLeaders(modifier: Modifier = Modifier, color: Color) {
-    Text(
-        text = "·".repeat(80),
-        color = color,
-        fontFamily = FontFamily.Serif,
-        fontSize = 12.sp,
-        maxLines = 1,
-        overflow = TextOverflow.Clip,
-        softWrap = false,
-        modifier = modifier,
-    )
+    androidx.compose.foundation.Canvas(modifier = modifier.fillMaxWidth().height(8.dp)) {
+        val y = size.height - 1.dp.toPx()
+        val step = 5.dp.toPx()
+        val r = 1.1.dp.toPx()
+        var x = 0f
+        while (x < size.width) {
+            drawCircle(color = color, radius = r, center = androidx.compose.ui.geometry.Offset(x, y))
+            x += step
+        }
+    }
 }
 
 /**

@@ -257,7 +257,16 @@ class BakingProgressService : LifecycleService() {
     private fun startForegroundFor(sessionId: Long, notification: Notification) {
         val id = BakingProgress.notificationId(sessionId)
         val previous = foregroundSessionId
-        if (!enterForeground(id, notification)) return
+        if (!enterForeground(id, notification)) {
+            // Cycle 20: отказ — это конец сервиса, а не повод жить дальше.
+            // Раньше здесь стоял голый return: сервис оставался поднятым без
+            // переднего плана и либо молча ждал, пока система убьёт его за
+            // молчание, либо держал в шторке строку хода, которую больше
+            // некому обновлять, — тот самый застывший прогресс, ради
+            // недопущения которого сервис и заведён.
+            giveUpForeground()
+            return
+        }
         foregroundSessionId = sessionId
         shownSessionIds = shownSessionIds + sessionId
         // Прежнее переднеплановое уведомление после смены остаётся обычным —
@@ -291,12 +300,22 @@ class BakingProgressService : LifecycleService() {
             }
             true
         } catch (error: Exception) {
-            if (isBackgroundStartRestriction(error)) false else throw error
+            if (isForegroundRefusal(error, Build.VERSION.SDK_INT)) false else throw error
         }
 
-    private fun isBackgroundStartRestriction(error: Throwable): Boolean =
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-            error is android.app.ForegroundServiceStartNotAllowedException
+    /**
+     * Без переднего плана сервису делать нечего: обновлять строку хода он всё
+     * равно не сможет, а оставленное уведомление застынет на последней секунде
+     * и снять его будет уже некому. Уходим сами и уносим своё.
+     *
+     * Восстановление после ребута этим не ломается: BootReceiver поднимает
+     * сервис заново, и следующая попытка — уже из своего разрешённого случая.
+     */
+    private fun giveUpForeground() {
+        clearAll()
+        stopForegroundCompat()
+        stopSelf()
+    }
 
     private fun clearAll() {
         shownSessionIds.forEach { manager.cancel(BakingProgress.notificationId(it)) }
@@ -352,6 +371,20 @@ class BakingProgressService : LifecycleService() {
             } else {
                 null
             }
+
+        /**
+         * Отказал ли в переднем плане САМ Android — единственный случай, который
+         * книга переживает молча (запрет старта из фона, Android 12+).
+         *
+         * Развилка нетривиальная, поэтому вынесена и проверяется отдельно: оба
+         * исхода приходят одинаковым Exception, а поступать с ними надо
+         * противоположно. Любой другой отказ означает, что сервис остался без
+         * переднего плана по нашей ошибке, — такое обязано упасть и быть
+         * починено, а не превратиться в тихо неработающую выпечку.
+         */
+        internal fun isForegroundRefusal(error: Throwable, sdk: Int): Boolean =
+            sdk >= Build.VERSION_CODES.S &&
+                error is android.app.ForegroundServiceStartNotAllowedException
 
         /**
          * Поднять сервис. Зовётся из BakingViewModel в момент, когда человек

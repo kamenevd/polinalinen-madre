@@ -9,6 +9,7 @@ import com.polinalinen.madre.data.db.entities.SourdoughConfigEntity
 import com.polinalinen.madre.data.db.entities.StorageLocation
 import com.polinalinen.madre.notifications.FeedingReminderPlanner
 import com.polinalinen.madre.notifications.FeedingReminderScheduler
+import com.polinalinen.madre.notifications.MadreNotifier
 import com.polinalinen.madre.sourdough.StarterRenameQueue
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -31,6 +32,7 @@ class SourdoughViewModel(app: Application) : AndroidViewModel(app) {
     private val repository = (app as MadreApplication).sourdoughRepository
     private val syncRepository = (app as MadreApplication).syncRepository
     private val reminderScheduler = FeedingReminderScheduler(app)
+    private val notifier = MadreNotifier(app)
 
     private val _config = MutableStateFlow<SourdoughConfigEntity?>(null)
     val config: StateFlow<SourdoughConfigEntity?> = _config.asStateFlow()
@@ -132,6 +134,12 @@ class SourdoughViewModel(app: Application) : AndroidViewModel(app) {
                 photoPath = photoPath,
             )
             val feedingId = repository.addFeeding(feeding)
+            // Cycle 20: кормление записано — напоминанию в шторке больше нечего
+            // звать. Иначе оно продолжает просить покормить закваску, которую
+            // только что покормили, и человек идёт проверять, записалось ли.
+            // Следующее напоминание планируется отдельно, от нового
+            // lastFeedingMillis (см. init).
+            notifier.cancelFeedingReminder()
             // Cycle 5: кормление уходит в общую книгу фоном (retry без сети).
             // Заметка и место хранения — личное, наружу только мука/вода/время.
             // photoPath не шарим — личное.

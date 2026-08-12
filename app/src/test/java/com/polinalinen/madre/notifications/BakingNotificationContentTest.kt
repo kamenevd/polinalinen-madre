@@ -115,6 +115,21 @@ class BakingNotificationContentTest {
         assertThat(done.bigText).contains("время вышло")
     }
 
+    /**
+     * Cycle 20: ноль остаётся нулём и на паузе. «Пауза, осталось 0:00» — это
+     * цифра ни о чём: шаг кончился, и пауза этого не отменяет. В ту же секунду
+     * страница таймера говорит «время вышло», и двух ответов на одно событие в
+     * книге быть не должно.
+     */
+    @Test
+    fun `a bake paused past the end says the time is out, not zero zero`() {
+        val done = content(progress(remainingSeconds = 0, isPaused = true))
+        assertThat(done.timerText).isEqualTo("время вышло")
+        assertThat(done.compact).contains("время вышло")
+        assertThat(done.compact).doesNotContain("0:00")
+        assertThat(done.bigText).doesNotContain("0:00")
+    }
+
     @Test
     fun `a step with no time at all never shows a phantom countdown`() {
         val instant = content(progress(remainingSeconds = 0, isPaused = false, stepIndex = 0))

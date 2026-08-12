@@ -83,7 +83,17 @@ class BakingProgressTest {
     @Test
     fun `minutes and seconds only, when there are no hours`() {
         assertThat(progress(remainingSeconds = 125).contentText()).contains("2:05")
-        assertThat(progress(remainingSeconds = 0).contentText()).contains("0:00")
+    }
+
+    /**
+     * Cycle 20: ноль — «время вышло», а не «осталось 0:00». Ноль остатка
+     * означает ровно одно событие, и книга называет его одинаково везде:
+     * на странице таймера, в своей карточке шторки и здесь.
+     */
+    @Test
+    fun `a step that ran out is named, not counted to zero`() {
+        assertThat(progress(remainingSeconds = 0).contentText()).contains("время вышло")
+        assertThat(progress(remainingSeconds = 0).contentText()).doesNotContain("0:00")
     }
 
     @Test

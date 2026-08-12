@@ -141,8 +141,7 @@ class BakingSessionTest {
         stepIndex = s.currentStepIndex,
         stepCount = s.recipe.timeline.size,
         remainingSeconds = remaining,
-        elapsedSeconds = 0,
-        totalSeconds = s.totalDurationMinutes * 60L,
+        stepTotalSeconds = s.currentStep.durationMinutes * 60L,
         isPaused = s.isPaused,
         nextStepTitle = s.recipe.timeline.getOrNull(s.currentStepIndex + 1)?.title,
     )

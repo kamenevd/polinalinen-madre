@@ -34,8 +34,6 @@ class BakingProgressStepScopeTest {
     /** Слепок собирается ровно так же, как его собирает BakingViewModel. */
     private fun snapshot(recipe: Recipe, stepIndex: Int, remainingSeconds: Long): BakingProgress {
         val step = recipe.timeline[stepIndex]
-        val stepsBefore = recipe.timeline.take(stepIndex).sumOf { it.durationMinutes } * 60L
-        val stepTotal = step.durationMinutes * 60L
         return BakingProgress(
             sessionId = 1L,
             recipeName = recipe.name,
@@ -43,8 +41,7 @@ class BakingProgressStepScopeTest {
             stepIndex = stepIndex,
             stepCount = recipe.timeline.size,
             remainingSeconds = remainingSeconds,
-            elapsedSeconds = stepsBefore + (stepTotal - remainingSeconds).coerceAtLeast(0L),
-            totalSeconds = recipe.timeline.sumOf { it.durationMinutes } * 60L,
+            stepTotalSeconds = step.durationMinutes * 60L,
             isPaused = false,
             nextStepTitle = recipe.timeline.getOrNull(stepIndex + 1)?.title,
         )

@@ -20,8 +20,7 @@ class BakingNotificationContentTest {
         stepIndex: Int = 2,
         stepCount: Int = 8,
         remainingSeconds: Long = 3_725,
-        elapsedSeconds: Long = 900,
-        totalSeconds: Long = 3_600,
+        stepTotalSeconds: Long = 7_200,
         isPaused: Boolean = false,
         nextStepTitle: String? = "Формовка",
         starterName: String = "Соня",
@@ -33,8 +32,7 @@ class BakingNotificationContentTest {
         stepIndex = stepIndex,
         stepCount = stepCount,
         remainingSeconds = remainingSeconds,
-        elapsedSeconds = elapsedSeconds,
-        totalSeconds = totalSeconds,
+        stepTotalSeconds = stepTotalSeconds,
         isPaused = isPaused,
         nextStepTitle = nextStepTitle,
     )
@@ -138,10 +136,13 @@ class BakingNotificationContentTest {
     }
 
     @Test
-    fun `the progress bar follows real time, straight from the snapshot`() {
-        val bake = progress(elapsedSeconds = 900, totalSeconds = 3_600)
+    fun `the progress bar follows the step, straight from the snapshot`() {
+        val bake = progress(remainingSeconds = 1_800, stepTotalSeconds = 3_600)
         assertThat(BakingNotificationContent.from(bake, now).progressPermille)
             .isEqualTo(bake.permille())
+        // Ноль остатка — полная полоска: цифры и полоска говорят одно и то же.
+        assertThat(BakingNotificationContent.from(progress(remainingSeconds = 0), now).progressPermille)
+            .isEqualTo(BakingProgress.PROGRESS_MAX)
     }
 
     /** Свёрнутая карточка — одна строка: перевод строки в ней обрезал бы смысл. */

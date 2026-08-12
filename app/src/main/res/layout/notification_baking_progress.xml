@@ -102,7 +102,8 @@
         android:visibility="gone"
         android:text="" />
 
-    <!-- Ход по ВРЕМЕНИ всей выпечки, не по номеру шага. max = 1000. -->
+    <!-- Cycle 20: ход ТЕКУЩЕГО шага по времени. На нуле остатка полоска полна —
+         про всю выпечку выше сказано словами, «шаг 3 из 8». max = 1000. -->
     <ProgressBar
         android:id="@+id/notif_progress"
         style="?android:attr/progressBarStyleHorizontal"

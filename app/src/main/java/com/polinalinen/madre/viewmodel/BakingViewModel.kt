@@ -488,10 +488,15 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
      * бы на экране одно, а в уведомлении другое.
      */
     private fun publishProgress() {
+        // Cycle 20: остаток считается ЗДЕСЬ, от часов, а не берётся из карты,
+        // которую заполняет тик. Публикуют слепок и переходы — пауза,
+        // продолжение, переименование закваски, — а они приходят между тиками:
+        // карта в этот момент хранит секунду предыдущего тика, и шторка
+        // получала на секунду больше, чем стояло на странице. Часы одни и те
+        // же, монотонные, — то же число, что покажет следующий тик.
+        val nowElapsed = BakingClock.elapsed()
         val bakes = _sessions.value.filterNot { it.isCompleted }.map { s ->
-            val stepsBefore = s.recipe.timeline.take(s.currentStepIndex).sumOf { it.durationMinutes } * 60L
-            val currentStepTotal = s.currentStep.durationMinutes * 60L
-            val remaining = _remainingSeconds.value[s.id] ?: currentStepTotal
+            val remaining = s.remainingSeconds(nowElapsed)
             BakingProgress(
                 sessionId = s.id,
                 recipeName = s.recipe.name,
@@ -501,8 +506,9 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
                 stepIndex = s.currentStepIndex,
                 stepCount = s.recipe.timeline.size,
                 remainingSeconds = remaining,
-                elapsedSeconds = stepsBefore + (currentStepTotal - remaining).coerceAtLeast(0L),
-                totalSeconds = s.totalDurationMinutes * 60L,
+                // Полоска мерится длиной СВОЕГО шага: «шаг 3 из 8» уже сказало
+                // всё, что нужно сказать про выпечку целиком.
+                stepTotalSeconds = s.currentStep.durationMinutes * 60L,
                 isPaused = s.isPaused,
                 // Cycle 14: у следующего шага только название. Отсчёт в
                 // слепке один — remainingSeconds текущего шага, тот же, что

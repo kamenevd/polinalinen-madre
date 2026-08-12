@@ -765,3 +765,7 @@ Eleven recipes as paper contents: `Название ........ N`. Favorites/DogEa
 
 ### Permissions
 APK update with same signing key does not revoke runtime grants. UI re-reads location on resume; camera denial offers gallery or app settings. Gallery uses Photo Picker (no storage permission).
+
+## Cycle 23 — launcher icons v2 (2026-08-12)
+
+Новый pack `madre-android-icons-v2`: density mipmaps + adaptive PNG foreground/background (Parchment). Play 512 в docs/.

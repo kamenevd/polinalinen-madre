@@ -1,42 +1,23 @@
 {
   "schema_version": 1,
   "cycle": {
-    "number": 22,
+    "number": 23,
     "kind": "maintenance",
-    "version": "6.4.2-maintenance22",
-    "branch": "maintenance/22",
+    "version": "6.4.3-maintenance23",
+    "branch": "maintenance/23",
     "stage": "releasable",
-    "created_at": "2026-08-12T18:00:00Z",
-    "updated_at": "2026-08-12T18:01:28Z"
+    "created_at": "2026-08-12T18:30:00Z",
+    "updated_at": "2026-08-12T18:32:49Z"
   },
   "features": [
     {
-      "id": "native-notif",
-      "title": "Нативные уведомления без paper RemoteViews",
+      "id": "launcher-icons-v2",
+      "title": "Новые иконки launcher (adaptive + densities)",
       "needs_generated_asset": false,
       "acceptance": [
-        "Нет setCustomContentView/Big",
-        "compact содержит время или «время вышло»",
-        "нет Chronometer/минуса"
-      ]
-    },
-    {
-      "id": "book-toc",
-      "title": "Оглавление книги без избранного",
-      "needs_generated_asset": false,
-      "acceptance": [
-        "11 рецептов как Name....N",
-        "нет DogEar/favorite на home"
-      ]
-    },
-    {
-      "id": "perm-honesty",
-      "title": "Честность про permissions при update",
-      "needs_generated_asset": false,
-      "acceptance": [
-        "location refresh on resume",
-        "camera denial → gallery or settings",
-        "Photo Picker без storage"
+        "mipmap densities updated",
+        "adaptive foreground/background PNG",
+        "Play 512 in docs"
       ]
     }
   ],
@@ -44,25 +25,25 @@
     "plan": {
       "status": "pass",
       "evidence": [
-        "DESIGN-V4 Cycle 22"
+        "DESIGN-V4 Cycle 23"
       ]
     },
     "tdd": {
       "status": "pass",
       "evidence": [
-        "641 unit tests LXC108"
+        "CI Android quality"
       ]
     },
     "build": {
       "status": "pass",
       "evidence": [
-        "lintDebug assembleDebug"
+        "assembleDebug"
       ]
     },
     "review": {
       "status": "pass",
       "evidence": [
-        "PR #38"
+        "PR #40"
       ]
     },
     "visual": {
@@ -87,7 +68,6 @@
   },
   "blockers": [],
   "decisions": [
-    "2026-08-12: native system notifications preferred over custom paper",
-    "2026-08-12: favorites removed from home TOC"
+    "2026-08-12: icons from madre-android-icons-v2 zip"
   ]
 }

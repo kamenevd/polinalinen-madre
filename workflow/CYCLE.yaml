@@ -1,165 +1,92 @@
 {
   "schema_version": 1,
   "cycle": {
-    "number": 19,
-    "kind": "feature",
-    "version": "6.3.1-cycle19",
-    "branch": "cycle/19",
-    "stage": "releasable",
-    "created_at": "2026-08-10T15:40:00Z",
-    "updated_at": "2026-08-11T18:58:02Z"
+    "number": 20,
+    "kind": "maintenance",
+    "version": "6.4.0-maintenance20",
+    "branch": "maintenance/20",
+    "stage": "implementing",
+    "created_at": "2026-08-12T09:00:00Z",
+    "updated_at": "2026-08-12T09:00:00Z"
   },
   "features": [
     {
-      "id": "hero-release-keep",
-      "title": "Hero-фотокарточки снова в release",
+      "id": "chrono-negative",
+      "title": "Хронометр в шторке считает до точного конца шага, а не мимо нуля",
       "needs_generated_asset": false,
       "acceptance": [
-        "heroResFor(recipeId) — явный when на R.drawable.hero_*, без getIdentifier",
-        "Unit-тест: все 11 id из книги → non-null drawable id",
-        "Release APK содержит 11 hero webp (проверка unzip)"
+        "В слепке есть stepEndsAtElapsed — точный конец шага по монотонным часам",
+        "База Chronometer и setWhen считаются от него, а не от «сейчас + остаток»",
+        "Тик таймера спит min(1000, до границы шага) и попадает В ноль, а не после",
+        "formatTimer/formatRemaining не печатают минус ни на каком входе"
       ]
     },
     {
-      "id": "russian-ingredient-headers",
-      "title": "Русские заголовки секций ингредиентов",
+      "id": "progress-scope",
+      "title": "Полоска хода — шаг-локальная: ноль остатка = полная полоска",
       "needs_generated_asset": false,
       "acceptance": [
-        "ingredientSectionTitle: sponge/main/dough/filling/cream/sponge1/sponge2 → русские ярлыки",
-        "RecipeDetailScreen не показывает сырой english key секции",
-        "Unit-тест на ключи из recipes.json"
+        "permille = пройденное шага / длина шага, а не доля всей выпечки",
+        "Инвариант remainingSeconds == 0 ⇒ permille == 1000 на КАЖДОМ шаге всех рецептов книги",
+        "publishProgress берёт остаток от BakingClock.elapsed() в момент публикации",
+        "Докблоки и комментарий в notification_baking_progress.xml переписаны"
       ]
     },
     {
-      "id": "toc-and-herbarium",
-      "title": "Оглавление без «все N» + гербарий избранного",
+      "id": "no-content-intent",
+      "title": "Уведомления открывают своё место в книге",
       "needs_generated_asset": false,
       "acceptance": [
-        "На HomeScreen нет строки «все ${recipes.size}»",
-        "Избранное = HerbariumMark (засушенный цветок), DogEar — alias",
-        "a11y: «Вложить цветок в гербарий» / «В гербарии — нажмите, чтобы убрать»",
-        "Иконка: ic_launcher_foreground — книга + буханка (Warm Paper)"
+        "«Время вышло» и «достаньте масло» ведут в свою выпечку (EXTRA_SESSION_ID)",
+        "Напоминание о кормлении по тапу ведёт на форму кормления",
+        "Записанное кормление снимает своё напоминание из шторки"
       ]
     },
     {
-      "id": "scale-notes-no-dup",
-      "title": "Пересчёт: граммы выхода не дублируются в записке про печь",
+      "id": "fgs-silent-drop",
+      "title": "Сервис не живёт без переднего плана",
       "needs_generated_asset": false,
       "acceptance": [
-        "capacityNote не повторяет граммы, уже названные в строке выхода",
-        "Unit-тест на настоящем рецепте"
+        "Отказ startForeground → сервис снимает свои уведомления и уходит (stopSelf)",
+        "Восстановление после ребута не сломано"
       ]
     },
     {
-      "id": "timer-layout-next-above",
-      "title": "Таймер: название следующего шага над «Дальше»",
+      "id": "screen-never-says-done",
+      "title": "На нуле везде «время вышло», и «скоро» одно на книгу",
       "needs_generated_asset": false,
       "acceptance": [
-        "Название следующего шага стоит НАД кнопкой «Дальше», без приставки «дальше:»",
-        "«Бросить выпечку» — в самом низу страницы, отдельно от хода"
-      ]
-    },
-    {
-      "id": "big-baking-notifications",
-      "title": "Крупная строка хода выпечки в шторке",
-      "needs_generated_asset": false,
-      "acceptance": [
-        "Шапка своей карточки — «имя закваски · рецепт», а не «Мадре · в печи»",
-        "Развёрнутая карточка — свой RemoteViews на бумаге: шапка, ярлык, крупный отсчёт, полоска, «дальше · …»",
-        "Свёрнутая строка остаётся системной — хронометр тикает сам",
-        "Ярлык «скоро» при остатке меньше пяти минут; на паузе — «пауза»",
-        "Один отсчёт на выпечку: у следующего шага своего времени нет",
-        "BigText остаётся заполненным — на прошивках без своей карточки читается он"
-      ]
-    },
-    {
-      "id": "settings-ia-v2",
-      "title": "Настройки: пять блоков вместо одной ленты",
-      "needs_generated_asset": false,
-      "acceptance": [
-        "Заголовок «Настройки», подзаголовок курсивом «выходные данные книги»",
-        "Пять разделов: Я · Закваска · Общая книга · Вид · О книге",
-        "«Как часто кормить» — человеческие значения (раз в сутки, раз в два дня…)",
-        "«Напоминания» показывают запрет телефона одной строкой и дорогу обратно",
-        "Экслибрис — только пока семьи нет: в семье имя книги живёт в карточке",
-        "«Тираж» убран; в «О книге» — журнал и версия",
-        "Вид — два названных варианта: спокойное · живое",
-        "Голого Modifier.clickable в файле не осталось"
+        "Страница таймера на нуле пишет «время вышло», а не 0:00 и «тесто спит»",
+        "Порог «скоро» — общая константа BakingNotificationContent.URGENT_SECONDS",
+        "Шторка на нуле тоже говорит «время вышло», а не «пауза, осталось 0:00»"
       ]
     }
   ],
   "gates": {
     "plan": {
       "status": "pass",
-      "evidence": [
-        "DESIGN-V4.md",
-        "workflow/CYCLE.yaml",
-        "workflow/evidence/cycle19/plan.md"
-      ]
+      "evidence": ["workflow/CYCLE.yaml", "DESIGN-V4.md Cycle 20"]
     },
-    "tdd": {
-      "status": "pass",
-      "evidence": [
-        "LXC108 testDebugUnitTest 567/0",
-        "RecipeAssetsTest"
-      ]
-    },
-    "build": {
-      "status": "pass",
-      "evidence": [
-        "LXC108 assembleRelease+bundleRelease signed",
-        "APK 2.7MB 13 webp"
-      ]
-    },
-    "review": {
-      "status": "pass",
-      "evidence": [
-        "CI PR #29",
-        "LXC108 local gates"
-      ]
-    },
-    "visual": {
-      "status": "pass",
-      "evidence": [
-        "CI PR #29",
-        "LXC108 local gates"
-      ]
-    },
-    "runtime": {
-      "status": "pass",
-      "evidence": [
-        "CI PR #29",
-        "LXC108 local gates"
-      ]
-    },
-    "release": {
-      "status": "pass",
-      "evidence": [
-        "tag v6.3.1-cycle19",
-        "GH release https://github.com/kamenevd/polinalinen-madre/releases/tag/v6.3.1-cycle19",
-        "https://kdnfx.space/downloads/madre-v6.3.1-cycle19.apk",
-        "sha256 da8f732a8ea9980d23c7ecefcf51935a3fb0709d763be5aa4b2c846037f2df04"
-      ]
-    }
+    "tdd": {"status": "pending", "evidence": []},
+    "build": {"status": "pending", "evidence": []},
+    "review": {"status": "pending", "evidence": []},
+    "visual": {"status": "pending", "evidence": []},
+    "runtime": {"status": "pending", "evidence": []},
+    "release": {"status": "pending", "evidence": []}
   },
   "reviews": [],
   "artifacts": {
-    "apk": "https://kdnfx.space/downloads/madre-v6.3.1-cycle19.apk",
+    "apk": null,
     "source_archive": null,
-    "sha256": "da8f732a8ea9980d23c7ecefcf51935a3fb0709d763be5aa4b2c846037f2df04",
-    "release_url": "https://github.com/kamenevd/polinalinen-madre/releases/tag/v6.3.1-cycle19"
+    "sha256": null,
+    "release_url": null
   },
   "blockers": [],
   "decisions": [
-    "Hero fix: explicit R.drawable map; tools:keep as belt-and-suspenders.",
-    "Herbarium is static Canvas + spring only — no third live effect on Home.",
-    "versionCode/versionName not hand-edited; release_cycle.py owns 6.3.0-cycle19 bump.",
-    "RuStore AAB prepared as preview; console upload needs Dima developer account after merge.",
-    "2026-08-10: prepare-version → versionCode 26 / 6.3.0-cycle19 after PR #29 merge",
-    "2026-08-11: остаток цикла 19 — крупная шторка и перекладка настроек; версию руками не трогаем, prepare-version уже прошёл.",
-    "Шторка: системная свёрнутая строка + свой RemoteViews в развёрнутой. Держать карточку раскрытой Android не даёт — свёрнутая строка обязана стоять сама по себе.",
-    "Отсчёт в своей карточке — Chronometer в RemoteViews, а не текст: текст замер бы между обновлениями.",
-    "Кнопок «Пауза»/«Дальше» в шторке нет: ход выпечки — не пульт, а строка о том, что происходит.",
-    "«Оформление» → «Вид», значение «полное» → «живое»: пара «спокойное · живое» читается без подписи."
+    "2026-08-12: полоска хода — шаг-локальная. «шаг N из M» уже говорит про всю выпечку, а полоска, не доходящая до края на нуле, читается как «ещё не всё».",
+    "2026-08-12: на нуле и экран, и шторка говорят «время вышло». 0:00 рядом с «тесто спит» — две неправды в одной строке.",
+    "2026-08-12: nag-on-open и повтор напоминания о кормлении — DEFER, планирование не трогаем.",
+    "2026-08-12: полный переезд тика в foreground service — DEFER. В этом цикле только отказ от жизни без переднего плана.",
+    "2026-08-12: версию руками не бампаем — versionCode/versionName остаются за prepare-version."
   ]
 }

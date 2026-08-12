@@ -16,11 +16,15 @@ class BakingNotificationContentTest {
 
     private val now = 1_700_000_000_000L
 
+    /** «Сейчас» по монотонным часам — тот же миг, что и [now]. */
+    private val nowElapsed = 5_000_000L
+
     private fun progress(
         stepIndex: Int = 2,
         stepCount: Int = 8,
         remainingSeconds: Long = 3_725,
         stepTotalSeconds: Long = 7_200,
+        stepEndsAtElapsed: Long = nowElapsed + 3_725_000L,
         isPaused: Boolean = false,
         nextStepTitle: String? = "Формовка",
         starterName: String = "Соня",
@@ -33,12 +37,13 @@ class BakingNotificationContentTest {
         stepCount = stepCount,
         remainingSeconds = remainingSeconds,
         stepTotalSeconds = stepTotalSeconds,
+        stepEndsAtElapsed = stepEndsAtElapsed,
         isPaused = isPaused,
         nextStepTitle = nextStepTitle,
     )
 
     private fun content(progress: BakingProgress = progress()) =
-        BakingNotificationContent.from(progress, now)
+        BakingNotificationContent.from(progress, now, nowElapsed)
 
     @Test
     fun `the title is the bread, so the shade says what is baking`() {
@@ -61,6 +66,38 @@ class BakingNotificationContentTest {
         val running = content()
         assertThat(running.usesChronometer).isTrue()
         assertThat(running.chronometerFinishAtMillis).isEqualTo(now + 3_725_000L)
+    }
+
+    /**
+     * Cycle 20: база хронометра — ТОЧНЫЙ конец шага, а не «сейчас плюс остаток
+     * в секундах». Остаток округлён вниз: шаг, кончающийся в .400, получал бы
+     * базу на четыре десятых секунды позже, и хронометр досчитывал до нуля
+     * после того, как страница уже сказала «время вышло».
+     */
+    @Test
+    fun `the chronometer is set to the exact end of the step, not to a rounded second`() {
+        val ragged = progress(
+            remainingSeconds = 3_725,
+            stepEndsAtElapsed = nowElapsed + 3_725_400L,
+        )
+        val card = content(ragged)
+        assertThat(card.chronometerBaseElapsed).isEqualTo(nowElapsed + 3_725_400L)
+        assertThat(card.chronometerFinishAtMillis).isEqualTo(now + 3_725_400L)
+    }
+
+    /**
+     * Уведомление строится не в тот же миг, когда собран слепок, и пересобирается
+     * оно каждую секунду. Конец шага от этого не двигается — а «сейчас плюс
+     * остаток» уезжал вперёд на каждой пересборке.
+     */
+    @Test
+    fun `rebuilding the card later does not push the finish moment forward`() {
+        val bake = progress()
+        val atSnapshot = BakingNotificationContent.from(bake, now, nowElapsed)
+        val aMomentLater = BakingNotificationContent.from(bake, now + 800L, nowElapsed + 800L)
+        assertThat(aMomentLater.chronometerFinishAtMillis)
+            .isEqualTo(atSnapshot.chronometerFinishAtMillis)
+        assertThat(aMomentLater.chronometerBaseElapsed).isEqualTo(atSnapshot.chronometerBaseElapsed)
     }
 
     @Test
@@ -138,10 +175,9 @@ class BakingNotificationContentTest {
     @Test
     fun `the progress bar follows the step, straight from the snapshot`() {
         val bake = progress(remainingSeconds = 1_800, stepTotalSeconds = 3_600)
-        assertThat(BakingNotificationContent.from(bake, now).progressPermille)
-            .isEqualTo(bake.permille())
+        assertThat(content(bake).progressPermille).isEqualTo(bake.permille())
         // Ноль остатка — полная полоска: цифры и полоска говорят одно и то же.
-        assertThat(BakingNotificationContent.from(progress(remainingSeconds = 0), now).progressPermille)
+        assertThat(content(progress(remainingSeconds = 0)).progressPermille)
             .isEqualTo(BakingProgress.PROGRESS_MAX)
     }
 

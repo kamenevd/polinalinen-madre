@@ -60,8 +60,15 @@ data class BakingNotificationContent(
     val usesChronometer: Boolean,
     /** Осталось меньше пяти минут и выпечка идёт: цифры в карточке краснеют. */
     val isUrgent: Boolean,
-    /** Момент, когда текущий шаг досчитает до нуля. */
+    /** Момент, когда текущий шаг досчитает до нуля, — по стенным часам (setWhen). */
     val chronometerFinishAtMillis: Long,
+    /**
+     * Тот же момент по монотонным часам — база для Chronometer в своей
+     * карточке. Двое часов здесь не роскошь: setWhen у уведомления понимает
+     * только стенные, а Chronometer — только elapsedRealtime, и переводить одно
+     * в другое на месте отрисовки значило бы считать конец шага дважды.
+     */
+    val chronometerBaseElapsed: Long,
 ) {
 
     companion object {
@@ -74,7 +81,18 @@ data class BakingNotificationContent(
          */
         const val URGENT_SECONDS = 300L
 
-        fun from(bake: BakingProgress, nowMillis: Long): BakingNotificationContent {
+        /**
+         * @param nowMillis «сейчас» по стенным часам — только чтобы перевести в
+         *   них конец шага для setWhen.
+         * @param nowElapsed «сейчас» по монотонным часам, в тот же миг, что и
+         *   [nowMillis]. Оба нужны потому, что конец шага известен в монотонных,
+         *   а уведомление умеет только стенные.
+         */
+        fun from(
+            bake: BakingProgress,
+            nowMillis: Long,
+            nowElapsed: Long,
+        ): BakingNotificationContent {
             // Хронометр имеет смысл, только когда есть чему идти: на паузе он
             // врал бы, а на нуле мигал бы отрицательным временем.
             val ticking = !bake.isPaused && bake.remainingSeconds > 0L
@@ -114,8 +132,12 @@ data class BakingNotificationContent(
                 progressPermille = bake.permille(),
                 usesChronometer = ticking,
                 isUrgent = urgent,
+                // Конец шага известен в монотонных часах — в стенные он
+                // переводится один раз, здесь, и ровно тем сдвигом, который
+                // между ними сейчас. Ни округления, ни «сейчас плюс остаток».
                 chronometerFinishAtMillis =
-                    if (ticking) nowMillis + bake.remainingSeconds * 1000L else nowMillis,
+                    if (ticking) nowMillis + (bake.stepEndsAtElapsed - nowElapsed) else nowMillis,
+                chronometerBaseElapsed = if (ticking) bake.stepEndsAtElapsed else nowElapsed,
             )
         }
 

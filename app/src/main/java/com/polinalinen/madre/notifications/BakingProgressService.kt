@@ -141,12 +141,18 @@ class BakingProgressService : LifecycleService() {
      * прошивке, которая своей карточки не покажет, читается он.
      */
     private fun buildNotification(bake: BakingProgress): Notification {
-        val content = BakingNotificationContent.from(bake, System.currentTimeMillis())
+        // Оба «сейчас» снимаются в один миг: по стенным живёт setWhen, по
+        // монотонным — база Chronometer, и разъехаться им нельзя.
+        val content = BakingNotificationContent.from(
+            bake = bake,
+            nowMillis = System.currentTimeMillis(),
+            nowElapsed = SystemClock.elapsedRealtime(),
+        )
         return baseBuilder()
             .setContentTitle(content.title)
             .setContentText(content.compact)
             .setStyle(NotificationCompat.BigTextStyle().bigText(content.bigText))
-            .setCustomBigContentView(bigCard(content, bake.remainingSeconds))
+            .setCustomBigContentView(bigCard(content))
             .setProgress(BakingProgress.PROGRESS_MAX, content.progressPermille, false)
             .setShowWhen(content.usesChronometer)
             .setWhen(content.chronometerFinishAtMillis)
@@ -164,14 +170,20 @@ class BakingProgressService : LifecycleService() {
      * RemoteViews проверить нечем, поэтому логике в ней делать нечего.
      *
      * Отсчёт — Chronometer, а не текст: текст замер бы между обновлениями, а
-     * обновления идут раз в секунду только пока жив процесс. База считается от
-     * [android.os.SystemClock.elapsedRealtime] — тех же монотонных часов, по
-     * которым идёт таймер на странице (стенные прыгают при синхронизации).
+     * обновления идут раз в секунду только пока жив процесс. База — момент
+     * конца шага по [android.os.SystemClock.elapsedRealtime], тем же монотонным
+     * часам, по которым идёт таймер на странице (стенные прыгают при
+     * синхронизации). Cycle 20: приходит она готовой из
+     * [BakingNotificationContent.chronometerBaseElapsed], а не считается здесь
+     * как «сейчас плюс остаток»: остаток округлён вниз, а карточка строится
+     * позже, чем собран слепок, — обе неточности уводили ноль хронометра за
+     * настоящий конец шага.
+     *
      * На паузе и на нуле хронометр уступает место обычному тексту: остановленный
      * Chronometer показал бы последнее значение, и отличить стоящие цифры от
      * идущих было бы нечем.
      */
-    private fun bigCard(content: BakingNotificationContent, remainingSeconds: Long): RemoteViews =
+    private fun bigCard(content: BakingNotificationContent): RemoteViews =
         RemoteViews(packageName, R.layout.notification_baking_progress).apply {
             setTextViewText(R.id.notif_header, content.headerLine)
             setTextViewText(R.id.notif_step, content.stepLine)
@@ -194,12 +206,7 @@ class BakingProgressService : LifecycleService() {
             if (content.usesChronometer) {
                 setViewVisibility(R.id.notif_timer, View.VISIBLE)
                 setViewVisibility(R.id.notif_timer_static, View.GONE)
-                setChronometer(
-                    R.id.notif_timer,
-                    SystemClock.elapsedRealtime() + remainingSeconds * 1000L,
-                    null,
-                    true,
-                )
+                setChronometer(R.id.notif_timer, content.chronometerBaseElapsed, null, true)
                 setChronometerCountDown(R.id.notif_timer, true)
                 setTextColor(R.id.notif_timer, ink)
                 setContentDescription(R.id.notif_timer, content.spokenTimer)

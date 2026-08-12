@@ -42,6 +42,7 @@ class BakingProgressStepScopeTest {
             stepCount = recipe.timeline.size,
             remainingSeconds = remainingSeconds,
             stepTotalSeconds = step.durationMinutes * 60L,
+            stepEndsAtElapsed = 5_000_000L + remainingSeconds * 1000L,
             isPaused = false,
             nextStepTitle = recipe.timeline.getOrNull(stepIndex + 1)?.title,
         )

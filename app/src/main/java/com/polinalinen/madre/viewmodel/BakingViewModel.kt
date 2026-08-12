@@ -509,6 +509,10 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
                 // Полоска мерится длиной СВОЕГО шага: «шаг 3 из 8» уже сказало
                 // всё, что нужно сказать про выпечку целиком.
                 stepTotalSeconds = s.currentStep.durationMinutes * 60L,
+                // Точный конец шага — для базы системного хронометра в шторке.
+                // Округлённого остатка ему мало: он тикает сам, между нашими
+                // обновлениями, и промах в долю секунды виден на нуле.
+                stepEndsAtElapsed = s.stepEndsAtElapsed(nowElapsed),
                 isPaused = s.isPaused,
                 // Cycle 14: у следующего шага только название. Отсчёт в
                 // слепке один — remainingSeconds текущего шага, тот же, что

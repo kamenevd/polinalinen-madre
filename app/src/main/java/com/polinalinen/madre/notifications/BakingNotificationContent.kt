@@ -98,9 +98,15 @@ data class BakingNotificationContent(
             val ticking = !bake.isPaused && bake.remainingSeconds > 0L
             val head = "${bake.stepTitle} · шаг ${bake.stepIndex + 1} из ${bake.stepCount}"
             val time = BakingProgress.formatRemaining(bake.remainingSeconds)
+            // Cycle 20: конец шага проверяется РАНЬШЕ паузы. Иначе выпечка,
+            // поставленная на паузу после нуля, говорила «пауза, осталось
+            // 0:00» — цифра ни о чём: шаг кончился, и пауза этого не отменяет.
+            // Порядок тот же, что у BakingProgress.timerLabel: одно событие —
+            // один ответ во всей книге.
             val state = when {
+                bake.remainingSeconds <= 0L ->
+                    if (bake.isPaused) "пауза, время вышло" else "время вышло"
                 bake.isPaused -> "пауза, осталось $time"
-                bake.remainingSeconds <= 0L -> "время вышло"
                 else -> "осталось $time"
             }
             // «Скоро» — только пока отсчёт идёт. На паузе торопить нечем, а на

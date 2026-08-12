@@ -5,9 +5,9 @@
     "kind": "maintenance",
     "version": "6.4.0-maintenance20",
     "branch": "maintenance/20",
-    "stage": "reviewing",
+    "stage": "releasable",
     "created_at": "2026-08-12T09:00:00Z",
-    "updated_at": "2026-08-12T13:20:00Z"
+    "updated_at": "2026-08-12T13:38:52Z"
   },
   "features": [
     {
@@ -65,7 +65,10 @@
   "gates": {
     "plan": {
       "status": "pass",
-      "evidence": ["workflow/CYCLE.yaml", "DESIGN-V4.md Cycle 20"]
+      "evidence": [
+        "workflow/CYCLE.yaml",
+        "DESIGN-V4.md Cycle 20"
+      ]
     },
     "tdd": {
       "status": "pass",
@@ -81,10 +84,22 @@
         "app/build/outputs/apk/debug/app-debug.apk"
       ]
     },
-    "review": {"status": "pending", "evidence": []},
-    "visual": {"status": "pending", "evidence": []},
-    "runtime": {"status": "pending", "evidence": []},
-    "release": {"status": "pending", "evidence": []}
+    "review": {
+      "status": "pending",
+      "evidence": []
+    },
+    "visual": {
+      "status": "pending",
+      "evidence": []
+    },
+    "runtime": {
+      "status": "pending",
+      "evidence": []
+    },
+    "release": {
+      "status": "pending",
+      "evidence": []
+    }
   },
   "reviews": [],
   "artifacts": {

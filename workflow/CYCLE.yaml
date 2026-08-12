@@ -1,64 +1,43 @@
 {
   "schema_version": 1,
   "cycle": {
-    "number": 20,
+    "number": 21,
     "kind": "maintenance",
-    "version": "6.4.0-maintenance20",
-    "branch": "maintenance/20",
-    "stage": "releasable",
-    "created_at": "2026-08-12T09:00:00Z",
-    "updated_at": "2026-08-12T13:38:52Z"
+    "version": "6.4.1-maintenance21",
+    "branch": "maintenance/21",
+    "stage": "reviewing",
+    "created_at": "2026-08-12T16:00:00Z",
+    "updated_at": "2026-08-12T16:50:33Z"
   },
   "features": [
     {
-      "id": "chrono-negative",
-      "title": "Хронометр в шторке считает до точного конца шага, а не мимо нуля",
+      "id": "static-shade-timer",
+      "title": "Статичные цифры в шторке — без countdown Chronometer",
       "needs_generated_asset": false,
       "acceptance": [
-        "В слепке есть stepEndsAtElapsed — точный конец шага по монотонным часам",
-        "База Chronometer и setWhen считаются от него, а не от «сейчас + остаток»",
-        "Тик таймера спит min(1000, до границы шага) и попадает В ноль, а не после",
-        "formatTimer/formatRemaining не печатают минус ни на каком входе"
+        "usesChronometer/setWhen/RemoteViews Chronometer не используются для хода выпечки",
+        "Остаток — clamped timerText или «время вышло»; нигде нет знака минус",
+        "Свёрнутая строка несёт цифры времени (или «время вышло»)"
       ]
     },
     {
-      "id": "progress-scope",
-      "title": "Полоска хода — шаг-локальная: ноль остатка = полная полоска",
+      "id": "paper-compact-dark",
+      "title": "Бумага в свёрнутой и развёрнутой карточке — читаемо в тёмной теме",
       "needs_generated_asset": false,
       "acceptance": [
-        "permille = пройденное шага / длина шага, а не доля всей выпечки",
-        "Инвариант remainingSeconds == 0 ⇒ permille == 1000 на КАЖДОМ шаге всех рецептов книги",
-        "publishProgress берёт остаток от BakingClock.elapsed() в момент публикации",
-        "Докблоки и комментарий в notification_baking_progress.xml переписаны"
+        "setCustomContentView(compact) + setCustomBigContentView(big) на paper",
+        "Фон paper переставляется setBackgroundResource после инфляции",
+        "Чернила ink/cocoa/urgent через ContextCompat + setTextColor",
+        "BigText остаётся заполненным как fallback"
       ]
     },
     {
-      "id": "no-content-intent",
-      "title": "Уведомления открывают своё место в книге",
+      "id": "notify-on-change",
+      "title": "notify только когда карточка реально изменилась",
       "needs_generated_asset": false,
       "acceptance": [
-        "«Время вышло» и «достаньте масло» ведут в свою выпечку (EXTRA_SESSION_ID)",
-        "Напоминание о кормлении по тапу ведёт на форму кормления",
-        "Записанное кормление снимает своё напоминание из шторки"
-      ]
-    },
-    {
-      "id": "fgs-silent-drop",
-      "title": "Сервис не живёт без переднего плана",
-      "needs_generated_asset": false,
-      "acceptance": [
-        "Отказ startForeground → сервис снимает свои уведомления и уходит (stopSelf)",
-        "Восстановление после ребута не сломано"
-      ]
-    },
-    {
-      "id": "screen-never-says-done",
-      "title": "На нуле везде «время вышло», и «скоро» одно на книгу",
-      "needs_generated_asset": false,
-      "acceptance": [
-        "Страница таймера на нуле пишет «время вышло», а не 0:00 и «тесто спит»",
-        "Порог «скоро» — общая константа BakingNotificationContent.URGENT_SECONDS",
-        "Шторка на нуле тоже говорит «время вышло», а не «пауза, осталось 0:00»"
+        "Пересборка уведомления не идёт каждый тик без смены BakingNotificationContent",
+        "Смена remaining/permille/badge/pause/step публикуется"
       ]
     }
   ],
@@ -66,22 +45,21 @@
     "plan": {
       "status": "pass",
       "evidence": [
-        "workflow/CYCLE.yaml",
-        "DESIGN-V4.md Cycle 20"
+        "DESIGN-V4.md Cycle 21",
+        "MoA shade residual"
       ]
     },
     "tdd": {
       "status": "pass",
       "evidence": [
-        "635 unit-тестов, 0 падений, 0 @Ignore",
-        "красные-сначала: BakingTimerCopyTest, NotificationContentIntentTest, BakingForegroundRefusalTest"
+        "LXC108 testDebugUnitTest 647 green",
+        "BakingShadeCardsTest"
       ]
     },
     "build": {
       "status": "pass",
       "evidence": [
-        "testDebugUnitTest lintDebug verifyRoborazziDebug assembleDebug — BUILD SUCCESSFUL",
-        "app/build/outputs/apk/debug/app-debug.apk"
+        "lintDebug assembleDebug LXC108"
       ]
     },
     "review": {
@@ -110,10 +88,9 @@
   },
   "blockers": [],
   "decisions": [
-    "2026-08-12: полоска хода — шаг-локальная. «шаг N из M» уже говорит про всю выпечку, а полоска, не доходящая до края на нуле, читается как «ещё не всё».",
-    "2026-08-12: на нуле и экран, и шторка говорят «время вышло». 0:00 рядом с «тесто спит» — две неправды в одной строке.",
-    "2026-08-12: nag-on-open и повтор напоминания о кормлении — DEFER, планирование не трогаем.",
-    "2026-08-12: полный переезд тика в foreground service — DEFER. В этом цикле только отказ от жизни без переднего плана.",
-    "2026-08-12: версию руками не бампаем — versionCode/versionName остаются за prepare-version."
+    "2026-08-12: kill both system and RemoteViews countdown Chronometers — free-run past base is structural",
+    "2026-08-12: dual paper custom content+big for dark OEM readability; no values-night invert",
+    "2026-08-12: notify-on-change via full BakingNotificationContent equality after chrono fields removed",
+    "2026-08-12: FGS tick ownership still DEFER — frozen digits better than minus"
   ]
 }

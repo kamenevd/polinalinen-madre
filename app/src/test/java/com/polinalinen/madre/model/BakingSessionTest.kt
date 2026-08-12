@@ -141,8 +141,8 @@ class BakingSessionTest {
         stepIndex = s.currentStepIndex,
         stepCount = s.recipe.timeline.size,
         remainingSeconds = remaining,
-        elapsedSeconds = 0,
-        totalSeconds = s.totalDurationMinutes * 60L,
+        stepTotalSeconds = s.currentStep.durationMinutes * 60L,
+        stepEndsAtElapsed = s.stepEndsAtElapsed(startElapsed),
         isPaused = s.isPaused,
         nextStepTitle = s.recipe.timeline.getOrNull(s.currentStepIndex + 1)?.title,
     )
@@ -153,9 +153,9 @@ class BakingSessionTest {
         val paused = shadeOf(session().togglePause(startElapsed), remaining = 3600)
         val now = 1_700_000_000_000L
 
-        assertThat(BakingNotificationContent.from(running, now).usesChronometer).isTrue()
-        assertThat(BakingNotificationContent.from(paused, now).usesChronometer).isFalse()
-        assertThat(BakingNotificationContent.from(paused, now).compact).contains("пауза")
+        assertThat(BakingNotificationContent.from(running, now, startElapsed).usesChronometer).isTrue()
+        assertThat(BakingNotificationContent.from(paused, now, startElapsed).usesChronometer).isFalse()
+        assertThat(BakingNotificationContent.from(paused, now, startElapsed).compact).contains("пауза")
     }
 
     @Test
@@ -170,6 +170,7 @@ class BakingSessionTest {
         val content = BakingNotificationContent.from(
             shadeOf(session(), remaining = 0),
             1_700_000_000_000L,
+            startElapsed,
         )
         assertThat(content.usesChronometer).isFalse()
         assertThat(content.compact).contains("время вышло")

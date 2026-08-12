@@ -40,6 +40,10 @@ class MadreNotifier(private val context: Context) {
             id = ID_FEEDING,
             title = title,
             text = text,
+            // Cycle 20: сам текст ведёт туда же, куда кнопка, — на форму
+            // кормления. Раньше дорога была только через кнопку, а тап по
+            // строке не делал ничего: половина напоминания была мёртвой.
+            contentIntent = FeedingReminderAction.pendingIntent(context),
             action = NotificationCompat.Action.Builder(
                 0,
                 FeedingReminderAction.LABEL,
@@ -55,8 +59,28 @@ class MadreNotifier(private val context: Context) {
      * Разные шаги не затирают друг друга, повтор того же ключа заменяет своё же
      * уведомление, и ничего считать для этого не нужно.
      */
-    fun postBakingNotification(key: String, title: String, text: String) {
-        post(CHANNEL_BAKING, "Выпечка", tag = key, id = ID_KEYED, title = title, text = text)
+    fun postBakingNotification(sessionId: Long, key: String, title: String, text: String) {
+        post(
+            channelId = CHANNEL_BAKING,
+            channelName = "Выпечка",
+            tag = key,
+            id = ID_KEYED,
+            title = title,
+            text = text,
+            // Cycle 20: тап открывает ИМЕННО эту выпечку. [sessionId] здесь
+            // обязателен, а не «по возможности»: уведомление про шаг всегда
+            // знает, чей это шаг, и молча остаться без дороги не должно.
+            contentIntent = BakeOpenIntent.pendingIntent(context, sessionId),
+        )
+    }
+
+    /**
+     * Снять напоминание о кормлении (Cycle 20). Зовётся, когда кормление
+     * записано: иначе шторка продолжает звать кормить закваску, которую только
+     * что покормили, и человек идёт проверять, записалось ли.
+     */
+    fun cancelFeedingReminder() {
+        NotificationManagerCompat.from(context).cancel(ID_FEEDING)
     }
 
     /**
@@ -91,6 +115,7 @@ class MadreNotifier(private val context: Context) {
         id: Int,
         title: String,
         text: String,
+        contentIntent: android.app.PendingIntent,
         action: NotificationCompat.Action? = null,
     ) {
         if (!canPost()) return
@@ -101,7 +126,10 @@ class MadreNotifier(private val context: Context) {
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            // Тап уносит уведомление из шторки: иначе оно остаётся звать уже
+            // сделанное — и звать туда, где делать больше нечего.
             .setAutoCancel(true)
+            .setContentIntent(contentIntent)
             .apply { if (action != null) addAction(action) }
             .build()
         notifySafely(id, notification, tag)

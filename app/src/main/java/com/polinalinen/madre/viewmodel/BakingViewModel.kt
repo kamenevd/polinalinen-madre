@@ -11,6 +11,7 @@ import com.polinalinen.madre.MadreApplication
 import com.polinalinen.madre.data.db.entities.ActiveBakeEntity
 import com.polinalinen.madre.model.BakingClock
 import com.polinalinen.madre.model.BakingSession
+import com.polinalinen.madre.model.BakingTick
 import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.model.StepType
 import com.polinalinen.madre.notifications.BakingNotificationPlanner
@@ -449,11 +450,12 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
         timerJobs[id] = viewModelScope.launch {
             while (true) {
                 val s = session(id) ?: break
+                // Монотонные часы, а не стенные: смена пояса или переход на
+                // летнее время не должны отнимать у теста час расстойки
+                // (и не должны дарить его).
+                val nowElapsed = BakingClock.elapsed()
                 if (!s.isPaused && !s.isCompleted) {
-                    // Монотонные часы, а не стенные: смена пояса или переход на
-                    // летнее время не должны отнимать у теста час расстойки
-                    // (и не должны дарить его).
-                    val remaining = s.remainingSeconds(BakingClock.elapsed())
+                    val remaining = s.remainingSeconds(nowElapsed)
                     _remainingSeconds.update { it + (id to remaining) }
                     notifyProgress(s, remaining)
                     // Слепок для шторки — только на идущем тике. Cycle 16: на
@@ -463,7 +465,17 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
                     // дальше в шторке стоит ровно то, что происходит на деле.
                     publishProgress()
                 }
-                delay(1000)
+                // Cycle 20: последний сон шага — короче секунды, ровно до его
+                // конца. Иначе тики идут по своей сетке, а шаг кончается по
+                // своей, и ноль приходит к человеку с опозданием до секунды.
+                // На паузе границы нет — там обычный шаг.
+                delay(
+                    if (s.isPaused || s.isCompleted) {
+                        BakingTick.INTERVAL_MS
+                    } else {
+                        BakingTick.sleepMillis(nowElapsed, s.stepEndsAtElapsed(nowElapsed))
+                    }
+                )
             }
         }
     }
@@ -476,10 +488,15 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
      * бы на экране одно, а в уведомлении другое.
      */
     private fun publishProgress() {
+        // Cycle 20: остаток считается ЗДЕСЬ, от часов, а не берётся из карты,
+        // которую заполняет тик. Публикуют слепок и переходы — пауза,
+        // продолжение, переименование закваски, — а они приходят между тиками:
+        // карта в этот момент хранит секунду предыдущего тика, и шторка
+        // получала на секунду больше, чем стояло на странице. Часы одни и те
+        // же, монотонные, — то же число, что покажет следующий тик.
+        val nowElapsed = BakingClock.elapsed()
         val bakes = _sessions.value.filterNot { it.isCompleted }.map { s ->
-            val stepsBefore = s.recipe.timeline.take(s.currentStepIndex).sumOf { it.durationMinutes } * 60L
-            val currentStepTotal = s.currentStep.durationMinutes * 60L
-            val remaining = _remainingSeconds.value[s.id] ?: currentStepTotal
+            val remaining = s.remainingSeconds(nowElapsed)
             BakingProgress(
                 sessionId = s.id,
                 recipeName = s.recipe.name,
@@ -489,8 +506,13 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
                 stepIndex = s.currentStepIndex,
                 stepCount = s.recipe.timeline.size,
                 remainingSeconds = remaining,
-                elapsedSeconds = stepsBefore + (currentStepTotal - remaining).coerceAtLeast(0L),
-                totalSeconds = s.totalDurationMinutes * 60L,
+                // Полоска мерится длиной СВОЕГО шага: «шаг 3 из 8» уже сказало
+                // всё, что нужно сказать про выпечку целиком.
+                stepTotalSeconds = s.currentStep.durationMinutes * 60L,
+                // Точный конец шага — для базы системного хронометра в шторке.
+                // Округлённого остатка ему мало: он тикает сам, между нашими
+                // обновлениями, и промах в долю секунды виден на нуле.
+                stepEndsAtElapsed = s.stepEndsAtElapsed(nowElapsed),
                 isPaused = s.isPaused,
                 // Cycle 14: у следующего шага только название. Отсчёт в
                 // слепке один — remainingSeconds текущего шага, тот же, что
@@ -521,6 +543,7 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
             val key = BakingNotificationPlanner.butterPrepKey(session.id, session.currentStepIndex)
             if (notificationLedger.markIfNew(key)) {
                 notifier.postBakingNotification(
+                    sessionId = session.id,
                     key = key,
                     title = "Достаньте сливочное масло",
                     text = "Через полчаса оно понадобится мягким — «${session.recipe.name}».",
@@ -531,6 +554,7 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
             val key = BakingNotificationPlanner.stepDoneKey(session.id, session.currentStepIndex)
             if (notificationLedger.markIfNew(key)) {
                 notifier.postBakingNotification(
+                    sessionId = session.id,
                     key = key,
                     title = "«${session.recipe.name}» — время вышло",
                     text = "${session.currentStep.title}: шаг закончен, можно продолжать.",

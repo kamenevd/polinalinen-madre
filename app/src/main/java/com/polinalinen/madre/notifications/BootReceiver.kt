@@ -105,6 +105,7 @@ class BakeStepEndWorker(
         val stepTitle = inputData.getString(KEY_STEP_TITLE).orEmpty()
 
         MadreNotifier(applicationContext).postBakingNotification(
+            sessionId = sessionId,
             key = BakingNotificationPlanner.stepDoneKey(sessionId, stepIndex),
             title = "«$recipeName» — время вышло",
             text = "$stepTitle: шаг закончен, можно продолжать.",

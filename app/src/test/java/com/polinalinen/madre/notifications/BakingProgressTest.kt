@@ -15,8 +15,8 @@ class BakingProgressTest {
         stepIndex: Int = 0,
         stepCount: Int = 4,
         remainingSeconds: Long = 600,
-        elapsedSeconds: Long = 0,
-        totalSeconds: Long = 3600,
+        stepTotalSeconds: Long = 3600,
+        stepEndsAtElapsed: Long = 5_000_000L,
         isPaused: Boolean = false,
         nextStepTitle: String? = "Складка",
         starterName: String = StarterName.DEFAULT,
@@ -28,8 +28,8 @@ class BakingProgressTest {
         stepIndex = stepIndex,
         stepCount = stepCount,
         remainingSeconds = remainingSeconds,
-        elapsedSeconds = elapsedSeconds,
-        totalSeconds = totalSeconds,
+        stepTotalSeconds = stepTotalSeconds,
+        stepEndsAtElapsed = stepEndsAtElapsed,
         isPaused = isPaused,
         nextStepTitle = nextStepTitle,
     )
@@ -53,23 +53,28 @@ class BakingProgressTest {
         assertThat(ids).doesNotContain(1001)
     }
 
+    /**
+     * Cycle 20: полоска — про время ТЕКУЩЕГО шага. Раньше она считала долю
+     * всей выпечки, и на нуле первого шага стояла в начале — при том что цифры
+     * рядом уже говорили «время вышло».
+     */
     @Test
-    fun `progress follows real elapsed time, not the step number`() {
-        assertThat(progress(elapsedSeconds = 0, totalSeconds = 3600).permille()).isEqualTo(0)
-        assertThat(progress(elapsedSeconds = 900, totalSeconds = 3600).permille()).isEqualTo(250)
-        assertThat(progress(elapsedSeconds = 3600, totalSeconds = 3600).permille()).isEqualTo(1000)
+    fun `progress follows the time of this step, not the whole bake`() {
+        assertThat(progress(remainingSeconds = 3600, stepTotalSeconds = 3600).permille()).isEqualTo(0)
+        assertThat(progress(remainingSeconds = 2700, stepTotalSeconds = 3600).permille()).isEqualTo(250)
+        assertThat(progress(remainingSeconds = 0, stepTotalSeconds = 3600).permille()).isEqualTo(1000)
     }
 
     @Test
     fun `progress never runs past the end or before the start`() {
-        assertThat(progress(elapsedSeconds = 9_000, totalSeconds = 3600).permille()).isEqualTo(1000)
-        assertThat(progress(elapsedSeconds = -50, totalSeconds = 3600).permille()).isEqualTo(0)
+        assertThat(progress(remainingSeconds = -50, stepTotalSeconds = 3600).permille()).isEqualTo(1000)
+        assertThat(progress(remainingSeconds = 9_000, stepTotalSeconds = 3600).permille()).isEqualTo(0)
     }
 
-    /** Рецепт без времени в плане не должен делить на ноль. */
+    /** Шаг без времени в плане не должен делить на ноль. */
     @Test
-    fun `a timeless recipe shows no progress instead of crashing`() {
-        assertThat(progress(elapsedSeconds = 10, totalSeconds = 0).permille()).isEqualTo(0)
+    fun `a timeless step shows no progress instead of crashing`() {
+        assertThat(progress(remainingSeconds = 10, stepTotalSeconds = 0).permille()).isEqualTo(0)
     }
 
     @Test
@@ -83,7 +88,17 @@ class BakingProgressTest {
     @Test
     fun `minutes and seconds only, when there are no hours`() {
         assertThat(progress(remainingSeconds = 125).contentText()).contains("2:05")
-        assertThat(progress(remainingSeconds = 0).contentText()).contains("0:00")
+    }
+
+    /**
+     * Cycle 20: ноль — «время вышло», а не «осталось 0:00». Ноль остатка
+     * означает ровно одно событие, и книга называет его одинаково везде:
+     * на странице таймера, в своей карточке шторки и здесь.
+     */
+    @Test
+    fun `a step that ran out is named, not counted to zero`() {
+        assertThat(progress(remainingSeconds = 0).contentText()).contains("время вышло")
+        assertThat(progress(remainingSeconds = 0).contentText()).doesNotContain("0:00")
     }
 
     @Test

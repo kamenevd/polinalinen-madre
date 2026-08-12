@@ -141,12 +141,18 @@ class BakingProgressService : LifecycleService() {
      * прошивке, которая своей карточки не покажет, читается он.
      */
     private fun buildNotification(bake: BakingProgress): Notification {
-        val content = BakingNotificationContent.from(bake, System.currentTimeMillis())
+        // Оба «сейчас» снимаются в один миг: по стенным живёт setWhen, по
+        // монотонным — база Chronometer, и разъехаться им нельзя.
+        val content = BakingNotificationContent.from(
+            bake = bake,
+            nowMillis = System.currentTimeMillis(),
+            nowElapsed = SystemClock.elapsedRealtime(),
+        )
         return baseBuilder()
             .setContentTitle(content.title)
             .setContentText(content.compact)
             .setStyle(NotificationCompat.BigTextStyle().bigText(content.bigText))
-            .setCustomBigContentView(bigCard(content, bake.remainingSeconds))
+            .setCustomBigContentView(bigCard(content))
             .setProgress(BakingProgress.PROGRESS_MAX, content.progressPermille, false)
             .setShowWhen(content.usesChronometer)
             .setWhen(content.chronometerFinishAtMillis)
@@ -164,14 +170,20 @@ class BakingProgressService : LifecycleService() {
      * RemoteViews проверить нечем, поэтому логике в ней делать нечего.
      *
      * Отсчёт — Chronometer, а не текст: текст замер бы между обновлениями, а
-     * обновления идут раз в секунду только пока жив процесс. База считается от
-     * [android.os.SystemClock.elapsedRealtime] — тех же монотонных часов, по
-     * которым идёт таймер на странице (стенные прыгают при синхронизации).
+     * обновления идут раз в секунду только пока жив процесс. База — момент
+     * конца шага по [android.os.SystemClock.elapsedRealtime], тем же монотонным
+     * часам, по которым идёт таймер на странице (стенные прыгают при
+     * синхронизации). Cycle 20: приходит она готовой из
+     * [BakingNotificationContent.chronometerBaseElapsed], а не считается здесь
+     * как «сейчас плюс остаток»: остаток округлён вниз, а карточка строится
+     * позже, чем собран слепок, — обе неточности уводили ноль хронометра за
+     * настоящий конец шага.
+     *
      * На паузе и на нуле хронометр уступает место обычному тексту: остановленный
      * Chronometer показал бы последнее значение, и отличить стоящие цифры от
      * идущих было бы нечем.
      */
-    private fun bigCard(content: BakingNotificationContent, remainingSeconds: Long): RemoteViews =
+    private fun bigCard(content: BakingNotificationContent): RemoteViews =
         RemoteViews(packageName, R.layout.notification_baking_progress).apply {
             setTextViewText(R.id.notif_header, content.headerLine)
             setTextViewText(R.id.notif_step, content.stepLine)
@@ -194,12 +206,7 @@ class BakingProgressService : LifecycleService() {
             if (content.usesChronometer) {
                 setViewVisibility(R.id.notif_timer, View.VISIBLE)
                 setViewVisibility(R.id.notif_timer_static, View.GONE)
-                setChronometer(
-                    R.id.notif_timer,
-                    SystemClock.elapsedRealtime() + remainingSeconds * 1000L,
-                    null,
-                    true,
-                )
+                setChronometer(R.id.notif_timer, content.chronometerBaseElapsed, null, true)
                 setChronometerCountDown(R.id.notif_timer, true)
                 setTextColor(R.id.notif_timer, ink)
                 setContentDescription(R.id.notif_timer, content.spokenTimer)
@@ -240,27 +247,26 @@ class BakingProgressService : LifecycleService() {
             .setShowWhen(false)
 
     /**
-     * Тап открывает ИМЕННО эту выпечку. Свой requestCode на каждую — иначе
-     * PendingIntent'ы разных выпечек считались бы одним и тем же, и вторая
-     * строка в шторке вела бы на первую.
+     * Тап открывает ИМЕННО эту выпечку. Cycle 20: дорога сюда общая с
+     * уведомлениями шага ([BakeOpenIntent]) — раньше её знал только сервис, и
+     * «время вышло» от WorkManager не вело никуда.
      */
-    private fun openBakingIntent(sessionId: Long?): PendingIntent {
-        val intent = Intent(this, MainActivity::class.java)
-            .setAction(Intent.ACTION_VIEW)
-            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-        if (sessionId != null) intent.putExtra(MainActivity.EXTRA_SESSION_ID, sessionId)
-        return PendingIntent.getActivity(
-            this,
-            BakingNotificationContent.intentRequestCode(sessionId ?: PLACEHOLDER_SESSION_ID),
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-    }
+    private fun openBakingIntent(sessionId: Long?): PendingIntent =
+        BakeOpenIntent.pendingIntent(this, sessionId)
 
     private fun startForegroundFor(sessionId: Long, notification: Notification) {
         val id = BakingProgress.notificationId(sessionId)
         val previous = foregroundSessionId
-        if (!enterForeground(id, notification)) return
+        if (!enterForeground(id, notification)) {
+            // Cycle 20: отказ — это конец сервиса, а не повод жить дальше.
+            // Раньше здесь стоял голый return: сервис оставался поднятым без
+            // переднего плана и либо молча ждал, пока система убьёт его за
+            // молчание, либо держал в шторке строку хода, которую больше
+            // некому обновлять, — тот самый застывший прогресс, ради
+            // недопущения которого сервис и заведён.
+            giveUpForeground()
+            return
+        }
         foregroundSessionId = sessionId
         shownSessionIds = shownSessionIds + sessionId
         // Прежнее переднеплановое уведомление после смены остаётся обычным —
@@ -294,12 +300,22 @@ class BakingProgressService : LifecycleService() {
             }
             true
         } catch (error: Exception) {
-            if (isBackgroundStartRestriction(error)) false else throw error
+            if (isForegroundRefusal(error, Build.VERSION.SDK_INT)) false else throw error
         }
 
-    private fun isBackgroundStartRestriction(error: Throwable): Boolean =
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-            error is android.app.ForegroundServiceStartNotAllowedException
+    /**
+     * Без переднего плана сервису делать нечего: обновлять строку хода он всё
+     * равно не сможет, а оставленное уведомление застынет на последней секунде
+     * и снять его будет уже некому. Уходим сами и уносим своё.
+     *
+     * Восстановление после ребута этим не ломается: BootReceiver поднимает
+     * сервис заново, и следующая попытка — уже из своего разрешённого случая.
+     */
+    private fun giveUpForeground() {
+        clearAll()
+        stopForegroundCompat()
+        stopSelf()
+    }
 
     private fun clearAll() {
         shownSessionIds.forEach { manager.cancel(BakingProgress.notificationId(it)) }
@@ -355,6 +371,29 @@ class BakingProgressService : LifecycleService() {
             } else {
                 null
             }
+
+        /**
+         * Отказал ли в переднем плане САМ Android — единственный случай, который
+         * книга переживает молча (запрет старта из фона, Android 12+).
+         *
+         * Развилка нетривиальная, поэтому вынесена и проверяется отдельно: оба
+         * исхода приходят одинаковым Exception, а поступать с ними надо
+         * противоположно. Любой другой отказ означает, что сервис остался без
+         * переднего плана по нашей ошибке, — такое обязано упасть и быть
+         * починено, а не превратиться в тихо неработающую выпечку.
+         *
+         * Класс сверяется по имени, а не через `is`: самого класса до Android 12
+         * в системе нет, и ссылка на него из кода с minSdk 26 — ошибка lint
+         * (NewApi), законная. Раньше её снимала проверка SDK_INT прямо рядом, но
+         * версия здесь — аргумент, а не «сейчас», иначе развилку было бы не
+         * проверить. Система бросает ровно этот класс, не наследника.
+         */
+        internal fun isForegroundRefusal(error: Throwable, sdk: Int): Boolean =
+            sdk >= Build.VERSION_CODES.S &&
+                error.javaClass.name == FOREGROUND_START_NOT_ALLOWED
+
+        private const val FOREGROUND_START_NOT_ALLOWED =
+            "android.app.ForegroundServiceStartNotAllowedException"
 
         /**
          * Поднять сервис. Зовётся из BakingViewModel в момент, когда человек

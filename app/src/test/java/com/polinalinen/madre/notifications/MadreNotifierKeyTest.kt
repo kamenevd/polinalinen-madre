@@ -52,8 +52,8 @@ class MadreNotifierKeyTest {
 
     @Test
     fun `two keys that used to share an id now keep two notifications`() {
-        notifier.postBakingNotification(collidingA, "Первая", "шаг закончен")
-        notifier.postBakingNotification(collidingB, "Вторая", "шаг закончен")
+        notifier.postBakingNotification(1408L, collidingA, "Первая", "шаг закончен")
+        notifier.postBakingNotification(1605L, collidingB, "Вторая", "шаг закончен")
 
         assertThat(shown()).containsExactly(
             collidingA to MadreNotifier.ID_KEYED,
@@ -63,8 +63,8 @@ class MadreNotifierKeyTest {
 
     @Test
     fun `cancelling one of the two colliding keys leaves the other alone`() {
-        notifier.postBakingNotification(collidingA, "Первая", "шаг закончен")
-        notifier.postBakingNotification(collidingB, "Вторая", "шаг закончен")
+        notifier.postBakingNotification(1408L, collidingA, "Первая", "шаг закончен")
+        notifier.postBakingNotification(1605L, collidingB, "Вторая", "шаг закончен")
 
         notifier.cancelByKey(collidingA)
 
@@ -75,7 +75,7 @@ class MadreNotifierKeyTest {
     @Test
     fun `a keyed notification is tagged with the key itself`() {
         val key = BakingNotificationPlanner.butterPrepKey(sessionId = 3L, stepIndex = 2)
-        notifier.postBakingNotification(key, "Достаньте масло", "через полчаса")
+        notifier.postBakingNotification(3L, key, "Достаньте масло", "через полчаса")
 
         assertThat(shown()).containsExactly(key to MadreNotifier.ID_KEYED)
     }
@@ -84,8 +84,8 @@ class MadreNotifierKeyTest {
     @Test
     fun `the same key replaces its own notification`() {
         val key = BakingNotificationPlanner.stepDoneKey(sessionId = 1L, stepIndex = 4)
-        notifier.postBakingNotification(key, "Первый показ", "шаг закончен")
-        notifier.postBakingNotification(key, "Второй показ", "шаг закончен")
+        notifier.postBakingNotification(1L, key, "Первый показ", "шаг закончен")
+        notifier.postBakingNotification(1L, key, "Второй показ", "шаг закончен")
 
         assertThat(shown()).containsExactly(key to MadreNotifier.ID_KEYED)
     }
@@ -101,7 +101,7 @@ class MadreNotifierKeyTest {
                 }
             }
         }
-        keys.forEach { notifier.postBakingNotification(it, "Заголовок", "текст") }
+        keys.forEach { notifier.postBakingNotification(1L, it, "Заголовок", "текст") }
 
         assertThat(manager.activeNotifications.map { it.tag }).containsExactlyElementsIn(keys)
     }
@@ -111,7 +111,7 @@ class MadreNotifierKeyTest {
         notifier.postFeedingReminder("Покормите закваску", "прошло 12 часов")
         val key = BakingNotificationPlanner.stepDoneKey(sessionId = 7L, stepIndex = 1)
 
-        notifier.postBakingNotification(key, "время вышло", "шаг закончен")
+        notifier.postBakingNotification(7L, key, "время вышло", "шаг закончен")
         notifier.cancelByKey(key)
 
         assertThat(shown()).containsExactly(null to MadreNotifier.ID_FEEDING)
@@ -127,7 +127,7 @@ class MadreNotifierKeyTest {
         notifier.notifySafely(progressId, progressNotification())
         val key = BakingNotificationPlanner.stepDoneKey(sessionId = 1000L, stepIndex = 0)
 
-        notifier.postBakingNotification(key, "время вышло", "шаг закончен")
+        notifier.postBakingNotification(1000L, key, "время вышло", "шаг закончен")
         notifier.cancelByKey(key)
 
         assertThat(shown()).containsExactly(null to progressId)
@@ -137,7 +137,7 @@ class MadreNotifierKeyTest {
     @Test
     fun `odd keys are still told apart`() {
         val odd = listOf("", "😀", "a".repeat(1000), "Aa", "BB", "step-done-0-0")
-        odd.forEach { notifier.postBakingNotification(it, "Заголовок", "текст") }
+        odd.forEach { notifier.postBakingNotification(1L, it, "Заголовок", "текст") }
 
         assertThat(manager.activeNotifications.map { it.tag }).containsExactlyElementsIn(odd)
     }

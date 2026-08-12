@@ -77,7 +77,9 @@ fun BakingTimerScreen(
     // назвал по имени строки: остальное — проза, и трогать её книга не берётся.
     val quantityBindings = remember(s.recipe) { RecipeScaler.scalableBindings(s.recipe) }
     val isWait = step.type == StepType.WAIT
-    val urgent = remaining in 1..(step.durationMinutes * 60L / 10).coerceAtLeast(1)
+    // Cycle 20: порог «скоро» — общий для книги, а не десятая часть шага.
+    // Страница и шторка торопятся в одну и ту же секунду.
+    val urgent = BakingTimerCopy.isUrgent(remaining, s.isPaused)
     // Следующий шаг — только название, без «дальше:»: на экране уже кнопка
     // «Дальше», префикс дублировал слово. В шторке/уведомлении формат
     // BakingProgressFormatter со «дальше:» остаётся — там кнопки нет.
@@ -126,11 +128,12 @@ fun BakingTimerScreen(
                 )
 
                 Text(
-                    formatTimer(remaining),
+                    BakingTimerCopy.timerText(remaining),
                     color = if (urgent) colors.terracotta else colors.espresso,
                     fontFamily = FontFamily.Serif,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 88.sp,
+                    // На нуле здесь стоят слова, а не цифры, и кегль у них свой.
+                    fontSize = BakingTimerCopy.timerSizeSp(remaining).sp,
                     letterSpacing = (-3).sp,
                     textAlign = TextAlign.Center,
                     modifier = Modifier
@@ -145,7 +148,7 @@ fun BakingTimerScreen(
                     maxLines = 1,
                 )
                 Text(
-                    moodLine(isWait, s.isPaused, urgent),
+                    BakingTimerCopy.moodLine(isWait, s.isPaused, remaining),
                     color = colors.cocoa,
                     fontFamily = FontFamily.Serif,
                     fontStyle = FontStyle.Italic,
@@ -300,21 +303,6 @@ private fun ClosedBakingPage(onBack: () -> Unit) {
             BookButton(label = "На первую полосу", onClick = onBack)
         }
     }
-}
-
-/** hh:mm:ss при наличии часов, иначе m:ss — pitfall CLAUDE.md соблюдён. */
-private fun formatTimer(totalSeconds: Long): String {
-    val h = totalSeconds / 3600
-    val m = (totalSeconds % 3600) / 60
-    val sec = totalSeconds % 60
-    return if (h > 0) "%d:%02d:%02d".format(h, m, sec) else "%d:%02d".format(m, sec)
-}
-
-private fun moodLine(isWait: Boolean, isPaused: Boolean, urgent: Boolean) = when {
-    isPaused -> "страница заложена. вернёмся, когда скажешь"
-    urgent -> "почти! не уходи далеко"
-    isWait -> "тесто спит. не будите его."
-    else -> "твой ход, пекарь"
 }
 
 private fun portionWord(n: Int) = when (n) {

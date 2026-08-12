@@ -98,3 +98,15 @@ Canvas, Compose layout, типографика и обычные иконки н
 Maintenance проверяет screenshot coverage, accessibility, startup/performance,
 Room migrations, PocketBase rules, зависимости, dead code и документацию.
 Новая декоративная механика не имеет приоритета над красным gate или миграцией.
+
+
+## VersionName (product)
+
+**Только pure semver:** `6.4.4`, не `6.4.4-maintenance23`.
+
+- patch residual: `6.4.4` → `6.4.5`
+- важное: `6.5.0`
+- кардинально новое: `7.0.x`
+- git-ветка по-прежнему `cycle/N` или `maintenance/N`
+- `versionCode` только растёт; `prepare-version` пишет `versionName` из `CYCLE.yaml`
+

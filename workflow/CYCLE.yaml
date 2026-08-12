@@ -1,43 +1,42 @@
 {
   "schema_version": 1,
   "cycle": {
-    "number": 21,
+    "number": 22,
     "kind": "maintenance",
-    "version": "6.4.1-maintenance21",
-    "branch": "maintenance/21",
+    "version": "6.4.2-maintenance22",
+    "branch": "maintenance/22",
     "stage": "releasable",
-    "created_at": "2026-08-12T16:00:00Z",
-    "updated_at": "2026-08-12T16:55:55Z"
+    "created_at": "2026-08-12T18:00:00Z",
+    "updated_at": "2026-08-12T18:01:28Z"
   },
   "features": [
     {
-      "id": "static-shade-timer",
-      "title": "Статичные цифры в шторке — без countdown Chronometer",
+      "id": "native-notif",
+      "title": "Нативные уведомления без paper RemoteViews",
       "needs_generated_asset": false,
       "acceptance": [
-        "usesChronometer/setWhen/RemoteViews Chronometer не используются для хода выпечки",
-        "Остаток — clamped timerText или «время вышло»; нигде нет знака минус",
-        "Свёрнутая строка несёт цифры времени (или «время вышло»)"
+        "Нет setCustomContentView/Big",
+        "compact содержит время или «время вышло»",
+        "нет Chronometer/минуса"
       ]
     },
     {
-      "id": "paper-compact-dark",
-      "title": "Бумага в свёрнутой и развёрнутой карточке — читаемо в тёмной теме",
+      "id": "book-toc",
+      "title": "Оглавление книги без избранного",
       "needs_generated_asset": false,
       "acceptance": [
-        "setCustomContentView(compact) + setCustomBigContentView(big) на paper",
-        "Фон paper переставляется setBackgroundResource после инфляции",
-        "Чернила ink/cocoa/urgent через ContextCompat + setTextColor",
-        "BigText остаётся заполненным как fallback"
+        "11 рецептов как Name....N",
+        "нет DogEar/favorite на home"
       ]
     },
     {
-      "id": "notify-on-change",
-      "title": "notify только когда карточка реально изменилась",
+      "id": "perm-honesty",
+      "title": "Честность про permissions при update",
       "needs_generated_asset": false,
       "acceptance": [
-        "Пересборка уведомления не идёт каждый тик без смены BakingNotificationContent",
-        "Смена remaining/permille/badge/pause/step публикуется"
+        "location refresh on resume",
+        "camera denial → gallery or settings",
+        "Photo Picker без storage"
       ]
     }
   ],
@@ -45,26 +44,26 @@
     "plan": {
       "status": "pass",
       "evidence": [
-        "DESIGN-V4.md Cycle 21",
-        "MoA shade residual"
+        "DESIGN-V4 Cycle 22"
       ]
     },
     "tdd": {
       "status": "pass",
       "evidence": [
-        "LXC108 testDebugUnitTest 647 green",
-        "BakingShadeCardsTest"
+        "641 unit tests LXC108"
       ]
     },
     "build": {
       "status": "pass",
       "evidence": [
-        "lintDebug assembleDebug LXC108"
+        "lintDebug assembleDebug"
       ]
     },
     "review": {
-      "status": "pending",
-      "evidence": []
+      "status": "pass",
+      "evidence": [
+        "PR #38"
+      ]
     },
     "visual": {
       "status": "pending",
@@ -88,9 +87,7 @@
   },
   "blockers": [],
   "decisions": [
-    "2026-08-12: kill both system and RemoteViews countdown Chronometers — free-run past base is structural",
-    "2026-08-12: dual paper custom content+big for dark OEM readability; no values-night invert",
-    "2026-08-12: notify-on-change via full BakingNotificationContent equality after chrono fields removed",
-    "2026-08-12: FGS tick ownership still DEFER — frozen digits better than minus"
+    "2026-08-12: native system notifications preferred over custom paper",
+    "2026-08-12: favorites removed from home TOC"
   ]
 }

@@ -163,16 +163,43 @@ class BakingProgressService : LifecycleService() {
      * Свои RemoteViews убраны — нативный Android в светлой и тёмной теме.
      */
     private fun buildNotification(content: BakingNotificationContent): Notification =
-        // Cycle 22: только системный шаблон. Своя «бумага» (RemoteViews) давала
-        // цветную подложку в светлой и тёмной теме — Дима просил нативный Android.
-        // Цифры и «время вышло» уже в content.compact / bigText (без Chronometer).
+        // Collapsed: pure system template (title + compact + thin progress).
+        // Expanded: DecoratedCustomViewStyle + wide RemoteViews WITHOUT paper bg —
+        // system chrome/colors only, large timer (Dima: «широкие нативные»).
         baseBuilder()
             .setContentTitle(content.title)
             .setContentText(content.compact)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(content.bigText))
+            .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+            .setCustomBigContentView(wideExpandedCard(content))
             .setProgress(BakingProgress.PROGRESS_MAX, content.progressPermille, false)
             .setContentIntent(openBakingIntent(content.sessionId))
             .build()
+
+    /**
+     * Развёрнутая широкая карточка: крупные цифры, шаг, полоска, «дальше».
+     * Без своей подложки — DecoratedCustomViewStyle рисует системную рамку.
+     */
+    private fun wideExpandedCard(content: BakingNotificationContent): android.widget.RemoteViews {
+        val rv = android.widget.RemoteViews(packageName, R.layout.notification_baking_wide)
+        rv.setTextViewText(R.id.notif_wide_header, content.headerLine)
+        rv.setTextViewText(R.id.notif_wide_timer, content.timerText)
+        rv.setContentDescription(R.id.notif_wide_timer, content.spokenTimer)
+        val step = if (content.badge == null) content.stepLine else "${content.badge} · ${content.stepLine}"
+        rv.setTextViewText(R.id.notif_wide_step, step)
+        rv.setProgressBar(
+            R.id.notif_wide_progress,
+            BakingProgress.PROGRESS_MAX,
+            content.progressPermille,
+            false,
+        )
+        if (content.nextLine.isBlank()) {
+            rv.setViewVisibility(R.id.notif_wide_next, android.view.View.GONE)
+        } else {
+            rv.setViewVisibility(R.id.notif_wide_next, android.view.View.VISIBLE)
+            rv.setTextViewText(R.id.notif_wide_next, content.nextLine)
+        }
+        return rv
+    }
 
     /** Первые доли секунды, пока не пришёл первый слепок. */
     private fun buildStartingNotification(): Notification =

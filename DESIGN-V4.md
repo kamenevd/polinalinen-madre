@@ -769,3 +769,8 @@ APK update with same signing key does not revoke runtime grants. UI re-reads loc
 ## Cycle 23 — launcher icons v2 (2026-08-12)
 
 Новый pack `madre-android-icons-v2`: density mipmaps + adaptive PNG foreground/background (Parchment). Play 512 в docs/.
+
+## Cycle 24 — TOC leaders + wide native shade (2026-08-12)
+
+- TOC: Canvas leaders always fill gap; no WornPage gray tint on chapter rows.
+- Notifications: collapsed system; expanded DecoratedCustomViewStyle wide timer (no paper).

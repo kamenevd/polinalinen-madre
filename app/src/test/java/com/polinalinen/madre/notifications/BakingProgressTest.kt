@@ -16,7 +16,6 @@ class BakingProgressTest {
         stepCount: Int = 4,
         remainingSeconds: Long = 600,
         stepTotalSeconds: Long = 3600,
-        stepEndsAtElapsed: Long = 5_000_000L,
         isPaused: Boolean = false,
         nextStepTitle: String? = "Складка",
         starterName: String = StarterName.DEFAULT,
@@ -29,7 +28,6 @@ class BakingProgressTest {
         stepCount = stepCount,
         remainingSeconds = remainingSeconds,
         stepTotalSeconds = stepTotalSeconds,
-        stepEndsAtElapsed = stepEndsAtElapsed,
         isPaused = isPaused,
         nextStepTitle = nextStepTitle,
     )

@@ -9,22 +9,19 @@ import org.junit.Test
  * Строка собирается ЗДЕСЬ, чистой функцией над одним слепком хода — а не
  * внутри сервиса, где её нечем проверить. Android сам решает, разворачивать
  * ли карточку в шторке, и книга этого не обещает; она обещает другое: смысл
- * виден и в свёрнутом виде, обратный отсчёт виден всегда, а полный текст ждёт
- * в BigText без обрезания.
+ * виден и в свёрнутом виде, цифры остатка есть везде, где их вообще видно, а
+ * полный текст ждёт в BigText без обрезания.
+ *
+ * Cycle 21: и главное обещание этого файла — цифры НИКОГДА не отрицательные.
+ * Считает их не система, а книга, и «-4:12» ей просто неоткуда взять.
  */
 class BakingNotificationContentTest {
-
-    private val now = 1_700_000_000_000L
-
-    /** «Сейчас» по монотонным часам — тот же миг, что и [now]. */
-    private val nowElapsed = 5_000_000L
 
     private fun progress(
         stepIndex: Int = 2,
         stepCount: Int = 8,
         remainingSeconds: Long = 3_725,
         stepTotalSeconds: Long = 7_200,
-        stepEndsAtElapsed: Long = nowElapsed + 3_725_000L,
         isPaused: Boolean = false,
         nextStepTitle: String? = "Формовка",
         starterName: String = "Соня",
@@ -37,13 +34,26 @@ class BakingNotificationContentTest {
         stepCount = stepCount,
         remainingSeconds = remainingSeconds,
         stepTotalSeconds = stepTotalSeconds,
-        stepEndsAtElapsed = stepEndsAtElapsed,
         isPaused = isPaused,
         nextStepTitle = nextStepTitle,
     )
 
     private fun content(progress: BakingProgress = progress()) =
-        BakingNotificationContent.from(progress, now, nowElapsed)
+        BakingNotificationContent.from(progress)
+
+    /** Всё, что человек читает в шторке, — одним списком: для проверок «нигде нет». */
+    private fun everythingVisible(card: BakingNotificationContent) = listOf(
+        card.title,
+        card.headerLine,
+        card.compact,
+        card.stepLine,
+        card.compactStepLine,
+        card.timerText,
+        card.spokenTimer,
+        card.nextLine,
+        card.bigText,
+        card.badge.orEmpty(),
+    )
 
     @Test
     fun `the title is the bread, so the shade says what is baking`() {
@@ -56,52 +66,87 @@ class BakingNotificationContentTest {
         assertThat(content().compact).contains("шаг 3 из 8")
     }
 
+    // ————— Cycle 21: минуса не бывает —————
+
     /**
-     * Живой отсчёт рисует система: setWhen + chronometer countDown тикают сами,
-     * между обновлениями и в свёрнутой карточке. Дублировать его текстом в той
-     * же строке — значит показать два разных числа в одной секунде.
+     * Главный фикс цикла. Раньше обратный отсчёт в шторке рисовал системный
+     * Chronometer: он тикал сам, между обновлениями, — и не останавливался на
+     * своей базе, а продолжал считать в другую сторону, показывая «-4:12».
+     * Пока книга жива, следующее обновление через секунду подменяло его
+     * словами; когда OEM усыпил процесс, а уведомление в шторке оставил, —
+     * подменять было некому, и минус жил там часами.
+     *
+     * Теперь цифры приходят готовой строкой, и взяться минусу неоткуда.
      */
     @Test
-    fun `a running bake hands the countdown to the system chronometer`() {
-        val running = content()
-        assertThat(running.usesChronometer).isTrue()
-        assertThat(running.chronometerFinishAtMillis).isEqualTo(now + 3_725_000L)
+    fun `no line the human reads ever carries a minus sign`() {
+        val remainders = listOf(-5L, -1L, 0L, 1L, 59L, 299L, 300L, 3_725L, 86_400L)
+        remainders.forEach { remaining ->
+            listOf(true, false).forEach { paused ->
+                val card = content(progress(remainingSeconds = remaining, isPaused = paused))
+                everythingVisible(card).forEach { line ->
+                    assertThat(line).doesNotContain("-")
+                    assertThat(line).doesNotContain("−")
+                }
+            }
+        }
     }
 
     /**
-     * Cycle 20: база хронометра — ТОЧНЫЙ конец шага, а не «сейчас плюс остаток
-     * в секундах». Остаток округлён вниз: шаг, кончающийся в .400, получал бы
-     * базу на четыре десятых секунды позже, и хронометр досчитывал до нуля
-     * после того, как страница уже сказала «время вышло».
+     * Остаток ушёл в минус — это тот же конец шага, а не «минус пять секунд».
+     * Слепок такого показывать не должен вовсе, но между тиком и публикацией
+     * секунда может быть отрицательной, и книга обязана назвать её честно.
      */
     @Test
-    fun `the chronometer is set to the exact end of the step, not to a rounded second`() {
-        val ragged = progress(
-            remainingSeconds = 3_725,
-            stepEndsAtElapsed = nowElapsed + 3_725_400L,
-        )
-        val card = content(ragged)
-        assertThat(card.chronometerBaseElapsed).isEqualTo(nowElapsed + 3_725_400L)
-        assertThat(card.chronometerFinishAtMillis).isEqualTo(now + 3_725_400L)
+    fun `a remainder gone past zero is still just the end of the step`() {
+        val overdue = content(progress(remainingSeconds = -5))
+        assertThat(overdue.timerText).isEqualTo("время вышло")
+        assertThat(overdue.compact).contains("время вышло")
+        assertThat(overdue.bigText).contains("время вышло")
+        // Полоска на конце шага полна — как и на ровном нуле.
+        assertThat(overdue.progressPermille).isEqualTo(BakingProgress.PROGRESS_MAX)
     }
 
     /**
-     * Уведомление строится не в тот же миг, когда собран слепок, и пересобирается
-     * оно каждую секунду. Конец шага от этого не двигается — а «сейчас плюс
-     * остаток» уезжал вперёд на каждой пересборке.
+     * Свёрнутую строку человек видит, не разворачивая шторку, и цифры в ней
+     * теперь единственные: системного хронометра, который рисовал их сам, не
+     * стало. Строка без цифр означала бы, что до остатка надо ещё дотянуться.
      */
     @Test
-    fun `rebuilding the card later does not push the finish moment forward`() {
-        val bake = progress()
-        val atSnapshot = BakingNotificationContent.from(bake, now, nowElapsed)
-        val aMomentLater = BakingNotificationContent.from(bake, now + 800L, nowElapsed + 800L)
-        assertThat(aMomentLater.chronometerFinishAtMillis)
-            .isEqualTo(atSnapshot.chronometerFinishAtMillis)
-        assertThat(aMomentLater.chronometerBaseElapsed).isEqualTo(atSnapshot.chronometerBaseElapsed)
+    fun `the compact line always carries the time itself`() {
+        assertThat(content().compact).contains("1:02:05")
+        assertThat(content(progress(isPaused = true)).compact).contains("1:02:05")
+        assertThat(content(progress(remainingSeconds = 299)).compact).contains("4:59")
+        assertThat(content(progress(remainingSeconds = 0)).compact).contains("время вышло")
+    }
+
+    /**
+     * Цифры стоят в свёрнутой строке ВТОРЫМИ, сразу за названием шага. Систему
+     * никто не обязывает показать строку целиком: длинное название рецепта, узкий
+     * экран — и хвост уходит в многоточие. Номер шага это переживёт, остаток нет.
+     */
+    @Test
+    fun `the time comes before the step number, because the tail gets cut`() {
+        val line = content().compact
+        assertThat(line.indexOf("1:02:05")).isLessThan(line.indexOf("шаг 3 из 8"))
+    }
+
+    /**
+     * Один и тот же слепок обязан давать одну и ту же карточку: на этом стоит
+     * дедупликация в сервисе — он не шлёт системе то же самое второй раз.
+     * Раньше сравнить две карточки было нельзя: они несли момент конца шага в
+     * стенных часах и отличались им при каждой пересборке.
+     */
+    @Test
+    fun `the same snapshot renders the same card, so nothing is re-sent for nothing`() {
+        assertThat(content(progress())).isEqualTo(content(progress()))
+        assertThat(content(progress(isPaused = true))).isNotEqualTo(content(progress()))
+        // Секунда прошла — карточка другая, и её послать обязаны.
+        assertThat(content(progress(remainingSeconds = 3_724))).isNotEqualTo(content(progress()))
     }
 
     @Test
-    fun `the full text spells the time out, so nothing depends on the chronometer alone`() {
+    fun `the full text spells the time out, so nothing depends on one card alone`() {
         assertThat(content().bigText).contains("осталось 1:02:05")
     }
 
@@ -120,22 +165,29 @@ class BakingNotificationContentTest {
         assertThat(last.bigText).doesNotContain("дальше:")
     }
 
+    /**
+     * На паузе стоящие цифры выглядят точно так же, как идущие, и отличить их
+     * человеку нечем. Поэтому «пауза» сказана в обеих карточках — и в свёрнутой
+     * строке, и ярлыком в развёрнутой. Остаток при этом всё равно назван: пауза
+     * не должна прятать, сколько осталось.
+     */
     @Test
-    fun `a paused bake stops the chronometer and says it is paused`() {
+    fun `a paused bake says so on every card, not only in the big one`() {
         val paused = content(progress(isPaused = true))
-        assertThat(paused.usesChronometer).isFalse()
         assertThat(paused.compact).contains("пауза")
-        // Остаток всё равно назван — пауза не должна прятать, сколько осталось.
         assertThat(paused.compact).contains("1:02:05")
+        assertThat(paused.badge).isEqualTo("пауза")
+        assertThat(paused.compactStepLine).startsWith("пауза · ")
+        assertThat(paused.timerText).isEqualTo("1:02:05")
     }
 
+    /** Сняли паузу — ярлык уходит, цифры остаются теми же. */
     @Test
-    fun `resuming brings the chronometer back with a fresh finish time`() {
-        val paused = content(progress(isPaused = true))
+    fun `resuming drops the pause mark and keeps the digits`() {
         val resumed = content(progress(isPaused = false))
-        assertThat(paused.usesChronometer).isFalse()
-        assertThat(resumed.usesChronometer).isTrue()
-        assertThat(resumed.chronometerFinishAtMillis).isGreaterThan(now)
+        assertThat(resumed.badge).isNull()
+        assertThat(resumed.compactStepLine).isEqualTo(resumed.stepLine)
+        assertThat(resumed.compact).doesNotContain("пауза")
     }
 
     /**
@@ -145,7 +197,7 @@ class BakingNotificationContentTest {
     @Test
     fun `a step that ran out says so instead of counting to nothing`() {
         val done = content(progress(remainingSeconds = 0))
-        assertThat(done.usesChronometer).isFalse()
+        assertThat(done.timerText).isEqualTo("время вышло")
         assertThat(done.compact).contains("время вышло")
         assertThat(done.bigText).contains("время вышло")
     }
@@ -168,8 +220,8 @@ class BakingNotificationContentTest {
     @Test
     fun `a step with no time at all never shows a phantom countdown`() {
         val instant = content(progress(remainingSeconds = 0, isPaused = false, stepIndex = 0))
-        assertThat(instant.usesChronometer).isFalse()
-        assertThat(instant.chronometerFinishAtMillis).isEqualTo(now)
+        assertThat(instant.timerText).isEqualTo("время вышло")
+        assertThat(instant.isUrgent).isFalse()
     }
 
     @Test
@@ -189,7 +241,10 @@ class BakingNotificationContentTest {
             content(progress(isPaused = true)),
             content(progress(remainingSeconds = 0)),
             content(progress(stepIndex = 7, stepCount = 8, nextStepTitle = null)),
-        ).forEach { assertThat(it.compact).doesNotContain("\n") }
+        ).forEach {
+            assertThat(it.compact).doesNotContain("\n")
+            assertThat(it.compactStepLine).doesNotContain("\n")
+        }
     }
 
     @Test
@@ -198,11 +253,6 @@ class BakingNotificationContentTest {
         assertThat(content().bigText).contains("\n")
     }
 
-    /**
-     * Тап ведёт в СВОЮ выпечку: у каждой сессии свой requestCode, иначе
-     * PendingIntent'ы разных выпечек система считает одним и тем же, и вторая
-     * строка в шторке открывает первую.
-     */
     // ————— Cycle 19: своя карточка в развёрнутой шторке —————
 
     /**
@@ -232,9 +282,15 @@ class BakingNotificationContentTest {
         assertThat(content(progress(remainingSeconds = 0)).timerText).isEqualTo("время вышло")
     }
 
+    /** Карточка знает, чья она: дорога внутрь книги строится по этому id. */
+    @Test
+    fun `the card carries the session it belongs to`() {
+        assertThat(content().sessionId).isEqualTo(3L)
+    }
+
     /**
      * «Скоро» — ярлык, а не второе число: пять минут до конца шага человек и
-     * так видит по хронометру, но заметить их он должен, не вчитываясь.
+     * так видит по цифрам, но заметить их он должен, не вчитываясь.
      */
     @Test
     fun `the last five minutes get a badge, and it is a word, not an emoji`() {
@@ -309,6 +365,11 @@ class BakingNotificationContentTest {
         assertThat(big).contains("Формовка")
     }
 
+    /**
+     * Тап ведёт в СВОЮ выпечку: у каждой сессии свой requestCode, иначе
+     * PendingIntent'ы разных выпечек система считает одним и тем же, и вторая
+     * строка в шторке открывает первую.
+     */
     @Test
     fun `every bake gets its own pending intent, and none of them is the feeding one`() {
         val codes = (1L..50L).map { BakingNotificationContent.intentRequestCode(it) }

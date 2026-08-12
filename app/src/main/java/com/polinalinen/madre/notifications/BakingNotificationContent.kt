@@ -10,25 +10,45 @@ import com.polinalinen.madre.sourdough.StarterName
  * раскрытым» нет, и книга такого не обещает. Обещает она ровно три вещи, и все
  * три проверяются юнит-тестом:
  *
- *  · свёрнутая строка сама по себе имеет смысл — шаг и его номер стоят в
- *    начале, а не в хвосте, который система обрежет;
- *  · обратный отсчёт виден всегда — его рисует системный хронометр
- *    (setWhen + setUsesChronometer + setChronometerCountDown), поэтому он тикает
- *    и между обновлениями, и в свёрнутой карточке;
+ *  · свёрнутая строка сама по себе имеет смысл — шаг, остаток и номер шага
+ *    стоят в ней в таком порядке, чтобы обрезание хвоста системой не унесло
+ *    цифры;
+ *  · цифры остатка есть в каждой строке, которую видит человек, — и никогда не
+ *    бывают отрицательными;
  *  · в BigText лежит полный текст, включая остаток словами, — так ничего не
- *    зависит от одного лишь хронометра.
+ *    зависит от одной лишь своей карточки.
  *
  * Cycle 19: у развёрнутой карточки появился свой вид — RemoteViews на бумаге
- * ([R.layout.notification_baking_progress]). Поля [headerLine], [stepLine],
- * [timerText], [nextLine] и [badge] существуют ровно для него: в самом
- * RemoteViews ничего не считается, туда кладут уже готовые строки. Это не
+ * ([R.layout.notification_baking_progress]). Cycle 21: свой вид появился и у
+ * свёрнутой ([R.layout.notification_baking_compact]). Поля [headerLine],
+ * [stepLine], [timerText], [nextLine] и [badge] существуют ровно для них: в
+ * самом RemoteViews ничего не считается, туда кладут уже готовые строки. Это не
  * замена BigText, а слой поверх него — прошивка, которая своей карточки не
  * покажет, отдаст человеку тот же [bigText], что и раньше.
+ *
+ * ПОЧЕМУ ЗДЕСЬ НЕТ ХРОНОМЕТРА. До Cycle 21 обратный отсчёт в шторке рисовал
+ * системный Chronometer: и в свёрнутой строке (setWhen + setUsesChronometer +
+ * setChronometerCountDown), и в своей карточке. Он тикал сам, между
+ * обновлениями, — и в этом же была беда. Chronometer не останавливается на
+ * своей базе: досчитав до нуля, он идёт дальше в минус и показывает «-4:12».
+ * Пока приложение живо, следующее обновление приходит через секунду и подменяет
+ * его словами «время вышло», но живо оно не всегда: OEM'ы усыпляют процессы,
+ * а уведомление в шторке при этом остаётся — со свободно бегущим минусом внутри.
+ * Так минус и жил у Димы после m20, где чинили базу хронометра, а не сам факт
+ * его существования.
+ *
+ * Поэтому цифр, идущих самих по себе, в книге больше нет: в шторке лежит
+ * готовая строка [timerText], и меняет её только новое уведомление. Замерший
+ * процесс оставит на бумаге последнюю известную секунду — это честно («столько
+ * оставалось, когда книгу усыпили») и, в отличие от минуса, не выдумывает
+ * времени, которого не было.
  *
  * Собирается это здесь, чистой функцией, а не внутри сервиса: в сервисе строку
  * нечем проверить, а разойтись с экраном она не имеет права.
  */
 data class BakingNotificationContent(
+    /** Чья это выпечка — по нему строится дорога внутрь книги. */
+    val sessionId: Long,
     /** Что печётся — системный заголовок свёрнутой строки. */
     val title: String,
     /**
@@ -40,11 +60,30 @@ data class BakingNotificationContent(
      * второй раз незачем.
      */
     val headerLine: String,
-    /** Одна строка со смыслом — то, что видно, даже если карточка свёрнута. */
+    /**
+     * Одна строка со смыслом — то, что видно, даже если карточка свёрнута и
+     * своей у неё не вышло.
+     *
+     * Cycle 21: цифры стоят в ней ВТОРЫМИ, сразу за названием шага. Раньше их
+     * там не было вовсе — их показывал хронометр, и два числа про одну секунду
+     * разошлись бы на глазах. Хронометра больше нет, а номер шага пережить
+     * обрезание хвоста системой может, остаток — нет.
+     */
     val compact: String,
     /** «Расстойка · шаг 3 из 8» — отдельной строкой своей карточки. */
     val stepLine: String,
-    /** Крупные цифры карточки: «1:02:05» либо «время вышло». */
+    /**
+     * То же для свёрнутой карточки, но с ярлыком впереди: «пауза · Расстойка ·
+     * шаг 3 из 8».
+     *
+     * Ярлык стоит первым не для порядка. В свёрнутой карточке рядом лежат
+     * крупные цифры [timerText], и на паузе они выглядят точно так же, как на
+     * ходу, — стоящее время неотличимо от идущего. Не сказать при этом «пауза»
+     * значило бы показать живой отсчёт там, где его нет (hard rule №8). Места в
+     * строке мало, поэтому обрезается хвост — номер шага, а не ярлык.
+     */
+    val compactStepLine: String,
+    /** Крупные цифры карточки: «1:02:05» либо «время вышло». Минуса не бывает. */
     val timerText: String,
     /** Те же цифры словами — для экранного диктора, крупные цифры он читает по знаку. */
     val spokenTimer: String,
@@ -56,19 +95,8 @@ data class BakingNotificationContent(
     val bigText: String,
     /** Полоска хода — та же, что в слепке. */
     val progressPermille: Int,
-    /** Отдать ли отсчёт системному хронометру. */
-    val usesChronometer: Boolean,
     /** Осталось меньше пяти минут и выпечка идёт: цифры в карточке краснеют. */
     val isUrgent: Boolean,
-    /** Момент, когда текущий шаг досчитает до нуля, — по стенным часам (setWhen). */
-    val chronometerFinishAtMillis: Long,
-    /**
-     * Тот же момент по монотонным часам — база для Chronometer в своей
-     * карточке. Двое часов здесь не роскошь: setWhen у уведомления понимает
-     * только стенные, а Chronometer — только elapsedRealtime, и переводить одно
-     * в другое на месте отрисовки значило бы считать конец шага дважды.
-     */
-    val chronometerBaseElapsed: Long,
 ) {
 
     companion object {
@@ -82,22 +110,19 @@ data class BakingNotificationContent(
         const val URGENT_SECONDS = 300L
 
         /**
-         * @param nowMillis «сейчас» по стенным часам — только чтобы перевести в
-         *   них конец шага для setWhen.
-         * @param nowElapsed «сейчас» по монотонным часам, в тот же миг, что и
-         *   [nowMillis]. Оба нужны потому, что конец шага известен в монотонных,
-         *   а уведомление умеет только стенные.
+         * Cycle 21: часов здесь больше нет ни стенных, ни монотонных.
+         *
+         * Раньше в [from] приходили оба «сейчас» — чтобы перевести конец шага в
+         * стенные часы для setWhen и отдать монотонные хронометру. Обоих
+         * потребителей больше не существует, а слепок и без них знает всё, что
+         * нужно сказать: сколько осталось, стоит ли пауза, какой это шаг.
          */
-        fun from(
-            bake: BakingProgress,
-            nowMillis: Long,
-            nowElapsed: Long,
-        ): BakingNotificationContent {
-            // Хронометр имеет смысл, только когда есть чему идти: на паузе он
-            // врал бы, а на нуле мигал бы отрицательным временем.
-            val ticking = !bake.isPaused && bake.remainingSeconds > 0L
+        fun from(bake: BakingProgress): BakingNotificationContent {
             val head = "${bake.stepTitle} · шаг ${bake.stepIndex + 1} из ${bake.stepCount}"
+            // formatRemaining поднимает отрицательное до нуля, но до неё дело и
+            // не доходит: ноль и всё, что меньше, книга называет словами.
             val time = BakingProgress.formatRemaining(bake.remainingSeconds)
+            val running = !bake.isPaused && bake.remainingSeconds > 0L
             // Cycle 20: конец шага проверяется РАНЬШЕ паузы. Иначе выпечка,
             // поставленная на паузу после нуля, говорила «пауза, осталось
             // 0:00» — цифра ни о чём: шаг кончился, и пауза этого не отменяет.
@@ -111,39 +136,36 @@ data class BakingNotificationContent(
             }
             // «Скоро» — только пока отсчёт идёт. На паузе торопить нечем, а на
             // нуле торопиться уже поздно: ярлык там был бы просто неправдой.
-            val urgent = ticking && bake.remainingSeconds < URGENT_SECONDS
+            val urgent = running && bake.remainingSeconds < URGENT_SECONDS
             val badge = when {
                 bake.isPaused -> "пауза"
                 urgent -> "скоро"
                 else -> null
             }
+            // Хвост свёрнутой строки: сначала цифры, потом ярлык. Средняя точка
+            // здесь та же, что и на карточке, — других разделителей в шторке нет.
+            val compactTail = when {
+                bake.remainingSeconds <= 0L ->
+                    if (bake.isPaused) "пауза · время вышло" else "время вышло"
+                bake.isPaused -> "пауза · $time"
+                urgent -> "$time · скоро"
+                else -> time
+            }
 
             return BakingNotificationContent(
+                sessionId = bake.sessionId,
                 title = bake.recipeName,
                 headerLine = "${StarterName.sanitize(bake.starterName)} · ${bake.recipeName}",
-                // Пока идёт отсчёт, время в строке не дублируется: его показывает
-                // хронометр, и два числа про одну секунду разошлись бы на глазах.
-                // Ярлык «скоро» — не число, и хронометру он не противоречит.
-                compact = when {
-                    urgent -> "$head · скоро"
-                    ticking -> head
-                    else -> "$head · $state"
-                },
+                compact = "${bake.stepTitle} · $compactTail · шаг ${bake.stepIndex + 1} из ${bake.stepCount}",
                 stepLine = head,
+                compactStepLine = if (badge == null) head else "$badge · $head",
                 timerText = if (bake.remainingSeconds <= 0L) "время вышло" else time,
                 spokenTimer = BakingProgress.timerLabel(bake.remainingSeconds, bake.isPaused),
                 nextLine = bake.shadeNextLine(),
                 badge = badge,
                 bigText = "$head\n$state\n${bake.nextStepText()}",
                 progressPermille = bake.permille(),
-                usesChronometer = ticking,
                 isUrgent = urgent,
-                // Конец шага известен в монотонных часах — в стенные он
-                // переводится один раз, здесь, и ровно тем сдвигом, который
-                // между ними сейчас. Ни округления, ни «сейчас плюс остаток».
-                chronometerFinishAtMillis =
-                    if (ticking) nowMillis + (bake.stepEndsAtElapsed - nowElapsed) else nowMillis,
-                chronometerBaseElapsed = if (ticking) bake.stepEndsAtElapsed else nowElapsed,
             )
         }
 

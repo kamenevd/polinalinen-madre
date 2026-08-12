@@ -47,6 +47,7 @@ class BakingNotificationContentTest {
         card.headerLine,
         card.compact,
         card.stepLine,
+        card.compactStepLine,
         card.timerText,
         card.spokenTimer,
         card.nextLine,
@@ -152,16 +153,17 @@ class BakingNotificationContentTest {
 
     /**
      * На паузе стоящие цифры выглядят точно так же, как идущие, и отличить их
-     * человеку нечем. Поэтому «пауза» сказана в свёрнутой строке и ярлыком в
-     * развёрнутой. Остаток при этом всё равно назван: пауза не должна прятать,
-     * сколько осталось.
+     * человеку нечем. Поэтому «пауза» сказана в обеих карточках — и в свёрнутой
+     * строке, и ярлыком в развёрнутой. Остаток при этом всё равно назван: пауза
+     * не должна прятать, сколько осталось.
      */
     @Test
-    fun `a paused bake says so in the compact line, not only in the big one`() {
+    fun `a paused bake says so on every card, not only in the big one`() {
         val paused = content(progress(isPaused = true))
         assertThat(paused.compact).contains("пауза")
         assertThat(paused.compact).contains("1:02:05")
         assertThat(paused.badge).isEqualTo("пауза")
+        assertThat(paused.compactStepLine).startsWith("пауза · ")
         assertThat(paused.timerText).isEqualTo("1:02:05")
     }
 
@@ -170,6 +172,7 @@ class BakingNotificationContentTest {
     fun `resuming drops the pause mark and keeps the digits`() {
         val resumed = content(progress(isPaused = false))
         assertThat(resumed.badge).isNull()
+        assertThat(resumed.compactStepLine).isEqualTo(resumed.stepLine)
         assertThat(resumed.compact).doesNotContain("пауза")
     }
 
@@ -224,7 +227,10 @@ class BakingNotificationContentTest {
             content(progress(isPaused = true)),
             content(progress(remainingSeconds = 0)),
             content(progress(stepIndex = 7, stepCount = 8, nextStepTitle = null)),
-        ).forEach { assertThat(it.compact).doesNotContain("\n") }
+        ).forEach {
+            assertThat(it.compact).doesNotContain("\n")
+            assertThat(it.compactStepLine).doesNotContain("\n")
+        }
     }
 
     @Test

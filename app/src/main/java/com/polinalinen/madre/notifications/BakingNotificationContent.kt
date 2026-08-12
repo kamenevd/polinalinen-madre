@@ -19,8 +19,9 @@ import com.polinalinen.madre.sourdough.StarterName
  *    зависит от одной лишь своей карточки.
  *
  * Cycle 19: у развёрнутой карточки появился свой вид — RemoteViews на бумаге
- * ([R.layout.notification_baking_progress]). Поля [headerLine], [stepLine],
- * [timerText], [nextLine] и [badge] существуют ровно для него: в
+ * ([R.layout.notification_baking_progress]). Cycle 21: свой вид появился и у
+ * свёрнутой ([R.layout.notification_baking_compact]). Поля [headerLine],
+ * [stepLine], [timerText], [nextLine] и [badge] существуют ровно для них: в
  * самом RemoteViews ничего не считается, туда кладут уже готовые строки. Это не
  * замена BigText, а слой поверх него — прошивка, которая своей карточки не
  * покажет, отдаст человеку тот же [bigText], что и раньше.
@@ -71,6 +72,17 @@ data class BakingNotificationContent(
     val compact: String,
     /** «Расстойка · шаг 3 из 8» — отдельной строкой своей карточки. */
     val stepLine: String,
+    /**
+     * То же для свёрнутой карточки, но с ярлыком впереди: «пауза · Расстойка ·
+     * шаг 3 из 8».
+     *
+     * Ярлык стоит первым не для порядка. В свёрнутой карточке рядом лежат
+     * крупные цифры [timerText], и на паузе они выглядят точно так же, как на
+     * ходу, — стоящее время неотличимо от идущего. Не сказать при этом «пауза»
+     * значило бы показать живой отсчёт там, где его нет (hard rule №8). Места в
+     * строке мало, поэтому обрезается хвост — номер шага, а не ярлык.
+     */
+    val compactStepLine: String,
     /** Крупные цифры карточки: «1:02:05» либо «время вышло». Минуса не бывает. */
     val timerText: String,
     /** Те же цифры словами — для экранного диктора, крупные цифры он читает по знаку. */
@@ -146,6 +158,7 @@ data class BakingNotificationContent(
                 headerLine = "${StarterName.sanitize(bake.starterName)} · ${bake.recipeName}",
                 compact = "${bake.stepTitle} · $compactTail · шаг ${bake.stepIndex + 1} из ${bake.stepCount}",
                 stepLine = head,
+                compactStepLine = if (badge == null) head else "$badge · $head",
                 timerText = if (bake.remainingSeconds <= 0L) "время вышло" else time,
                 spokenTimer = BakingProgress.timerLabel(bake.remainingSeconds, bake.isPaused),
                 nextLine = bake.shadeNextLine(),

@@ -5,7 +5,7 @@
     "kind": "maintenance",
     "version": "6.4.0-maintenance20",
     "branch": "maintenance/20",
-    "stage": "implemented",
+    "stage": "reviewing",
     "created_at": "2026-08-12T09:00:00Z",
     "updated_at": "2026-08-12T13:20:00Z"
   },

@@ -11,6 +11,7 @@ import com.polinalinen.madre.MadreApplication
 import com.polinalinen.madre.data.db.entities.ActiveBakeEntity
 import com.polinalinen.madre.model.BakingClock
 import com.polinalinen.madre.model.BakingSession
+import com.polinalinen.madre.model.BakingTick
 import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.model.StepType
 import com.polinalinen.madre.notifications.BakingNotificationPlanner
@@ -449,11 +450,12 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
         timerJobs[id] = viewModelScope.launch {
             while (true) {
                 val s = session(id) ?: break
+                // Монотонные часы, а не стенные: смена пояса или переход на
+                // летнее время не должны отнимать у теста час расстойки
+                // (и не должны дарить его).
+                val nowElapsed = BakingClock.elapsed()
                 if (!s.isPaused && !s.isCompleted) {
-                    // Монотонные часы, а не стенные: смена пояса или переход на
-                    // летнее время не должны отнимать у теста час расстойки
-                    // (и не должны дарить его).
-                    val remaining = s.remainingSeconds(BakingClock.elapsed())
+                    val remaining = s.remainingSeconds(nowElapsed)
                     _remainingSeconds.update { it + (id to remaining) }
                     notifyProgress(s, remaining)
                     // Слепок для шторки — только на идущем тике. Cycle 16: на
@@ -463,7 +465,17 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
                     // дальше в шторке стоит ровно то, что происходит на деле.
                     publishProgress()
                 }
-                delay(1000)
+                // Cycle 20: последний сон шага — короче секунды, ровно до его
+                // конца. Иначе тики идут по своей сетке, а шаг кончается по
+                // своей, и ноль приходит к человеку с опозданием до секунды.
+                // На паузе границы нет — там обычный шаг.
+                delay(
+                    if (s.isPaused || s.isCompleted) {
+                        BakingTick.INTERVAL_MS
+                    } else {
+                        BakingTick.sleepMillis(nowElapsed, s.stepEndsAtElapsed(nowElapsed))
+                    }
+                )
             }
         }
     }

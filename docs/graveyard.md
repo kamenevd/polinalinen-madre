@@ -286,3 +286,8 @@ Room намеренно. Убрать сущность из `entities` — зн�
 - PocketBase migration `1784937780_family_rules_for_stats.js` keeps collections
   locked or family-scoped; no public guest page.
 - Client no longer pretends share/library notes work without family auth.
+
+
+## 2026-08-12 — custom shade paper (BakingShadeCards)
+Removed: RemoteViews paper compact/big. Dima wants native Android notifications.
+Kept: system BigText + progress + static digits (no Chronometer).

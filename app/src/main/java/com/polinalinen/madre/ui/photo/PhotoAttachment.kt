@@ -23,6 +23,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import java.io.File
 
 /**
@@ -98,17 +101,31 @@ fun rememberPhotoAttachment(
     }
 
     if (cameraDenied) {
+        // Обновление APK с тем же signing key runtime-разрешения НЕ сбрасывает.
+        // Если кажется, что «каждый раз слетает» — чаще это переустановка
+        // (другая подпись debug/release) или «запретить навсегда» в системе.
+        val openSettings: () -> Unit = {
+            val intent = Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.fromParts("package", context.packageName, null),
+            )
+            runCatching { context.startActivity(intent) }
+        }
         ConfirmDialog(
             title = "Камера закрыта",
-            message = "Книге не разрешили снимать. Разрешение можно вернуть в настройках " +
-                "телефона — или вклеить готовый снимок из галереи, это то же самое.",
+            message = "Книге не разрешили снимать. Можно вклеить снимок из галереи " +
+                "(для неё отдельное разрешение не нужно) или открыть настройки приложения " +
+                "и вернуть доступ к камере. Обновление с тем же ключом подписи разрешения не сбрасывает.",
             confirmLabel = "Из галереи",
-            dismissLabel = "Не сейчас",
+            dismissLabel = "Настройки",
             onConfirm = {
                 cameraDenied = false
                 galleryPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
             },
-            onDismiss = { cameraDenied = false },
+            onDismiss = {
+                cameraDenied = false
+                openSettings()
+            },
         )
     }
 

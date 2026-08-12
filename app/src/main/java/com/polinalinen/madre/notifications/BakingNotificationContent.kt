@@ -19,8 +19,7 @@ import com.polinalinen.madre.sourdough.StarterName
  *    зависит от одной лишь своей карточки.
  *
  * Cycle 19: у развёрнутой карточки появился свой вид — RemoteViews на бумаге
- * ([R.layout.notification_baking_progress]). Cycle 21: свой вид появился и у
- * свёрнутой ([R.layout.notification_baking_compact]). Поля [headerLine],
+ * Cycle 22: системный шаблон (без RemoteViews). Поля [headerLine],
  * [stepLine], [timerText], [nextLine] и [badge] существуют ровно для них: в
  * самом RemoteViews ничего не считается, туда кладут уже готовые строки. Это не
  * замена BigText, а слой поверх него — прошивка, которая своей карточки не

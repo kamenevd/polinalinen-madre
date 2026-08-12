@@ -48,6 +48,23 @@ class BakingProgressService : LifecycleService() {
     /** Что сейчас показано — чтобы снимать ровно то, что уже не идёт. */
     private var shownSessionIds: Set<Long> = emptySet()
 
+    /**
+     * Cycle 21: что именно сейчас написано в шторке у каждой выпечки.
+     *
+     * Нужно, чтобы не звать notify зря. Слепки приходят раз в секунду всегда —
+     * и когда идёт отсчёт, и когда выпечка стоит на паузе третий час, и когда
+     * шаг кончился и книга ждёт человека. В первом случае карточка каждую
+     * секунду другая, в остальных двух — ровно та же самая, и пересылать её
+     * системе шестьдесят раз в минуту незачем: каждая посылка — работа SystemUI
+     * над разметкой, которая не изменилась.
+     *
+     * Сравнивается сам [BakingNotificationContent] — то есть всё, что человек
+     * читает, и ничего сверх того. Раньше так сравнить его было нельзя: он нёс
+     * момент конца шага в стенных часах и отличался этим полем при каждой
+     * пересборке. Хронометра нет — сравнение стало честным.
+     */
+    private var shownContent: Map<Long, BakingNotificationContent> = emptyMap()
+
     /** Чьё уведомление сейчас держит сервис на переднем плане. */
     private var foregroundSessionId: Long? = null
 
@@ -104,22 +121,34 @@ class BakingProgressService : LifecycleService() {
         // пока идёт, и не прыгает от того, что где-то тикнул счётчик.
         val leader = bakes.minBy { it.sessionId }
         if (foregroundSessionId != leader.sessionId) {
-            startForegroundFor(leader.sessionId, buildNotification(BakingNotificationContent.from(leader)))
+            val content = BakingNotificationContent.from(leader)
+            startForegroundFor(leader.sessionId, buildNotification(content))
+            // Отказ в переднем плане уносит сервис вместе со всеми его
+            // уведомлениями — рисовать после этого уже нечего и некуда.
+            if (foregroundSessionId == null) return
+            shownContent = shownContent + (leader.sessionId to content)
         }
         // Переднеплановое уведомление обновляется тем же способом, что и
         // остальные: startForeground закрепил за ним id, дальше это обычный
         // notify по тому же id.
         bakes.forEach { bake ->
+            val content = BakingNotificationContent.from(bake)
+            // Cycle 21: то же самое второй раз не посылаем. Пока идёт отсчёт,
+            // карточка каждую секунду другая и notify случится всё равно; на
+            // паузе и после конца шага меняться в ней нечему.
+            if (shownContent[bake.sessionId] == content) return@forEach
             notifier.notifySafely(
                 BakingProgress.notificationId(bake.sessionId),
-                buildNotification(BakingNotificationContent.from(bake)),
+                buildNotification(content),
             )
+            shownContent = shownContent + (bake.sessionId to content)
         }
         // Выпечки, которых больше нет в списке, — закрыты или брошены.
         (shownSessionIds - bakes.map { it.sessionId }.toSet()).forEach { gone ->
             manager.cancel(BakingProgress.notificationId(gone))
         }
         shownSessionIds = bakes.map { it.sessionId }.toSet()
+        shownContent = shownContent.filterKeys { it in shownSessionIds }
     }
 
     /**
@@ -253,6 +282,7 @@ class BakingProgressService : LifecycleService() {
         shownSessionIds.forEach { manager.cancel(BakingProgress.notificationId(it)) }
         foregroundSessionId?.let { manager.cancel(BakingProgress.notificationId(it)) }
         shownSessionIds = emptySet()
+        shownContent = emptyMap()
         foregroundSessionId = null
     }
 

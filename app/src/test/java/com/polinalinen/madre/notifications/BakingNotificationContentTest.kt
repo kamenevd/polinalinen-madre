@@ -131,6 +131,20 @@ class BakingNotificationContentTest {
         assertThat(line.indexOf("1:02:05")).isLessThan(line.indexOf("шаг 3 из 8"))
     }
 
+    /**
+     * Один и тот же слепок обязан давать одну и ту же карточку: на этом стоит
+     * дедупликация в сервисе — он не шлёт системе то же самое второй раз.
+     * Раньше сравнить две карточки было нельзя: они несли момент конца шага в
+     * стенных часах и отличались им при каждой пересборке.
+     */
+    @Test
+    fun `the same snapshot renders the same card, so nothing is re-sent for nothing`() {
+        assertThat(content(progress())).isEqualTo(content(progress()))
+        assertThat(content(progress(isPaused = true))).isNotEqualTo(content(progress()))
+        // Секунда прошла — карточка другая, и её послать обязаны.
+        assertThat(content(progress(remainingSeconds = 3_724))).isNotEqualTo(content(progress()))
+    }
+
     @Test
     fun `the full text spells the time out, so nothing depends on one card alone`() {
         assertThat(content().bigText).contains("осталось 1:02:05")

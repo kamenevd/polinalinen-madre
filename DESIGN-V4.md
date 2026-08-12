@@ -774,3 +774,7 @@ APK update with same signing key does not revoke runtime grants. UI re-reads loc
 
 - TOC: Canvas leaders always fill gap; no WornPage gray tint on chapter rows.
 - Notifications: collapsed system; expanded DecoratedCustomViewStyle wide timer (no paper).
+
+## Cycle 25 — TOC numbers flush right (2026-08-12)
+
+Номера глав у правого края; лидеры на всю ширину слота под именем (paper mask).

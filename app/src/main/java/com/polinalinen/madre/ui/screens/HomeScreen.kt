@@ -4,12 +4,14 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -467,7 +469,10 @@ private fun ChapterRow(
     @Suppress("UNUSED_PARAMETER") bakeCount: Int = 0,
 ) {
     val colors = AppColors.current
-    // Оглавление: имя + лидеры Canvas + номер. Без серой WornPage-заливки.
+    // Книжное оглавление: номер у правого края ряда, лидеры — на всю ширину
+    // между именем и номером. Имя/номер на paper-фоне перекрывают точки
+    // (классический приём вёрстки TOC) — так на любом экране точки доходят
+    // до числа, а число сидит максимально справа (с учётом end-padding).
     val a11y = TocLine.contentDescription(recipe.name, index)
     Box(
         Modifier
@@ -478,33 +483,46 @@ private fun ChapterRow(
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 22.dp, vertical = 12.dp),
+                // start как у остальных полей книги; end меньше — число ближе к краю
+                .padding(start = 22.dp, end = 10.dp, top = 12.dp, bottom = 12.dp),
             verticalAlignment = Alignment.Bottom,
         ) {
-            // weight(fill=false): имя берёт сколько нужно, но не съедает ряд целиком —
-            // иначе у длинных названий (3–11) лидерам остаётся 0 dp.
-            Text(
-                recipe.name,
-                color = colors.espresso,
-                fontFamily = FontFamily.Serif,
-                fontSize = 17.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
-            )
-            TocLeaders(
-                modifier = Modifier
+            Box(
+                Modifier
                     .weight(1f)
-                    .padding(horizontal = 6.dp)
-                    .padding(bottom = 5.dp),
-                color = colors.cocoa.copy(alpha = 0.45f),
-            )
+                    .fillMaxWidth(),
+            ) {
+                TocLeaders(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 5.dp)
+                        .align(Alignment.BottomCenter),
+                    color = colors.cocoa.copy(alpha = 0.45f),
+                )
+                Text(
+                    recipe.name,
+                    color = colors.espresso,
+                    fontFamily = FontFamily.Serif,
+                    fontSize = 17.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .background(colors.paper)
+                        .padding(end = 6.dp),
+                )
+            }
             Text(
                 index.toString(),
                 color = colors.espresso,
                 fontFamily = FontFamily.Serif,
                 fontWeight = FontWeight.Medium,
                 fontSize = 17.sp,
+                textAlign = TextAlign.End,
+                modifier = Modifier
+                    .padding(start = 2.dp)
+                    .background(colors.paper)
+                    .defaultMinSize(minWidth = 16.dp),
             )
         }
         if (isSeasonal) {
@@ -516,7 +534,8 @@ private fun ChapterRow(
                 fontSize = 10.sp,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(end = 22.dp, top = 2.dp),
+                    .padding(end = 10.dp, top = 2.dp)
+                    .background(colors.paper),
             )
         }
         HairRule(Modifier.align(Alignment.BottomCenter).padding(horizontal = 22.dp))
@@ -524,8 +543,8 @@ private fun ChapterRow(
 }
 
 /**
- * Лидеры — пунктир Canvas на всю доступную ширину (не Text с ·.repeat:
- * длинное имя сжимало weight до нуля и точки пропадали).
+ * Пунктир на всю ширину слота. Рисуется под именем; имя с paper-фоном
+ * перекрывает лишние точки слева.
  */
 @Composable
 private fun TocLeaders(modifier: Modifier = Modifier, color: Color) {
@@ -540,6 +559,7 @@ private fun TocLeaders(modifier: Modifier = Modifier, color: Color) {
         }
     }
 }
+
 
 /**
  * «Мадре советует» (DESIGN-V4.md Cycle 1, фича MoodBookmark) — вторая ляссе

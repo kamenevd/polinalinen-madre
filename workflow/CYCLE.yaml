@@ -1,32 +1,23 @@
 {
   "schema_version": 1,
   "cycle": {
-    "number": 24,
+    "number": 25,
     "kind": "maintenance",
-    "version": "6.4.4",
-    "branch": "maintenance/24",
+    "version": "6.4.5",
+    "branch": "maintenance/25",
     "stage": "releasable",
-    "created_at": "2026-08-12T19:00:00Z",
-    "updated_at": "2026-08-12T18:57:20Z"
+    "created_at": "2026-08-12T19:20:00Z",
+    "updated_at": "2026-08-12T19:14:23Z"
   },
   "features": [
     {
-      "id": "toc-leaders-fix",
-      "title": "Точки оглавления на всех рецептах, без серой тонировки",
+      "id": "toc-flush-right",
+      "title": "Номера оглавления максимально справа, точки до них",
       "needs_generated_asset": false,
       "acceptance": [
-        "Canvas leaders for all 11",
-        "no WornPage toc alpha tint"
-      ]
-    },
-    {
-      "id": "wide-native-notif",
-      "title": "Широкое native expanded уведомление",
-      "needs_generated_asset": false,
-      "acceptance": [
-        "DecoratedCustomViewStyle",
-        "large timer",
-        "no paper background"
+        "index at row end with minimal end padding",
+        "leaders fill full width under name via paper mask",
+        "works on narrow and wide screens"
       ]
     }
   ],
@@ -34,13 +25,13 @@
     "plan": {
       "status": "pass",
       "evidence": [
-        "DESIGN-V4 Cycle 24"
+        "DESIGN-V4 Cycle 25"
       ]
     },
     "tdd": {
       "status": "pass",
       "evidence": [
-        "unit tests"
+        "CI"
       ]
     },
     "build": {
@@ -75,7 +66,6 @@
   },
   "blockers": [],
   "decisions": [
-    "2026-08-12: pure semver 6.4.4",
-    "wide native = DecoratedCustomViewStyle not paper"
+    "2026-08-12: TOC book layout paper-mask leaders"
   ]
 }

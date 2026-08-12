@@ -543,6 +543,7 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
             val key = BakingNotificationPlanner.butterPrepKey(session.id, session.currentStepIndex)
             if (notificationLedger.markIfNew(key)) {
                 notifier.postBakingNotification(
+                    sessionId = session.id,
                     key = key,
                     title = "Достаньте сливочное масло",
                     text = "Через полчаса оно понадобится мягким — «${session.recipe.name}».",
@@ -553,6 +554,7 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
             val key = BakingNotificationPlanner.stepDoneKey(session.id, session.currentStepIndex)
             if (notificationLedger.markIfNew(key)) {
                 notifier.postBakingNotification(
+                    sessionId = session.id,
                     key = key,
                     title = "«${session.recipe.name}» — время вышло",
                     text = "${session.currentStep.title}: шаг закончен, можно продолжать.",

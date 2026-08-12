@@ -91,7 +91,7 @@ class NotificationContentIntentTest {
     fun `both notifications go away when they are tapped`() {
         notifier.postFeedingReminder("Мадре: пора кормить", "прошло 12 часов")
         assertThat(shown().flags and Notification.FLAG_AUTO_CANCEL).isNotEqualTo(0)
-        shadowOf(manager).cancelAllNotifications()
+        manager.cancelAll()
 
         notifier.postBakingNotification(
             sessionId = 1L,

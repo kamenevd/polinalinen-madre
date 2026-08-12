@@ -247,22 +247,12 @@ class BakingProgressService : LifecycleService() {
             .setShowWhen(false)
 
     /**
-     * Тап открывает ИМЕННО эту выпечку. Свой requestCode на каждую — иначе
-     * PendingIntent'ы разных выпечек считались бы одним и тем же, и вторая
-     * строка в шторке вела бы на первую.
+     * Тап открывает ИМЕННО эту выпечку. Cycle 20: дорога сюда общая с
+     * уведомлениями шага ([BakeOpenIntent]) — раньше её знал только сервис, и
+     * «время вышло» от WorkManager не вело никуда.
      */
-    private fun openBakingIntent(sessionId: Long?): PendingIntent {
-        val intent = Intent(this, MainActivity::class.java)
-            .setAction(Intent.ACTION_VIEW)
-            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-        if (sessionId != null) intent.putExtra(MainActivity.EXTRA_SESSION_ID, sessionId)
-        return PendingIntent.getActivity(
-            this,
-            BakingNotificationContent.intentRequestCode(sessionId ?: PLACEHOLDER_SESSION_ID),
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-    }
+    private fun openBakingIntent(sessionId: Long?): PendingIntent =
+        BakeOpenIntent.pendingIntent(this, sessionId)
 
     private fun startForegroundFor(sessionId: Long, notification: Notification) {
         val id = BakingProgress.notificationId(sessionId)

@@ -142,20 +142,26 @@ class BakingSessionTest {
         stepCount = s.recipe.timeline.size,
         remainingSeconds = remaining,
         stepTotalSeconds = s.currentStep.durationMinutes * 60L,
-        stepEndsAtElapsed = s.stepEndsAtElapsed(startElapsed),
         isPaused = s.isPaused,
         nextStepTitle = s.recipe.timeline.getOrNull(s.currentStepIndex + 1)?.title,
     )
 
+    /**
+     * Cycle 21: пауза видна в самой строке, а не по остановленному хронометру.
+     * Хронометра в шторке больше нет — стоящие цифры от идущих человек отличает
+     * только по слову «пауза», и потому оно обязано там быть.
+     */
     @Test
-    fun `the shade counts down while running and stops while paused`() {
-        val running = shadeOf(session(), remaining = 3600)
-        val paused = shadeOf(session().togglePause(startElapsed), remaining = 3600)
-        val now = 1_700_000_000_000L
+    fun `the shade shows the time while running and says pause while paused`() {
+        val running = BakingNotificationContent.from(shadeOf(session(), remaining = 3600))
+        val paused = BakingNotificationContent.from(
+            shadeOf(session().togglePause(startElapsed), remaining = 3600),
+        )
 
-        assertThat(BakingNotificationContent.from(running, now, startElapsed).usesChronometer).isTrue()
-        assertThat(BakingNotificationContent.from(paused, now, startElapsed).usesChronometer).isFalse()
-        assertThat(BakingNotificationContent.from(paused, now, startElapsed).compact).contains("пауза")
+        assertThat(running.compact).contains("1:00:00")
+        assertThat(running.compact).doesNotContain("пауза")
+        assertThat(paused.compact).contains("пауза")
+        assertThat(paused.compact).contains("1:00:00")
     }
 
     @Test
@@ -167,12 +173,8 @@ class BakingSessionTest {
 
     @Test
     fun `a step out of time says so in the shade rather than showing a dead clock`() {
-        val content = BakingNotificationContent.from(
-            shadeOf(session(), remaining = 0),
-            1_700_000_000_000L,
-            startElapsed,
-        )
-        assertThat(content.usesChronometer).isFalse()
+        val content = BakingNotificationContent.from(shadeOf(session(), remaining = 0))
+        assertThat(content.timerText).isEqualTo("время вышло")
         assertThat(content.compact).contains("время вышло")
     }
 }

@@ -8,7 +8,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
-import android.os.SystemClock
 import android.view.View
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
@@ -93,7 +92,9 @@ class BakingProgressService : LifecycleService() {
             val waiting = (application as MadreApplication).activeBakes.progress.value.firstOrNull()
             startForegroundFor(
                 sessionId = waiting?.sessionId ?: PLACEHOLDER_SESSION_ID,
-                notification = waiting?.let(::buildNotification) ?: buildStartingNotification(),
+                notification = waiting
+                    ?.let { buildNotification(BakingNotificationContent.from(it)) }
+                    ?: buildStartingNotification(),
             )
         }
         // Восстанавливать себя после убийства процесса нечего: сессии выпечки
@@ -106,13 +107,16 @@ class BakingProgressService : LifecycleService() {
         // пока идёт, и не прыгает от того, что где-то тикнул счётчик.
         val leader = bakes.minBy { it.sessionId }
         if (foregroundSessionId != leader.sessionId) {
-            startForegroundFor(leader.sessionId, buildNotification(leader))
+            startForegroundFor(leader.sessionId, buildNotification(BakingNotificationContent.from(leader)))
         }
         // Переднеплановое уведомление обновляется тем же способом, что и
         // остальные: startForeground закрепил за ним id, дальше это обычный
         // notify по тому же id.
         bakes.forEach { bake ->
-            notifier.notifySafely(BakingProgress.notificationId(bake.sessionId), buildNotification(bake))
+            notifier.notifySafely(
+                BakingProgress.notificationId(bake.sessionId),
+                buildNotification(BakingNotificationContent.from(bake)),
+            )
         }
         // Выпечки, которых больше нет в списке, — закрыты или брошены.
         (shownSessionIds - bakes.map { it.sessionId }.toSet()).forEach { gone ->
@@ -125,42 +129,28 @@ class BakingProgressService : LifecycleService() {
      * Cycle 14: что писать — решает [BakingNotificationContent], здесь только
      * раскладка по билдеру.
      *
-     * Обратный отсчёт отдан системному хронометру: setWhen на момент конца шага
-     * плюс setUsesChronometer/setChronometerCountDown. Так цифры идут сами,
-     * между обновлениями и в свёрнутой карточке, и не могут разойтись с
-     * экраном — источник времени один и тот же слепок.
-     *
      * Раскрыта карточка или свёрнута, решает система: программного способа
      * держать её раскрытой у Android нет, и книга такого не обещает. Поэтому
      * свёрнутая строка осмысленна сама по себе, а полный текст ждёт в BigText.
      *
      * Cycle 19: у развёрнутой карточки появился свой вид — [bigCard]. Свёрнутая
-     * осталась системной намеренно: собственный вид в свёрнутом виде отнял бы у
-     * неё системный хронометр, единственные цифры, которые человек видит, не
-     * разворачивая шторку. BigTextStyle при этом остаётся на месте — на
-     * прошивке, которая своей карточки не покажет, читается он.
+     * пока системная: цифры в ней теперь стоят прямо в тексте ([compact]),
+     * потому что рисовавшего их системного хронометра больше нет.
+     *
+     * Заголовок, текст и BigText при этом остаются заполненными. Это не
+     * «на всякий случай»: прошивка вправе не показать RemoteViews вовсе, и тогда
+     * человек читает обычный системный шаблон — со своим шагом, своими цифрами
+     * и своими словами.
      */
-    private fun buildNotification(bake: BakingProgress): Notification {
-        // Оба «сейчас» снимаются в один миг: по стенным живёт setWhen, по
-        // монотонным — база Chronometer, и разъехаться им нельзя.
-        val content = BakingNotificationContent.from(
-            bake = bake,
-            nowMillis = System.currentTimeMillis(),
-            nowElapsed = SystemClock.elapsedRealtime(),
-        )
-        return baseBuilder()
+    private fun buildNotification(content: BakingNotificationContent): Notification =
+        baseBuilder()
             .setContentTitle(content.title)
             .setContentText(content.compact)
             .setStyle(NotificationCompat.BigTextStyle().bigText(content.bigText))
             .setCustomBigContentView(bigCard(content))
             .setProgress(BakingProgress.PROGRESS_MAX, content.progressPermille, false)
-            .setShowWhen(content.usesChronometer)
-            .setWhen(content.chronometerFinishAtMillis)
-            .setUsesChronometer(content.usesChronometer)
-            .setChronometerCountDown(content.usesChronometer)
-            .setContentIntent(openBakingIntent(bake.sessionId))
+            .setContentIntent(openBakingIntent(content.sessionId))
             .build()
-    }
 
     /**
      * Cycle 19: развёрнутая карточка — страница книги, а не служебная строка.
@@ -169,19 +159,11 @@ class BakingProgressService : LifecycleService() {
      * [BakingNotificationContent], где их проверяет юнит-тест. Раскладку
      * RemoteViews проверить нечем, поэтому логике в ней делать нечего.
      *
-     * Отсчёт — Chronometer, а не текст: текст замер бы между обновлениями, а
-     * обновления идут раз в секунду только пока жив процесс. База — момент
-     * конца шага по [android.os.SystemClock.elapsedRealtime], тем же монотонным
-     * часам, по которым идёт таймер на странице (стенные прыгают при
-     * синхронизации). Cycle 20: приходит она готовой из
-     * [BakingNotificationContent.chronometerBaseElapsed], а не считается здесь
-     * как «сейчас плюс остаток»: остаток округлён вниз, а карточка строится
-     * позже, чем собран слепок, — обе неточности уводили ноль хронометра за
-     * настоящий конец шага.
-     *
-     * На паузе и на нуле хронометр уступает место обычному тексту: остановленный
-     * Chronometer показал бы последнее значение, и отличить стоящие цифры от
-     * идущих было бы нечем.
+     * Cycle 21: крупный остаток — обычный текст. Chronometer, стоявший тут
+     * прежде, тикал сам и потому не останавливался на нуле: досчитав до базы,
+     * он продолжал считать в минус. Пока книга жива, следующее обновление через
+     * секунду подменяло его словами «время вышло»; когда процесс усыплён, а
+     * уведомление оставлено, — не подменял никто.
      */
     private fun bigCard(content: BakingNotificationContent): RemoteViews =
         RemoteViews(packageName, R.layout.notification_baking_progress).apply {
@@ -202,21 +184,12 @@ class BakingProgressService : LifecycleService() {
                 )
             }
 
-            val ink = color(if (content.isUrgent) R.color.madre_notif_urgent else R.color.madre_notif_ink)
-            if (content.usesChronometer) {
-                setViewVisibility(R.id.notif_timer, View.VISIBLE)
-                setViewVisibility(R.id.notif_timer_static, View.GONE)
-                setChronometer(R.id.notif_timer, content.chronometerBaseElapsed, null, true)
-                setChronometerCountDown(R.id.notif_timer, true)
-                setTextColor(R.id.notif_timer, ink)
-                setContentDescription(R.id.notif_timer, content.spokenTimer)
-            } else {
-                setViewVisibility(R.id.notif_timer, View.GONE)
-                setViewVisibility(R.id.notif_timer_static, View.VISIBLE)
-                setTextViewText(R.id.notif_timer_static, content.timerText)
-                setTextColor(R.id.notif_timer_static, ink)
-                setContentDescription(R.id.notif_timer_static, content.spokenTimer)
-            }
+            setTextViewText(R.id.notif_timer_static, content.timerText)
+            setTextColor(
+                R.id.notif_timer_static,
+                color(if (content.isUrgent) R.color.madre_notif_urgent else R.color.madre_notif_ink),
+            )
+            setContentDescription(R.id.notif_timer_static, content.spokenTimer)
         }
 
     private fun color(res: Int): Int = ContextCompat.getColor(this, res)

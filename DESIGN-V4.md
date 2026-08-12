@@ -752,3 +752,16 @@ permille == 1000` на любом шаге. «шаг N из M» уже гово�
 
 - перенос владения отсчётом в сам foreground service: пока процесс заморожен,
   цифры в шторке стоят. Честно, но не живо.
+
+## Cycle 22 — native shade + book TOC (2026-08-12)
+
+Residual after 6.4.1 device feedback.
+
+### Notifications
+System template only (title, compact with time, BigText, progress). Custom paper RemoteViews removed.
+
+### Home TOC
+Eleven recipes as paper contents: `Название ........ N`. Favorites/DogEar removed from home.
+
+### Permissions
+APK update with same signing key does not revoke runtime grants. UI re-reads location on resume; camera denial offers gallery or app settings. Gallery uses Photo Picker (no storage permission).

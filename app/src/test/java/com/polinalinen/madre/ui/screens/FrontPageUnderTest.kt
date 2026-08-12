@@ -68,8 +68,6 @@ internal fun ComposeContentTestRule.showFrontPage(
                 starterName = starterName,
                 phase = phase,
                 lastFeedingMillis = lastFeedingMillis,
-                favoriteIds = emptySet(),
-                onToggleFavorite = {},
                 onOpenRecipe = onOpenRecipe,
                 onOpenStarter = onOpenStarter,
                 onOpenTimer = onOpenTimer,

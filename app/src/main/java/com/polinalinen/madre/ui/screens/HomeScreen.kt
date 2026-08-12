@@ -21,6 +21,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -28,6 +32,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
@@ -52,7 +58,6 @@ import com.polinalinen.madre.sourdough.hoursSinceFeeding
 import com.polinalinen.madre.ui.components.BookBreath
 import com.polinalinen.madre.ui.components.BookButton
 import com.polinalinen.madre.ui.components.BookButtonVariant
-import com.polinalinen.madre.ui.components.DogEar
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.HeavyRule
 import com.polinalinen.madre.ui.components.PageLabel
@@ -76,6 +81,22 @@ import java.util.Locale
  * Ярлыки для тестов: первая полоса длинная, и до строки оглавления надо
  * ещё доехать — без ярлыка её в композиции просто нет.
  */
+object TocLine {
+    /** A11y и тесты: «Хлебушек домашний, рецепт 1». */
+    fun contentDescription(name: String, index: Int): String =
+        "$name, рецепт $index"
+
+    /**
+     * Однострочное оглавление для тестов и логов.
+     * Визуальные точки на экране рисует [TocLeaders]; здесь — фиксированные
+     * лидеры, чтобы assert не зависел от ширины.
+     */
+    fun format(name: String, index: Int, leaderWidth: Int = 24): String {
+        val dots = ".".repeat(leaderWidth.coerceAtLeast(3))
+        return "$name$dots$index"
+    }
+}
+
 object Home {
     const val LIST_TAG = "home-list"
 
@@ -93,8 +114,6 @@ fun HomeScreen(
     phase: GrowthPhase,
     /** Когда кормили в прошлый раз; null — дневник ещё пуст. */
     lastFeedingMillis: Long? = null,
-    favoriteIds: Set<String>,
-    onToggleFavorite: (String) -> Unit,
     onOpenRecipe: (String) -> Unit,
     onOpenStarter: () -> Unit,
     onOpenTimer: (sessionId: Long) -> Unit,
@@ -119,6 +138,20 @@ fun HomeScreen(
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted -> hasLocationPermission = granted }
+    // После возврата из системных настроек (или обновления APK) перечитываем
+    // grant — иначе UI может думать, что геолокации всё ещё нет.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val obs = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                hasLocationPermission =
+                    context.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) ==
+                        PackageManager.PERMISSION_GRANTED
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(obs)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
+    }
     LaunchedEffect(hasLocationPermission) {
         if (hasLocationPermission) weatherViewModel.load()
     }
@@ -181,14 +214,13 @@ fun HomeScreen(
                     )
                 }
                 items(recipes, key = { it.id }) { recipe ->
+                    val index = recipes.indexOf(recipe) + 1
                     ChapterRow(
-                        index = recipes.indexOf(recipe) + 1,
+                        index = index,
                         recipe = recipe,
-                        isFavorite = recipe.id in favoriteIds,
                         isSeasonal = recipe.id == seasonalRecipeId,
                         bakeCount = bakeCounts[recipe.id] ?: 0,
                         onClick = { onOpenRecipe(recipe.id) },
-                        onToggleFavorite = { onToggleFavorite(recipe.id) },
                     )
                 }
                 item { Colophon() }
@@ -433,79 +465,82 @@ private fun familyWord(n: Int) = when (n) {
 private fun ChapterRow(
     index: Int,
     recipe: Recipe,
-    isFavorite: Boolean,
     onClick: () -> Unit,
-    onToggleFavorite: () -> Unit,
     isSeasonal: Boolean = false,
     bakeCount: Int = 0,
 ) {
     val colors = AppColors.current
-    val difficultyLabel = when {
-        recipe.difficulty <= 2 -> "легко" to colors.sage
-        recipe.difficulty == 3 -> "средне" to colors.crust
-        else -> "сложно" to colors.terracotta
-    }
-    val hours = recipe.timeline.sumOf { it.durationMinutes } / 60
-    // «Затёртая страница» (Cycle 4, WornPages): строку часто печёной главы
-    // едва заметно тонирует Espresso — как засаленную страницу оглавления.
+    // Классическое оглавление: «Название ........ N» (Cycle 22).
+    // Избранное/DogEar убраны — книга читается как содержание, не как лента.
     val wornAlpha = WornPage.tocAlpha(bakeCount)
+    val a11y = TocLine.contentDescription(recipe.name, index)
     Box(
         Modifier
             .fillMaxWidth()
             .testTag(Home.chapterRowTag(recipe.id))
-            .then(bookAction("Открыть главу «${recipe.name}»") { onClick() })
-            .drawBehind { if (wornAlpha > 0f) drawRect(colors.espresso.copy(alpha = wornAlpha)) }
+            .then(bookAction(a11y) { onClick() })
+            .drawBehind { if (wornAlpha > 0f) drawRect(colors.espresso.copy(alpha = wornAlpha)) },
     ) {
         Row(
-            Modifier.padding(horizontal = 22.dp, vertical = 11.dp),
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 22.dp, vertical = 12.dp),
             verticalAlignment = Alignment.Bottom,
         ) {
             Text(
-                "%02d".format(index),
-                color = colors.flour,
+                recipe.name,
+                color = colors.espresso,
                 fontFamily = FontFamily.Serif,
-                fontWeight = FontWeight.Bold,
-                fontSize = 26.sp,
-                modifier = Modifier.width(40.dp),
+                fontSize = 17.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.wrapContentWidth(unbounded = false),
             )
-            Column(Modifier.weight(1f)) {
-                Text(recipe.name, color = colors.espresso, fontFamily = FontFamily.Serif, fontSize = 16.sp)
-                Row {
-                    Text(
-                        "$hours ч · ",
-                        color = colors.cocoa, fontFamily = FontFamily.SansSerif, fontSize = 11.sp,
-                    )
-                    Text(
-                        difficultyLabel.first,
-                        color = difficultyLabel.second, fontFamily = FontFamily.SansSerif, fontSize = 11.sp,
-                    )
-                    // «Глава сезона» (Cycle 3, SeasonalEdition) — отметка на одном рецепте.
-                    if (isSeasonal) {
-                        Text(
-                            " · глава сезона",
-                            color = colors.crust,
-                            fontFamily = FontFamily.Serif,
-                            fontStyle = FontStyle.Italic,
-                            fontSize = 11.sp,
-                        )
-                    }
-                }
-            }
+            TocLeaders(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                color = colors.flour,
+            )
+            Text(
+                index.toString(),
+                color = colors.espresso,
+                fontFamily = FontFamily.Serif,
+                fontWeight = FontWeight.Medium,
+                fontSize = 17.sp,
+            )
         }
-        // Гербарий — избранное (Cycle 19, возврат фичи 20). Touch target 48dp.
-        DogEar(
-            isFavorite = isFavorite,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .then(
-                    bookAction(
-                        if (isFavorite) "Убрать цветок из гербария" else "Вложить цветок в гербарий"
-                    ) { onToggleFavorite() }
-                )
-                .padding(6.dp),
-        )
+        if (isSeasonal) {
+            Text(
+                "глава сезона",
+                color = colors.crust,
+                fontFamily = FontFamily.Serif,
+                fontStyle = FontStyle.Italic,
+                fontSize = 10.sp,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(end = 22.dp, top = 2.dp),
+            )
+        }
         HairRule(Modifier.align(Alignment.BottomCenter).padding(horizontal = 22.dp))
     }
+}
+
+/**
+ * Точки-лидеры между названием и номером страницы — как в бумажном оглавлении.
+ */
+@Composable
+private fun TocLeaders(modifier: Modifier = Modifier, color: Color) {
+    Text(
+        text = "·".repeat(80),
+        color = color,
+        fontFamily = FontFamily.Serif,
+        fontSize = 12.sp,
+        maxLines = 1,
+        overflow = TextOverflow.Clip,
+        softWrap = false,
+        modifier = modifier,
+    )
 }
 
 /**

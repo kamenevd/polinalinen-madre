@@ -159,25 +159,17 @@ class BakingProgressService : LifecycleService() {
      * держать её раскрытой у Android нет, и книга такого не обещает. Поэтому
      * свёрнутая строка осмысленна сама по себе, а полный текст ждёт в BigText.
      *
-     * Cycle 19: у развёрнутой карточки появился свой вид. Cycle 21:
-     * свой вид появился и у свёрнутой ([BakingShadeCards]). Раньше свёрнутая была
-     * системной ради системного же хронометра — единственных цифр, которые
-     * человек видел, не разворачивая шторку. Хронометра больше нет (он уходил в
-     * минус), а вместе с ним ушла и причина отдавать строку чужой теме: в
-     * тёмной теме телефона книга на ней была не читаема.
-     *
-     * Заголовок, текст и BigText при этом остаются заполненными. Это не
-     * «на всякий случай»: прошивка вправе не показать RemoteViews вовсе, и тогда
-     * человек читает обычный системный шаблон — со своим шагом, своими цифрами
-     * и своими словами.
+     * Cycle 22: снова только системный шаблон (title + compact + BigText + progress).
+     * Свои RemoteViews убраны — нативный Android в светлой и тёмной теме.
      */
     private fun buildNotification(content: BakingNotificationContent): Notification =
+        // Cycle 22: только системный шаблон. Своя «бумага» (RemoteViews) давала
+        // цветную подложку в светлой и тёмной теме — Дима просил нативный Android.
+        // Цифры и «время вышло» уже в content.compact / bigText (без Chronometer).
         baseBuilder()
             .setContentTitle(content.title)
             .setContentText(content.compact)
             .setStyle(NotificationCompat.BigTextStyle().bigText(content.bigText))
-            .setCustomContentView(BakingShadeCards.compact(this, content))
-            .setCustomBigContentView(BakingShadeCards.big(this, content))
             .setProgress(BakingProgress.PROGRESS_MAX, content.progressPermille, false)
             .setContentIntent(openBakingIntent(content.sessionId))
             .build()

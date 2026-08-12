@@ -93,14 +93,6 @@ fun MadreNavHost(
 
     // Избранное + имя: SharedPreferences как в v3 (простое и рабочее, Room не нужен)
     val prefs = remember { context.getSharedPreferences("madre_prefs", Context.MODE_PRIVATE) }
-    var favoriteIds by remember {
-        mutableStateOf(prefs.getStringSet("favorite_recipes", emptySet())?.toSet() ?: emptySet())
-    }
-    val toggleFavorite: (String) -> Unit = { id ->
-        val newSet = if (id in favoriteIds) favoriteIds - id else favoriteIds + id
-        favoriteIds = newSet
-        prefs.edit().putStringSet("favorite_recipes", newSet).apply()
-    }
     var myName by remember { mutableStateOf(prefs.getString("my_name", "") ?: "") }
     val setMyName: (String) -> Unit = { name ->
         myName = name
@@ -171,8 +163,6 @@ fun MadreNavHost(
                     starterName = starterName,
                     phase = phase,
                     lastFeedingMillis = sourdoughConfig?.lastFeedingMillis,
-                    favoriteIds = favoriteIds,
-                    onToggleFavorite = toggleFavorite,
                     onOpenRecipe = { id -> navController.navigate(MadreDestinations.recipeDetail(id)) },
                     onOpenStarter = { navController.navigate(MadreDestinations.STARTER_DETAIL) },
                     onOpenTimer = { sessionId -> navController.navigate(MadreDestinations.bakingTimer(sessionId.toString())) },

@@ -24,18 +24,41 @@ jobs:
   release:
     name: Build and publish signed release
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    # Up to 40 minutes waiting for the quality checks (see
+    # DEFAULT_TIMEOUT_SECONDS in scripts/verify_github_release_context.py) plus
+    # the signed build itself. The job must never be the thing that gives up
+    # mid-Gradle; test_workflow_contract.py enforces the margin.
+    timeout-minutes: 80
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - name: Verify tagged commit passed protected checks
+      - name: Fetch main
+        run: git fetch --no-tags --force origin main:refs/remotes/origin/main
+
+      - name: Verify tagged commit is on main
+        run: |
+          # A tag pushed in the same breath as the merge can reach the release
+          # runner before origin/main advertises the commit. Short bounded
+          # retry; still a hard failure if the commit never shows up on main.
+          for attempt in 1 2 3 4 5; do
+            if git merge-base --is-ancestor "${GITHUB_SHA}" origin/main; then
+              echo "tagged commit ${GITHUB_SHA} is on main"
+              exit 0
+            fi
+            echo "attempt ${attempt}: ${GITHUB_SHA} not visible on origin/main yet"
+            if [ "${attempt}" -lt 5 ]; then
+              sleep 10
+              git fetch --no-tags --force origin main:refs/remotes/origin/main
+            fi
+          done
+          echo "tagged commit ${GITHUB_SHA} is not an ancestor of origin/main"
+          exit 1
+
+      - name: Verify required quality checks
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          git fetch --no-tags origin main
-          git merge-base --is-ancestor "${GITHUB_SHA}" origin/main
-          python3 scripts/verify_github_release_context.py
+        run: python3 scripts/verify_github_release_context.py
       - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v4
         with:
           distribution: temurin

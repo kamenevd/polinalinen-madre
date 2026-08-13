@@ -5,18 +5,21 @@ from pathlib import Path
 from scripts import verify_apk_signature, verify_github_release_context
 
 
+ACTIONS = {"app": {"slug": "github-actions"}}
+
+
 class ReleaseTrustTests(unittest.TestCase):
     def test_all_successful_required_checks_pass(self):
         runs = [
-            {"name": name, "status": "completed", "conclusion": "success", "completed_at": "2026-07-25T10:00:00Z"}
+            {"name": name, "status": "completed", "conclusion": "success", "completed_at": "2026-07-25T10:00:00Z", **ACTIONS}
             for name in verify_github_release_context.REQUIRED_CHECKS
         ]
         self.assertEqual([], verify_github_release_context.verify_check_runs(runs))
 
     def test_missing_or_failed_check_is_rejected(self):
         runs = [
-            {"name": "Workflow integrity", "status": "completed", "conclusion": "success"},
-            {"name": "Android quality", "status": "completed", "conclusion": "failure"},
+            {"name": "Workflow integrity", "status": "completed", "conclusion": "success", **ACTIONS},
+            {"name": "Android quality", "status": "completed", "conclusion": "failure", **ACTIONS},
         ]
         errors = verify_github_release_context.verify_check_runs(runs)
         self.assertTrue(any("Android quality" in error for error in errors))
@@ -24,8 +27,8 @@ class ReleaseTrustTests(unittest.TestCase):
 
     def test_latest_rerun_wins(self):
         runs = [
-            {"name": "Android quality", "status": "completed", "conclusion": "failure", "completed_at": "2026-07-25T09:00:00Z"},
-            {"name": "Android quality", "status": "completed", "conclusion": "success", "completed_at": "2026-07-25T10:00:00Z"},
+            {"name": "Android quality", "status": "completed", "conclusion": "failure", "completed_at": "2026-07-25T09:00:00Z", **ACTIONS},
+            {"name": "Android quality", "status": "completed", "conclusion": "success", "completed_at": "2026-07-25T10:00:00Z", **ACTIONS},
         ]
         errors = verify_github_release_context.verify_check_runs(runs, ("Android quality",))
         self.assertEqual([], errors)

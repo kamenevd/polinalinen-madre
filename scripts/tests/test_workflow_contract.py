@@ -2,7 +2,7 @@ import re
 import unittest
 from pathlib import Path
 
-from scripts import verify_apk_signature
+from scripts import verify_apk_signature, verify_github_release_context
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -49,6 +49,35 @@ class WorkflowContractTests(unittest.TestCase):
         ):
             self.assertIn(required, text)
         self.assertNotIn("assembleDebug", text)
+
+    def test_release_workflow_checks_main_and_quality_in_separate_named_steps(self):
+        text = self.read(".github/workflows/release.yml")
+        for step in (
+            "name: Fetch main",
+            "name: Verify tagged commit is on main",
+            "name: Verify required quality checks",
+        ):
+            self.assertIn(step, text)
+
+    def test_release_job_timeout_covers_the_check_wait_plus_the_build(self):
+        # The gate may legitimately wait out a running quality run; the job must
+        # not be the thing that gives up, least of all mid-Gradle.
+        text = self.read(".github/workflows/release.yml")
+        job_timeout = re.findall(r"^\s*timeout-minutes:\s*(\d+)", text, re.MULTILINE)
+        self.assertEqual(1, len(job_timeout), "release workflow must set one job timeout")
+        wait_minutes = verify_github_release_context.DEFAULT_TIMEOUT_SECONDS / 60
+        # 35 minutes is what "Test and build signed release" needed before the
+        # wait existed, so that is the build budget the wait has to sit on top of.
+        self.assertGreaterEqual(int(job_timeout[0]), wait_minutes + 35)
+
+    def test_release_gate_waits_but_never_below_a_usable_floor(self):
+        source = self.read("scripts/verify_github_release_context.py")
+        self.assertIn("wait_for_required_checks", source)
+        self.assertEqual(300.0, verify_github_release_context.MINIMUM_TIMEOUT_SECONDS)
+        self.assertEqual(
+            ("Workflow integrity", "Android quality", "Instrumented smoke"),
+            verify_github_release_context.REQUIRED_CHECKS,
+        )
 
     def test_release_workflow_passes_the_exact_tag_being_released(self):
         # Without the current tag the packager compares the build against its own

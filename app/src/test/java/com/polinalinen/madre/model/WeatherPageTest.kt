@@ -85,4 +85,15 @@ class WeatherPageTest {
         val note = WeatherPage.noteFor(30.0, 90, RAIN, 1.0)
         assertThat(note!!.text).contains("дождь")
     }
+
+    /**
+     * Cycle 26: строка для комментария кормления — только измеренное, без
+     * советов. Минус ноля не бывает: −0.4° это «0°», а не «−0°».
+     */
+    @Test
+    fun `factual current weather states measurement only`() {
+        assertThat(WeatherPage.factualCurrent(18.4, 60)).isEqualTo("+18°, влажность 60%")
+        assertThat(WeatherPage.factualCurrent(-7.2, 80)).isEqualTo("-7°, влажность 80%")
+        assertThat(WeatherPage.factualCurrent(-0.4, 55)).isEqualTo("0°, влажность 55%")
+    }
 }

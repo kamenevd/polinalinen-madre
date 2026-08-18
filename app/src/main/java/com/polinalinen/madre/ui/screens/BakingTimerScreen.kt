@@ -110,7 +110,7 @@ fun BakingTimerScreen(
                 }
                 Text(
                     "готовится ×${s.scaleFactor.toInt().coerceAtLeast(1)} ${portionWord(s.scaleFactor.toInt())}" +
-                        if (otherActive > 0) " · ещё в печи: $otherActive" else "",
+                        if (otherActive > 0) " · ещё готовим: $otherActive" else "",
                     color = colors.crust,
                     fontFamily = FontFamily.Serif,
                     fontStyle = FontStyle.Italic,

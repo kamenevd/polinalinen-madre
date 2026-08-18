@@ -32,10 +32,13 @@ object FeedingReminderPlanner {
         lastFeedingMillis: Long?,
         nowMillis: Long,
     ): FeedingReminderPlan {
-        if (!remindersEnabled) return FeedingReminderPlan.Cancel
+        if (!remindersEnabled || intervalHours <= 0) return FeedingReminderPlan.Cancel
         // Ни разу не кормили — напоминать не от чего: дневник ещё пуст.
         val lastFeeding = lastFeedingMillis ?: return FeedingReminderPlan.Cancel
-        val dueAt = lastFeeding + intervalHours * 3_600_000L
-        return FeedingReminderPlan.Schedule((dueAt - nowMillis).coerceAtLeast(0L))
+        return when (val schedule = FeedingSchedule.calculate(lastFeeding, intervalHours, nowMillis)) {
+            is FeedingSchedule.State.NotDue -> FeedingReminderPlan.Schedule(schedule.dueAtMillis - nowMillis)
+            is FeedingSchedule.State.Due -> FeedingReminderPlan.Schedule(0L)
+            else -> FeedingReminderPlan.Cancel
+        }
     }
 }

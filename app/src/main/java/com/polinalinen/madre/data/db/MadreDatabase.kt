@@ -78,11 +78,23 @@ interface FeedingDao {
     @Query("SELECT photoPath FROM feedings WHERE photoPath IS NOT NULL")
     suspend fun allPhotoPaths(): List<String>
 
-    @Query("SELECT * FROM feedings WHERE sourdoughConfigId = :configId ORDER BY timestampMillis DESC")
+    @Query("SELECT * FROM feedings WHERE sourdoughConfigId = :configId ORDER BY id DESC")
     fun observeHistory(configId: Long): Flow<List<FeedingEntity>>
 
-    @Query("SELECT * FROM feedings WHERE sourdoughConfigId = :configId ORDER BY timestampMillis DESC LIMIT 1")
+    @Query("SELECT * FROM feedings WHERE sourdoughConfigId = :configId ORDER BY id DESC LIMIT 1")
     suspend fun getLast(configId: Long): FeedingEntity?
+
+    /**
+     * Cycle 26: гидратация, от которой считается новое кормление. Берётся
+     * САМАЯ СВЕЖАЯ посчитанная — legacy-записи и записи без расчёта
+     * пропускаются, а не заполняются задним числом.
+     */
+    @Query(
+        "SELECT finalHydrationPercent FROM feedings " +
+            "WHERE sourdoughConfigId = :configId AND finalHydrationPercent IS NOT NULL " +
+            "ORDER BY id DESC LIMIT 1"
+    )
+    suspend fun latestFinalHydration(configId: Long): Int?
 
     @Insert
     suspend fun insert(feeding: FeedingEntity): Long
@@ -254,6 +266,31 @@ private val MIGRATION_7_8 = object : Migration(7, 8) {
     }
 }
 
+// v8 -> v9 (Cycle 26): factual, explicitly confirmed starter snapshots.
+// Nullable additions preserve every legacy row and all photo paths verbatim.
+private val MIGRATION_8_9 = object : Migration(8, 9) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `feedings` ADD COLUMN `hydrationPercent` INTEGER DEFAULT NULL")
+        db.execSQL("ALTER TABLE `feedings` ADD COLUMN `starterObservation` TEXT DEFAULT NULL")
+        db.execSQL("ALTER TABLE `feedings` ADD COLUMN `observedAtMillis` INTEGER DEFAULT NULL")
+    }
+}
+
+// v9 -> v10 (Cycle 26): кормление становится расчётом. К feedings добавляются
+// оставленная закваска, посчитанная гидратация после кормления и снимок
+// «Комментария закваски». Только ALTER TABLE ADD COLUMN — ни одна старая
+// запись не переписывается: legacy hydrationPercent, starterObservation,
+// observedAtMillis, notes и photoPath остаются ровно такими, как были, а новые
+// колонки у них остаются NULL. Ретроспективно вычислять гидратацию за прошлые
+// кормления нельзя: масс закваски в тех записях никто не называл.
+private val MIGRATION_9_10 = object : Migration(9, 10) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `feedings` ADD COLUMN `retainedStarterGrams` INTEGER DEFAULT NULL")
+        db.execSQL("ALTER TABLE `feedings` ADD COLUMN `finalHydrationPercent` INTEGER DEFAULT NULL")
+        db.execSQL("ALTER TABLE `feedings` ADD COLUMN `generatedComment` TEXT DEFAULT NULL")
+    }
+}
+
 /**
  * Cycle 11: «Пометы на полях» и «Конверт на будущее» убраны из приложения, но
  * margin_notes и sealed_notes ОСТАЮТСЯ объявленными сущностями — намеренно.
@@ -273,7 +310,7 @@ private val MIGRATION_7_8 = object : Migration(7, 8) {
         SealedNoteEntity::class,
         FamilySettingEntity::class,
     ],
-    version = 8,
+    version = 10,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -293,7 +330,7 @@ abstract class MadreDatabase : RoomDatabase() {
          */
         val MIGRATIONS: Array<Migration> = arrayOf(
             MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
-            MIGRATION_6_7, MIGRATION_7_8,
+            MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
         )
 
         // Room создаётся один раз через Application (см. MadreApplication.kt),

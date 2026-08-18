@@ -291,3 +291,29 @@ Room намеренно. Убрать сущность из `entities` — зн�
 ## 2026-08-12 — custom shade paper (BakingShadeCards)
 Removed: RemoteViews paper compact/big. Dima wants native Android notifications.
 Kept: system BigText + progress + static digits (no Chronometer).
+
+## Cycle 26 — ручное поле гидратации, штампы-наблюдения и «примерно через…»
+
+Убрано из формы кормления: поле «Гидратация после кормления» с кнопкой
+«Подтвердить» (`FeedingInput.hydration`) и ряд штампов «Только проснулась /
+На пике / Опала», писавший `starterObservation`. Поле спрашивало у человека
+то, что однозначно выводится из его же граммов, и позволяло записать число,
+противоречащее арифметике книги; штампы выдавали выбранный ярлык за
+наблюдение. Гидратацию теперь считает `HydrationMath`, а «Комментарий
+закваски» собирается из фактов (`FeedingComment`).
+
+Вместе с ними убран `FeedingSchedule.approximateBand` — «Следующее кормление —
+примерно через 12–24 часа». Диапазон нельзя ни проверить, ни спланировать;
+на его месте точный местный срок `nextFeedingLabel`, один на первую полосу и
+дневник.
+
+Колонки `hydrationPercent`, `starterObservation` и `observedAtMillis`
+**остались в схеме** и читаются как прежние значения: убрать их значит
+поменять identity hash и не открыть лежащую на телефонах `madre.db`.
+
+## Cycle 26 — inferred starter voice and mood ribbon
+
+Removed `MadreVoice` and the phase-driven Home mood ribbon. They presented an
+elapsed-time model as observed biology («на пике», «проголодалась», «опала»).
+Home urgency now follows the saved personal schedule; diary biology appears only
+when a person explicitly records an observation.

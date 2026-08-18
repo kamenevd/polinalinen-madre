@@ -3,19 +3,45 @@ package com.polinalinen.madre.data.repository
 import com.polinalinen.madre.data.db.MadreDatabase
 import com.polinalinen.madre.data.db.entities.FeedingEntity
 import com.polinalinen.madre.data.db.entities.SourdoughConfigEntity
+import com.polinalinen.madre.data.db.entities.StorageLocation
 import com.polinalinen.madre.data.db.entities.UserEntity
+import com.polinalinen.madre.sourdough.FeedingComment
+import com.polinalinen.madre.sourdough.FeedingFacts
+import com.polinalinen.madre.sourdough.HydrationMath
 import com.polinalinen.madre.sourdough.StarterName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import androidx.room.withTransaction
+
+data class SourdoughFeedingSaveRequest(
+    val configId: Long,
+    val intervalHours: Int,
+    val savedAtMillis: Long,
+    val retainedStarterGrams: Int,
+    val flourGrams: Int,
+    val waterGrams: Int,
+    val storageLocation: StorageLocation,
+    val note: String?,
+    val photoPath: String?,
+    val weather: String?,
+)
+
+data class SourdoughFeedingSaveResult(
+    val feedingId: Long,
+    val feeding: FeedingEntity,
+)
 
 /**
  * Repository layer поверх Room для закваски — новое в v4 (в v3 ViewModel обращался
  * к DAO напрямую). Все suspend-функции — на Dispatchers.IO (баг v3 #6: blocking I/O
  * на main thread через GSON/file.delete()).
  */
-class SourdoughRepository(private val db: MadreDatabase) {
+class SourdoughRepository(
+    private val db: MadreDatabase,
+    private val onPostInsert: suspend () -> Unit = {},
+) {
 
     fun observeConfig(userId: Long): Flow<SourdoughConfigEntity?> =
         db.sourdoughConfigDao().observeForUser(userId)
@@ -46,13 +72,83 @@ class SourdoughRepository(private val db: MadreDatabase) {
         db.sourdoughConfigDao().updateRemindersEnabled(configId, enabled)
     }
 
+    /** Прошлое кормление целиком — из него комментарий берёт «в прошлый раз дали…». */
+    suspend fun lastFeeding(configId: Long): FeedingEntity? = withContext(Dispatchers.IO) {
+        db.feedingDao().getLast(configId)
+    }
+
+    /**
+     * Cycle 26: гидратация, от которой считается новое кормление. null — ни
+     * одного посчитанного кормления ещё нет, и тогда (и только тогда) берётся
+     * HydrationMath.INITIAL_LEVITO_HYDRATION_PERCENT.
+     */
+    suspend fun latestFinalHydration(configId: Long): Int? = withContext(Dispatchers.IO) {
+        db.feedingDao().latestFinalHydration(configId)
+    }
+
+    suspend fun saveFeeding(request: SourdoughFeedingSaveRequest): SourdoughFeedingSaveResult = withContext(
+        Dispatchers.IO
+    ) {
+        db.withTransaction {
+            val priorHydrationRow = db.feedingDao().latestFinalHydration(request.configId)
+            val priorHydration = priorHydrationRow
+                ?: HydrationMath.INITIAL_LEVITO_HYDRATION_PERCENT
+
+            val previous = db.feedingDao().getLast(request.configId)
+            val finalHydration = HydrationMath.finalHydrationPercent(
+                retainedStarterGrams = request.retainedStarterGrams,
+                priorHydrationPercent = priorHydration,
+                addedFlourGrams = request.flourGrams,
+                addedWaterGrams = request.waterGrams,
+            )
+
+            val feeding = FeedingEntity(
+                sourdoughConfigId = request.configId,
+                timestampMillis = request.savedAtMillis,
+                flourGrams = request.flourGrams,
+                waterGrams = request.waterGrams,
+                storageLocation = request.storageLocation,
+                notes = request.note,
+                photoPath = request.photoPath,
+                retainedStarterGrams = request.retainedStarterGrams,
+                finalHydrationPercent = finalHydration,
+                generatedComment = FeedingComment.compose(
+                    FeedingFacts(
+                            savedAtMillis = request.savedAtMillis,
+                            intervalHours = request.intervalHours,
+                            previousFeedingMillis = previous?.timestampMillis,
+                            previousFlourGrams = previous?.flourGrams,
+                            previousWaterGrams = previous?.waterGrams,
+                            priorHydrationPercent = priorHydration,
+                            priorHydrationIsInitial = priorHydrationRow == null,
+                            retainedStarterGrams = request.retainedStarterGrams,
+                            addedFlourGrams = request.flourGrams,
+                            addedWaterGrams = request.waterGrams,
+                            finalHydrationPercent = finalHydration,
+                            weather = request.weather,
+                    )
+                ),
+            )
+            val id = db.feedingDao().insert(feeding)
+            onPostInsert()
+            db.sourdoughConfigDao().updateLastFeeding(request.configId, request.savedAtMillis)
+            SourdoughFeedingSaveResult(
+                feedingId = id,
+                feeding = feeding.copy(id = id),
+            )
+        }
+    }
+
+    @Deprecated("Use saveFeeding() with request/result object.")
     suspend fun addFeeding(feeding: FeedingEntity): Long = withContext(Dispatchers.IO) {
-        val id = db.feedingDao().insert(feeding)
-        // Обновляем lastFeedingMillis в конфиге, чтобы SourdoughProfile.hoursSinceFeeding()
-        // считал статус от актуального кормления (раньше этот шаг был обещан в
-        // комментарии, но не выполнялся — правка Cycle 3, 2026-07-21).
-        db.sourdoughConfigDao().updateLastFeeding(feeding.sourdoughConfigId, feeding.timestampMillis)
-        id
+        db.withTransaction {
+            val id = db.feedingDao().insert(feeding)
+            // Обновляем lastFeedingMillis в той же транзакции, чтобы вставка и
+            // отметка «последнее кормление» никогда не разъехались.
+            db.sourdoughConfigDao().updateLastFeeding(feeding.sourdoughConfigId, feeding.timestampMillis)
+            onPostInsert()
+            id
+        }
     }
 
     /**

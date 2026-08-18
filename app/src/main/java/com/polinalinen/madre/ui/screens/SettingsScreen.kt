@@ -290,8 +290,15 @@ private fun FeedingRhythmRow(intervalHours: Int, onChange: (Int) -> Unit) {
     var picking by rememberSaveable { mutableStateOf(false) }
     SettingsRow(
         label = "Как часто кормить",
-        value = FeedingInterval.label(intervalHours),
+        value = "Ваш ритм: ${FeedingInterval.label(intervalHours)}",
         onClick = { picking = true },
+    )
+    Text(
+        "Руководство Levito Madre: при хранении на средней полке холодильника 4–6°C — каждые 3–5 дней. Это ориентир, не замена вашему ритму.",
+        color = AppColors.current.cocoa,
+        fontFamily = FontFamily.Serif,
+        fontSize = 12.sp,
+        modifier = Modifier.padding(horizontal = 22.dp, vertical = 4.dp),
     )
     if (picking) {
         SettingsChoiceDialog(

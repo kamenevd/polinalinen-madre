@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Surface
@@ -33,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Modifier
@@ -54,10 +54,9 @@ import com.polinalinen.madre.model.WeatherNote
 import com.polinalinen.madre.sourdough.FeedingCall
 import com.polinalinen.madre.sourdough.GrowthPhase
 import com.polinalinen.madre.sourdough.StarterName
-import com.polinalinen.madre.sourdough.hoursSinceFeeding
+import com.polinalinen.madre.notifications.FeedingSchedule
 import com.polinalinen.madre.ui.components.BookBreath
 import com.polinalinen.madre.ui.components.BookButton
-import com.polinalinen.madre.ui.components.BookButtonVariant
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.HeavyRule
 import com.polinalinen.madre.ui.components.PageLabel
@@ -113,6 +112,10 @@ fun HomeScreen(
     phase: GrowthPhase,
     /** Когда кормили в прошлый раз; null — дневник ещё пуст. */
     lastFeedingMillis: Long? = null,
+    intervalHours: Int = 24,
+    latestHydrationPercent: Int? = null,
+    nowMillis: Long? = null,
+    nowProvider: () -> Long = System::currentTimeMillis,
     onOpenRecipe: (String) -> Unit,
     onOpenStarter: () -> Unit,
     onOpenTimer: (sessionId: Long) -> Unit,
@@ -123,6 +126,9 @@ fun HomeScreen(
     weatherViewModel: WeatherViewModel = viewModel(),
 ) {
     val colors = AppColors.current
+    var scheduleNowMillis by remember(nowMillis, nowProvider) {
+        mutableStateOf(nowMillis ?: nowProvider())
+    }
     val recipes by viewModel.recipes.collectAsState()
     // «Погода за окном» (Cycle 7, WeatherPage): заметка Мадре на полях +
     // отсыревшая бумага в дождь. Без разрешения на геолокацию — тихое
@@ -140,9 +146,10 @@ fun HomeScreen(
     // После возврата из системных настроек (или обновления APK) перечитываем
     // grant — иначе UI может думать, что геолокации всё ещё нет.
     val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
+    DisposableEffect(lifecycleOwner, nowMillis, nowProvider) {
         val obs = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
+                if (nowMillis == null) scheduleNowMillis = nowProvider()
                 hasLocationPermission =
                     context.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) ==
                         PackageManager.PERMISSION_GRANTED
@@ -150,6 +157,16 @@ fun HomeScreen(
         }
         lifecycleOwner.lifecycle.addObserver(obs)
         onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
+    }
+    LaunchedEffect(nowMillis, nowProvider) {
+        if (nowMillis != null) {
+            scheduleNowMillis = nowMillis
+            return@LaunchedEffect
+        }
+        while (true) {
+            delay(SCHEDULE_REFRESH_MILLIS)
+            scheduleNowMillis = nowProvider()
+        }
     }
     LaunchedEffect(hasLocationPermission) {
         if (hasLocationPermission) weatherViewModel.load()
@@ -176,7 +193,12 @@ fun HomeScreen(
             LazyColumn(modifier = Modifier.statusBarsPadding().testTag(Home.LIST_TAG)) {
                 item { Masthead(season, onOpenSettings, onOpenShelf) }
                 item { MadreLine(madreHeadline, starterName, onOpenStarter) }
-                item { FeedingCallButton(starterName, phase, lastFeedingMillis, onOpenFeeding) }
+                item {
+                    FeedingScheduleStatus(
+                        starterName, lastFeedingMillis, intervalHours, latestHydrationPercent,
+                        scheduleNowMillis, onOpenFeeding,
+                    )
+                }
                 item {
                     WeatherMargin(
                         note = weatherNote,
@@ -234,6 +256,8 @@ fun HomeScreen(
     }
 }
 
+private const val SCHEDULE_REFRESH_MILLIS = 60_000L
+
 /**
  * Ляссе поверх первой полосы — только одно за раз: пока идёт хотя бы одна
  * выпечка, это лента выпечки, иначе mood-ляссе «Мадре советует» (в фазах
@@ -263,10 +287,6 @@ internal fun PageRibbon(
 ) {
     if (hasActiveBake) {
         RibbonBookmark(modifier, totalBakes = totalBakes)
-    } else {
-        moodBookmarkSpec(phase)?.let { spec ->
-            MoodBookmark(spec = spec, totalBakes = totalBakes, modifier = modifier)
-        }
     }
 }
 
@@ -349,33 +369,47 @@ private fun MadreLine(headline: String, starterName: String, onOpenStarter: () -
  * Кормление — единственное, что делают в этой книге каждый день, а дорога к
  * нему шла через три экрана: первая полоса → дневник → форма. Теперь один тап.
  *
- * Пока кормить пора — это единственная кнопка заливкой на всей полосе. Когда
- * кормили недавно, она не гаснет и не исчезает: кормить закваску раньше срока
- * человек вправе, и запрещать ему это книге не за что. Меняется только голос —
- * рамка вместо заливки — и под кнопкой появляется, когда кормили. Время
- * относительное и настоящее: если его нет, подписи тоже нет (см.
- * [FeedingCall.sinceLabel]).
+ * Действие появляется по личному расписанию либо до первой записи кормления.
+ * До срока книга показывает только спокойный фактический статус. Некорректный
+ * интервал и часы раньше последней записи не маскируются призывом к действию.
  */
 @Composable
-private fun FeedingCallButton(
+private fun FeedingScheduleStatus(
     starterName: String,
-    phase: GrowthPhase,
     lastFeedingMillis: Long?,
+    intervalHours: Int,
+    latestHydrationPercent: Int?,
+    nowMillis: Long,
     onOpenFeeding: () -> Unit,
 ) {
-    val fresh = FeedingCall.isFresh(phase)
-    val caption = if (fresh) {
-        FeedingCall.sinceLabel(lastFeedingMillis?.let { hoursSinceFeeding(it) })
-    } else {
-        null
+    val colors = AppColors.current
+    val state = FeedingSchedule.calculate(lastFeedingMillis, intervalHours, nowMillis)
+    Column(Modifier.padding(horizontal = 22.dp, vertical = 8.dp)) {
+        val status = when (state) {
+            FeedingSchedule.State.NeverFed -> "Кормлений пока нет — запишите первое, когда покормите"
+            FeedingSchedule.State.InvalidInterval -> "Интервал кормления не задан корректно — проверьте настройки"
+            is FeedingSchedule.State.ClockBeforeLastFeeding -> "Время телефона раньше последнего кормления — проверьте часы"
+            // Cycle 26: точный местный срок вместо округлённого диапазона —
+            // «примерно через 12–24 часа» нельзя ни проверить, ни спланировать.
+            is FeedingSchedule.State.NotDue -> FeedingSchedule.nextFeedingLabel(state.dueAtMillis)
+            is FeedingSchedule.State.Due -> "Кормление уже по вашему расписанию"
+        }
+        Text(status, color = colors.espresso, fontFamily = FontFamily.Serif, fontSize = 16.sp)
+        Text(
+            "Последнее: ${lastFeedingMillis?.let { SimpleDateFormat("d MMM, HH:mm", Locale("ru")).format(Date(it)) } ?: "не записано"}",
+            color = colors.cocoa, fontFamily = FontFamily.SansSerif, fontSize = 12.sp,
+        )
+        Text(
+            "Гидратация закваски: ${latestHydrationPercent?.let { "$it%" } ?: "не указана"}",
+            color = colors.cocoa, fontFamily = FontFamily.SansSerif, fontSize = 12.sp,
+        )
+        if (state is FeedingSchedule.State.Due || state is FeedingSchedule.State.NeverFed) {
+            BookButton(
+                label = FeedingCall.label(starterName), onClick = onOpenFeeding,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
     }
-    BookButton(
-        label = FeedingCall.label(starterName),
-        onClick = onOpenFeeding,
-        variant = if (fresh) BookButtonVariant.SECONDARY else BookButtonVariant.PRIMARY,
-        caption = caption,
-        modifier = Modifier.padding(horizontal = 22.dp, vertical = 8.dp),
-    )
 }
 
 /**
@@ -430,7 +464,7 @@ private fun ActiveBakingTicket(
                     fontSize = 14.sp,
                 )
             }
-            Stamp("В печи", colors.terracotta)
+            Stamp("Готовим", colors.terracotta)
         }
         Text(
             "шаг ${stepIndex + 1} из $stepCount" + if (isPaused) " · пауза" else "",
@@ -560,52 +594,6 @@ private fun TocLeaders(modifier: Modifier = Modifier, color: Color) {
     }
 }
 
-
-/**
- * «Мадре советует» (DESIGN-V4.md Cycle 1, фича MoodBookmark) — вторая ляссе
- * на главной, цвет и текст зависят от фазы закваски. Показывается только
- * пока не идёт активная выпечка (см. HomeScreen — baking-ляссе в приоритете).
- */
-private data class MoodBookmarkSpec(val color: Color, val label: String, val description: String)
-
-@Composable
-private fun moodBookmarkSpec(phase: GrowthPhase): MoodBookmarkSpec? {
-    val colors = AppColors.current
-    // Cycle 18: описания рассказывают о закваске, а не о нажатии — ляссе
-    // больше никуда не ведёт. «— открыть рецепт» и «— покормить» обещали
-    // дорогу, которая зависела от фазы и была не видна глазом.
-    return when (phase) {
-        GrowthPhase.PEAK -> MoodBookmarkSpec(
-            colors.sage, "Мадре советует: пеките сейчас!",
-            "Закваска на пике",
-        )
-        GrowthPhase.DECLINING -> MoodBookmarkSpec(
-            colors.crust, "Покормите меня сначала…",
-            "Закваска просит еды",
-        )
-        GrowthPhase.HUNGRY -> MoodBookmarkSpec(
-            colors.terracotta, "Я проголодалась…",
-            "Закваска давно не кормлена",
-        )
-        else -> null
-    }
-}
-
-@Composable
-private fun MoodBookmark(spec: MoodBookmarkSpec, totalBakes: Int = 0, modifier: Modifier = Modifier) {
-    Column(modifier, horizontalAlignment = Alignment.End) {
-        RibbonBookmark(color = spec.color, description = spec.description, totalBakes = totalBakes)
-        Text(
-            spec.label,
-            color = spec.color,
-            fontFamily = FontFamily.Serif,
-            fontStyle = FontStyle.Italic,
-            fontSize = 11.sp,
-            textAlign = TextAlign.End,
-            modifier = Modifier.widthIn(max = 130.dp).padding(top = 4.dp, end = 4.dp),
-        )
-    }
-}
 
 /**
  * «Общая статистика» жила подвалом первой полосы с Cycle 5 и умерла в

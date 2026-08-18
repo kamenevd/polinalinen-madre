@@ -17,11 +17,11 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.polinalinen.madre.MadreApplication
 import com.polinalinen.madre.sourdough.GrowthPhase
-import com.polinalinen.madre.sourdough.MadreVoice
 import com.polinalinen.madre.sourdough.currentPhase
 import com.polinalinen.madre.sourdough.hoursSinceFeeding
 import com.polinalinen.madre.sourdough.StarterName
 import com.polinalinen.madre.sourdough.profileForInterval
+import com.polinalinen.madre.data.db.entities.FeedingEntity
 import com.polinalinen.madre.ui.screens.BakingCompleteScreen
 import com.polinalinen.madre.ui.screens.BakingTimerScreen
 import com.polinalinen.madre.ui.screens.BookStatsScreen
@@ -39,6 +39,11 @@ import com.polinalinen.madre.ui.theme.SharedPreferencesFlagStore
 import com.polinalinen.madre.viewmodel.BakingViewModel
 import com.polinalinen.madre.viewmodel.SourdoughViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+
+internal fun authoritativeFeedingFromHistory(history: List<FeedingEntity>): FeedingEntity? = history.firstOrNull()
+
+internal fun latestComputedHydrationFromHistory(history: List<FeedingEntity>): Int? =
+    history.firstNotNullOfOrNull { it.finalHydrationPercent }
 
 /**
  * Home, RecipeDetail, BakingTimer, StarterDiary, Settings, Полка, BookStats,
@@ -117,6 +122,7 @@ fun MadreNavHost(
     // через SourdoughViewModel — реактивно, без ручного refetch после кормления.
     val sourdoughConfig by sourdoughViewModel.config.collectAsState()
     val feedingHistory by sourdoughViewModel.history.collectAsState()
+    val saveState by sourdoughViewModel.saveState.collectAsState()
     // Cycle 14: имя закваски одно на всю книгу и живёт в Room. Отсюда оно
     // расходится в дневник, на первую полосу, в подписи фотокарточек кормлений
     // и (через SourdoughViewModel.rescheduleReminder) в напоминание.
@@ -145,13 +151,26 @@ fun MadreNavHost(
         }
         all.sortedByDescending { it.timestampMillis }
     }
-    val lastFeeding = feedingHistory.firstOrNull() // observeHistory сортирует DESC
+    val latestHistoryFeeding = authoritativeFeedingFromHistory(feedingHistory)
+    // Cycle 26: решения для последнего кормления опираются только на фактически
+    // последнюю вставку (id DESC), а не на timestamp, чтобы rollback не ломал
+    // факт и не заставлял UI возвращаться к старому порядку.
+    val authoritativeLastFeedingMillis = latestHistoryFeeding?.timestampMillis
+        ?: sourdoughConfig?.lastFeedingMillis
+
+    // Cycle 26: гидратация книги — самая свежая ПОСЧИТАННАЯ; если таких ещё
+    // нет, показываем «—» в суммарном блоке и не используем это как источник
+    // для следующего расчёта.
+    val latestFinalHydration = latestComputedHydrationFromHistory(feedingHistory)
+    val shownHydration = latestFinalHydration
     val profile = profileForInterval(sourdoughConfig?.intervalHours ?: 24)
-    val phase = sourdoughConfig?.lastFeedingMillis?.let { currentPhase(hoursSinceFeeding(it), profile) }
+    val phase = authoritativeLastFeedingMillis?.let { currentPhase(hoursSinceFeeding(it), profile) }
         ?: GrowthPhase.EMPTY
-    val headline = MadreVoice.headline(lastFeeding, profile)
+    val headline = "Режим кормления задаёте вы — книга показывает только записанные факты"
     // "День N" — календарные дни с первого кормления в этом дневнике (не число записей).
-    val dayNumber = feedingHistory.lastOrNull()?.let { oldest ->
+    // Первый кормеж — по фактическому timestamp, а не по тому, как rows
+    // встали в таблице.
+    val dayNumber = feedingHistory.minByOrNull { it.timestampMillis }?.let { oldest ->
         ((System.currentTimeMillis() - oldest.timestampMillis) / 86_400_000L).toInt() + 1
     } ?: 1
 
@@ -162,7 +181,9 @@ fun MadreNavHost(
                     madreHeadline = headline,
                     starterName = starterName,
                     phase = phase,
-                    lastFeedingMillis = sourdoughConfig?.lastFeedingMillis,
+                    lastFeedingMillis = authoritativeLastFeedingMillis,
+                    intervalHours = sourdoughConfig?.intervalHours ?: 24,
+                    latestHydrationPercent = shownHydration,
                     onOpenRecipe = { id -> navController.navigate(MadreDestinations.recipeDetail(id)) },
                     onOpenStarter = { navController.navigate(MadreDestinations.STARTER_DETAIL) },
                     onOpenTimer = { sessionId -> navController.navigate(MadreDestinations.bakingTimer(sessionId.toString())) },
@@ -222,13 +243,18 @@ fun MadreNavHost(
                     dayNumber = dayNumber,
                     phase = phase,
                     profile = profile,
-                    entries = MadreVoice.entriesFor(lastFeeding, profile),
+                    // Generated biology is not an observation. Only saved user
+                    // observations appear in the factual feeding list below.
+                    entries = emptyList(),
                     history = feedingHistory,
                     onBack = { navController.popBackStack() },
                     onFeed = { navController.navigate(MadreDestinations.FEEDING_FORM) },
                     onOpenGallery = { navController.navigate(MadreDestinations.PHOTO_GALLERY) },
                     cancelledBakeCount = cancelledBakeCount,
                     starterName = starterName,
+                    // Дневник и первая полоса считают срок одной функцией от
+                    // одного и того же интервала из настроек.
+                    intervalHours = sourdoughConfig?.intervalHours ?: 24,
                 )
             }
             composable(MadreDestinations.PHOTO_GALLERY) {
@@ -239,12 +265,25 @@ fun MadreNavHost(
             }
             composable(MadreDestinations.FEEDING_FORM) {
                 FeedingFormScreen(
-                    onSave = { flourGrams, waterGrams, location, note, photoPath ->
-                        sourdoughViewModel.feed(flourGrams, waterGrams, location, note, photoPath)
-                        navController.popBackStack()
+                    onSave = { starterGrams, flourGrams, waterGrams, location, note, photoPath ->
+                        sourdoughViewModel.feed(starterGrams, flourGrams, waterGrams, location, note, photoPath)
                     },
                     onBack = { navController.popBackStack() },
+                    saveState = saveState,
+                    // Гидратация, от которой считается это кормление: самая
+                    // свежая посчитанная. null — их ещё нет, и форма вслух
+                    // назовёт стартовую 50% из буклета.
+                    priorHydrationPercent = latestFinalHydration,
                 )
+                LaunchedEffect(saveState) {
+                    when (saveState) {
+                        is com.polinalinen.madre.viewmodel.FeedingSaveState.Success -> {
+                            navController.popBackStack()
+                            sourdoughViewModel.consumeSaveState()
+                        }
+                        else -> {}
+                    }
+                }
             }
             composable(MadreDestinations.SETTINGS) {
                 SettingsScreen(

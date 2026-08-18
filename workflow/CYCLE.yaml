@@ -1,23 +1,26 @@
 {
   "schema_version": 1,
   "cycle": {
-    "number": 25,
-    "kind": "maintenance",
-    "version": "6.4.5",
-    "branch": "maintenance/25",
-    "stage": "releasable",
+    "number": 26,
+    "kind": "feature",
+    "version": "6.5.0",
+    "branch": "cycle/26",
+    "stage": "implementing",
     "created_at": "2026-08-12T19:20:00Z",
-    "updated_at": "2026-08-12T19:14:23Z"
+    "updated_at": "2026-08-18T00:00:00Z"
   },
   "features": [
     {
-      "id": "toc-flush-right",
-      "title": "Номера оглавления максимально справа, точки до них",
+      "id": "factual-starter-guidance",
+      "title": "Фактическое расписание, гидратация и дневник закваски",
       "needs_generated_asset": false,
       "acceptance": [
-        "index at row end with minimal end padding",
-        "leaders fill full width under name via paper mask",
-        "works on narrow and wide screens"
+        "Home action uses exact due datetime and shared schedule logic from sourdough config",
+        "hydration in form and table is automatic and persisted as final computed hydration (no manual confirmation required)",
+        "comment snapshot is immutable and survives schema migration, with weather included only when available/permissioned",
+        "non-destructive Room migration 9->10 with exact schema 10 and no legacy mutation",
+        "history ordering for last feeding and prior hydration uses deterministic insertion order (id DESC)",
+        "latest watering defaults are labeled editable 50/100/50 and not presented as calculated result"
       ]
     }
   ],
@@ -25,20 +28,16 @@
     "plan": {
       "status": "pass",
       "evidence": [
-        "DESIGN-V4 Cycle 25"
+        "workflow/evidence/cycle26/plan.md"
       ]
     },
     "tdd": {
-      "status": "pass",
-      "evidence": [
-        "CI"
-      ]
+      "status": "pending",
+      "evidence": []
     },
     "build": {
-      "status": "pass",
-      "evidence": [
-        "assemble"
-      ]
+      "status": "pending",
+      "evidence": []
     },
     "review": {
       "status": "pending",
@@ -66,6 +65,8 @@
   },
   "blockers": [],
   "decisions": [
-    "2026-08-12: TOC book layout paper-mask leaders"
+    "2026-08-18: Dima authorized user-visible alignment with the Levito Madre booklet",
+    "2026-08-18: preserve personal reminder cadence; booklet cadence remains labelled guidance",
+    "2026-08-18: planned 6.5.0 is workflow planning; Gradle remains versionName 6.4.5 / versionCode 33 until release preparation"
   ]
 }

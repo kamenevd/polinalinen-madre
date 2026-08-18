@@ -124,8 +124,8 @@ shelf              shelf/{ownerId}
 
 ## Данные
 
-Room **версия 8**, 8 объявленных сущностей, 7 миграций
-(`MIGRATION_1_2` … `MIGRATION_7_8`). Список миграций — один, в
+Room **версия 10**, 8 объявленных сущностей, 9 миграций
+(`MIGRATION_1_2` … `MIGRATION_9_10`). Список миграций — один, в
 `MadreDatabase.Companion.MIGRATIONS`; его же берёт
 `androidTest/data/db/MigrationTest.kt`. Миграция, написанная но не
 зарегистрированная, роняет тест, а не «проходит» на своей копии списка.
@@ -136,6 +136,29 @@ Room **версия 8**, 8 объявленных сущностей, 7 мигр
 намеренно остались объявленными**: убрать их из `entities` значит поменять
 identity hash схемы, и Room откажется открывать лежащую на телефонах
 `madre.db`. DAO у них удалены, читать и писать их нечем. Не «прибирать».
+
+Cycle 26 шёл к `feedings` двумя шагами. Версия 9 добавила три nullable-поля
+ручного снимка — `hydrationPercent`, `starterObservation`, `observedAtMillis`;
+версия 10 добавила ещё три — `retainedStarterGrams`, `finalHydrationPercent`
+и `generatedComment`. Обе миграции только `ADD COLUMN`: legacy-записи не
+переписываются и остаются null.
+
+Кормление теперь **расчёт, а не форма**: человек называет три массы
+(оставленная закваска, мука, вода), гидратацию считает
+`sourdough/HydrationMath` от последней сохранённой `finalHydrationPercent`, а
+если посчитанных кормлений ещё нет — от объявленной константы
+`INITIAL_LEVITO_HYDRATION_PERCENT = 50` (её источник экран называет вслух).
+Поля v9 остаются читаемыми как прежние значения: приоритет показа —
+`finalHydrationPercent`, затем `hydrationPercent`, затем «—». Ретроспективно
+гидратацию за старые кормления не вычисляем: масс закваски в них не называли.
+
+`generatedComment` — снимок фактов на момент записи (`sourdough/FeedingComment`):
+интервал из настроек, прошедшее время, «не позже срока»/насколько опоздали
+(`FeedingSchedule.classify`, граница принадлежит сроку), прошлая гидратация,
+прошлые мука/вода, новые массы и результат. Погода в нём появляется, только
+если разрешение на грубую геолокацию уже дано и точка не старше 30 минут
+(`FeedingWeatherSource`); координаты никуда не пишутся, наружу в семейную книгу
+по-прежнему уходят только id/мука/вода/время.
 
 Схемы экспортируются в `app/schemas` — они и есть история, по которой
 `MigrationTestHelper` поднимает базу нужной версии.
@@ -284,9 +307,10 @@ Compose-тесты гоняются на Robolectric намеренно: эму�
    Новый `clickable` в diff'е — повод откатить правку.
 
    Первая полоса приведена к этому в Cycle 18 и держится тестом
-   `HomeControlsUiTest`. Остальные экраны — ещё нет: `PhotoDesigner`,
+   `HomeControlsUiTest`; `FeedingFormScreen` и `StarterDiaryScreen` — в
+   Cycle 26. Остальные экраны — ещё нет: `PhotoDesigner`,
    `PhotoSourceChooser`, `Bookplate`, `AgedPhoto`, `HandwrittenOverlay`,
-   `BakingCompleteScreen`, `FeedingFormScreen`, `StarterDiaryScreen`,
+   `BakingCompleteScreen`,
    `BookStatsScreen` и `PhotoGalleryScreen` держат старые `clickable`. Правило
    на них распространяется при следующей правке этих файлов; отдельный обход
    всей книги отложен сознательно (`workflow/CYCLE.yaml`, decisions).

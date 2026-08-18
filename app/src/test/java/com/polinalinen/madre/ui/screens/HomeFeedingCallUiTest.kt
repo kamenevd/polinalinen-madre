@@ -114,6 +114,21 @@ class HomeFeedingCallUiTest {
     }
 
     @Test
+    fun `an overdue feeding still shows action and phrase`() {
+        val now = 1_700_000_000_000L
+        rule.showFrontPage(
+            phase = GrowthPhase.HUNGRY,
+            lastFeedingMillis = now - 26 * 3_600_000L,
+            intervalHours = 24,
+            nowMillis = now,
+        )
+        awaitTableOfContents()
+
+        rule.onNodeWithText("Кормление уже по вашему расписанию").assertIsDisplayed()
+        rule.onNodeWithText("Покормить Мадре").assertIsDisplayed()
+    }
+
+    @Test
     fun `invalid interval is honest and offers no action`() {
         rule.showFrontPage(
             phase = GrowthPhase.EMPTY,

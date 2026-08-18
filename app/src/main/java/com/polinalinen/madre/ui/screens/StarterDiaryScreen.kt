@@ -21,6 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -88,6 +89,8 @@ fun StarterDiaryScreen(
     starterName: String = StarterName.DEFAULT,
     intervalHours: Int = 24,
     currentYear: Int = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR),
+    nowMillis: Long? = null,
+    nowProvider: () -> Long = System::currentTimeMillis,
 ) {
     val colors = AppColors.current
     // «Клякса» — DESIGN-V4.md Cycle 3, фича InkBlot. Событие для seed — самое
@@ -96,9 +99,11 @@ fun StarterDiaryScreen(
 
     // Срок следующего кормления — тот же расчёт, что и на первой полосе:
     // время последней записи плюс интервал из настроек, без «примерно».
-    // Кормлений нет — строки нет: выдумывать срок не от чего.
-    val nextFeedingDueMillis = history.firstOrNull()
-        ?.let { FeedingSchedule.dueAtMillis(it.timestampMillis, intervalHours) }
+    val scheduleNowMillis by remember(nowMillis, nowProvider) {
+        mutableStateOf(nowMillis ?: nowProvider())
+    }
+    val nextFeedingStatus = history.firstOrNull()
+        ?.let { FeedingSchedule.nextFeedingStatus(FeedingSchedule.calculate(it.timestampMillis, intervalHours, scheduleNowMillis)) }
 
     Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
         // «Страница на просвет» (Cycle 4, LightPage): наклон телефона ловит
@@ -130,9 +135,9 @@ fun StarterDiaryScreen(
                     modifier = Modifier.padding(horizontal = 22.dp),
                 )
 
-                if (nextFeedingDueMillis != null) {
+                if (nextFeedingStatus != null) {
                     Text(
-                        FeedingSchedule.nextFeedingLabel(nextFeedingDueMillis),
+                        nextFeedingStatus,
                         color = colors.espresso,
                         fontFamily = FontFamily.Serif,
                         fontSize = 15.sp,

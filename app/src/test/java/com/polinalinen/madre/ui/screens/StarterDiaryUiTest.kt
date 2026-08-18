@@ -54,6 +54,18 @@ class StarterDiaryUiTest {
         notes = "пахнет яблоками",
     )
 
+    private val priorYearTop = FeedingEntity(
+        id = 8,
+        sourdoughConfigId = 1,
+        timestampMillis = momentOf(2025, Calendar.AUGUST, 18, 8, 0),
+        flourGrams = 150,
+        waterGrams = 75,
+        storageLocation = StorageLocation.KITCHEN,
+        retainedStarterGrams = 45,
+        finalHydrationPercent = 86,
+        generatedComment = "Приоритетный сценарий для проверки даты прошлогоднего года.",
+    )
+
     /** Запись, сделанная до Cycle 26: масс закваски никто не называл. */
     private val legacy = FeedingEntity(
         id = 3,
@@ -95,7 +107,7 @@ class StarterDiaryUiTest {
         storageLocation = StorageLocation.KITCHEN,
     )
 
-    private fun show(history: List<FeedingEntity>, intervalHours: Int = 24) {
+    private fun show(history: List<FeedingEntity>, intervalHours: Int = 24, nowMillis: Long? = null) {
         rule.setContent {
             MadreTheme {
                 StarterDiaryScreen(
@@ -108,6 +120,7 @@ class StarterDiaryUiTest {
                     onFeed = {},
                     intervalHours = intervalHours,
                     currentYear = 2026,
+                    nowMillis = nowMillis,
                 )
             }
         }
@@ -185,7 +198,7 @@ class StarterDiaryUiTest {
 
     /** Срок — точный местный, тот же расчёт, что на первой полосе. */
     @Test fun `the exact next feeding follows the settings interval`() {
-        show(listOf(computed), intervalHours = 24)
+        show(listOf(computed), intervalHours = 24, nowMillis = momentOf(2025, Calendar.AUGUST, 18, 13, 0))
         rule.onNodeWithText("Следующее кормление: 19 августа, 12:00")
             .performScrollTo().assertIsDisplayed()
     }
@@ -202,7 +215,11 @@ class StarterDiaryUiTest {
             laterByTimestampRow.timestampMillis + 24 * 3_600_000L,
         )
 
-        show(listOf(secondInsertWithEarlierTime, laterByTimestampRow), intervalHours = 24)
+        show(
+            listOf(secondInsertWithEarlierTime, laterByTimestampRow),
+            intervalHours = 24,
+            nowMillis = secondInsertWithEarlierTime.timestampMillis + 60 * 60_000L,
+        )
         rule.onNodeWithText(authoritativeDue).performScrollTo().assertIsDisplayed()
         rule.onNodeWithText(nonAuthoritativeDue).assertDoesNotExist()
     }
@@ -211,5 +228,24 @@ class StarterDiaryUiTest {
     @Test fun `an empty diary shows no next feeding`() {
         show(emptyList())
         rule.onAllNodesWithText("Следующее кормление", substring = true).assertCountEquals(0)
+    }
+
+    @Test fun `overdue due status uses shared overdue phrase`() {
+        val now = momentOf(2025, Calendar.AUGUST, 19, 12, 0)
+        show(listOf(computed), intervalHours = 24, nowMillis = now)
+        rule.onNodeWithText("Кормление уже по вашему расписанию").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun `prior year row keeps full date and ordered narration`() {
+        show(
+            listOf(priorYearTop, computed),
+            intervalHours = 24,
+            nowMillis = momentOf(2025, Calendar.AUGUST, 20, 9, 0),
+        )
+        rule.onNodeWithText("18 авг. 2025", useUnmergedTree = true).performScrollTo().assertIsDisplayed()
+        rule.onNodeWithContentDescription(
+            "18 августа 2025, 08:00. Закваска: 45 граммов. Мука: 150 граммов. " +
+                "Вода: 75 граммов. Гидратация: 86 процентов. Хранение: кухня.",
+        ).performScrollTo().assertIsDisplayed()
     }
 }

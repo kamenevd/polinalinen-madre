@@ -386,13 +386,13 @@ private fun FeedingScheduleStatus(
     val state = FeedingSchedule.calculate(lastFeedingMillis, intervalHours, nowMillis)
     Column(Modifier.padding(horizontal = 22.dp, vertical = 8.dp)) {
         val status = when (state) {
-            FeedingSchedule.State.NeverFed -> "Кормлений пока нет — запишите первое, когда покормите"
-            FeedingSchedule.State.InvalidInterval -> "Интервал кормления не задан корректно — проверьте настройки"
-            is FeedingSchedule.State.ClockBeforeLastFeeding -> "Время телефона раньше последнего кормления — проверьте часы"
-            // Cycle 26: точный местный срок вместо округлённого диапазона —
-            // «примерно через 12–24 часа» нельзя ни проверить, ни спланировать.
-            is FeedingSchedule.State.NotDue -> FeedingSchedule.nextFeedingLabel(state.dueAtMillis)
-            is FeedingSchedule.State.Due -> "Кормление уже по вашему расписанию"
+            // Cycle 26: текст статуса о следующем кормлении совпадает на всех
+            // экранах и определяется только через `calculate()`.
+            is FeedingSchedule.State.Due,
+            is FeedingSchedule.State.NotDue,
+            is FeedingSchedule.State.ClockBeforeLastFeeding,
+            is FeedingSchedule.State.InvalidInterval,
+            FeedingSchedule.State.NeverFed -> FeedingSchedule.nextFeedingStatus(state)
         }
         Text(status, color = colors.espresso, fontFamily = FontFamily.Serif, fontSize = 16.sp)
         Text(

@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.Box
@@ -93,6 +94,7 @@ fun FeedingFormScreen(
     priorHydrationPercent: Int? = null,
 ) {
     val colors = AppColors.current
+    val isSaving = saveState is FeedingSaveState.Saving
 
     // rememberSaveable, а не remember: поворот телефона или уход в камеру за
     // фотокарточкой раньше стирал уже набранные граммы и заметку.
@@ -131,7 +133,8 @@ fun FeedingFormScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(bottom = 32.dp)
         ) {
-            BackLabel("Дневник", onClick = onBack, modifier = Modifier.padding(horizontal = 22.dp))
+            BackHandler(enabled = isSaving) {}
+            BackLabel("Дневник", onClick = { if (!isSaving) onBack() }, modifier = Modifier.padding(horizontal = 22.dp))
 
             Text(
                 "Новая запись",

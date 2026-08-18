@@ -231,4 +231,18 @@ class SourdoughViewModel @JvmOverloads constructor(
     fun consumeSaveState() {
         _saveState.value = FeedingSaveState.Idle
     }
+
+    /**
+     * Clears stale terminal form state before re-entering the feeding form.
+     *
+     * This does not cancel an in-flight save; it only drops completed
+     * Success/Error so stale navigation/pop-back behavior does not rerun.
+     */
+    fun clearSaveState() {
+        when (_saveState.value) {
+            is FeedingSaveState.Success,
+            is FeedingSaveState.Error -> _saveState.value = FeedingSaveState.Idle
+            else -> {}
+        }
+    }
 }

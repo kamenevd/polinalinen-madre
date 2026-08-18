@@ -57,6 +57,22 @@ object FeedingSchedule {
         "Следующее кормление: ${RuShortDate.dateTime(dueAtMillis, zone)}"
 
     /**
+     * Unified next-feeding status copy for Home and StarterDiary.
+     *
+     * - `NotDue` keeps exact local datetime from `dateTime(dueAtMillis)`.
+     * - `Due` (exact boundary or overdue) uses the shared overdue wording.
+     * - `InvalidInterval`, `ClockBeforeLastFeeding`, and `NeverFed` keep their
+     *   dedicated statuses, consistent across all screens.
+     */
+    fun nextFeedingStatus(state: State, zone: TimeZone = TimeZone.getDefault()): String = when (state) {
+        State.NeverFed -> "Кормлений пока нет — запишите первое, когда покормите"
+        State.InvalidInterval -> "Интервал кормления не задан корректно — проверьте настройки"
+        is State.ClockBeforeLastFeeding -> "Время телефона раньше последнего кормления — проверьте часы"
+        is State.NotDue -> nextFeedingLabel(state.dueAtMillis, zone)
+        is State.Due -> "Кормление уже по вашему расписанию"
+    }
+
+    /**
      * Прожитое время словами: «3 дн 4 ч», «23 ч 45 мин», «40 мин», «меньше
      * минуты». Секунды не показываются — это книга, а не секундомер.
      */

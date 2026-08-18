@@ -35,6 +35,17 @@ class StarterDiaryGoldenTest {
         val profile = profileForInterval(24)
         val history = listOf(
             FeedingEntity(
+                id = 10,
+                sourdoughConfigId = 1,
+                timestampMillis = momentOf(2025, Calendar.AUGUST, 18, 8, 0),
+                flourGrams = 150,
+                waterGrams = 75,
+                storageLocation = StorageLocation.KITCHEN,
+                retainedStarterGrams = 45,
+                finalHydrationPercent = 86,
+                generatedComment = "Перед самой широкой строкой, чтобы проверить формат года.",
+            ),
+            FeedingEntity(
                 id = 9,
                 sourdoughConfigId = 1,
                 timestampMillis = momentOf(2026, Calendar.AUGUST, 18, 12, 0),

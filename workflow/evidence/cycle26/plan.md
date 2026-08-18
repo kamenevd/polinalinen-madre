@@ -25,8 +25,9 @@ navigation aid only; uncertain OCR is never quoted.
   insertion order (`id DESC`) when timestamps regress.
 - Feedings use automatic hydration only: 50/100/50 are editable convenience
   defaults only; no manual hydration field and no manual hydration validation.
-- DB baseline for this cycle is schema v8; cycle migrations are non-destructive
-  `8 → 9` and `9 → 10`; working schema is v10.
+- DB baseline for this cycle is schema `v8`; cycle migrations are additive and
+  non-destructive `8 → 9` and `9 → 10` (`v9` is not a released populated
+  baseline); working schema is `v10`.
 - Migration chain reaches `Room` schema 10 (v9→v10 included), preserving all
   legacy rows, legacy hydration/observations, notes, and photo paths while adding
   `retainedStarterGrams`, `finalHydrationPercent`, and `generatedComment`.
@@ -36,8 +37,8 @@ navigation aid only; uncertain OCR is never quoted.
   Legacy `hydrationPercent` is for display only.
 - Comments remain immutable snapshots of facts at save time; weather is only added
   when permission and fresh coarse location allow a successful fetch.
-- Formula is exact and timestamped: `finalHydration = round((priorWater + addedWater)/(priorFlour + addedFlour)*100)`
-  with integer-safe arithmetic and `.5` behavior (`87.5 -> 88`), no truncation.
+- Formula is exact and timestamped. Hydration math is rational `Long` arithmetic with
+  final half-up rounding only (`87.5 -> 88`), no truncation from division order.
 - Start-of-book reference: 2:1:2, 50% hydration, белая пшеничная мука >10 г белка/100 г,
   хранение 4–6°C, и кормление в холодильнике обычно через 3–5 дней.
 - Table (`StarterDiaryScreen`) has accessible ordered heading semantics and one

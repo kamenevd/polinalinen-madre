@@ -2,6 +2,7 @@ package com.polinalinen.madre.ui.screens
 
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -49,6 +50,7 @@ class FeedingFormMassesUiTest {
         priorHydrationPercent: Int? = 50,
         saveState: FeedingSaveState = FeedingSaveState.Idle,
         onSaved: (Saved) -> Unit = {},
+        onBack: () -> Unit = {},
     ) {
         rule.setContent {
             MadreTheme {
@@ -56,7 +58,7 @@ class FeedingFormMassesUiTest {
                     onSave = { starter, flour, water, location, note, photo ->
                         onSaved(Saved(starter, flour, water, location, note, photo))
                     },
-                    onBack = {},
+                    onBack = onBack,
                     saveState = saveState,
                     priorHydrationPercent = priorHydrationPercent,
                 )
@@ -146,6 +148,25 @@ class FeedingFormMassesUiTest {
         rule.onNodeWithText("Вписать в дневник")
             .performScrollTo()
             .assertIsNotEnabled()
+    }
+
+    @Test fun `back is ignored while saving`() {
+        var returned = false
+        show(
+            saveState = FeedingSaveState.Saving,
+            onBack = { returned = true },
+        )
+
+        rule.onNodeWithText("← ДНЕВНИК").performClick()
+        assertThat(returned).isFalse()
+    }
+
+    @Test fun `back works while idle`() {
+        var returned = false
+        show(onBack = { returned = true })
+
+        rule.onNodeWithText("← ДНЕВНИК").performClick()
+        assertThat(returned).isTrue()
     }
 
     @Test fun `error announcement stays retryable`() {

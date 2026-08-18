@@ -18,7 +18,7 @@
         "Home action uses exact due datetime and shared schedule logic from sourdough config",
         "hydration in form and table is automatic and persisted as final computed hydration (no manual confirmation required)",
         "comment snapshot is immutable and survives schema migration, with weather included only when available/permissioned",
-        "non-destructive Room migration 9->10 with exact schema 10 and no legacy mutation",
+        "non-destructive Room migrations 8->9 and 9->10 with exact schema 10 and no legacy mutation",
         "history ordering for last feeding and prior hydration uses deterministic insertion order (id DESC)",
         "latest watering defaults are labeled editable 50/100/50 and not presented as calculated result"
       ]
@@ -32,12 +32,16 @@
       ]
     },
     "tdd": {
-      "status": "pending",
-      "evidence": []
+      "status": "pass",
+      "evidence": [
+        "workflow/evidence/cycle26/final-gates.md"
+      ]
     },
     "build": {
-      "status": "pending",
-      "evidence": []
+      "status": "pass",
+      "evidence": [
+        "workflow/evidence/cycle26/final-gates.md"
+      ]
     },
     "review": {
       "status": "pending",
@@ -65,6 +69,7 @@
   },
   "blockers": [],
   "decisions": [
+    "2026-08-18: baseline for Cycle 26 Room schema and migration chain is `v8 -> 9 -> 10`; `v9` is a non-released populated-baseline step",
     "2026-08-18: Dima authorized user-visible alignment with the Levito Madre booklet",
     "2026-08-18: preserve personal reminder cadence; booklet cadence remains labelled guidance",
     "2026-08-18: planned 6.5.0 is workflow planning; Gradle remains versionName 6.4.5 / versionCode 33 until release preparation"

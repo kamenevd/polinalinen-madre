@@ -37,6 +37,7 @@ import com.polinalinen.madre.ui.theme.CalmModeSetting
 import com.polinalinen.madre.ui.theme.LocalCalmMode
 import com.polinalinen.madre.ui.theme.SharedPreferencesFlagStore
 import com.polinalinen.madre.viewmodel.BakingViewModel
+import com.polinalinen.madre.viewmodel.FeedingSaveState
 import com.polinalinen.madre.viewmodel.SourdoughViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 
@@ -67,6 +68,13 @@ fun MadreNavHost(
     val sourdoughViewModel: SourdoughViewModel = viewModel()
     val app = context.applicationContext as MadreApplication
 
+    val enterFeedingForm = {
+        sourdoughViewModel.clearSaveState()
+        navController.navigate(MadreDestinations.FEEDING_FORM) {
+            popUpTo(MadreDestinations.HOME) { inclusive = false }
+        }
+    }
+
     // Cycle 12: тап по строке хода выпечки в шторке открывает ИМЕННО ту
     // выпечку. Намерение приходит из MainActivity и ждёт здесь, пока NavHost
     // готов; после исполнения гасится, чтобы поворот экрана не увёл человека
@@ -90,9 +98,7 @@ fun MadreNavHost(
         LaunchedEffect(requested) {
             if (!requested) return@LaunchedEffect
             pendingFeeding.value = false
-            navController.navigate(MadreDestinations.FEEDING_FORM) {
-                popUpTo(MadreDestinations.HOME) { inclusive = false }
-            }
+            enterFeedingForm()
         }
     }
 
@@ -187,7 +193,7 @@ fun MadreNavHost(
                     onOpenRecipe = { id -> navController.navigate(MadreDestinations.recipeDetail(id)) },
                     onOpenStarter = { navController.navigate(MadreDestinations.STARTER_DETAIL) },
                     onOpenTimer = { sessionId -> navController.navigate(MadreDestinations.bakingTimer(sessionId.toString())) },
-                    onOpenFeeding = { navController.navigate(MadreDestinations.FEEDING_FORM) },
+                    onOpenFeeding = enterFeedingForm,
                     onOpenSettings = { navController.navigate(MadreDestinations.SETTINGS) },
                     // Cycle 18: «Полка» с первой полосы ведёт сразу в свою
                     // летопись. Промежуточный разворот Полки показывал ровно
@@ -248,7 +254,7 @@ fun MadreNavHost(
                     entries = emptyList(),
                     history = feedingHistory,
                     onBack = { navController.popBackStack() },
-                    onFeed = { navController.navigate(MadreDestinations.FEEDING_FORM) },
+                    onFeed = enterFeedingForm,
                     onOpenGallery = { navController.navigate(MadreDestinations.PHOTO_GALLERY) },
                     cancelledBakeCount = cancelledBakeCount,
                     starterName = starterName,
@@ -277,7 +283,7 @@ fun MadreNavHost(
                 )
                 LaunchedEffect(saveState) {
                     when (saveState) {
-                        is com.polinalinen.madre.viewmodel.FeedingSaveState.Success -> {
+                        is FeedingSaveState.Success -> {
                             navController.popBackStack()
                             sourdoughViewModel.consumeSaveState()
                         }

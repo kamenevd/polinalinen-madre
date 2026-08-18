@@ -18,6 +18,13 @@ class FeedingScheduleTest {
             .isEqualTo(FeedingSchedule.State.Due(1_000L + 24 * hour, 0L))
     }
 
+    @Test fun overdue_isDueWithPositiveOverdueMillis() {
+        assertThat(FeedingSchedule.calculate(1_000L, 24, 1_000L + 24 * hour + 1))
+            .isEqualTo(FeedingSchedule.State.Due(1_000L + 24 * hour, 1L))
+        assertThat(FeedingSchedule.calculate(1_000L, 24, 1_000L + 24 * hour + 90 * 60_000L + 500L))
+            .isEqualTo(FeedingSchedule.State.Due(1_000L + 24 * hour, 90 * 60_000L + 500L))
+    }
+
     @Test fun clockBeforeLastFeeding_isHonestAnomaly() {
         assertThat(FeedingSchedule.calculate(2_000L, 24, 1_999L))
             .isEqualTo(FeedingSchedule.State.ClockBeforeLastFeeding(2_000L))

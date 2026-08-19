@@ -9,18 +9,18 @@
 
 ## Final lane verdicts
 
-- **Claude Opus** — `VERDICT: APPROVE`  
-  - Scope: full implementation review against approved Cycle 26 acceptance criteria, including math, persistence, ordering, migration safety, privacy, and major user flows.  
+- **Claude Opus** — `VERDICT: APPROVE`
+  - Scope: full implementation review against approved Cycle 26 acceptance criteria, including math, persistence, ordering, migration safety, privacy, and major user flows.
   - Report SHA-256: `376e6166159f87e1df12d0004e0946afc5747b1ede87b7a0f7cacbbbe5bf6a94`
 
-- **DeepSeek** — `VERDICT: APPROVE`  
-  - Scope: adversarial end-to-end review of staging behavior, scheduling wording, rounding, duplicate submit safety, clock-rollback ordering, weather freshness, migrations, and regression coverage.  
+- **DeepSeek** — `VERDICT: APPROVE`
+  - Scope: adversarial end-to-end review of staging behavior, scheduling wording, rounding, duplicate submit safety, clock-rollback ordering, weather freshness, migrations, and regression coverage.
   - Report SHA-256: `82b62f8f6ce27f09a14964324958963143484762c138ab0ed4142f36265be12b`
 
-- **Codex Sol** — `VERDICT: APPROVE`  
-  - Scope: contract and evidence compliance check (visible-copy execution, plan/design literals, screenshot and runtime provenance, and non-contradictory gate state expectations).  
+- **Codex Sol** — `VERDICT: APPROVE`
+  - Scope: contract and evidence compliance check (visible-copy execution, plan/design literals, screenshot and runtime provenance, and non-contradictory gate state expectations).
   - Report SHA-256: `86179b9885614a6345852f6142286f7478acd60ea63a835e6a2d6b6cf8e4ad67`
 
-- **GLM 5.3** — `VERDICT: APPROVE`  
-  - Scope: closure review of prior findings against final packet + full test/evidence contracts, including runtime and visual proof completeness.  
+- **GLM 5.3** — `VERDICT: APPROVE`
+  - Scope: closure review of prior findings against final packet + full test/evidence contracts, including runtime and visual proof completeness.
   - Report SHA-256: `f92f3e48d5c8b08d83dc21a862c48755956457e67e2fcd6ffba39d897709506e`

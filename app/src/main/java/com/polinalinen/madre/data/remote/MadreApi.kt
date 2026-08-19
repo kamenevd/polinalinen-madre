@@ -5,10 +5,14 @@ import java.util.concurrent.TimeUnit
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import okhttp3.MultipartBody
+import okhttp3.RequestBody
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Header
+import retrofit2.http.Multipart
 import retrofit2.http.POST
+import retrofit2.http.Part
 import retrofit2.http.Query
 
 /**
@@ -38,17 +42,31 @@ interface MadreApi {
     ): BakeStatRecord
 
     /**
-     * Выпечки СВОЕЙ семьи: сервер и так не отдаст чужих, а вызывающий сужает
-     * выборку до других устройств ([PocketBaseFilter.excludeDevice]) — свои
-     * выпечки книга и без сети знает лучше.
+     * Выпечки СВОЕЙ полки. Без фильтра сервер отдаёт все записи семьи —
+     * корешки считает клиент по user id. Старый вызов с
+     * [PocketBaseFilter.excludeDevice] остаётся законным.
      */
     @GET("api/collections/bake_stats/records")
     suspend fun listBakeStats(
         @Header("Authorization") token: String,
-        @Query("filter") filter: String,
+        @Query("filter") filter: String? = null,
         @Query("sort") sort: String = "-baked_at",
         @Query("perPage") perPage: Int = 200,
     ): RecordsPage<BakeStatRecord>
+
+    @Multipart
+    @POST("api/madre/shelf/photo")
+    suspend fun uploadBakePhoto(
+        @Header("Authorization") token: String,
+        @Part("id") recordId: RequestBody,
+        @Part photo: MultipartBody.Part,
+    ): BakeStatRecord
+
+    @POST("api/madre/shelf/photo/clear")
+    suspend fun clearBakePhoto(
+        @Header("Authorization") token: String,
+        @Body body: ClearShelfPhotoRequest,
+    ): BakeStatRecord
 
     @POST("api/collections/feeding_stats/records")
     suspend fun postFeedingStat(

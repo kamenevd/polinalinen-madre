@@ -328,14 +328,12 @@ private fun Masthead(
             )
             HeavyRule(Modifier.weight(1f))
         }
-        // Cycle 12: два выхода с первой полосы — названные и видимые.
-        // Cycle 18 MoA: «Полка» → «Летопись» — ведёт сразу в свою книгу-формуляр,
-        // не в промежуточный разворот корешков (там пока нечего выбирать).
+        // Cycle 27: «Полка» снова ведёт на корешки — книг в семье больше одной.
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 22.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            TextAction("Летопись", onClick = onOpenShelf)
+            TextAction("Полка", onClick = onOpenShelf)
             TextAction("Настройки", onClick = onOpenSettings)
         }
     }

@@ -31,8 +31,11 @@ import com.polinalinen.madre.ui.screens.HomeScreen
 import com.polinalinen.madre.ui.screens.PhotoGalleryScreen
 import com.polinalinen.madre.ui.screens.RecipeDetailScreen
 import com.polinalinen.madre.ui.screens.SettingsScreen
+import com.polinalinen.madre.ui.screens.SettingsShelfScreen
 import com.polinalinen.madre.ui.screens.ShelfScreen
 import com.polinalinen.madre.ui.screens.StarterDiaryScreen
+import com.polinalinen.madre.shelf.FamilyShelf
+import com.polinalinen.madre.viewmodel.ShelfViewModel
 import com.polinalinen.madre.ui.theme.CalmModeSetting
 import com.polinalinen.madre.ui.theme.LocalCalmMode
 import com.polinalinen.madre.ui.theme.SharedPreferencesFlagStore
@@ -66,6 +69,7 @@ fun MadreNavHost(
     val context = LocalContext.current
     val bakingViewModel: BakingViewModel = viewModel()
     val sourdoughViewModel: SourdoughViewModel = viewModel()
+    val shelfViewModel: ShelfViewModel = viewModel()
     val app = context.applicationContext as MadreApplication
 
     val enterFeedingForm = {
@@ -195,13 +199,7 @@ fun MadreNavHost(
                     onOpenTimer = { sessionId -> navController.navigate(MadreDestinations.bakingTimer(sessionId.toString())) },
                     onOpenFeeding = enterFeedingForm,
                     onOpenSettings = { navController.navigate(MadreDestinations.SETTINGS) },
-                    // Cycle 18: «Полка» с первой полосы ведёт сразу в свою
-                    // летопись. Промежуточный разворот Полки показывал ровно
-                    // один корешок — свой, — и требовал второго нажатия на
-                    // каждодневной дороге. Сама Полка (MadreDestinations.SHELF)
-                    // осталась в графе и обретёт вход, когда книг станет больше
-                    // одной; до тех пор с первой полосы её не видно.
-                    onOpenShelf = { navController.navigate(MadreDestinations.bookStats("me")) },
+                    onOpenShelf = { navController.navigate(MadreDestinations.SHELF) },
                     viewModel = bakingViewModel,
                 )
             }
@@ -309,26 +307,44 @@ fun MadreNavHost(
                     onRemindersEnabledChange = sourdoughViewModel::setRemindersEnabled,
                     calmMode = calmMode,
                     onCalmModeChange = setCalmMode,
+                    onOpenShelfSettings = { navController.navigate(MadreDestinations.SETTINGS_SHELF) },
+                )
+            }
+            composable(MadreDestinations.SETTINGS_SHELF) {
+                SettingsShelfScreen(
+                    myName = myName,
+                    localRecords = bakeRecords,
+                    onBack = { navController.popBackStack() },
+                    shelfViewModel = shelfViewModel,
                 )
             }
             composable(MadreDestinations.SHELF) {
                 ShelfScreen(
                     myName = myName,
+                    localRecords = bakeRecords,
                     onBack = { navController.popBackStack() },
-                    onOpenMyBook = { navController.navigate(MadreDestinations.bookStats("me")) },
+                    onOpenBook = { ownerId -> navController.navigate(MadreDestinations.bookStats(ownerId)) },
+                    shelfViewModel = shelfViewModel,
                 )
             }
-            composable(MadreDestinations.BOOK_STATS) {
-                // Пока есть только "me" — книги друзей появятся здесь же, когда будет
-                // от кого брать данные (нужен сервер, см. ShelfScreen).
+            composable(MadreDestinations.BOOK_STATS) { backStackEntry ->
+                val ownerId = backStackEntry.arguments?.getString("ownerId").orEmpty()
+                val myUserId by shelfViewModel.myUserId.collectAsState()
+                val own = FamilyShelf.isOwnBook(ownerId, myUserId)
                 BookStatsScreen(
-                    ownerLabel = myName.ifBlank { "вы" },
-                    isMe = true,
+                    ownerLabel = if (own) {
+                        myName.ifBlank { "вы" }
+                    } else {
+                        shelfViewModel.labelFor(ownerId, "книга")
+                    },
+                    isMe = own,
                     recipes = recipesForStats,
-                    records = bakeRecords,
-                    // Cycle 15: ритм года считает и кормления — закваску кормят
-                    // чаще, чем пекут, и без них год выглядел бы пустым.
-                    feedingMillis = remember(feedingHistory) { feedingHistory.map { it.timestampMillis } },
+                    records = if (own) bakeRecords else shelfViewModel.recordsFor(ownerId),
+                    feedingMillis = if (own) {
+                        remember(feedingHistory) { feedingHistory.map { it.timestampMillis } }
+                    } else {
+                        emptyList()
+                    },
                     onBack = { navController.popBackStack() },
                 )
             }

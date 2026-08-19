@@ -25,5 +25,80 @@ onRecordCreateRequest((e) => {
 
     e.record.set("family", family);
 
+    if (e.collection.name === "bake_stats") {
+        // Автор книги — вошедший. Присланный user затирается, чтобы корешок
+        // нельзя было повесить на чужое имя.
+        e.record.set("user", e.auth.id);
+        const signedName = (e.record.getString("display_name") || e.auth.getString("name") || "").trim();
+        e.record.set("display_name", signedName);
+        if (!e.record.getString("family_name")) {
+            try {
+                const shelf = e.app.findRecordById("families", family);
+                e.record.set("family_name", shelf.getString("name"));
+            } catch (err) {
+                e.record.set("family_name", "");
+            }
+        }
+    }
+
     e.next();
 }, "bake_stats", "feeding_stats");
+
+/**
+ * Кадр на полке. Факт выпечки уже лежит; сюда приходит только файл.
+ * Снять кадр можно тем же автором — строка формуляра остаётся.
+ */
+routerAdd("POST", "/api/madre/shelf/photo", (e) => {
+    const family = e.auth.getString("family");
+    if (!family) {
+        throw new BadRequestError("Сначала нужно завести или открыть полку.", null);
+    }
+
+    const body = new DynamicModel({ id: "" });
+    e.bindBody(body);
+    if (!body.id) {
+        throw new BadRequestError("Нужна запись выпечки.", null);
+    }
+
+    const files = e.findUploadedFiles("photo");
+    if (!files || files.length === 0) {
+        throw new BadRequestError("Нужен кадр.", null);
+    }
+
+    const rec = $app.findRecordById("bake_stats", body.id);
+    if (rec.getString("user") !== e.auth.id) {
+        throw new ForbiddenError("Кадр ставит тот, чья это выпечка.", null);
+    }
+    if (rec.getString("family") !== family) {
+        throw new ForbiddenError("Эта выпечка с другой полки.", null);
+    }
+
+    rec.set("photo", files);
+    $app.save(rec);
+    return e.json(200, rec);
+}, $apis.requireAuth());
+
+routerAdd("POST", "/api/madre/shelf/photo/clear", (e) => {
+    const family = e.auth.getString("family");
+    if (!family) {
+        throw new BadRequestError("Сначала нужно завести или открыть полку.", null);
+    }
+
+    const body = new DynamicModel({ id: "" });
+    e.bindBody(body);
+    if (!body.id) {
+        throw new BadRequestError("Нужна запись выпечки.", null);
+    }
+
+    const rec = $app.findRecordById("bake_stats", body.id);
+    if (rec.getString("user") !== e.auth.id) {
+        throw new ForbiddenError("Кадр снимает тот, чья это выпечка.", null);
+    }
+    if (rec.getString("family") !== family) {
+        throw new ForbiddenError("Эта выпечка с другой полки.", null);
+    }
+
+    rec.set("photo", null);
+    $app.save(rec);
+    return e.json(200, rec);
+}, $apis.requireAuth());

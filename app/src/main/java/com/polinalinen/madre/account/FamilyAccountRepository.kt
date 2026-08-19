@@ -7,6 +7,8 @@ import com.polinalinen.madre.data.remote.FamilyResponse
 import com.polinalinen.madre.data.remote.JoinFamilyRequest
 import com.polinalinen.madre.data.remote.PasswordAuthRequest
 import com.polinalinen.madre.data.remote.RegisterRequest
+import com.polinalinen.madre.data.remote.RenameFamilyRequest
+import com.polinalinen.madre.data.remote.UserRecord
 
 /**
  * Вход в общую книгу и работа с семьёй (DESIGN-V4.md Cycle 11, фича 28).
@@ -83,10 +85,54 @@ class FamilyAccountRepository(
         return remember(current, response)
     }
 
+    /**
+     * Новое название полки. Старые строки формуляра хранят снимок имени на
+     * сервере и здесь не переписываются — меняется только живой заголовок.
+     */
+    suspend fun renameFamily(name: String): FamilyBookState {
+        val authorization = token ?: return fail(NetworkFailure.SIGNED_OUT)
+        val current = account ?: return fail(NetworkFailure.SIGNED_OUT)
+        if (!current.isFamilyOwner) return fail(NetworkFailure.NOT_OWNER)
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return fail(NetworkFailure.UNKNOWN)
+        val response = runCatching { api.renameFamily(authorization, RenameFamilyRequest(trimmed)) }
+            .getOrElse { return fail(NetworkFailure.classify(it, NetworkFailure.NOT_OWNER)) }
+        val updated = current.copy(familyName = response.familyName)
+        account = updated
+        return FamilyBookState.SignedIn(updated)
+    }
+
+    /**
+     * Уйти с полки, остаться в книге на телефоне. Токен не выбрасывается:
+     * это не выход из аккаунта.
+     */
+    suspend fun leaveFamily(): FamilyBookState {
+        val authorization = token ?: return fail(NetworkFailure.SIGNED_OUT)
+        val current = account ?: return fail(NetworkFailure.SIGNED_OUT)
+        runCatching { api.leaveFamily(authorization) }
+            .getOrElse { return fail(NetworkFailure.classify(it)) }
+        val updated = current.copy(
+            familyId = null,
+            familyName = null,
+            inviteCode = null,
+            familyOwnerId = null,
+        )
+        account = updated
+        return FamilyBookState.SignedIn(updated)
+    }
+
+    suspend fun listFamilyUsers(): List<UserRecord> {
+        val authorization = token ?: return emptyList()
+        return runCatching { api.listFamilyUsers(authorization).items }
+            .getOrDefault(emptyList())
+    }
+
     fun signOut(): FamilyBookState {
         tokens.clear()
         return forget()
     }
+
+    fun currentAccount(): FamilyAccount? = account
 
     /**
      * Забыть открытый код: сервер отдаёт его один раз, и после показа он не

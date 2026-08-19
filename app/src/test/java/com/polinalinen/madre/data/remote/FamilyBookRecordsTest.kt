@@ -91,4 +91,15 @@ class FamilyBookRecordsTest {
         assertThat(record.name).isEqualTo("Ивановы")
         assertThat(record.owner).isEqualTo("u1")
     }
+
+    @Test
+    fun `rename request speaks snake_case name only`() {
+        assertThat(gson.toJson(RenameFamilyRequest(name = "Каменевы"))).contains("\"name\":\"Каменевы\"")
+    }
+
+    @Test
+    fun `leave response is a simple ok`() {
+        val response = gson.fromJson("""{"ok":true}""", LeaveFamilyResponse::class.java)
+        assertThat(response.ok).isTrue()
+    }
 }

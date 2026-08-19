@@ -9,23 +9,21 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import com.google.gson.Gson
+import com.google.gson.annotations.SerializedName
 import com.polinalinen.madre.data.remote.BakeStatRecord
 import com.polinalinen.madre.data.remote.FeedingStatRecord
 import com.polinalinen.madre.data.remote.PocketBaseDates
 import java.util.concurrent.TimeUnit
 
 /**
- * Шаринг статистики в общую книгу (Cycle 5): каждая выпечка/кормление
+ * Шаринг статистики на полку (Cycle 5 → 27): каждая выпечка/кормление
  * превращается в OneTimeWorkRequest — без сети WorkManager подождёт её и
  * дошлёт сам (retry-политика — SyncPolicy). Очередь на запись — уникальное
- * имя + KEEP: повторный вызов с тем же ключом (например, кнопка «Поделиться»
- * после автоотправки) не создаёт дубликат записи на сервере.
+ * имя + KEEP: повторный вызов с тем же ключом не создаёт дубликат.
  *
- * Cycle 15: то же обещание, но и за пределами очереди — каждая запись несёт
- * client_event_id ([SyncEventId]). Уникальное имя работы защищает, только пока
- * работа ещё в очереди этого устройства; повтор после успешного POST с
- * потерянным ответом, доотправка из старой очереди или переустановка ему уже
- * не видны, а серверу по ключу — видны.
+ * Cycle 27: вместе с фактом уходит снимок подписи; кадр — отдельная работа,
+ * потому что его могут вклеить уже после того, как факт встал в очередь.
+ * Снять кадр с полки факт не трогает.
  */
 class SyncRepository(private val context: Context) {
 
@@ -35,17 +33,51 @@ class SyncRepository(private val context: Context) {
      * @param recordId id строки bake_records — он же ключ события. Номер
      *   сессии сюда больше не приходит: см. [SyncEventId.forBake].
      */
-    fun shareBakeStat(recordId: Long, recipeId: String, recipeName: String, portions: Int, bakedAtMillis: Long) {
+    fun shareBakeStat(
+        recordId: Long,
+        recipeId: String,
+        recipeName: String,
+        portions: Int,
+        bakedAtMillis: Long,
+        displayName: String? = null,
+        familyName: String? = null,
+        photoPath: String? = null,
+    ) {
         val deviceId = DeviceIdentity.id(context)
+        val clientEventId = SyncEventId.forBake(deviceId, recordId)
         val record = BakeStatRecord(
             deviceId = deviceId,
-            clientEventId = SyncEventId.forBake(deviceId, recordId),
+            clientEventId = clientEventId,
             recipeId = recipeId,
             recipeName = recipeName,
             portions = portions,
             bakedAt = PocketBaseDates.toIso(bakedAtMillis),
+            displayName = displayName?.trim()?.takeIf { it.isNotEmpty() },
+            familyName = familyName?.trim()?.takeIf { it.isNotEmpty() },
         )
         enqueue("sync-bake-record-$recordId", SyncWorker.KIND_BAKE, gson.toJson(record))
+        val photo = photoPath?.trim().orEmpty()
+        if (photo.isNotEmpty()) {
+            shareBakePhoto(recordId, photo)
+        }
+    }
+
+    fun shareBakePhoto(recordId: Long, photoPath: String) {
+        val deviceId = DeviceIdentity.id(context)
+        val payload = BakePhotoPayload(
+            clientEventId = SyncEventId.forBake(deviceId, recordId),
+            photoPath = photoPath,
+        )
+        enqueue("sync-bake-photo-$recordId", SyncWorker.KIND_BAKE_PHOTO, gson.toJson(payload))
+    }
+
+    fun clearBakePhoto(recordId: Long) {
+        val deviceId = DeviceIdentity.id(context)
+        val payload = BakePhotoPayload(
+            clientEventId = SyncEventId.forBake(deviceId, recordId),
+            photoPath = "",
+        )
+        enqueue("sync-bake-photo-clear-$recordId", SyncWorker.KIND_BAKE_PHOTO_CLEAR, gson.toJson(payload))
     }
 
     fun shareFeedingStat(feedingId: Long, flourGrams: Int, waterGrams: Int, fedAtMillis: Long) {
@@ -69,3 +101,8 @@ class SyncRepository(private val context: Context) {
         WorkManager.getInstance(context).enqueueUniqueWork(uniqueName, ExistingWorkPolicy.KEEP, request)
     }
 }
+
+internal data class BakePhotoPayload(
+    @SerializedName("client_event_id") val clientEventId: String,
+    @SerializedName("photo_path") val photoPath: String,
+)

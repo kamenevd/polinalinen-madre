@@ -16,9 +16,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -32,6 +35,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -45,11 +49,13 @@ import com.polinalinen.madre.ui.components.AgedPhoto
 import com.polinalinen.madre.ui.components.BookButton
 import com.polinalinen.madre.ui.components.BookButtonVariant
 import com.polinalinen.madre.ui.components.HairRule
+import com.polinalinen.madre.ui.components.Stamp
 import com.polinalinen.madre.ui.components.TextAction
 import com.polinalinen.madre.ui.components.TracingPaper
 import com.polinalinen.madre.ui.components.WaxSealStamp
 import com.polinalinen.madre.ui.components.drawPhotoHolders
 import com.polinalinen.madre.ui.photo.rememberPhotoAttachment
+import com.polinalinen.madre.shelf.ShelfSharePolicy
 import com.polinalinen.madre.ui.theme.AppColors
 import com.polinalinen.madre.utils.PhotoStore
 import com.polinalinen.madre.viewmodel.BakingViewModel
@@ -83,6 +89,19 @@ fun BakingCompleteScreen(
     val photoPaths by viewModel.bakePhotoPaths.collectAsState()
     val sharingAvailable by viewModel.sharingAvailable.collectAsState()
     val photoPath = sessionId?.let { photoPaths[it] }
+    val context = LocalContext.current
+    val sharePrefs = remember {
+        context.getSharedPreferences(ShelfSharePolicy.PREFS, android.content.Context.MODE_PRIVATE)
+    }
+    val shareMode = remember { ShelfSharePolicy.read(sharePrefs) }
+    var onShelf by rememberSaveable {
+        mutableStateOf(ShelfSharePolicy.showOnShelfStamp(shareMode, sharingAvailable))
+    }
+    var askDismissed by rememberSaveable { mutableStateOf(false) }
+    var pendingPhotoShare by rememberSaveable { mutableStateOf(false) }
+    val ask = sessionId != null && session != null &&
+        ShelfSharePolicy.shouldAskOnComplete(shareMode, sharingAvailable) &&
+        !onShelf && !askDismissed
 
     // Камера и галерея — одна общая дорога (ui/photo/PhotoAttachment): выбор
     // источника, «Стол оформления» и сохранение живут там, экран получает уже
@@ -90,7 +109,22 @@ fun BakingCompleteScreen(
     val openPhotoSource = rememberPhotoAttachment(
         kind = PhotoStore.PhotoKind.BAKE,
         key = sessionId ?: 0L,
-    ) { path -> sessionId?.let { viewModel.attachBakePhoto(it, path) } }
+    ) { path ->
+        sessionId?.let { id ->
+            viewModel.attachBakePhoto(id, path)
+            if (pendingPhotoShare) {
+                viewModel.shareBakeStats(id, withPhoto = true)
+                onShelf = true
+                pendingPhotoShare = false
+            }
+        }
+    }
+
+    LaunchedEffect(sharingAvailable, shareMode) {
+        if (ShelfSharePolicy.showOnShelfStamp(shareMode, sharingAvailable)) {
+            onShelf = true
+        }
+    }
 
     // «Калька» (Cycle 9, TracingPaper): приписка Мадре карандашом на юбилейной
     // выпечке. Cycle 12: лист больше НЕ ложится поверх страницы. Он забирал
@@ -195,28 +229,18 @@ fun BakingCompleteScreen(
                 modifier = Modifier.padding(top = 18.dp),
             )
 
+            // Cycle 27: на полку — штамп после «всегда», либо один лист
+            // «Поставить на полку?». Кнопки «Поделиться статистикой» больше нет.
+            if (onShelf) {
+                Stamp(
+                    ShelfSharePolicy.ON_SHELF_STAMP,
+                    colors.sage,
+                    modifier = Modifier.padding(top = 8.dp, bottom = 10.dp),
+                )
+            }
+
             Spacer(Modifier.weight(1f))
             Spacer(Modifier.height(24.dp))
-
-            // Cycle 5: явная отправка в общую книгу. Статистика и так уходит
-            // фоном при завершении (BakingViewModel.advanceStep), но кнопка
-            // делает это видимым — повторное нажатие безопасно, очередь
-            // дедуплицируется по id записи формуляра (unique work + KEEP).
-            //
-            // Cycle 17: без аккаунта кнопки нет вовсе. Отправлять её нажатие
-            // было некуда с самого Cycle 11 (коллекции закрыты миграцией), а
-            // экран всё это время отвечал «отправлено».
-            if (sessionId != null && session != null && sharingAvailable) {
-                var shared by rememberSaveable { mutableStateOf(false) }
-                ShareStatsButton(
-                    shared = shared,
-                    onShare = {
-                        viewModel.shareBakeStats(sessionId)
-                        shared = true
-                    },
-                )
-                Spacer(Modifier.height(10.dp))
-            }
 
             BookButton(
                 label = "На главную",
@@ -224,6 +248,54 @@ fun BakingCompleteScreen(
                 modifier = Modifier.padding(bottom = 8.dp),
             )
         }
+        }
+
+        if (ask && sessionId != null) {
+            AlertDialog(
+                onDismissRequest = { askDismissed = true },
+                shape = RoundedCornerShape(4.dp),
+                containerColor = colors.cream,
+                title = {
+                    Text(
+                        ShelfSharePolicy.SHEET_TITLE,
+                        fontFamily = FontFamily.Serif,
+                        fontSize = 20.sp,
+                        color = colors.espresso,
+                    )
+                },
+                text = {
+                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        BookButton(
+                            label = ShelfSharePolicy.PUT_LABEL,
+                            onClick = {
+                                viewModel.shareBakeStats(sessionId, withPhoto = false)
+                                onShelf = true
+                                askDismissed = true
+                            },
+                        )
+                        BookButton(
+                            label = ShelfSharePolicy.PUT_WITH_PHOTO_LABEL,
+                            variant = BookButtonVariant.SECONDARY,
+                            onClick = {
+                                if (photoPath != null) {
+                                    viewModel.shareBakeStats(sessionId, withPhoto = true)
+                                    onShelf = true
+                                } else {
+                                    pendingPhotoShare = true
+                                    openPhotoSource()
+                                }
+                                askDismissed = true
+                            },
+                        )
+                        BookButton(
+                            label = ShelfSharePolicy.KEEP_LABEL,
+                            variant = BookButtonVariant.SECONDARY,
+                            onClick = { askDismissed = true },
+                        )
+                    }
+                },
+                confirmButton = {},
+            )
         }
     }
 }
@@ -236,37 +308,6 @@ fun BakingCompleteScreen(
 @Composable
 private fun WaxSeal(dateLabel: String, modifier: Modifier = Modifier) {
     WaxSealStamp(title = "ИСПЕЧЕНО", caption = dateLabel, color = AppColors.current.sage, modifier = modifier)
-}
-
-/**
- * «Поделиться статистикой» — вторичная кнопка: outline-рамка Espresso 1.5dp,
- * скругление 4dp (DESIGN-V4.md: бумага, не пластик), без заливки — заливка
- * только у главной CTA «На главную». После нажатия превращается в тихую
- * курсивную строку-подтверждение.
- */
-@Composable
-private fun ShareStatsButton(shared: Boolean, onShare: () -> Unit, modifier: Modifier = Modifier) {
-    val colors = AppColors.current
-    if (shared) {
-        // «Отправлена» здесь было бы неправдой: запись уходит в очередь
-        // WorkManager и долетит, когда будет сеть, — иногда через час.
-        Text(
-            "статистика ждёт очереди в общую книгу",
-            color = colors.sage,
-            fontFamily = FontFamily.Serif,
-            fontStyle = FontStyle.Italic,
-            fontSize = 13.sp,
-            textAlign = TextAlign.Center,
-            modifier = modifier.fillMaxWidth().padding(vertical = 14.dp),
-        )
-    } else {
-        BookButton(
-            label = "Поделиться статистикой",
-            onClick = onShare,
-            variant = BookButtonVariant.SECONDARY,
-            modifier = modifier,
-        )
-    }
 }
 
 @Composable

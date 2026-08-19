@@ -8,8 +8,10 @@ import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Header
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 /**
  * «Семейная книга» (Cycle 11): вход и общие книги на PocketBase
@@ -52,6 +54,26 @@ interface FamilyBookApi {
         @Header("Authorization") token: String,
         @Path("id") id: String,
     ): FamilyRecord
+
+    @PATCH("api/madre/family/rename")
+    suspend fun renameFamily(
+        @Header("Authorization") token: String,
+        @Body body: RenameFamilyRequest,
+    ): FamilyResponse
+
+    @POST("api/madre/family/leave")
+    suspend fun leaveFamily(@Header("Authorization") token: String): LeaveFamilyResponse
+
+    /**
+     * Участники своей полки. Правило коллекции users и так не отдаст чужих;
+     * фильтр здесь не нужен — один аккаунт остаётся одним корешком на клиенте.
+     */
+    @GET("api/collections/users/records")
+    suspend fun listFamilyUsers(
+        @Header("Authorization") token: String,
+        @Query("perPage") perPage: Int = 50,
+        @Query("fields") fields: String = "id,email,name,family",
+    ): RecordsPage<UserRecord>
 }
 
 object FamilyBookApiFactory {

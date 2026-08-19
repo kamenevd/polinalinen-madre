@@ -12,8 +12,10 @@ import com.polinalinen.madre.data.remote.FamilyBookApi
 import com.polinalinen.madre.data.remote.FamilyRecord
 import com.polinalinen.madre.data.remote.FamilyResponse
 import com.polinalinen.madre.data.remote.JoinFamilyRequest
+import com.polinalinen.madre.data.remote.LeaveFamilyResponse
 import com.polinalinen.madre.data.remote.PasswordAuthRequest
 import com.polinalinen.madre.data.remote.RegisterRequest
+import com.polinalinen.madre.data.remote.RenameFamilyRequest
 import com.polinalinen.madre.data.remote.UserRecord
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -88,6 +90,22 @@ class FamilyBookViewModelTest {
             calls += "family"
             return FamilyRecord("f1", "Ивановы", "u1")
         }
+
+        override suspend fun renameFamily(token: String, body: RenameFamilyRequest): FamilyResponse {
+            calls += "rename"
+            return FamilyResponse("f1", body.name, null)
+        }
+
+        override suspend fun leaveFamily(token: String): LeaveFamilyResponse {
+            calls += "leave"
+            return LeaveFamilyResponse(ok = true)
+        }
+
+        override suspend fun listFamilyUsers(
+            token: String,
+            perPage: Int,
+            fields: String,
+        ) = com.polinalinen.madre.data.remote.RecordsPage<UserRecord>(1, perPage, 0, emptyList())
     }
 
     private fun viewModel(api: FakeApi): FamilyBookViewModel {

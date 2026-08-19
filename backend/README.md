@@ -22,17 +22,25 @@ backend/
 |------|------------|
 | `1784937600_lock_legacy_collections.js` | закрывает коллекции Cycle 5–7 (`bake_stats`, `feeding_stats`, `margin_notes_sync`, `guest_notes`), у которых правила остались пустыми, то есть публичными |
 | `1784937660_created_families.js` | коллекция `families`: название, владелец, HMAC кода приглашения (hidden + уникальный индекс) |
-| `1784937720_users_family_relation.js` | `users.family` + правила: читать чужие записи можно только внутри своей семьи, а поле `family` клиент себе переписать не может |
+| `1784937720_users_family_relation.js` | `users.family` + правила: читать чужие записи можно только внутри своей семьи |
+| `1784937780_family_rules_for_stats.js` | bake_stats / feeding_stats: семья, client_event_id |
+| `1787164800_bake_stats_shelf.js` | bake_stats: user, display_name, family_name, photo |
 
 ## Маршруты (`pb_hooks`)
 
-`madre_family.pb.js` добавляет три маршрута, все под `$apis.requireAuth()`:
+`madre_family.pb.js` добавляет маршруты, все под `$apis.requireAuth()`:
 
 | маршрут | тело | ответ |
 |---------|------|-------|
 | `POST /api/madre/family/create` | `{"name": "Ивановы"}` | `{"family_id", "family_name", "invite_code"}` |
 | `POST /api/madre/family/join` | `{"code": "2W4X6Y8ZABCDEFGH"}` | `{"family_id", "family_name"}` |
 | `POST /api/madre/family/invite` | — | `{"family_id", "family_name", "invite_code"}` |
+| `PATCH /api/madre/family/rename` | `{"name"}` | `{"family_id", "family_name"}` — только тот, кто завёл; снимки в bake_stats не трогает |
+| `POST /api/madre/family/leave` | — | `{"ok": true}` |
+
+`madre_stats.pb.js` проставляет `family` и для `bake_stats` ещё `user` /
+снимок подписи. Кадр: `POST /api/madre/shelf/photo` и
+`POST /api/madre/shelf/photo/clear` — факт выпечки остаётся.
 
 Членство пишет только сервер, из тела запроса оно не читается. На неверный
 код `join` отвечает одинаковой ошибкой независимо от того, существует книга

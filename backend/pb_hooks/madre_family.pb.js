@@ -181,3 +181,74 @@ routerAdd("POST", "/api/madre/family/invite", (e) => {
         invite_code: code,
     });
 }, $apis.requireAuth());
+
+routerAdd("PATCH", "/api/madre/family/rename", (e) => {
+    const familyId = e.auth.getString("family");
+    if (!familyId) {
+        throw new BadRequestError("Полка ещё не заведена.", null);
+    }
+
+    const body = new DynamicModel({ name: "" });
+    e.bindBody(body);
+    const name = (body.name || "").trim();
+    if (name.length < 1 || name.length > 60) {
+        throw new BadRequestError("Полке нужно название — от 1 до 60 знаков.", null);
+    }
+
+    let renamed = null;
+
+    $app.runInTransaction((txApp) => {
+        renamed = txApp.findRecordById("families", familyId);
+        if (renamed.getString("owner") !== e.auth.id) {
+            throw new ForbiddenError("Название полки меняет только тот, кто её завёл.", null);
+        }
+        renamed.set("name", name);
+        txApp.save(renamed);
+    });
+
+    return e.json(200, {
+        family_id: renamed.id,
+        family_name: renamed.getString("name"),
+    });
+}, $apis.requireAuth());
+
+routerAdd("POST", "/api/madre/family/leave", (e) => {
+    const familyId = e.auth.getString("family");
+    if (!familyId) {
+        throw new BadRequestError("Полка ещё не заведена.", null);
+    }
+
+    $app.runInTransaction((txApp) => {
+        const member = txApp.findRecordById("users", e.auth.id);
+        if (member.getString("family") !== familyId) {
+            throw new BadRequestError("Полка ещё не заведена.", null);
+        }
+
+        const family = txApp.findRecordById("families", familyId);
+        let others = [];
+        try {
+            others = txApp.findRecordsByFilter(
+                "users",
+                "family = {:family} && id != {:id}",
+                "",
+                200,
+                0,
+                { family: familyId, id: e.auth.id },
+            );
+        } catch (err) {
+            others = [];
+        }
+
+        member.set("family", "");
+        txApp.save(member);
+
+        if (!others || others.length === 0) {
+            txApp.delete(family);
+        } else if (family.getString("owner") === e.auth.id) {
+            family.set("owner", others[0].id);
+            txApp.save(family);
+        }
+    });
+
+    return e.json(200, { ok: true });
+}, $apis.requireAuth());

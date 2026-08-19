@@ -48,6 +48,18 @@ data class CreateFamilyRequest(
     @SerializedName("name") val name: String,
 )
 
+data class RenameFamilyRequest(
+    @SerializedName("name") val name: String,
+)
+
+data class LeaveFamilyResponse(
+    @SerializedName("ok") val ok: Boolean = true,
+)
+
+data class ClearShelfPhotoRequest(
+    @SerializedName("id") val id: String,
+)
+
 data class JoinFamilyRequest(
     @SerializedName("code") val code: String,
 )

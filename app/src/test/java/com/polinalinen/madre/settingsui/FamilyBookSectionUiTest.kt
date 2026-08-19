@@ -54,7 +54,7 @@ class FamilyBookSectionUiTest {
         // Cycle 19: форма больше не развёрнута с порога — сперва её просят.
         // Проверяемое правило от этого не изменилось: набранное переживает
         // пересоздание активити, потому что лежит на rememberSaveable.
-        rule.onNodeWithText("Подключить семью…").performClick()
+        rule.onNodeWithText("Подключить полку…").performClick()
 
         rule.onAllNodes(hasSetTextAction())[0].performTextInput("anya@example.com")
         rule.onNodeWithText("anya@example.com").assertIsDisplayed()

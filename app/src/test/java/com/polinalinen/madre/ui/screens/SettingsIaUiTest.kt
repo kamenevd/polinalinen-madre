@@ -154,9 +154,9 @@ class SettingsIaUiTest {
             }
         }
         rule.onAllNodes(hasSetTextAction()).assertCountEquals(0)
-        rule.onNodeWithText("Подключить семью…").assertExists()
+        rule.onNodeWithText("Подключить полку…").assertExists()
 
-        rule.onNodeWithText("Подключить семью…").performClick()
+        rule.onNodeWithText("Подключить полку…").performClick()
         rule.waitForIdle()
 
         // Почта, пароль и подпись — три поля, и ни одного до просьбы.

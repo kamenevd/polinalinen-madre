@@ -67,6 +67,10 @@ class FamilyBookViewModel internal constructor(
 
     fun rotateInviteCode() = runNetwork { repository.rotateInviteCode() }
 
+    fun renameFamily(name: String) = runNetwork { repository.renameFamily(name) }
+
+    fun leaveFamily() = runNetwork { repository.leaveFamily() }
+
     fun signOut() {
         _state.value = repository.signOut()
     }

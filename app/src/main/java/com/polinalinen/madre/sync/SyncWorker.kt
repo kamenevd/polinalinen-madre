@@ -9,23 +9,27 @@ import com.polinalinen.madre.account.AuthTokenStore
 import com.polinalinen.madre.account.KeystoreTokenCipher
 import com.polinalinen.madre.account.SecureTokenStore
 import com.polinalinen.madre.data.remote.BakeStatRecord
+import com.polinalinen.madre.data.remote.ClearShelfPhotoRequest
 import com.polinalinen.madre.data.remote.FeedingStatRecord
 import com.polinalinen.madre.data.remote.MadreApi
 import com.polinalinen.madre.data.remote.MadreApiFactory
+import com.polinalinen.madre.data.remote.PocketBaseFilter
+import com.polinalinen.madre.utils.PhotoStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 
 /**
  * Фоновая отправка одной записи в PocketBase (Cycle 5). Пейлоад приезжает
  * в inputData готовым JSON'ом (собирает SyncRepository) — воркер только
  * доставляет его и решает по SyncPolicy, повторять ли при неудаче.
  *
- * Cycle 17: доставка идёт под входом. Токен берётся из того же
- * [SecureTokenStore], которым живёт семейная книга: другого входа у приложения
- * нет, и заводить второй — значит однажды разойтись с ним. Токена нет —
- * работа не повторяется: без аккаунта общей книги не существует, и долбить
- * сервер до пятой попытки незачем. Исход в любом случае ложится в
- * [SyncStatus], откуда его читают «Выходные данные».
+ * Cycle 17: доставка идёт под входом. Токена нет — работа не повторяется.
+ * Cycle 27: кадр на полке — отдельный вид; нет файла или нет записи — не
+ * выдумываем снимок.
  */
 class SyncWorker(
     context: Context,
@@ -36,8 +40,6 @@ class SyncWorker(
         val kind = inputData.getString(KEY_KIND) ?: return Result.failure()
         val payload = inputData.getString(KEY_PAYLOAD) ?: return Result.failure()
 
-        // Keystore и SharedPreferences — это диск: читаем на IO, а не на том
-        // потоке, который WorkManager выдал под doWork.
         val token = withContext(Dispatchers.IO) { tokens().read() }?.takeIf { it.isNotBlank() }
         if (token == null) {
             remember(SyncStatus.State.NO_ACCOUNT)
@@ -71,8 +73,34 @@ class SyncWorker(
         when (kind) {
             KIND_BAKE -> api.postBakeStat(token, gson.fromJson(payload, BakeStatRecord::class.java))
             KIND_FEEDING -> api.postFeedingStat(token, gson.fromJson(payload, FeedingStatRecord::class.java))
+            KIND_BAKE_PHOTO -> uploadPhoto(api, token, gson.fromJson(payload, BakePhotoPayload::class.java))
+            KIND_BAKE_PHOTO_CLEAR -> clearPhoto(api, token, gson.fromJson(payload, BakePhotoPayload::class.java))
             else -> error("Неизвестный вид синхронизации: $kind")
         }
+    }
+
+    private suspend fun uploadPhoto(api: MadreApi, token: String, payload: BakePhotoPayload) {
+        val recordId = findShelfRecordId(api, token, payload.clientEventId) ?: error("запись ещё не на полке")
+        val file = PhotoStore.resolve(applicationContext, payload.photoPath)
+        if (!file.isFile) {
+            // Кадра на телефоне нет — факта это не отменяет, и выдумывать
+            // файл книга не будет.
+            return
+        }
+        val media = "image/jpeg".toMediaType()
+        val part = MultipartBody.Part.createFormData("photo", file.name, file.asRequestBody(media))
+        val idBody = recordId.toRequestBody("text/plain".toMediaType())
+        api.uploadBakePhoto(token, idBody, part)
+    }
+
+    private suspend fun clearPhoto(api: MadreApi, token: String, payload: BakePhotoPayload) {
+        val recordId = findShelfRecordId(api, token, payload.clientEventId) ?: return
+        api.clearBakePhoto(token, ClearShelfPhotoRequest(recordId))
+    }
+
+    private suspend fun findShelfRecordId(api: MadreApi, token: String, clientEventId: String): String? {
+        val page = api.listBakeStats(token, filter = PocketBaseFilter.ofClientEvent(clientEventId), perPage = 1)
+        return page.items.firstOrNull()?.id
     }
 
     companion object {
@@ -80,12 +108,12 @@ class SyncWorker(
         const val KEY_PAYLOAD = "payload"
         const val KIND_BAKE = "bake"
         const val KIND_FEEDING = "feeding"
+        const val KIND_BAKE_PHOTO = "bake-photo"
+        const val KIND_BAKE_PHOTO_CLEAR = "bake-photo-clear"
 
-        /** Подмена api в тестах — у воркера нет конструктора под DI без Hilt. */
         @VisibleForTesting
         var apiOverride: MadreApi? = null
 
-        /** Подмена хранилища токена в тестах: Keystore на JVM не поднять. */
         @VisibleForTesting
         var tokenStoreOverride: AuthTokenStore? = null
     }

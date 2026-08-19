@@ -92,7 +92,7 @@ import kotlinx.coroutines.withContext
  *
  *  1. Я — как зовут читателя и как подписана книга
  *  2. Закваска — имя, ритм кормления, напоминания
- *  3. Общая книга — семья; пока не подключена, это одна строка и кнопка
+ *  3. Полка — одна строка с названием, дальше свой экран
  *  4. Вид — спокойное или живое оформление
  *  5. О книге — журнал и версия
  */
@@ -101,6 +101,7 @@ fun SettingsScreen(
     myName: String,
     onMyNameChange: (String) -> Unit,
     onBack: () -> Unit,
+    onOpenShelfSettings: () -> Unit = {},
     starterName: String = StarterName.DEFAULT,
     onStarterNameChange: (String) -> Unit = {},
     bakeCount: Int = 0,
@@ -193,19 +194,17 @@ fun SettingsScreen(
                 )
             }
 
-            // ————— 3. Общая книга —————
+            // ————— 3. Полка —————
             SettingsSection(Sections.FAMILY) {
-                FamilyBookSection(
-                    state = familyBookState,
-                    onSignIn = familyBookViewModel::signIn,
-                    onRegister = familyBookViewModel::register,
-                    onCreateFamily = familyBookViewModel::createFamily,
-                    onJoinFamily = familyBookViewModel::joinFamily,
-                    onRotateInvite = familyBookViewModel::rotateInviteCode,
-                    onSignOut = familyBookViewModel::signOut,
-                    onCodeHandled = familyBookViewModel::clearInviteCode,
+                val account = familyBookState.account
+                val shelfLabel = account?.takeIf { it.hasFamily }?.familyName
+                    ?.ifBlank { null }
+                    ?: if (account != null) "завести" else "подключить"
+                SettingsRow(
+                    label = shelfLabel,
+                    value = "›",
+                    onClick = onOpenShelfSettings,
                 )
-                SyncStatusLine(Modifier.padding(horizontal = 22.dp, vertical = 4.dp))
             }
 
             // ————— 4. Вид —————
@@ -246,7 +245,7 @@ fun SettingsScreen(
 internal object Sections {
     const val ME = "Я"
     const val STARTER = "Закваска"
-    const val FAMILY = "Общая книга"
+    const val FAMILY = "Полка"
     const val LOOK = "Вид"
     const val ABOUT = "О книге"
 
@@ -487,7 +486,7 @@ private fun <T> SettingsChoiceDialog(
  * событий, и обновлять строку раз в секунду не за чем следить.
  */
 @Composable
-private fun SyncStatusLine(modifier: Modifier = Modifier) {
+internal fun SyncStatusLine(modifier: Modifier = Modifier) {
     val colors = AppColors.current
     val context = LocalContext.current
     var line by remember { mutableStateOf<String?>(null) }
@@ -552,7 +551,7 @@ internal fun FamilyBookSection(
     Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 8.dp)) {
         Text(
             "ваша книга остаётся на этом телефоне и открывается без аккаунта и сети. " +
-                "Общая книга — способ делиться выпечками с семьёй, а не условие работы.",
+                "Полка — способ делиться выпечками с семьёй, а не условие работы.",
             color = colors.cocoa,
             fontFamily = FontFamily.Serif,
             fontStyle = FontStyle.Italic,
@@ -569,10 +568,10 @@ internal fun FamilyBookSection(
             )
         }
         when {
-            loading -> Text("проверяем общую книгу", color = colors.cocoa, fontFamily = FontFamily.Serif, fontStyle = FontStyle.Italic)
+            loading -> Text("проверяем полку", color = colors.cocoa, fontFamily = FontFamily.Serif, fontStyle = FontStyle.Italic)
             account == null && !showForm -> {
                 BookButton(
-                    label = "Подключить семью…",
+                    label = "Подключить полку…",
                     variant = BookButtonVariant.SECONDARY,
                     onClick = { showForm = true },
                 )
@@ -598,9 +597,9 @@ internal fun FamilyBookSection(
             }
             !account.hasFamily -> {
                 Text("вы вошли как ${account.displayName.ifBlank { account.email }}", color = colors.espresso, fontFamily = FontFamily.Serif)
-                FamilyBookField("Название новой книги", familyName) { familyName = it }
+                FamilyBookField("Название полки", familyName) { familyName = it }
                 BookButton(
-                    label = "Создать семейную книгу",
+                    label = "Завести полку",
                     enabled = familyName.isNotBlank(),
                     onClick = { onCreateFamily(familyName) },
                 )
@@ -616,7 +615,7 @@ internal fun FamilyBookSection(
             }
             else -> {
                 Text(
-                    "общая книга: ${account.familyName ?: "семья"}",
+                    "полка: ${account.familyName ?: "семья"}",
                     color = colors.espresso,
                     fontFamily = FontFamily.Serif,
                     fontWeight = FontWeight.Bold,
@@ -635,13 +634,13 @@ internal fun FamilyBookSection(
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
                         TextAction("Скопировать", onClick = {
                             val clipboard = context.getSystemService(ClipboardManager::class.java)
-                            clipboard?.setPrimaryClip(ClipData.newPlainText("Код семейной книги", printedCode))
+                            clipboard?.setPrimaryClip(ClipData.newPlainText("Код полки", printedCode))
                             onCodeHandled()
                         }, modifier = Modifier.weight(1f))
                         TextAction("Отправить", onClick = {
                             val share = Intent(Intent.ACTION_SEND)
                                 .setType("text/plain")
-                                .putExtra(Intent.EXTRA_TEXT, "Вступите в семейную книгу «${account.familyName ?: "Мадре"}»: $printedCode")
+                                .putExtra(Intent.EXTRA_TEXT, "Вступите на полку «${account.familyName ?: "Мадре"}»: $printedCode")
                             context.startActivity(Intent.createChooser(share, "Отправить приглашение"))
                             onCodeHandled()
                         }, modifier = Modifier.weight(1f))
@@ -662,7 +661,7 @@ internal fun FamilyBookSection(
 }
 
 @Composable
-private fun FamilyBookField(
+internal fun FamilyBookField(
     label: String,
     value: String,
     masked: Boolean = false,

@@ -8,8 +8,10 @@ import com.polinalinen.madre.data.remote.FamilyBookApi
 import com.polinalinen.madre.data.remote.FamilyRecord
 import com.polinalinen.madre.data.remote.FamilyResponse
 import com.polinalinen.madre.data.remote.JoinFamilyRequest
+import com.polinalinen.madre.data.remote.LeaveFamilyResponse
 import com.polinalinen.madre.data.remote.PasswordAuthRequest
 import com.polinalinen.madre.data.remote.RegisterRequest
+import com.polinalinen.madre.data.remote.RenameFamilyRequest
 import com.polinalinen.madre.data.remote.UserRecord
 import java.net.UnknownHostException
 import kotlinx.coroutines.test.runTest
@@ -86,6 +88,29 @@ class FamilyAccountRepositoryTest {
             seenAuthorization = token
             return familyResult()
         }
+
+        override suspend fun renameFamily(token: String, body: RenameFamilyRequest): FamilyResponse {
+            calls += "rename"
+            seenAuthorization = token
+            return FamilyResponse("f1", body.name, null)
+        }
+
+        override suspend fun leaveFamily(token: String): LeaveFamilyResponse {
+            calls += "leave"
+            seenAuthorization = token
+            return LeaveFamilyResponse(ok = true)
+        }
+
+        override suspend fun listFamilyUsers(
+            token: String,
+            perPage: Int,
+            fields: String,
+        ) = com.polinalinen.madre.data.remote.RecordsPage(
+            page = 1,
+            perPage = perPage,
+            totalItems = 1,
+            items = listOf(UserRecord("u1", "anya@example.com", "Аня", "f1")),
+        )
     }
 
     private fun repository(api: FakeApi = FakeApi(), tokens: FakeTokenStore = FakeTokenStore()) =
@@ -374,5 +399,55 @@ class FamilyAccountRepositoryTest {
         assertThat(repository.signOut()).isEqualTo(FamilyBookState.SignedOut)
         assertThat(tokens.token).isNull()
         assertThat(repository.createFamily("Ивановы")).isEqualTo(FamilyBookState.Failed(NetworkFailure.SIGNED_OUT))
+    }
+
+    @Test
+    fun `the owner can rename the shelf without dropping the invite code locally`() = runTest {
+        val api = FakeApi()
+        val repository = repository(api, FakeTokenStore())
+        repository.signIn("anya@example.com", "пароль")
+        repository.createFamily("Ивановы")
+        repository.clearInviteCode()
+
+        val state = repository.renameFamily("Каменевы")
+
+        val account = (state as FamilyBookState.SignedIn).account
+        assertThat(account.familyName).isEqualTo("Каменевы")
+        assertThat(account.familyId).isEqualTo("f1")
+        assertThat(account.isFamilyOwner).isTrue()
+        assertThat(api.calls).contains("rename")
+    }
+
+    @Test
+    fun `a member who did not found the shelf cannot rename it`() = runTest {
+        val api = FakeApi()
+        api.familyResult = { FamilyRecord("f1", "Ивановы", "other-owner") }
+        val repository = repository(api, FakeTokenStore())
+        repository.signIn("anya@example.com", "пароль")
+        repository.joinFamily("2W4X-6Y8Z-ABCD-EFGH")
+        api.calls.clear()
+
+        val state = repository.renameFamily("Каменевы")
+
+        assertThat(state).isInstanceOf(FamilyBookState.Failed::class.java)
+        assertThat((state as FamilyBookState.Failed).failure).isEqualTo(NetworkFailure.NOT_OWNER)
+        assertThat(api.calls).isEmpty()
+    }
+
+    @Test
+    fun `leaving the shelf keeps the account and the book on the phone`() = runTest {
+        val api = FakeApi()
+        val tokens = FakeTokenStore()
+        val repository = repository(api, tokens)
+        repository.signIn("anya@example.com", "пароль")
+        repository.createFamily("Ивановы")
+
+        val state = repository.leaveFamily()
+
+        val account = (state as FamilyBookState.SignedIn).account
+        assertThat(account.hasFamily).isFalse()
+        assertThat(account.email).isEqualTo("anya@example.com")
+        assertThat(tokens.token).isEqualTo("pb_token_1")
+        assertThat(api.calls).contains("leave")
     }
 }

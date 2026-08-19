@@ -9,7 +9,7 @@
 - `./gradlew testDebugUnitTest lintDebug verifyRoborazziDebug assembleDebug assembleDebugAndroidTest --no-daemon` executed and finished **BUILD SUCCESSFUL**.
 - `python3 scripts/tests/test_cycle26_visible_copy.py -q` executed on exact HEAD: `Ran 2 tests in 0.010s`, `OK`, exit `0`.
 - `python3 -m unittest scripts/tests/test_workflow_contract.py scripts/tests/test_documentation_contract.py scripts/tests/test_workflow_version_contract.py` executed: `Ran 24 tests in 0.005s (OK)`.
-- `python3 scripts/cycle.py validate` executed: `CYCLE VALID`, exit `0` on exact HEAD; gate statuses (`review`, `visual`, `runtime`, `release`) remain pending and are not yet advanced.
+- `python3 scripts/cycle.py validate` executed: `CYCLE VALID`, exit `0` on exact HEAD; all checked gates currently pass and cycle stage is `releasable`.
 - `git diff --check` clean.
 
 ## Build/test outcome
@@ -58,7 +58,8 @@ Evidence source: `/home/claude/.cache/madre-book-review/cycle26-v650-visual-seve
 Screenshot state capture: 7/7 captured.
 
 ## Gate status and evidence
-- `review`, `visual`, and `runtime` gates are `pass` with evidence links above.
-- `release` remains `pending` with no release artifacts/evidence yet.
-- `workflow/CYCLE.yaml` now records these pass transitions and keeps `release` pending.
-- `python3 scripts/cycle.py validate` confirms the manifest gate chain is valid with those statuses.
+- All gates are `pass` with evidence:
+  - `plan` / `tdd` / `build` / `review` / `visual` / `runtime`: evidence already linked above
+  - `release`: `workflow/evidence/cycle26/release-artifacts.md`
+- Stage is `releasable`; `released` stage has not been taken.
+- `RuStore publication` was not performed.

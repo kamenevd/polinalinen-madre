@@ -122,6 +122,9 @@ shelf              shelf/{ownerId}
 только bake_stats этой полки, без кормлений и без выдуманных фото.
 В колофоне блок Полка — одна строка с названием, дальше `settings/shelf`.
 
+Над оглавлением — [StarterVoice]: круг строк от первого лица закваски,
+последний показанный индекс хранится, повтор до конца круга запрещён.
+
 ---
 
 ## Данные
@@ -210,7 +213,7 @@ api/collections/users/request-password-reset` с той же почты, что 
 1. **Кормление закваски и шаги WAIT** — WorkManager
    (`FeedingReminderPlanner` / `FeedingReminderWorker`). Отложенные и
    переживающие смерть процесса. У напоминания о кормлении есть кнопка
-   «Покормила» (`FeedingReminderAction`): она открывает книгу на форме
+   «Покормить» (`FeedingReminderAction`): она открывает книгу на форме
    кормления через `MainActivity.EXTRA_OPEN_FEEDING`, а не записывает
    кормление молча — граммы знает человек, и придумывать их за него нельзя.
 2. **Активная выпечка** — foreground service `BakingProgressService`

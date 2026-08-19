@@ -549,7 +549,7 @@ Acceptance: нет CommunitySection; нет второго clickable-пути к
 ### Фича 3: Покормить в один тап и летопись без Полки (daily-feed-and-chronicle)
 
 - Под MadreLine — `BookButton` PRIMARY «Покормить {имя}» → onOpenFeeding (B5.1). Если только что кормили — honest inactive/secondary + относительное время.
-- FeedingReminder notification — action «Покормила» (B5.2). Unit-тест на action id / PendingIntent.
+- FeedingReminder notification — action «Покормить» (B5.2). Unit-тест на action id / PendingIntent.
 - «Полка» на главной → сразу `BookStatsScreen` / bookStats("me"), без промежуточного ShelfScreen в ежедневном пути (B6).
 
 Acceptance: кормление = 1 тап; notification action тестируется; летопись = 1 тап; navigation smoke ок.
@@ -868,4 +868,17 @@ kdnfx@kdnfx.ru». Та же почта, что для входа. Успех —
 трогается.
 
 Коммит: `feat: password-reset-inline`
+
+### Фича 3: живая копия (living-copy)
+
+- Первая полоса: «Домашняя пекарня», без фамилии на титуле.
+- Статичный заголовок MadreLine заменён кругом [StarterVoice]: больше
+  сорока неповторяющихся строк от первого лица закваски, с холодом,
+  влажностью и фактами; последний индекс хранится, повтор — только после
+  полного круга.
+- Обращение к читателю нейтрально: «Покормить», «Оставить закваски»,
+  «кто завёл полку». Женский род остаётся у самой закваски, когда она
+  говорит «я».
+
+Коммит: `feat: living-copy`
 

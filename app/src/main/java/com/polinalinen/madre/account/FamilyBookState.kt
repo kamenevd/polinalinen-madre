@@ -68,7 +68,7 @@ data class FamilyAccount(
  */
 enum class NetworkFailure(val message: String) {
 
-    OFFLINE("Сети нет — своя книга открыта, общая подождёт."),
+    OFFLINE("Сети нет — своя книга открыта, полка подождёт."),
     SIGNED_OUT("Нужно войти заново."),
     INVALID_CREDENTIALS("Почта или пароль не подошли."),
     REJECTED("Приглашение не подошло — проверьте код и попробуйте ещё раз."),

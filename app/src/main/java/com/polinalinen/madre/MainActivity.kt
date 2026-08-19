@@ -33,7 +33,7 @@ class MainActivity : ComponentActivity() {
     private val pendingSessionId = MutableStateFlow<Long?>(null)
 
     /**
-     * Cycle 18: попросили открыть форму кормления — по кнопке «Покормила» из
+     * Cycle 18: попросили открыть форму кормления — по кнопке «Покормить» из
      * шторки. Ждёт NavHost тем же способом, что и [pendingSessionId].
      */
     private val pendingFeeding = MutableStateFlow(false)
@@ -97,7 +97,7 @@ class MainActivity : ComponentActivity() {
         /** Какую выпечку открыть по тапу на уведомление о ходе выпечки. */
         const val EXTRA_SESSION_ID = "madre.session_id"
 
-        /** Открыть форму кормления — приходит с кнопкой «Покормила» из шторки. */
+        /** Открыть форму кормления — приходит с кнопкой «Покормить» из шторки. */
         const val EXTRA_OPEN_FEEDING = "madre.open_feeding"
 
         private const val KEY_NOTIFICATIONS_ASKED = "notifications_permission_asked"

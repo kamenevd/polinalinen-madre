@@ -94,7 +94,7 @@ fun MadreNavHost(
         }
     }
 
-    // Cycle 18: кнопка «Покормила» из шторки открывает форму кормления. Тот же
+    // Cycle 18: кнопка «Покормить» из шторки открывает форму кормления. Тот же
     // приём, что и с выпечкой: намерение ждёт, пока NavHost готов, и гасится
     // сразу после исполнения, чтобы поворот экрана не открыл форму дважды.
     if (pendingFeeding != null) {
@@ -176,7 +176,6 @@ fun MadreNavHost(
     val profile = profileForInterval(sourdoughConfig?.intervalHours ?: 24)
     val phase = authoritativeLastFeedingMillis?.let { currentPhase(hoursSinceFeeding(it), profile) }
         ?: GrowthPhase.EMPTY
-    val headline = "Режим кормления задаёте вы — книга показывает только записанные факты"
     // "День N" — календарные дни с первого кормления в этом дневнике (не число записей).
     // Первый кормеж — по фактическому timestamp, а не по тому, как rows
     // встали в таблице.
@@ -188,7 +187,6 @@ fun MadreNavHost(
         NavHost(navController = navController, startDestination = MadreDestinations.HOME) {
             composable(MadreDestinations.HOME) {
                 HomeScreen(
-                    madreHeadline = headline,
                     starterName = starterName,
                     phase = phase,
                     lastFeedingMillis = authoritativeLastFeedingMillis,

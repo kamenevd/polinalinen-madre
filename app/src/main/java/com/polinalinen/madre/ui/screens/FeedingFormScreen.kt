@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.polinalinen.madre.data.db.entities.StorageLocation
 import com.polinalinen.madre.sourdough.FeedingInput
+import com.polinalinen.madre.sourdough.FeedingMassCopy
 import com.polinalinen.madre.sourdough.HydrationMath
 import com.polinalinen.madre.viewmodel.FeedingSaveState
 import com.polinalinen.madre.ui.components.AgedPhoto
@@ -72,8 +73,8 @@ import kotlin.math.roundToInt
  * Кормление закваски — экран 5.
  *
  * Cycle 26: форма перестала спрашивать то, что умеет посчитать. Человек
- * называет три массы — сколько закваски оставил в банке, сколько дал муки и
- * сколько воды, — а гидратация после кормления считается ([HydrationMath]) от
+ * называет три массы — сколько закваски осталось в банке, сколько муки и
+ * воды, — а гидратация после кормления считается ([HydrationMath]) от
  * последней сохранённой и показывается строкой, которую нельзя редактировать.
  * Поля «подтвердите гидратацию» и штампов-наблюдений здесь больше нет: одно
  * спрашивало у человека то, что выводится из его же цифр, другое выдавало
@@ -146,21 +147,21 @@ fun FeedingFormScreen(
             )
 
             GramCard(
-                label = "Оставила закваски",
+                label = FeedingMassCopy.STARTER,
                 accessibleLabel = "Оставленная закваска",
                 range = FeedingInput.STARTER,
                 grams = starterGrams,
                 onChange = { starterGrams = it },
             )
             GramCard(
-                label = "Дала муки",
+                label = FeedingMassCopy.FLOUR,
                 accessibleLabel = "Добавленная мука",
                 range = FeedingInput.FLOUR,
                 grams = flourGrams,
                 onChange = { flourGrams = it },
             )
             GramCard(
-                label = "Дала воды",
+                label = FeedingMassCopy.WATER,
                 accessibleLabel = "Добавленная вода",
                 range = FeedingInput.WATER,
                 grams = waterGrams,

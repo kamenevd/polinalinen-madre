@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.screens
 
+import android.content.Context
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -54,6 +55,7 @@ import com.polinalinen.madre.model.WeatherNote
 import com.polinalinen.madre.sourdough.FeedingCall
 import com.polinalinen.madre.sourdough.GrowthPhase
 import com.polinalinen.madre.sourdough.StarterName
+import com.polinalinen.madre.sourdough.StarterVoice
 import com.polinalinen.madre.notifications.FeedingSchedule
 import com.polinalinen.madre.ui.components.BookBreath
 import com.polinalinen.madre.ui.components.BookButton
@@ -101,13 +103,17 @@ object Home {
     fun chapterRowTag(recipeId: String): String = "home-chapter-$recipeId"
 }
 
+internal object HomeCopy {
+    const val BAKERY = "Домашняя пекарня"
+}
+
 /**
  * Главная — «Первая полоса» (DESIGN-V4.md, экран 1).
- * Masthead → строка от Мадре → талон «В ПЕЧИ» + ляссе → оглавление.
+ * Masthead → голос закваски → талон «В ПЕЧИ» + ляссе → оглавление.
  */
 @Composable
 fun HomeScreen(
-    madreHeadline: String,
+    madreHeadline: String? = null,
     starterName: String = StarterName.DEFAULT,
     phase: GrowthPhase,
     /** Когда кормили в прошлый раз; null — дневник ещё пуст. */
@@ -134,6 +140,16 @@ fun HomeScreen(
     // отсыревшая бумага в дождь. Без разрешения на геолокацию — тихое
     // приглашение; без сети/локации — молчание (ViewModel не ругается).
     val context = LocalContext.current
+    val spokenLine = remember(madreHeadline) {
+        if (madreHeadline != null) madreHeadline
+        else {
+            val prefs = context.getSharedPreferences(StarterVoice.PREFS, Context.MODE_PRIVATE)
+            val last = prefs.getInt(StarterVoice.KEY_INDEX, -1)
+            val (index, line) = StarterVoice.advance(last)
+            prefs.edit().putInt(StarterVoice.KEY_INDEX, index).apply()
+            line
+        }
+    }
     var hasLocationPermission by remember {
         mutableStateOf(
             context.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) ==
@@ -192,7 +208,7 @@ fun HomeScreen(
         ) {
             LazyColumn(modifier = Modifier.statusBarsPadding().testTag(Home.LIST_TAG)) {
                 item { Masthead(season, onOpenSettings, onOpenShelf) }
-                item { MadreLine(madreHeadline, starterName, onOpenStarter) }
+                item { MadreLine(spokenLine, starterName, onOpenStarter) }
                 item {
                     FeedingScheduleStatus(
                         starterName, lastFeedingMillis, intervalHours, latestHydrationPercent,
@@ -302,7 +318,7 @@ private fun Masthead(
         Modifier.fillMaxWidth().padding(top = 22.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        PageLabel("Домашняя пекарня Полины")
+        PageLabel(HomeCopy.BAKERY)
         Text(
             "МАДРЕ",
             color = colors.espresso,

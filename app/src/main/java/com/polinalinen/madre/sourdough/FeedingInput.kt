@@ -41,9 +41,16 @@ object FeedingInput {
     /** Сколько закваски оставили в банке. */
     val STARTER = Range(min = 5, max = 250, default = 50)
 
-    /** Сколько муки дали. */
+    /** Сколько муки добавлено. */
     val FLOUR = Range(min = 10, max = 500, default = 100)
 
-    /** Сколько воды дали. */
+    /** Сколько воды добавлено. */
     val WATER = Range(min = 5, max = 300, default = 50)
+}
+
+/** Подписи трёх масс на форме кормления — инфинитив, без рода читателя. */
+object FeedingMassCopy {
+    const val STARTER = "Оставить закваски"
+    const val FLOUR = "Добавить муки"
+    const val WATER = "Добавить воды"
 }

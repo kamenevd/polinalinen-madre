@@ -70,12 +70,12 @@ review resolves wording and provenance. Specifically audit remaining flour,
 whole-grain/rye, fermentation-state, timing, and attribution claims against
 original scan pages.
 
-## Release screenshot contract (partial capture)
+## Release screenshot contract
 
-After a successful APK build, 1080×1920 capture status is partial:
+After a successful APK build, 1080×1920 capture status is complete:
 
-- Captured states (5): starter diary, Home not-due hydration, feeding form with automatic
-  hydration, exact weight input, generated immutable comment.
-- Missing mandatory states (2): Home due with `Готовиться`/action and feeding reminder
-  notification.
+- Captured states (7): starter diary, Home not-due hydration, feeding form with automatic
+  hydration, exact weight input, generated immutable comment, Home due with
+  `Кормление уже по вашему расписанию`/`Покормить Мадре` and feeding reminder notification.
+- Missing mandatory states (0): none.
 - Visual and release gates remain pending.

@@ -7,8 +7,8 @@
 
 ## Scope validated
 - `./gradlew testDebugUnitTest lintDebug verifyRoborazziDebug assembleDebug assembleDebugAndroidTest --no-daemon` executed and finished **BUILD SUCCESSFUL**.
-- `python3 scripts/tests/test_cycle26_visible_copy.py` executed: passed, exit `0` on exact HEAD.
-- `python3 -m unittest scripts/tests/test_workflow_contract.py scripts/tests/test_documentation_contract.py scripts/tests/test_workflow_version_contract.py` executed: `Ran 24 tests in 0.006s (OK)`.
+- `python3 -m pytest scripts/tests/test_cycle26_visible_copy.py -q` executed on exact HEAD: `/usr/bin/python3: No module named pytest`, exit `1`.
+- `python3 -m unittest scripts/tests/test_workflow_contract.py scripts/tests/test_documentation_contract.py scripts/tests/test_workflow_version_contract.py` executed: `Ran 24 tests in 0.005s (OK)`.
 - `python3 scripts/cycle.py validate` executed: `CYCLE VALID`, exit `0` on exact HEAD; gate statuses (`review`, `visual`, `runtime`, `release`) remain pending and are not yet advanced.
 - `git diff --check` clean.
 
@@ -45,13 +45,17 @@
   - SHA-256: `743294a8f9c6d005038e586eae99e19fd4134e5c8b697673d35511f3f366ce8f`
 
 ## RuStore screenshots (1080×1920)
-Evidence source: `/home/claude/.cache/madre-book-review/rustore-v650-MANIFEST.md`
+Evidence source: `/home/claude/.cache/madre-book-review/cycle26-v650-visual-seven.md`
 
 1. `01-starter-diary.png` — SHA-256 `8a84e1273e0744b6e1a7d45e63470666671ac66bc8de1a4d85e4b4c7cd14f0e0`
 2. `02-home-hydration.png` — SHA-256 `808744dbc3115661f9ea8a8008fe88a22664b11f46c6ab7ed5d97ebebb2b297b`
 3. `03-feeding-masses.png` — SHA-256 `4f4334f955900382bf74368526f2b985364f799d06389cfe4b04bb6f57ee6c53`
 4. `04-exact-weight-input.png` — SHA-256 `0a7bbdc44714ad6d21af4e23e037fe0863c4d960005948eec0c28400b423ac5f`
 5. `05-generated-comment.png` — SHA-256 `87560664c23e4dee923c0a9d0c59f90f39d00777403358bd07dcac036c344fe9`
+6. `06-feeding-reminder.png` — SHA-256 `545f2b15d76805aa02b6f66955970dd9286ff0a91b8e6d5d85cfb55fe5031aa7`
+7. `07-home-due-action.png` — SHA-256 `b1cab7f5fb99fce589e20aa56df69d6114d11443a3a177a5eb098db90a0653f9`
+
+Screenshot state capture: 7/7 captured.
 
 ## Gate status and evidence
 - `review`, `visual`, `runtime`, and `release` gates remain `pending`; runtime evidence exists before gate status advancement.

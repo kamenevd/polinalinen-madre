@@ -99,13 +99,13 @@ def test_cycle26_visible_contracts_stay_current():
             raise AssertionError(f"Missing required cycle26 wording in DESIGN-V4.md: {phrase}")
 
     required_plan = (
-        "db baseline for this cycle is schema v8",
+        "db baseline for this cycle is schema `v8`",
         "8 → 9",
         "9 → 10",
-        "working schema is v10",
+        "working schema is `v10`",
         "finalhydrationpercent",
         "hydrationpercent",
-        "final, then legacy",
+        "computed `finalhydrationpercent` first, then legacy",
     )
     for phrase in required_plan:
         if phrase not in plan_lower:

@@ -58,6 +58,7 @@ Evidence source: `/home/claude/.cache/madre-book-review/cycle26-v650-visual-seve
 Screenshot state capture: 7/7 captured.
 
 ## Gate status and evidence
-- `review`, `visual`, `runtime`, and `release` gates remain `pending`; runtime evidence exists before gate status advancement.
-- `workflow/CYCLE.yaml` gate transitions were not changed in this pass.
-- `python3 scripts/cycle.py validate` confirms pending gates are legal and expected at this evidence stage.
+- `review`, `visual`, and `runtime` gates are `pass` with evidence links above.
+- `release` remains `pending` with no release artifacts/evidence yet.
+- `workflow/CYCLE.yaml` now records these pass transitions and keeps `release` pending.
+- `python3 scripts/cycle.py validate` confirms the manifest gate chain is valid with those statuses.

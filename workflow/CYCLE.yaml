@@ -5,7 +5,7 @@
     "kind": "feature",
     "version": "6.5.0",
     "branch": "cycle/26",
-    "stage": "implementing",
+    "stage": "validating",
     "created_at": "2026-08-12T19:20:00Z",
     "updated_at": "2026-08-18T00:00:00Z"
   },
@@ -44,16 +44,24 @@
       ]
     },
     "review": {
-      "status": "pending",
-      "evidence": []
+      "status": "pass",
+      "evidence": [
+        "workflow/evidence/cycle26/final-review.md"
+      ]
     },
     "visual": {
-      "status": "pending",
-      "evidence": []
+      "status": "pass",
+      "evidence": [
+        "workflow/evidence/cycle26/release-screenshots.md",
+        "app/src/test/snapshots"
+      ]
     },
     "runtime": {
-      "status": "pending",
-      "evidence": []
+      "status": "pass",
+      "evidence": [
+        "workflow/evidence/cycle26/runtime-head84.md",
+        "workflow/evidence/cycle26/final-gates.md"
+      ]
     },
     "release": {
       "status": "pending",

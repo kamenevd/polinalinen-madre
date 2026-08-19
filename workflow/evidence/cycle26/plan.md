@@ -78,4 +78,4 @@ After a successful APK build, 1080×1920 capture status is complete:
   hydration, exact weight input, generated immutable comment, Home due with
   `Кормление уже по вашему расписанию`/`Покормить Мадре` and feeding reminder notification.
 - Missing mandatory states (0): none.
-- Visual and release gates remain pending.
+- Review, visual, and runtime gates pass; release remains pending.

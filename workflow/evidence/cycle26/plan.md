@@ -12,7 +12,7 @@ navigation aid only; uncertain OCR is never quoted.
 
 ## Acceptance
 
-- Display precedence for hydration is fixed: computed `finalHydrationPercent`
+- Display precedence for hydration in the Starter Diary table is fixed: computed `finalHydrationPercent`
   first, then legacy `hydrationPercent`, else a dash (`—`).
 - Home and WorkManager share one due calculation based solely on saved personal
   interval and timestamp. Home refreshes it while visible and on lifecycle return,
@@ -44,7 +44,9 @@ navigation aid only; uncertain OCR is never quoted.
 - Table (`StarterDiaryScreen`) has accessible ordered heading semantics and one
   ordered sentence per row: six columns, sticky header, lazy full history,
   hydration displays `finalHydrationPercent`, then `hydrationPercent`, and only when
-  both are null uses `—`/`не указана`.
+  both are null uses `—`/`не указана`. This computed→legacy→dash fallback applies to the formulary table.
+- Home's current starter-status headline uses a computed snapshot and must not promote any
+  legacy value to current truth.
 - Share to family remains restricted to `feedingId`, flour, water and timestamp.
 - `save` in the form is not considered complete until successful local
   persistence; duplicate taps while saving are rejected.
@@ -68,10 +70,12 @@ review resolves wording and provenance. Specifically audit remaining flour,
 whole-grain/rye, fermentation-state, timing, and attribution claims against
 original scan pages.
 
-## Release screenshot contract (not captured yet)
+## Release screenshot contract (partial capture)
 
-After a successful APK build, capture exactly 1080×1920 on the approved AVD/device:
-Home not-due; Home due with `Готовиться`/action; feeding form with confirmed
-automatic hydration; Starter top; analytical feed; feeding reminder; and book
-guidance. Each fixture must use deterministic local data, Warm Paper light, no
-emoji, and no clipped or system-obscured content.
+After a successful APK build, 1080×1920 capture status is partial:
+
+- Captured states (5): starter diary, Home not-due hydration, feeding form with automatic
+  hydration, exact weight input, generated immutable comment.
+- Missing mandatory states (2): Home due with `Готовиться`/action and feeding reminder
+  notification.
+- Visual and release gates remain pending.

@@ -7,7 +7,7 @@
 
 ## Scope validated
 - `./gradlew testDebugUnitTest lintDebug verifyRoborazziDebug assembleDebug assembleDebugAndroidTest --no-daemon` executed and finished **BUILD SUCCESSFUL**.
-- `python3 -m pytest scripts/tests/test_cycle26_visible_copy.py -q` executed on exact HEAD: `/usr/bin/python3: No module named pytest`, exit `1`.
+- `python3 scripts/tests/test_cycle26_visible_copy.py -q` executed on exact HEAD: `Ran 2 tests in 0.010s`, `OK`, exit `0`.
 - `python3 -m unittest scripts/tests/test_workflow_contract.py scripts/tests/test_documentation_contract.py scripts/tests/test_workflow_version_contract.py` executed: `Ran 24 tests in 0.005s (OK)`.
 - `python3 scripts/cycle.py validate` executed: `CYCLE VALID`, exit `0` on exact HEAD; gate statuses (`review`, `visual`, `runtime`, `release`) remain pending and are not yet advanced.
 - `git diff --check` clean.

@@ -20,7 +20,7 @@
 
 ## Verified exact-HEAD checks
 
-- `python3 -m pytest scripts/tests/test_cycle26_visible_copy.py -q`: failed with `/usr/bin/python3: No module named pytest`, exit `1` on exact HEAD.
+- `python3 scripts/tests/test_cycle26_visible_copy.py -q`: `Ran 2 tests in 0.010s` and `OK`, exit `0` on exact HEAD.
 - `python3 scripts/cycle.py validate`: `CYCLE VALID` on exact HEAD.
 - Final unit aggregate: `98 suites / 728 tests / 0 failures / 0 errors / 0 skipped`.
 - `MigrationTest`: `OK (8 tests)` with migration chain `8 -> 9 -> 10` and `1 -> 10`.

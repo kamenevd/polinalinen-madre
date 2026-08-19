@@ -1,4 +1,5 @@
 import re
+import unittest
 from pathlib import Path
 
 
@@ -34,7 +35,7 @@ STARTER_DIARY_SCREEN = (
 )
 
 
-def test_no_legacy_baking_phrase_in_user_visible_literals():
+def check_no_legacy_baking_phrase_in_user_visible_literals():
     offenders = []
     for path in SOURCE_ROOT.rglob("*"):
         if path.suffix not in {".kt", ".xml"}:
@@ -46,14 +47,14 @@ def test_no_legacy_baking_phrase_in_user_visible_literals():
     assert not offenders, "Legacy user-visible copy remains:\n" + "\n".join(offenders)
 
 
-def test_cycle26_visible_contracts_stay_current():
+def check_cycle26_visible_contracts_stay_current():
     design = DESIGN.read_text(encoding="utf-8")
     plan = PLAN.read_text(encoding="utf-8")
     reminder = REMINDER_WORKER.read_text(encoding="utf-8")
     starter = STARTER_DIARY_SCREEN.read_text(encoding="utf-8")
 
     design_lower = design.lower()
-    plan_lower = plan.lower()
+    plan_normalized = re.sub(r"\s+", " ", plan.lower())
     reminder_lower = reminder.lower()
     starter_lower = starter.lower()
 
@@ -68,7 +69,7 @@ def test_cycle26_visible_contracts_stay_current():
         phrase_lower = phrase.lower()
         if phrase_lower in design_lower:
             raise AssertionError(f"Stale cycle26 wording remains in DESIGN-V4.md: {phrase}")
-        if phrase_lower in plan_lower:
+        if phrase_lower in plan_normalized:
             raise AssertionError(f"Stale cycle26 wording remains in cycle26 plan: {phrase}")
         if phrase_lower in starter_lower:
             raise AssertionError(f"Stale cycle26 wording remains in StarterDiaryScreen.kt: {phrase}")
@@ -81,7 +82,7 @@ def test_cycle26_visible_contracts_stay_current():
     for phrase in banned:
         if phrase in design_lower:
             raise AssertionError(f"Stale cycle26 wording remains in DESIGN-V4.md: {phrase}")
-        if phrase in plan_lower:
+        if phrase in plan_normalized:
             raise AssertionError(f"Stale cycle26 wording remains in cycle26 plan: {phrase}")
 
     required_design = (
@@ -108,7 +109,7 @@ def test_cycle26_visible_contracts_stay_current():
         "computed `finalhydrationpercent` first, then legacy",
     )
     for phrase in required_plan:
-        if phrase not in plan_lower:
+        if phrase not in plan_normalized:
             raise AssertionError(f"Missing required cycle26 contract phrase in plan: {phrase}")
 
     required_reminder = (
@@ -137,3 +138,15 @@ def test_cycle26_visible_contracts_stay_current():
     for phrase in required_diary:
         if phrase not in starter:
             raise AssertionError(f"Missing required cycle26 starter diary guidance phrase: {phrase}")
+
+
+class TestCycle26VisibleCopy(unittest.TestCase):
+    def test_no_legacy_baking_phrase_in_user_visible_literals(self):
+        check_no_legacy_baking_phrase_in_user_visible_literals()
+
+    def test_cycle26_visible_contracts_stay_current(self):
+        check_cycle26_visible_contracts_stay_current()
+
+
+if __name__ == "__main__":
+    unittest.main()

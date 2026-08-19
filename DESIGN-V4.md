@@ -860,3 +860,12 @@ APK update with same signing key does not revoke runtime grants. UI re-reads loc
 
 Коммит: `feat: shelf-of-books`
 
+### Фича 2: сброс пароля на форме входа (password-reset-inline)
+
+Отдельных экранов нет. Под паролем: «Забыли пароль? Пришлём письмо с
+kdnfx@kdnfx.ru». Та же почта, что для входа. Успех — «письмо ушло,
+загляните в спам». Отказ — честная строка. Книга на телефоне не
+трогается.
+
+Коммит: `feat: password-reset-inline`
+

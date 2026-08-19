@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.screens
 
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.StateRestorationTester
@@ -62,5 +63,26 @@ class FamilyBookSectionUiTest {
         restorationTester.emulateSavedInstanceStateRestore()
 
         rule.onNodeWithText("anya@example.com").assertIsDisplayed()
+    }
+
+    @Test
+    fun `password reset sits under the password and uses the same email field`() {
+        rule.setContent {
+            MadreTheme {
+                FamilyBookSection(
+                    state = FamilyBookState.SignedOut,
+                    onSignIn = { _, _ -> },
+                    onRegister = { _, _, _ -> },
+                    onCreateFamily = {},
+                    onJoinFamily = {},
+                    onRotateInvite = {},
+                    onSignOut = {},
+                    onCodeHandled = {},
+                )
+            }
+        }
+        rule.onNodeWithText("Подключить полку…").performClick()
+        rule.onNodeWithText(com.polinalinen.madre.account.PasswordReset.ACTION_LABEL).assertIsDisplayed()
+        rule.onAllNodes(hasSetTextAction()).assertCountEquals(3)
     }
 }

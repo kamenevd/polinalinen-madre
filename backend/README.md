@@ -72,3 +72,7 @@ systemctl restart pocketbase
 PocketBase применяет новые миграции на старте и подхватывает хуки без
 отдельной команды. TLS завершается на реверс-прокси перед PocketBase;
 `https://madre-api.kdnfx.space` — единственный вход снаружи.
+
+Сброс пароля — штатный маршрут PocketBase
+`POST /api/collections/users/request-password-reset`. Клиент его вызывает;
+SMTP настраивается в PocketBase отдельно, в этом репозитории писем нет.

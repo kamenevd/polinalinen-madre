@@ -36,6 +36,14 @@ class FamilyBookRecordsTest {
     }
 
     @Test
+    fun `password reset request is email only, never identity or password`() {
+        val json = gson.toJson(PasswordResetRequest(email = "anya@example.com"))
+        assertThat(json).isEqualTo("{\"email\":\"anya@example.com\"}")
+        assertThat(json).doesNotContain("identity")
+        assertThat(json).doesNotContain("password")
+    }
+
+    @Test
     fun `auth response parses token and user record`() {
         val json = """
             {"token":"pb_token_1","record":{"id":"u1","email":"anya@example.com","name":"Аня","family":"f1"}}

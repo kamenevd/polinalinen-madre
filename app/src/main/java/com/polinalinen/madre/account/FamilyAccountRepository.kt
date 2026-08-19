@@ -6,6 +6,7 @@ import com.polinalinen.madre.data.remote.FamilyBookApi
 import com.polinalinen.madre.data.remote.FamilyResponse
 import com.polinalinen.madre.data.remote.JoinFamilyRequest
 import com.polinalinen.madre.data.remote.PasswordAuthRequest
+import com.polinalinen.madre.data.remote.PasswordResetRequest
 import com.polinalinen.madre.data.remote.RegisterRequest
 import com.polinalinen.madre.data.remote.RenameFamilyRequest
 import com.polinalinen.madre.data.remote.UserRecord
@@ -41,6 +42,26 @@ class FamilyAccountRepository(
         val response = runCatching { api.authWithPassword(PasswordAuthRequest(email, password)) }
             .getOrElse { return fail(NetworkFailure.classify(it, NetworkFailure.INVALID_CREDENTIALS)) }
         return adopt(response)
+    }
+
+    /**
+     * Письмо со сбросом на ту же почту, что в поле входа. Токен и локальную
+     * книгу не трогает: неудача — строка на форме, не выход из книги.
+     */
+    suspend fun requestPasswordReset(email: String): PasswordResetResult {
+        val trimmed = email.trim()
+        if (trimmed.isEmpty()) return PasswordResetResult.Failed(PasswordReset.EMPTY_EMAIL)
+        val response = runCatching { api.requestPasswordReset(PasswordResetRequest(trimmed)) }
+            .getOrElse {
+                return PasswordResetResult.Failed(PasswordReset.messageFor(NetworkFailure.classify(it)))
+            }
+        if (response.isSuccessful) return PasswordResetResult.Sent
+        val failure = when (response.code()) {
+            400, 404, 422 -> NetworkFailure.INVALID_CREDENTIALS
+            in 500..599 -> NetworkFailure.SERVER
+            else -> NetworkFailure.UNKNOWN
+        }
+        return PasswordResetResult.Failed(PasswordReset.messageFor(failure))
     }
 
     /** Регистрация сразу заводит и вход — отдельного экрана «теперь войдите» нет. */

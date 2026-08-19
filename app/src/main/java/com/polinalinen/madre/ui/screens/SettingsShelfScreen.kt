@@ -66,6 +66,7 @@ fun SettingsShelfScreen(
     val colors = AppColors.current
     val context = LocalContext.current
     val familyBookState by familyBookViewModel.state.collectAsState()
+    val passwordResetNotice by familyBookViewModel.passwordReset.collectAsState()
     val members by shelfViewModel.members.collectAsState()
     val prefs = remember { context.getSharedPreferences(ShelfSharePolicy.PREFS, android.content.Context.MODE_PRIVATE) }
     var shareMode by remember { mutableStateOf(ShelfSharePolicy.read(prefs)) }
@@ -116,6 +117,8 @@ fun SettingsShelfScreen(
                         onRotateInvite = familyBookViewModel::rotateInviteCode,
                         onSignOut = familyBookViewModel::signOut,
                         onCodeHandled = familyBookViewModel::clearInviteCode,
+                        passwordResetNotice = passwordResetNotice,
+                        onRequestPasswordReset = familyBookViewModel::requestPasswordReset,
                     )
                 }
                 else -> {

@@ -5,6 +5,8 @@ import java.util.concurrent.TimeUnit
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import okhttp3.ResponseBody
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Header
@@ -30,6 +32,13 @@ interface FamilyBookApi {
 
     @POST("api/collections/users/auth-with-password")
     suspend fun authWithPassword(@Body body: PasswordAuthRequest): AuthResponse
+
+    /**
+     * Письмо со сбросом. PocketBase отвечает 204 без тела — Gson такое не
+     * читает, поэтому [Response] с [ResponseBody], а не data-класс.
+     */
+    @POST("api/collections/users/request-password-reset")
+    suspend fun requestPasswordReset(@Body body: PasswordResetRequest): Response<ResponseBody>
 
     @POST("api/collections/users/auth-refresh")
     suspend fun authRefresh(@Header("Authorization") token: String): AuthResponse

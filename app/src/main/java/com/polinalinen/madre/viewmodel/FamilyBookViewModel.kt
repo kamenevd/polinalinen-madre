@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.polinalinen.madre.MadreApplication
 import com.polinalinen.madre.account.FamilyAccountRepository
 import com.polinalinen.madre.account.FamilyBookState
+import com.polinalinen.madre.account.PasswordResetNotice
+import com.polinalinen.madre.account.PasswordResetResult
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,6 +23,9 @@ class FamilyBookViewModel internal constructor(
 
     private val _state = MutableStateFlow<FamilyBookState>(FamilyBookState.SignedOut)
     val state: StateFlow<FamilyBookState> = _state.asStateFlow()
+
+    private val _passwordReset = MutableStateFlow<PasswordResetNotice>(PasswordResetNotice.Idle)
+    val passwordReset: StateFlow<PasswordResetNotice> = _passwordReset.asStateFlow()
 
     /**
      * Ровно один сетевой запрос за раз. Проверять по [_state] нельзя: Loading
@@ -55,6 +60,25 @@ class FamilyBookViewModel internal constructor(
 
     fun signIn(email: String, password: String) = runNetwork {
         repository.signIn(email.trim(), password)
+    }
+
+    /**
+     * Сброс пароля не переводит книгу в Loading: форма должна остаться
+     * на месте, а локальная книга — не дёрнуться.
+     */
+    fun requestPasswordReset(email: String) {
+        if (!inFlight.compareAndSet(false, true)) return
+        _passwordReset.value = PasswordResetNotice.Sending
+        viewModelScope.launch {
+            try {
+                _passwordReset.value = when (val result = repository.requestPasswordReset(email)) {
+                    PasswordResetResult.Sent -> PasswordResetNotice.Sent
+                    is PasswordResetResult.Failed -> PasswordResetNotice.Failed(result.message)
+                }
+            } finally {
+                inFlight.set(false)
+            }
+        }
     }
 
     fun register(email: String, password: String, displayName: String) = runNetwork {

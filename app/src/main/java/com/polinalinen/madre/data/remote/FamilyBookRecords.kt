@@ -27,6 +27,11 @@ data class PasswordAuthRequest(
     @SerializedName("password") val password: String,
 )
 
+/** PocketBase `request-password-reset`: почта, без пароля и без identity. */
+data class PasswordResetRequest(
+    @SerializedName("email") val email: String,
+)
+
 /**
  * Запись пользователя. `family` — relation на коллекцию families; PocketBase
  * в зависимости от версии/состояния записи может вернуть незаполненную связь

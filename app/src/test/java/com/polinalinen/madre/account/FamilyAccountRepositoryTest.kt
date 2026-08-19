@@ -10,12 +10,16 @@ import com.polinalinen.madre.data.remote.FamilyResponse
 import com.polinalinen.madre.data.remote.JoinFamilyRequest
 import com.polinalinen.madre.data.remote.LeaveFamilyResponse
 import com.polinalinen.madre.data.remote.PasswordAuthRequest
+import com.polinalinen.madre.data.remote.PasswordResetRequest
 import com.polinalinen.madre.data.remote.RegisterRequest
 import com.polinalinen.madre.data.remote.RenameFamilyRequest
 import com.polinalinen.madre.data.remote.UserRecord
 import java.net.UnknownHostException
 import kotlinx.coroutines.test.runTest
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.Protocol
+import okhttp3.Request
+import okhttp3.ResponseBody
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Test
 import retrofit2.HttpException
@@ -48,6 +52,8 @@ class FamilyAccountRepositoryTest {
         var joinResult: () -> FamilyResponse = { FamilyResponse("f1", "Ивановы", null) }
         var inviteResult: () -> FamilyResponse = { FamilyResponse("f1", "Ивановы", "ZYXW9876543210AB") }
         var familyResult: () -> FamilyRecord = { FamilyRecord("f1", "Ивановы", "u1") }
+        var lastResetEmail: String? = null
+        var resetResult: () -> Response<ResponseBody> = { noContent() }
 
         override suspend fun register(body: RegisterRequest): UserRecord {
             calls += "register"
@@ -57,6 +63,12 @@ class FamilyAccountRepositoryTest {
         override suspend fun authWithPassword(body: PasswordAuthRequest): AuthResponse {
             calls += "auth"
             return authResult()
+        }
+
+        override suspend fun requestPasswordReset(body: PasswordResetRequest): Response<ResponseBody> {
+            calls += "reset"
+            lastResetEmail = body.email
+            return resetResult()
         }
 
         override suspend fun authRefresh(token: String): AuthResponse {
@@ -111,6 +123,18 @@ class FamilyAccountRepositoryTest {
             totalItems = 1,
             items = listOf(UserRecord("u1", "anya@example.com", "Аня", "f1")),
         )
+    }
+
+    companion object {
+        fun noContent(): Response<ResponseBody> {
+            val raw = okhttp3.Response.Builder()
+                .request(Request.Builder().url("https://madre-api.kdnfx.space/").build())
+                .protocol(Protocol.HTTP_1_1)
+                .code(204)
+                .message("No Content")
+                .build()
+            return Response.success(null, raw)
+        }
     }
 
     private fun repository(api: FakeApi = FakeApi(), tokens: FakeTokenStore = FakeTokenStore()) =
@@ -237,6 +261,50 @@ class FamilyAccountRepositoryTest {
 
         assertThat(state).isEqualTo(FamilyBookState.Failed(NetworkFailure.INVALID_CREDENTIALS))
         assertThat(api.calls).containsExactly("register")
+        assertThat(tokens.token).isNull()
+    }
+
+    @Test
+    fun `password reset posts the email and never touches the token`() = runTest {
+        val api = FakeApi()
+        val tokens = FakeTokenStore("pb_token_1")
+        val repository = repository(api, tokens)
+
+        val result = repository.requestPasswordReset("  anya@example.com  ")
+
+        assertThat(result).isEqualTo(PasswordResetResult.Sent)
+        assertThat(api.calls).containsExactly("reset")
+        assertThat(api.lastResetEmail).isEqualTo("anya@example.com")
+        assertThat(tokens.token).isEqualTo("pb_token_1")
+        assertThat(repository.currentAccount()).isNull()
+    }
+
+    @Test
+    fun `password reset failure keeps the book on the phone`() = runTest {
+        val api = FakeApi()
+        api.resetResult = {
+            Response.error(500, "{}".toResponseBody("application/json".toMediaType()))
+        }
+        val tokens = FakeTokenStore("pb_token_1")
+
+        val result = repository(api, tokens).requestPasswordReset("anya@example.com")
+
+        assertThat(result).isInstanceOf(PasswordResetResult.Failed::class.java)
+        assertThat((result as PasswordResetResult.Failed).message).isEqualTo(
+            PasswordReset.messageFor(NetworkFailure.SERVER),
+        )
+        assertThat(tokens.token).isEqualTo("pb_token_1")
+    }
+
+    @Test
+    fun `password reset without an email does not call the network`() = runTest {
+        val api = FakeApi()
+        val tokens = FakeTokenStore()
+
+        val result = repository(api, tokens).requestPasswordReset("  ")
+
+        assertThat(result).isEqualTo(PasswordResetResult.Failed(PasswordReset.EMPTY_EMAIL))
+        assertThat(api.calls).isEmpty()
         assertThat(tokens.token).isNull()
     }
 

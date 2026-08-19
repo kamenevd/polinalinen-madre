@@ -184,7 +184,10 @@ Cycle 26 шёл к `feedings` двумя шагами от базовой вер
 
 PocketBase на `https://madre-api.kdnfx.space` — полка на семью:
 `MadreApi` (статистика выпечек) и `FamilyBookApi` (вход, полка, токен в
-`SecureTokenStore` через Keystore). Погода — Open-Meteo, без ключа.
+`SecureTokenStore` через Keystore). Сброс пароля — `POST
+api/collections/users/request-password-reset` с той же почты, что в поле
+входа; отдельных экранов нет. SMTP настраивается на сервере отдельно.
+Погода — Open-Meteo, без ключа.
 
 Корешок на полке — PocketBase user id, не device_id. `bake_stats` несёт
 снимок подписи и названия полки; кадр ставится и снимается отдельно, факт

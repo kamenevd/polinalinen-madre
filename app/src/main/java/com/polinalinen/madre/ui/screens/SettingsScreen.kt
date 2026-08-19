@@ -53,6 +53,8 @@ import com.polinalinen.madre.sourdough.FeedingInterval
 import com.polinalinen.madre.sourdough.StarterName
 import com.polinalinen.madre.account.FamilyBookState
 import com.polinalinen.madre.account.InviteCode
+import com.polinalinen.madre.account.PasswordReset
+import com.polinalinen.madre.account.PasswordResetNotice
 import com.polinalinen.madre.ui.components.BackLabel
 import com.polinalinen.madre.ui.components.bookAction
 import com.polinalinen.madre.ui.components.BookButton
@@ -519,6 +521,8 @@ internal fun FamilyBookSection(
     onRotateInvite: () -> Unit,
     onSignOut: () -> Unit,
     onCodeHandled: () -> Unit,
+    passwordResetNotice: PasswordResetNotice = PasswordResetNotice.Idle,
+    onRequestPasswordReset: (String) -> Unit = {},
 ) {
     val colors = AppColors.current
     val context = LocalContext.current
@@ -579,6 +583,29 @@ internal fun FamilyBookSection(
             account == null -> {
                 FamilyBookField("Почта", email) { email = it }
                 FamilyBookField("Пароль", password, masked = true) { password = it }
+                TextAction(
+                    PasswordReset.ACTION_LABEL,
+                    enabled = passwordResetNotice !is PasswordResetNotice.Sending,
+                    onClick = { onRequestPasswordReset(email) },
+                )
+                when (val notice = passwordResetNotice) {
+                    PasswordResetNotice.Sent -> Text(
+                        PasswordReset.SENT_LINE,
+                        color = colors.cocoa,
+                        fontFamily = FontFamily.Serif,
+                        fontStyle = FontStyle.Italic,
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                    is PasswordResetNotice.Failed -> Text(
+                        notice.message,
+                        color = colors.terracotta,
+                        fontFamily = FontFamily.Serif,
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                    else -> Unit
+                }
                 FamilyBookField("Как подписать вас", displayName) { displayName = it }
                 Spacer(Modifier.height(8.dp))
                 BookButton(

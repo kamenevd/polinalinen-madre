@@ -365,9 +365,9 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
         val recordId = bakeRecordIds[id] ?: return
         val account = madreApp.familyAccountRepository.currentAccount()
         val photoPath = if (withPhoto) _bakePhotoPaths.value[id] else null
-        if (withPhoto && !photoPath.isNullOrBlank()) sharedPhotoSessionIds += id
         viewModelScope.launch {
             val bakedAtMillis = bakeHistoryRepository.getCompletedAt(recordId) ?: return@launch
+            if (withPhoto && !photoPath.isNullOrBlank()) sharedPhotoSessionIds += id
             syncRepository.shareBakeStat(
                 recordId = recordId,
                 recipeId = s.recipe.id,

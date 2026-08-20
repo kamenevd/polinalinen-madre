@@ -79,17 +79,16 @@ class ShelfViewModel(app: Application) : AndroidViewModel(app) {
             val usersResult = runCatching {
                 withContext(Dispatchers.IO) { madreApp.familyAccountRepository.listFamilyUsers() }
             }
+            val statsResult = runCatching {
+                withContext(Dispatchers.IO) { madreApp.madreApi.listBakeStats(token) }
+            }
+            if (myGeneration != currentRefreshGeneration) return@launch
             val users = usersResult.getOrNull() ?: emptyList()
             if (usersResult.isSuccess) {
                 lastConfirmedMembers = FamilyShelf.membersFromUsers(users, account.userId).ifEmpty {
                     listOf(FamilyShelf.localMember(account.displayName.ifBlank { localName }))
                 }
             }
-            // stats: on failure keep last remoteBakes
-            val statsResult = runCatching {
-                withContext(Dispatchers.IO) { madreApp.madreApi.listBakeStats(token) }
-            }
-            if (myGeneration != currentRefreshGeneration) return@launch
             _unreachable.value = statsResult.isFailure || usersResult.isFailure
             if (statsResult.isSuccess) {
                 remoteBakes = statsResult.getOrNull()?.items.orEmpty()

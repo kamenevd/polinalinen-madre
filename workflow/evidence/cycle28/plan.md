@@ -329,19 +329,35 @@ private fun publish(next: FamilyBookState): FamilyBookState { … }        // re
 private fun publishFresh(seen: Long, next: FamilyBookState): FamilyBookState
 ```
 
-Сетевой метод под локом берёт `val seen = revision.get()` **до** запроса и
-отдаёт ответ через `publishFresh(seen, …)`. Если `revision` не менялся — ответ
-публикуется как есть. Если менялся, значит пока ждали сеть:
+Сетевой метод под локом берёт `val seen = revision.get()` **до** запроса.
+`signOut()` и `clearInviteCode()` не suspend и лока не берут: пока сеть висит,
+они успевают сменить поколение. Поэтому **запись токена, AtomicReference и
+публикация состояния — одна граница свежести**, а не три.
 
-- вышли из аккаунта — состояние уже `SignedOut`, ответ **выбрасывается целиком**
- (выход сильнее любого ответа; протухший токен в запросе тем более не повод
- воскрешать аккаунт);
-- погасили одноразовый код — ответ публикуется, но через
- `FamilyBookState.withoutInviteCode()` (новая extension в `FamilyBookState.kt`):
- код, который человек уже скопировал и закрыл, не должен всплыть из ответа,
- отправленного раньше.
+`adoptLocked(seen, tokenValue, account)`:
 
-Больше состояний у окна нет, потому что больше нет писателей.
+1. если `revision.get() != seen` — **не пишет токен**, не трогает store,
+   не публикует; возвращает `_state.value`;
+2. иначе `token.set(tokenValue)`, `tokenStore.save(tokenValue)`,
+   `publishFresh(seen, SignedIn(account))`.
+
+`signOut()` атомарно относительно позднего ответа: `revision.incrementAndGet()`,
+`token.set(null)`, `tokenStore.clear()`, `_state.value = SignedOut`.
+Порядок важен: сначала поколение, потом чистка. Иначе `adoptLocked` успеет
+записать токен между `clear` и `revision++`.
+
+`clearInviteCode()` только `revision.incrementAndGet()` + публикует
+`withoutInviteCode()`; токен не трогает.
+
+Если `revision` не менялся — ответ публикуется как есть. Если менялся:
+
+- вышли из аккаунта — состояние уже `SignedOut`, ответ **выбрасывается целиком**,
+  store и reference пусты;
+- погасили одноразовый код — ответ публикуется через
+ `FamilyBookState.withoutInviteCode()`.
+
+Тест обязан проверить не только `SignedOut`, но и пустой store/reference после
+задержанного `signIn`/`register`.
 
 **Подписи методов не меняются** — старые тесты репозитория
 (`FamilyAccountRepositoryTest`, 470 строк) остаются как есть, включая
@@ -639,10 +655,16 @@ fun forget(sessionId: Long)
 ровно такие штуки — счётчики кофейных кругов по id рецепта
 (`CoffeeRing.prefsKey`, `BakingViewModel.kt:466-467`).
 
-Порядок записи строгий: `insert` вернул `recordId` → `ledger.remember(sessionId,
-recordId)` → и только потом состояние завершения объявляется готовым (П16).
-Обратный порядок дал бы `finish`, который поехал раньше, чем указатель стал
-долговечным.
+Порядок записи строгий и **синхронно долговечный**: `insert` вернул `recordId`
+→ `ledger.remember(sessionId, recordId)` зовёт `SharedPreferences.Editor.commit()`
+(не `apply()`) и возвращает `Boolean` → `recordId.complete(recordId)` **только
+если `commit() == true`**. `apply()` ставит запись в очередь и врёт «готово»
+до диска: смерть процесса в этом окне оставляет строку в Room без указателя,
+и новая ViewModel рисует печать без даты. Если `commit()` вернул false —
+`complete(null)`, как при упавшем insert: `finish` не публикует.
+
+Обратный порядок (complete до commit) дал бы `finish`, который поехал раньше,
+чем указатель стал долговечным.
 
 **Ловушка переиспользования id, которую нельзя не назвать.** `nextSessionId`
 сеется из `active_bakes` (`BakingViewModel.kt:177`), а завершённая выпечка из
@@ -984,9 +1006,9 @@ Runtime-гейт (живой PocketBase, обязателен — статиче
 
 | Класс | Файл | Что держит |
 |---|---|---|
-| `FamilyAccountStateFlowTest` | `app/src/test/java/com/polinalinen/madre/account/FamilyAccountStateFlowTest.kt` | поток отдаёт то же, что возвращает метод: `signIn`, `createFamily`, `renameFamily`, `leaveFamily`, `signOut`; `Loading` публикует репозиторий и он несёт аккаунт |
+| `FamilyAccountStateFlowTest` | `app/src/test/java/com/polinalinen/madre/account/FamilyAccountStateFlowTest.kt` | поток отдаёт то же, что возвращает метод: `signIn`, `createFamily`, `renameFamily`, `leaveFamily`, `signOut`, `clearInviteCode`; `Loading` публикует репозиторий и он несёт аккаунт |
 | `FamilyAccountSerializationTest` | `app/src/test/java/com/polinalinen/madre/account/FamilyAccountSerializationTest.kt` | два одновременных вызова не перетирают друг друга (rename + refresh на медленном фейке api → в потоке новое имя, не старое) |
-| `FamilyAccountStaleResponseTest` | `app/src/test/java/com/polinalinen/madre/account/FamilyAccountStaleResponseTest.kt` | `signOut` во время висящего запроса → ответ выброшен, состояние `SignedOut`; `clearInviteCode` во время висящего `rotate` → состояние без кода |
+| `FamilyAccountStaleResponseTest` | `app/src/test/java/com/polinalinen/madre/account/FamilyAccountStaleResponseTest.kt` | `signOut` во время висящего `signIn`/`register` → `SignedOut`, **store пуст, `token.get() == null`**; `clearInviteCode` во время висящего `rotate` → состояние без кода |
 | `FamilyAccountLockTest` | `app/src/test/java/com/polinalinen/madre/account/FamilyAccountLockTest.kt` | **`register` не самоблокируется**: `withTimeout(2_000) { repository.register(…) }` возвращает `SignedIn`, и в `api.calls` есть и `register`, и `authWithPassword`. Плюс тот же `withTimeout` вокруг **каждой** из одиннадцати операций (`restore`, `refresh`, `signIn`, `register`, `createFamily`, `joinFamily`, `rotateInviteCode`, `renameFamily`, `leaveFamily`, `requestPasswordReset`, `listFamilyUsers`) и ассерт на переход состояния у каждой: не «оно не висит», а «оно не висит и делает своё» |
 | `FamilyBookViewModelSingleStateTest` | `app/src/test/java/com/polinalinen/madre/viewmodel/FamilyBookViewModelSingleStateTest.kt` | рефлексией по объявленным полям `FamilyBookViewModel`: `MutableStateFlow` ровно один и это `_passwordReset` (П2б); `viewModel.state` — тот же экземпляр, что `repository.state` |
 | `FamilyBookRenameVisibilityTest` | `app/src/test/java/com/polinalinen/madre/viewmodel/FamilyBookRenameVisibilityTest.kt` | **переписан под П2б**: две ViewModel на одном репозитории, rename зовётся у первой; у второй `state.value` — новое `familyName` без единого её собственного вызова (ни `restore()`, ни `refreshFamily()`), и в `api.calls` нет второго `authRefresh`/`authWithPassword`. Ассерт стоит на **значении у второй ViewModel**, а не на «оба потока это один объект»: совпадение экземпляров — деталь реализации, видимое имя полки — требование USER DECISION 2 |
@@ -1087,14 +1109,19 @@ findings № 3, № 4, № 5, № 9, № 10.
 - `viewmodel/BakingViewModel.kt` — П16: `BakeCompletion`, `_completions`,
  `reserveCompletion` (атомарный резерв до первого приостанова), `finishing`,
  `finish(...)`, `restoreCompletion(...)`; `bakeRecordIds` (`:119`) удаляется;
- автоотправка из `advanceStep` (`:259-269`) убрана вместе с чтением prefs;
- `shareBakeStats` становится приватным; П13: явный `completedAtMillis` в
- `bakeHistoryRepository.record` и `ledger.forget(id)` + `finishing -= id` в
- `startBaking`.
+ `exitSession` больше не трогает `bakeRecordIds`/`sharedPhotoSessionIds` как
+ карту готовности: чистит `_completions` и `finishing` для этой сессии, затем
+ забывает активную выпечку как сейчас; автоотправка из `advanceStep`
+ (`:259-269`) убрана вместе с чтением prefs; `shareBakeStats` становится
+ приватным; П13: явный `completedAtMillis` в `bakeHistoryRepository.record` и
+ `ledger.forget(id)` + `finishing -= id` в `startBaking`.
 - `utils/BakeSessionLedger.kt` — новый, П13: sessionId → recordId в
- `madre_prefs`, ключ `bake_record_session_<id>`, `remember`/`recordIdFor`/`forget`.
- В `LegacyPrefs` этот префикс **не** попадает: ключ живой, и путать его с
- `shelf_share_mode` нельзя (П15).
+ `madre_prefs`, ключ `bake_record_session_<id>`; `remember` делает
+ `Editor.commit()` и возвращает Boolean; `complete(recordId)` только после
+ `true`. В `LegacyPrefs` этот префикс **не** попадает.
+- `utils/BakeSessionLedgerTest.kt` — `remember` зовёт `commit`, не `apply`;
+ после `commit()==true` новый экземпляр ledger читает тот же recordId;
+ `commit()==false` → указатель не считается готовым.
 - `data/repository/BakeHistoryRepository.kt` — `record(...)` принимает
  `completedAtMillis` (default сохраняется, схема Room не меняется).
 - `ui/photo/PhotoRoad.kt` — новый, П10: чистый автомат дороги.
@@ -1192,11 +1219,12 @@ Runtime-гейт (R11–R14, тот же провенанс, что у комм�
 **Доказательство, что загружен именно этот хук** — три вещи вместе, потому что
 по отдельности каждая лжёт: (1) совпадение `sha256sum` на сервере с репозиторием
 и несовпадение с тем, что лежало до деплоя; (2) рестарт PB **после** копирования
-файла, с временем в журнале; (3) поведенческая проба, которую старый хук пройти
-не может — уход последнего участника, после которого `GET
-/api/collections/families/records/{id}` отвечает 200, а не 404. Старый хук на
-этом месте удалял запись (`madre_family.pb.js:246`), значит 200 здесь и есть
-подпись нового кода.
+файла, с временем в журнале; (3) поведенческая проба обычным пользовательским токеном, которую старый хук
+пройти не может: уход последнего → вход тем же кодом приглашения возвращает
+**тот же `family_id`**. Старый хук удалял `families` (`madre_family.pb.js:246`),
+поэтому повторный вход либо падал, либо заводил новую полку. `GET families/{id}`
+после ухода **не** доказательство: у ушедшего `family=""`, family-scoped ACL
+может дать 404 и на живой спящей полке.
 
 **Токены.** Все сценарии — только обычными пользовательскими токенами
 (`POST /api/collections/users/auth-with-password`). Ни один шаг не выполняется
@@ -1428,7 +1456,7 @@ deadlock, которого не было. Смягчение — три вещи
 | 2 | Завершение «ровно один раз»: резерв `FINALIZING` обязан быть атомарным **до первого приостанова**; готовностью `recordId`/`completedAt` обязан владеть один объект; `finish` обязан ждать персистентной готовности; повтор и одновременность не должны дублировать attach, enqueue, `exitSession` и `onExit` | **П16** переписан: `BakeCompletion` (дата + `CompletableDeferred` готовности) как единственный держатель, `reserveCompletion` на `MutableStateFlow.compareAndSet` до `launch`, `finishing` синхронно до `launch`, `finish` ждёт `recordId.await()` под `withTimeoutOrNull`; `bakeRecordIds` удалён; исправлена ошибка редакции 2 про несуществующее поле `sharedSessionIds` | `BakeCompletionOnceTest` (придержанный insert, два `advanceStep`, два одновременных `finish`, «insert не вернулся»), `BakingShareOnceTest`, `BakingFinishOrderTest` |
 | 3 | Дата на сургуче обязана переживать пересоздание ViewModel и процесса: подниматься из Room по стабильной связи с `recordId`; проверить новой ViewModel на уже лежащей записи, около полуночи и в местном поясе | **П13** переписан: дата фиксируется при резерве и уходит в Room явным аргументом; связь `sessionId → recordId` — `utils/BakeSessionLedger.kt` в `madre_prefs` (Room не меняется, `family_settings` не трогаем); `restoreCompletion` поднимает дату из Room; названа ловушка переиспользования номеров сессий и её лечение в `startBaking`; граница про фото — О6 | `BakedSealRehydrationTest` (новая ViewModel, запись 23:58, пояс не UTC, часы уже следующего дня), `BakeSessionLedgerTest`, `BakedSealDateTest` |
 | 4 | Живая матрица ACL: ушедший и человек другой полки отказаны; оставшийся/новый владелец допущен; прежний владелец отказан до возврата; возврат видит те же нераздвоенные строки. Только обычные пользовательские токены | Новый раздел «Runtime-гейт: провенанс и живая матрица ACL», сценарии **R6–R10**; отдельно сказано, почему R9 не повтор R6 (метка владельца на спящей полке доступа не даёт) и почему superuser-токен доказывает не то | R6–R10 на живом PB со статусами и телами; «отказано» записывается как `403` либо `200` с пустым `items`, а не словом |
-| 5 | Провенанс runtime обязателен: точный git HEAD, SHA-256 задеплоенного хука, версия PB, id миграций и снимок схемы, id фикстур, каждый статус и тело, рестарт и health, доказательство что загружен именно этот хук. Привязать R1–R5 и негативы ACL | Тот же раздел: таблица обязательных полей с командами; доказательство загрузки хука — три вещи вместе (совпадение sha с репозиторием, несовпадение с предыдущим, рестарт после копирования, плюс поведенческая проба «`families` жив после ухода последнего»); шапка провенанса привязана к каждой строке R1–R14 | форма файла `workflow/evidence/cycle28/runtime.md`; строка без провенанса гейт не проходит |
+| 5 | Провенанс runtime обязателен: точный git HEAD, SHA-256 задеплоенного хука, версия PB, id миграций и снимок схемы, id фикстур, каждый статус и тело, рестарт и health, доказательство что загружен именно этот хук. Привязать R1–R5 и негативы ACL | Тот же раздел: таблица обязательных полей с командами; доказательство загрузки хука — три вещи вместе (совпадение sha с репозиторием, несовпадение с предыдущим, рестарт после копирования, плюс поведенческая проба «повторный вход тем же кодом возвращает тот же family_id»); шапка провенанса привязана к каждой строке R1–R14 | форма файла `workflow/evidence/cycle28/runtime.md`; строка без провенанса гейт не проходит |
 | 6 | Не сказано, что `FamilyBookViewModel._state` удаляется и `state` становится псевдонимом потока репозитория; тест на две ViewModel надо переписать; нужен compose-ассерт на `Loading` с известным аккаунтом | Новый **П2б** (дословный список правок: `:24-25` удалить, `restore`/`clearInviteCode`/`signOut`/`runNetwork` переписать, `_passwordReset` остаётся) | `FamilyBookViewModelSingleStateTest`, переписанный `FamilyBookRenameVisibilityTest`, `SettingsShelfLoadingKeepsShelfUiTest` |
 | 7 | Остатки `6.7.0` в тексте и противоречие про `valueColor`: сигнатура nullable, а текст называет параметр обязательным | Версия в VERDICT исправлена на **6.6.1** (единственное вхождение `6.7.0` в файле); в **П5** сказано точно: `valueColor: Color? = null` как у `SettingsRow`, «обязателен» — про call site у «Напоминаний», и почему непустой параметр был бы хуже | `SettingsStarterSectionGoldenTest` (цвет проверяется снимком, не текстом); версия — `scripts/release_cycle.py prepare-version` |
 | 8 | Пустая папка артефактов гейта | Наблюдение принято к сведению и **не** закрывается правкой плана: выводы трёх судей приходят из внешних сессий и копируются в `workflow/evidence/cycle28/` после этой редакции (`docs/CURSOR-FIRST-WORKFLOW.md` §3 — судьи работают в отдельных сессиях с неизменяемым packet). Планировщик судейские файлы не сочиняет | — |
@@ -1441,6 +1469,17 @@ deadlock, которого не было. Смягчение — три вещи
 `maintenance/28`, версия — `6.6.1`.
 
 ---
+
+## Редакция 4 — два P1 третьего круга
+
+- Токен, store и StateFlow делят одну границу `revision`: `adoptLocked` не пишет
+  токен, если поколение сменилось. Тест пустого store после задержанного входа.
+- `BakeSessionLedger.remember` — только `commit()`; `recordId.complete` после
+  успешного commit. Тест commit≠apply и новый экземпляр ledger.
+- Проба нового хука — повторный вход тем же кодом в тот же `family_id`, не
+  `GET families/{id}` ушедшим.
+- `exitSession` чистит `_completions`/`finishing`; `clearInviteCode` в
+  `FamilyAccountStateFlowTest`.
 
 ## VERDICT
 

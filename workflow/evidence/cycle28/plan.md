@@ -365,6 +365,13 @@ synchronized(authGate) {
 Корутинный mutex по-прежнему сериализует сетевые методы; `authGate` закрывает
 окно с не-suspend писателями.
 
+**Все** мутации токена/store/состояния идут через тот же `authGate`, не только
+`adoptLocked`: `publish`, `publishFresh`, `forgetLocked`, `failLocked`,
+`rememberLocked`, `rejectedLocked`, публикация `Loading`. Иначе `signOut`
+перетирается поздним `Loading`/`Failed`/`SignedIn`. Тест: `signOut` во время
+уже опубликованного `Loading` и во время `failLocked`/`forgetLocked` →
+`SignedOut`, store и reference пусты.
+
 Если `revision` не менялся — ответ публикуется как есть. Если менялся:
 
 - вышли из аккаунта — состояние уже `SignedOut`, ответ **выбрасывается целиком**,
@@ -712,10 +719,20 @@ viewModel.restoreCompletion(sessionId) }`.
 Пока число ещё не известно, печать рисуется без подписи-даты, а не с
 сегодняшней: пустая подпись честна, вчерашняя выпечка с завтрашним числом — нет.
 
-Границу видно и её надо назвать: рехидратация возвращает **дату завершения и
-только её**. Фотокарточка живёт в `_bakePhotoPaths` в памяти, после смерти
-процесса на этом экране её нет, и слот рисуется пустым (О6). Дорисовывать кадр
-из Room — отдельная работа, и в этом цикле её нет.
+Границу видно и её надо назвать: рехидратация возвращает **дату завершения**.
+Фотокарточка живёт в `_bakePhotoPaths` в памяти, после смерти процесса на этом
+экране её нет, и слот рисуется пустым (О6). Дорисовывать кадр из Room — отдельная
+работа, и в этом цикле её нет.
+
+После смерти процесса `session(id)` тоже нет (`forgetActiveBake` уже сработал).
+«На главную» на восстановленном экране **не** молчит: `finish` берёт
+`recipeId`/`recipeName`/`portions` из `BakeRecordEntity` по `recordId`
+(`BakeRecord.kt:17-19`), а не из сессии. `shouldEnqueue` строится из записи.
+П10 остаётся: дефолт «на полке · с кадром» без кадра открывает Камеру/Галерею
+и ничего не публикует, пока кадр не выбран или пока кнопку не переключили на
+«себе». Тест: `BakingRestoreFinishFromRecordTest` — ViewModel без сессии, запись
+в Room, `finish(..., PUT_WITH_PHOTO)` с кадром ставит в очередь один
+`shareBakeStat` с полями записи; без кадра — очередь пуста, `onExit` не звался.
 
 ### П14. Отказ и оффлайн видны на экране полки
 
@@ -850,7 +867,9 @@ fun finish(sessionId: Long, decision: ShelfShareDecision, onExit: () -> Unit)
 3. иначе по порядку: `wantsPhoto(decision)` и кадр есть →
  `bakeHistoryRepository.attachPhoto(recordId, path)` **с ожиданием**
  (`BakeHistoryRepository.kt:30-34`); затем `shouldEnqueue(decision)` → ровно один
- `sync.shareBakeStat(...)`. Повторный attach того же пути безвреден: прежний
+ `sync.shareBakeStat(...)` с `recipeId`/`recipeName`/`portions` из
+ `BakeRecordEntity` по этому `recordId`, **не** из `session(id)` (после смерти
+ процесса сессии нет). Повторный attach того же пути безвреден: прежний
  файл удаляется только если он **другой** (`:33`);
 4. `exitSession(sessionId)`;
 5. `onExit()`.
@@ -1126,9 +1145,9 @@ findings № 3, № 4, № 5, № 9, № 10.
 - `viewmodel/BakingViewModel.kt` — П16: `BakeCompletion`, `_completions`,
  `reserveCompletion` (атомарный резерв до первого приостанова), `finishing`,
  `finish(...)`, `restoreCompletion(...)`; `bakeRecordIds` (`:119`) удаляется;
- `exitSession` больше не трогает `bakeRecordIds`/`sharedPhotoSessionIds` как
- карту готовности: чистит `_completions` и `finishing` для этой сессии, затем
- забывает активную выпечку как сейчас; автоотправка из `advanceStep`
+ `exitSession` чистит только `_completions` этой сессии и забывает активную
+ выпечку как сейчас; `finishing` **не** снимает — флаг живёт до `startBaking`
+ того же id, иначе второй `finish` в момент выхода дублирует `onExit`; автоотправка из `advanceStep`
  (`:259-269`) убрана вместе с чтением prefs; `shareBakeStats` становится
  приватным; П13: явный `completedAtMillis` в `bakeHistoryRepository.record` и
  `ledger.forget(id)` + `finishing -= id` в `startBaking`.
@@ -1495,8 +1514,8 @@ deadlock, которого не было. Смягчение — три вещи
   успешного commit. Тест commit≠apply и новый экземпляр ledger.
 - Проба нового хука — повторный вход тем же кодом в тот же `family_id`, не
   `GET families/{id}` ушедшим.
-- `exitSession` чистит `_completions`/`finishing`; `clearInviteCode` в
-  `FamilyAccountStateFlowTest`.
+- `exitSession` чистит только `_completions`; `finishing` снимается в
+  `startBaking`. `clearInviteCode` в `FamilyAccountStateFlowTest`.
 
 ## VERDICT
 

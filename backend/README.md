@@ -25,6 +25,7 @@ backend/
 | `1784937720_users_family_relation.js` | `users.family` + правила: читать чужие записи можно только внутри своей семьи |
 | `1784937780_family_rules_for_stats.js` | bake_stats / feeding_stats: семья, client_event_id |
 | `1787164800_bake_stats_shelf.js` | bake_stats: user, display_name, family_name, photo |
+| `1787251200_family_members_ledger.js` | закрытый журнал `family_members`: durable факт членства (`active/left`) + backfill текущих участников |
 
 ## Маршруты (`pb_hooks`)
 
@@ -46,6 +47,15 @@ backend/
 код `join` отвечает одинаковой ошибкой независимо от того, существует книга
 или нет.
 
+Особенности Cycle 28:
+
+- `leave` не удаляет `families`: пустая полка засыпает, код приглашения и
+  `bake_stats` остаются.
+- `leave` пишет в закрытый журнал `family_members` статус `left`; доступ при
+  этом забирает `users.family`, и только он.
+- `join` в спящую полку доступен только бывшему участнику (по строке журнала),
+  делает его владельцем и гасит старый код приглашения.
+
 ## Код приглашения
 
 16 знаков алфавита Crockford base32 без `I/L/O/U` — ровно 80 бит, генерирует
@@ -63,11 +73,19 @@ MADRE_INVITE_PEPPER=<32+ случайных байт, base64>
 
 ## Развёртывание
 
-```sh
-rsync -a backend/pb_migrations/ <сервер>:<каталог PocketBase>/pb_migrations/
-rsync -a backend/pb_hooks/      <сервер>:<каталог PocketBase>/pb_hooks/
-systemctl restart pocketbase
-```
+1. Сначала миграции:
+
+   ```sh
+   rsync -a backend/pb_migrations/ <сервер>:<каталог PocketBase>/pb_migrations/
+   systemctl restart pocketbase
+   ```
+
+2. Потом хуки:
+
+   ```sh
+   rsync -a backend/pb_hooks/ <сервер>:<каталог PocketBase>/pb_hooks/
+   systemctl restart pocketbase
+   ```
 
 PocketBase применяет новые миграции на старте и подхватывает хуки без
 отдельной команды. TLS завершается на реверс-прокси перед PocketBase;

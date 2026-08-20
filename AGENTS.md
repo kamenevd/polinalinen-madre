@@ -22,6 +22,16 @@
 
 Лексикон UI/копирайта: **полка = семья**, **книга = один человек**. Запрещено: «семейная книга», «общая книга».
 
+## Утверждённый Cursor-first процесс
+
+SSOT: `docs/CURSOR-FIRST-WORKFLOW.md`.
+
+- План: Cursor `claude-opus-5-thinking-high`; фолбэк Claude Code Opus 5.
+- План проверяют **все трое**: GLM-5.3 + DeepSeek V4 Pro + GPT-5.6 Sol.
+- Код: Cursor `gpt-5.3-codex-xhigh`; фолбэк Codex Spark.
+- Код проверяют Grok 4.6 + Cursor Gemini 3.1 Pro.
+- `auto` не может быть автором. Автор не судит себя. Гес и судьи Kotlin не правят.
+
 ## Gradle
 
 Только если явно попросили. Не гонять длинную сборку параллельно с другими агентами. `versionName` только `X.Y.Z` через `scripts/release_cycle.py prepare-version`.

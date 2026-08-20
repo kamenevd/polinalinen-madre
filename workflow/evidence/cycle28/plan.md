@@ -1,14 +1,16 @@
 # Cycle 28 plan — правда полки, тап-крутилки, Испечено
 
-Base: `origin/main` `98ad5dd1`. Branch: `maintenance/28`. VersionName **не** трогать, пока не `prepare-version` → `6.6.1.
+Base: `origin/main` `98ad5dd1`. Branch: `maintenance/28`. VersionName **не** трогать,
+пока не `prepare-version` → `6.6.1`.
 
 RuStore: 6.6.0(35) и 6.5.0(34) pending **не редактировать**.
 
 Автор плана: Cursor `claude-opus-5-thinking-high` (роль 2 по `docs/CURSOR-FIRST-WORKFLOW.md`).
 Kotlin по этому плану пишет Cursor `gpt-5.3-codex-xhigh`. Планировщик код не пишет.
 
-Редакция 2 (ремедиация после гейта плана). Что изменилось против редакции 1 —
-раздел «Гейт плана: три REVISE и как они закрыты» в конце файла.
+Редакция 3 (ремедиация после второго круга гейта плана). Что изменилось против
+редакции 2 — раздел «Гейт плана, круг 2: восемь замечаний и как они закрыты».
+Что изменилось против редакции 1 — раздел «Гейт плана, круг 1» перед ним.
 
 ---
 
@@ -251,15 +253,65 @@ Kotlin по этому плану пишет Cursor `gpt-5.3-codex-xhigh`. Пл�
 MutableStateFlow<FamilyBookState>` со стартовым `SignedOut`; наружу
 `val state: StateFlow<FamilyBookState> = _state.asStateFlow()`.
 `currentAccount()` становится `_state.value.account`. Токен остаётся отдельным
-`private var token: String?` — он не часть `FamilyBookState` намеренно: в UI
-токену делать нечего, и попасть туда он не должен даже случайно.
+полем (`AtomicReference`, см. ниже) — он не часть `FamilyBookState` намеренно: в
+UI токену делать нечего, и попасть туда он не должен даже случайно.
 
-**Сериализация.** `private val mutex = Mutex()` (`kotlinx.coroutines.sync`).
-Тело **каждого** suspend-метода целиком в `mutex.withLock { … }`. Внутри лока
-метод читает аккаунт и токен **из полей**, а не из значения, захваченного до
-вызова: сегодняшний `val current = account ?: return …` перед сетевым запросом —
-это и есть незакрытое read-modify-write, из-за которого `ShelfViewModel.refresh`
-(Ф4) может перетереть только что переименованную полку.
+**Сериализация. `Mutex` не реентрантный, и план построен вокруг этого.**
+Переписано в редакции 3: «тело каждого suspend-метода целиком в `withLock`» —
+рецепт вечной блокировки, потому что `register` (`FamilyAccountRepository.kt:90`)
+своей последней строкой зовёт публичный `signIn`, а
+`kotlinx.coroutines.sync.Mutex` владельца не запоминает и повторный `withLock` из
+той же корутины ждёт сам себя навсегда.
+
+`private val mutex = Mutex()`. Правило владения локом одно, произносится один
+раз и держится тестом:
+
+1. **Лок берут только публичные точки входа**, ровно по одному
+ `mutex.withLock { …Locked(…) }` на вызов.
+2. **Вся работа живёт в приватных `suspend fun …Locked(…)`.** Лока они не
+ берут никогда. Первая строка KDoc у каждого — «вызывается только под
+ `mutex`»; это не украшение, а единственное место, где владение написано
+ словами.
+3. **Публичная точка входа не зовёт другую публичную точку входа.** Ни одну, ни
+ из тела, ни из помощника.
+
+Внутри лока метод читает аккаунт и токен **из полей**, а не из значения,
+захваченного до вызова: сегодняшний `val current = account ?: return …` перед
+сетевым запросом — это и есть незакрытое read-modify-write, из-за которого
+`ShelfViewModel.refresh` (Ф4) может перетереть только что переименованную полку.
+
+Что во что превращается — полностью, без «и так далее»:
+
+| Публичная точка входа | Тело под локом | Что важно |
+|---|---|---|
+| `restore()` | `restoreLocked()` → `adoptLocked` / `failLocked` / `forgetLocked` | |
+| `refresh()` | `refreshLocked()` | токен и аккаунт читаются внутри лока |
+| `signIn(email, password)` | `signInLocked()` → `adoptLocked` | |
+| `register(...)` | `registerLocked()` → **`signInLocked()`** | сегодня зовёт публичный `signIn` (`:90`) — именно здесь и был бы deadlock |
+| `createFamily(name)` | `createFamilyLocked()` → `rememberLocked` | |
+| `joinFamily(code)` | `joinFamilyLocked()` → `rememberLocked` / `rejectedLocked` | |
+| `rotateInviteCode()` | `rotateInviteCodeLocked()` → `rememberLocked` | |
+| `renameFamily(name)` | `renameFamilyLocked()` | |
+| `leaveFamily()` | `leaveFamilyLocked()` | |
+| `requestPasswordReset(email)` | `requestPasswordResetLocked()` | состояние не публикует, но живёт в той же очереди |
+| `listFamilyUsers()` | `listFamilyUsersLocked()` | только чтение токена |
+
+Приватные помощники, которые пишут состояние сегодня — `adopt` (`:189`),
+`remember` (`:210`), `forget` (`:228`), `fail` (`:234`), `rejected` (`:246`), —
+переименовываются в `adoptLocked`, `rememberLocked`, `forgetLocked`,
+`failLocked`, `rejectedLocked` и попадают под правило 2. Все их сегодняшние
+вызовы уже происходят из тел методов, то есть окажутся под локом; переименование
+нужно, чтобы владение было **видно глазами** на месте вызова, а не выводилось по
+цепочке из трёх файлов. `rememberLocked` внутри себя делает ещё один сетевой
+запрос (`api.family`, `:215`) — он тоже под тем же локом, и это осознанно: полка
+переименовывается реже, чем ждёт сеть, а второй писатель дороже второй секунды.
+
+**Токен — `AtomicReference<String?>`, а не `var`.** `signOut()` и
+`clearInviteCode()` не suspend и лока взять не могут (правило 1 к ним не
+применимо — применить его значило бы сделать их suspend и переписать все вызовы
+из UI). Значит поле, которое `signOut` чистит, обязано быть атомарным само:
+`private val token = AtomicReference<String?>(null)`. `_state` атомарен уже
+потому, что `MutableStateFlow`.
 
 **Loading публикует репозиторий.** Первое, что делает сетевой метод под локом, —
 `publish(FamilyBookState.Loading(_state.value.account))`. Из
@@ -305,10 +357,46 @@ NavHost, то есть флаг снова глобален. Даже если �
 ### П2. `Loading` носит аккаунт
 
 `data class Loading(override val account: FamilyAccount? = null)`. Проверки
-`is FamilyBookState.Loading` (`SettingsScreen.kt:539`, `FamilyBookViewModel.kt:39`)
-продолжают работать; сравнение по значению в
+`is FamilyBookState.Loading` продолжают работать: `SettingsScreen.kt:539` — как
+есть, `FamilyBookViewModel.kt:39` — по `repository.state.value` (П2б). Сравнение
+по значению в
 `app/src/test/java/com/polinalinen/madre/account/FamilyBookStateTest.kt:73,95`
 правится на `Loading()`.
+
+### П2б. `FamilyBookViewModel._state` удаляется, `state` — псевдоним потока репозитория
+
+Добавлено в редакции 3. В редакции 2 было сказано «`state` = поток репозитория»,
+но поле `_state` (`FamilyBookViewModel.kt:24`) в списке удаляемого не стояло — а
+пока оно объявлено, второй держатель состояния существует, и П1 закрыт только на
+словах.
+
+Дословно, что делает автор кода:
+
+- строки `FamilyBookViewModel.kt:24-25` (`private val _state = MutableStateFlow…`
+ и `val state = _state.asStateFlow()`) **удаляются**; на их место —
+ `val state: StateFlow<FamilyBookState> = repository.state`. Никакого
+ `stateIn`, никакого `map`: любое преобразование завело бы второй экземпляр
+ потока и вернуло бы ровно ту болезнь, от которой лечимся.
+- `restore()` (`:38-41`) проверяет `repository.state.value`, не своё поле.
+- `clearInviteCode()` (`:44-59`) схлопывается до `repository.clearInviteCode()` —
+ весь `when` по состоянию уходит: гасит код теперь репозиторий, и он же
+ публикует результат.
+- `signOut()` (`:98-100`) перестаёт присваивать: `repository.signOut()`
+ публикует сам, возвращаемое значение игнорируется (подпись репозитория не
+ меняется — П1).
+- `runNetwork` (`:102-114`) больше не пишет **ничего**: ни `Loading`, ни
+ результат. Остаётся `inFlight` + `viewModelScope.launch { action() }`.
+ Результат метода репозитория не присваивается никуда, и это надо сказать
+ вслух, иначе автор кода добавит присваивание «чтобы не терять ответ».
+- `_passwordReset` остаётся своим полем ViewModel: это не состояние аккаунта, а
+ состояние формы, и в репозитории ему делать нечего.
+
+Проверяемое следствие: в `FamilyBookViewModel` после коммита 2 остаётся ровно
+один `MutableStateFlow` — `_passwordReset`. Это и есть форма ассерта в
+`FamilyBookViewModelSingleStateTest`: рефлексией по объявленным полям класса
+собрать все `MutableStateFlow` и убедиться, что их один и зовут его
+`_passwordReset`. Такой тест не про «красиво», а про то, что второй держатель не
+вернётся следующим циклом незамеченным.
 
 ### П3. Один `FamilyBookViewModel`, аккаунт раздаётся сверху
 
@@ -365,8 +453,22 @@ fun TapCycleRow(
 Подпись слева, текущее значение справа; `Role.Button`,
 `onClickLabel = "$label: $value"` (тот же формат, что у `SettingsRow`, чтобы не
 ломать `SettingsIaUiTest:100-111`), мишень ≥48dp, тап — следующее по кругу.
-`valueColor` обязателен по сигнатуре и обязателен по смыслу: без него
-«Напоминания» теряют разницу между `sage` и `cocoa` (Ф5).
+
+**Про `valueColor` — точно, потому что в редакции 2 сигнатура и текст говорили
+разное.** Параметр `valueColor: Color? = null` — **nullable со значением по
+умолчанию**, буква в букву как у `SettingsRow` (`SettingsScreen.kt:813`), и
+внутри так же: `color = valueColor ?: colors.cocoa` (`:837`). «Обязателен» он не
+по сигнатуре, а **на стороне вызова**: у «Напоминаний» его обязано быть видно,
+иначе `вкл`/`выкл` теряют разницу между `sage` и `cocoa` (Ф5). Требование к
+сигнатуре — чтобы параметр вообще существовал; требование к call site — чтобы
+`RemindersRow` его передавал. Второе держит не компилятор, а
+`SettingsStarterSectionGoldenTest`: цвет — не текст, и текстовым ассертом его не
+проверить.
+
+Делать параметр непустым (`valueColor: Color` без default) специально **не**
+надо: тогда каждая из девяти крутилок обязана назвать цвет, а восьми из них
+цвет назначать нечем — они получили бы «цвет по умолчанию», переписанный руками
+в восьми местах, то есть хардкод токена вместо одного `?:` в компоненте.
 
 Пятая форма языка кнопок вписывается в hard rule №9 в `CLAUDE.md` в том же
 коммите.
@@ -501,25 +603,81 @@ object PhotoRoad { fun next(state, event): PhotoRoadState }
 Комментарий на `:82-84` («означает ровно то же, что кнопка На главную») в том же
 коммите переписывается: он станет неправдой.
 
-### П13. Дата на сургуче — из записи, не от часов отрисовки
+### П13. Дата на сургуче — из записи, и переживает пересоздание
 
-`BakingViewModel` заводит `val completedAt: StateFlow<Map<Long, Long>>`
-(sessionId → millis). Значение кладётся в `advanceStep` в тот же момент, что и
-`bakeRecordIds[id]` (`BakingViewModel.kt:259-262`), и тем же числом, которым
-запись легла в базу: `bakeHistoryRepository.record(...)` получает
-`completedAtMillis` явным аргументом (`BakeRecordEntity.completedAtMillis`,
-`data/db/entities/BakeRecord.kt:20`, default остаётся для остальных вызовов —
-схема Room **не меняется**, версия 10, миграций нет).
+Переписано в редакции 3: в редакции 2 дата жила в `StateFlow<Map<Long, Long>>`
+внутри ViewModel, то есть умирала вместе с ней. Новая ViewModel (поворот экрана
+с пересозданием, возврат в процесс после смерти, `NavHost` собран заново) снова
+не знала числа и снова рисовала бы «сегодня» — та же ложь, только реже.
 
-Экран берёт `romanDate(completedAt[sessionId])`, а не
-`System.currentTimeMillis()`; тем же числом кормится `AgedPhoto(takenAtMillis =
-…)` (`BakingCompleteScreen.kt:201`). Часовой пояс — местный, как и сейчас
+**Одно число, зафиксированное один раз.** `completedAtMillis` определяется
+**синхронно** в момент резервирования завершения (П16, шаг «FINALIZING»), из
+`BakingClock.wallClock()`, и дальше не пересчитывается никогда. Этим же числом
+кормится `bakeHistoryRepository.record(...)` — явным аргументом
+(`BakeRecordEntity.completedAtMillis`, `data/db/entities/BakeRecord.kt:20`;
+default остаётся для остальных вызовов, схема Room **не меняется**, версия 10,
+миграций нет). Room после этого — единственный долгоживущий держатель даты.
+
+**Стабильная связь sessionId → recordId.** Экран готовности знает только
+`sessionId` (маршрут `baking/{sessionId}/complete`), а дата лежит в строке с
+`recordId`. Карта `bakeRecordIds` (`BakingViewModel.kt:119`) живёт в памяти, и
+именно её потеря делает дату невосстановимой. Поэтому пара пишется в
+`madre_prefs` — новый `utils/BakeSessionLedger.kt`, тонкая обёртка над
+`SharedPreferences`:
+
+```
+fun key(sessionId: Long): String = "bake_record_session_$sessionId"
+fun remember(sessionId: Long, recordId: Long)
+fun recordIdFor(sessionId: Long): Long?
+fun forget(sessionId: Long)
+```
+
+Почему prefs, а не Room: новая таблица — это миграция, а миграций в этом цикле
+нет (граница цикла, «Не делать»). Писать указатель в `family_settings` тоже
+нельзя: это таблица экслибриса семьи, и складывать туда служебные указатели
+сессий значит завести вторую правду в чужом ящике. `madre_prefs` уже держит
+ровно такие штуки — счётчики кофейных кругов по id рецепта
+(`CoffeeRing.prefsKey`, `BakingViewModel.kt:466-467`).
+
+Порядок записи строгий: `insert` вернул `recordId` → `ledger.remember(sessionId,
+recordId)` → и только потом состояние завершения объявляется готовым (П16).
+Обратный порядок дал бы `finish`, который поехал раньше, чем указатель стал
+долговечным.
+
+**Ловушка переиспользования id, которую нельзя не назвать.** `nextSessionId`
+сеется из `active_bakes` (`BakingViewModel.kt:177`), а завершённая выпечка из
+`active_bakes` удаляется (`forgetActiveBake`, `:247`). Значит после смерти
+процесса номера сессий **выдаются заново с 1** — и новая выпечка №1 нашла бы в
+журнале указатель на чужую вчерашнюю запись и поставила бы на сургуч вчерашнее
+число. Правило: `startBaking` первым делом зовёт `ledger.forget(id)` для того
+id, который выдаёт. Одна строка, и без неё вся фича неверна ровно на второй
+день.
+
+**Рехидратация.** `BakingViewModel` получает
+`fun restoreCompletion(sessionId: Long)`: если в памяти по этой сессии
+завершения нет, взять `ledger.recordIdFor(sessionId)`, прочитать
+`bakeHistoryRepository.getCompletedAt(recordId)`
+(`BakeHistoryRepository.kt:36-38`, уже существует) и положить в `_completions`
+завершение с **уже готовым** `recordId` (`BakeCompletion(completedAtMillis).also
+{ it.recordId.complete(recordId) }`, П16) — то есть в том же виде, в каком его
+оставил бы живой `advanceStep`. Нет указателя или нет строки — в `_completions`
+не появляется ничего, и печать рисуется **без подписи-даты**. Зовёт его
+`BakingCompleteScreen` один раз: `LaunchedEffect(sessionId) {
+viewModel.restoreCompletion(sessionId) }`.
+
+Экран берёт число из состояния завершения, а не из `System.currentTimeMillis()`
+(`BakingCompleteScreen.kt:149`); тем же числом кормится `AgedPhoto(takenAtMillis
+= …)` (`:201`). Часовой пояс — местный, как и сейчас
 (`java.util.Calendar.getInstance()`, `:374`): римская дата книги — это дата на
 кухне, а не UTC.
 
-Пока число ещё не известно (запись создаётся асинхронно), печать рисуется без
-подписи-даты, а не с сегодняшней: пустая подпись честна, вчерашняя выпечка с
-завтрашним числом — нет.
+Пока число ещё не известно, печать рисуется без подписи-даты, а не с
+сегодняшней: пустая подпись честна, вчерашняя выпечка с завтрашним числом — нет.
+
+Границу видно и её надо назвать: рехидратация возвращает **дату завершения и
+только её**. Фотокарточка живёт в `_bakePhotoPaths` в памяти, после смерти
+процесса на этом экране её нет, и слот рисуется пустым (О6). Дорисовывать кадр
+из Room — отдельная работа, и в этом цикле её нет.
 
 ### П14. Отказ и оффлайн видны на экране полки
 
@@ -563,28 +721,102 @@ object PhotoRoad { fun next(state, event): PhotoRoadState }
 Ни одной подписи, обещающей «спросить», после коммита 4 в книге не остаётся —
 константы удалены, рисовать их нечем.
 
-### П16. Порядок отправки и «ровно один раз» — в одном методе
+### П16. Завершение — ровно одно, и его готовность наблюдаема
 
-`BakingViewModel` получает единственную дверь наружу с экрана готовности:
+Переписано в редакции 3. Редакция 2 говорила «линейный порядок внутри одного
+`launch`» — этого мало по двум причинам, и обе не гипотетические:
+
+- запись формуляра создаётся в **другой** корутине (`advanceStep`,
+ `BakingViewModel.kt:259-269`), и `finish`, нажатый раньше, чем вернулся
+ `insert`, брал бы `bakeRecordIds[id] == null` и молча не отправлял ничего;
+- сам `advanceStep` между проверкой `s?.isCompleted == true` и первым
+ приостановом ничего не резервирует — второй `advanceStep` (двойной тап,
+ пересоздание, шаг из уведомления) заводит **вторую строку** в `bake_records`.
+
+**Одно состояние завершения на сессию, и оно владеет всем.**
 
 ```
-fun finish(
-    sessionId: Long,
-    decision: ShelfShareDecision,
-    onExit: () -> Unit,
+private class BakeCompletion(
+    val completedAtMillis: Long,                                   // П13, зафиксировано при резерве
+    val recordId: CompletableDeferred<Long?> = CompletableDeferred(),  // null = запись не легла
 )
+
+private val _completions = MutableStateFlow<Map<Long, BakeCompletion>>(emptyMap())
+val completedAt: StateFlow<Map<Long, Long>>   // производная для экрана: sessionId → millis
 ```
 
-Внутри — один `viewModelScope.launch`, и порядок в нём линейный:
+Дата (для сургуча) и готовность записи (для отправки) — **одна вещь**, а не два
+поля, которые могут разойтись. Единственный держатель — `_completions`;
+`bakeRecordIds` (`:119`) удаляется, его читателей забирает `recordId.await()`.
 
-1. если `wantsPhoto(decision)` и кадр есть — `bakeHistoryRepository.attachPhoto`
- **с ожиданием** (существующий suspend, `BakeHistoryRepository.kt:30-34`);
-2. если `shouldEnqueue(decision)` и сессия ещё не отправлялась — ровно один
- `sync.shareBakeStat(...)`;
-3. `exitSession(sessionId)`;
-4. `onExit()`.
+**Резерв — атомарный и до первого приостанова.** В `advanceStep`, синхронно,
+**до** `viewModelScope.launch`:
 
-Автоотправка из `advanceStep` (`BakingViewModel.kt:259-269`) удаляется. Публичный
+```
+private fun reserveCompletion(sessionId: Long, completedAtMillis: Long): BakeCompletion? {
+    val fresh = BakeCompletion(completedAtMillis)
+    while (true) {
+        val current = _completions.value
+        if (sessionId in current) return null                  // уже кто-то зарезервировал
+        if (_completions.compareAndSet(current, current + (sessionId to fresh))) return fresh
+    }
+}
+```
+
+`MutableStateFlow.compareAndSet` — то, ради чего этот цикл написан: между
+проверкой и записью нет ни приостанова, ни окна. `null` в ответе значит «эту
+выпечку уже завершают», и второй `advanceStep` не делает **ничего**: ни insert,
+ни отправки. Число `completedAtMillis` берётся здесь же, из
+`BakingClock.wallClock()`, один раз на всю жизнь выпечки (П13).
+
+«FINALIZING» из замечания — это ровно **наличие ключа** в `_completions` с ещё
+не завершённым `recordId`. Отдельного значения перечисления для него нет
+намеренно: enum рядом с `Deferred` был бы вторым носителем той же правды, и
+разойтись они смогли бы уже на первом же исключении.
+
+Двое читателей `recordId`, которые сегодня живут на `bakeRecordIds`, переезжают
+туда же и по-разному, потому что у них разные требования:
+`attachBakePhoto` (`:395-402`) ждёт `recordId.await()` внутри своей корутины —
+наблюдаемый порядок ей не нужен, его обеспечивает `finish`; `clearBakePhoto`
+(`:409-416`) не suspend и **не ждёт**: он действует только если готовность уже
+наступила, а если нет — снимать с полки нечего, потому что туда ничего и не
+уходило.
+
+Дальше в `launch`: `record(...)` с явной датой → `ledger.remember(sessionId,
+recordId)` → `completion.recordId.complete(recordId)`. Insert упал —
+`complete(null)`, и это не «ничего не произошло»: ждущий `finish` получает
+ответ, а не висит.
+
+**`finish` — единственная дверь наружу, и она ждёт готовности.**
+
+```
+fun finish(sessionId: Long, decision: ShelfShareDecision, onExit: () -> Unit)
+```
+
+Первая строка синхронная и до `launch`:
+`if (!finishing.add(sessionId)) return` (`finishing` —
+`ConcurrentHashMap.newKeySet<Long>()`). Второй, третий и одновременный `finish`
+уходят ни с чем: не дублируется ни attach, ни enqueue, ни `exitSession`, ни
+`onExit`. Владелец выхода — первый вызов.
+
+Внутри одного `launch`, линейно:
+
+1. `val recordId = withTimeoutOrNull(RECORD_WAIT_MS) {
+ _completions.value[sessionId]?.recordId?.await() }` — ожидание **персистентной
+ готовности**, а не оптимистичное чтение карты. `RECORD_WAIT_MS = 5_000`:
+ верхняя граница есть, потому что «На главную» не может не сработать никогда;
+2. `recordId == null` (запись не легла или не дождались) → **ни attach, ни
+ enqueue**; идём на шаг 4. Ложного «на полке» при этом никто и не показывал
+ (П11), так что врать не пришлось;
+3. иначе по порядку: `wantsPhoto(decision)` и кадр есть →
+ `bakeHistoryRepository.attachPhoto(recordId, path)` **с ожиданием**
+ (`BakeHistoryRepository.kt:30-34`); затем `shouldEnqueue(decision)` → ровно один
+ `sync.shareBakeStat(...)`. Повторный attach того же пути безвреден: прежний
+ файл удаляется только если он **другой** (`:33`);
+4. `exitSession(sessionId)`;
+5. `onExit()`.
+
+Автоотправка из `advanceStep` (`:259-269`) удаляется. Публичный
 `shareBakeStats(id, withPhoto)` (`:363-382`) перестаёт быть публичным: единственный
 вызывающий — `finish`.
 
@@ -592,9 +824,21 @@ fun finish(
 
 | Слой | Где | Что закрывает |
 |---|---|---|
-| `sharedSessionIds` в ViewModel | `BakingViewModel` (поле уже есть, `:120`) | два быстрых «На главную», пересоздание экрана |
+| `finishing` + `reserveCompletion` в ViewModel | `BakingViewModel`, **новые** поля | два быстрых «На главную», два `advanceStep`, пересоздание экрана при живой ViewModel |
 | уникальное имя `sync-bake-chain-$recordId` + `KEEP` | `SyncRepository.kt:59-70` | повтор, пока работа ещё в очереди этого телефона |
-| `client_event_id = "$deviceId-$recordId"` | `SyncEventId.kt:39` | доставленный POST с потерянным ответом, доотправка после переустановки |
+| `client_event_id = "$deviceId-$recordId"` | `SyncEventId.kt:39` | доставленный POST с потерянным ответом; повтор после смерти процесса и новой ViewModel |
+
+Второй и третий слои держатся на том, что `recordId` **стабилен** — он и есть
+тот самый указатель из журнала П13. Поэтому «пережил процесс» закрывается не
+надеждой, а тем же числом.
+
+Поле `sharedSessionIds` из редакции 2 не существует и заводить его не надо:
+в коде есть `sharedPhotoSessionIds` (`:120`), и оно про снятие кадра с полки
+(`clearBakePhoto`, `:409-416`), а не про «уже отправляли». Это была ошибка
+редакции 2, а не переименование. `finishing` живёт до `startBaking` того же id
+(`finishing -= id` рядом с `ledger.forget(id)`, П13), а **не** до
+`exitSession`: снимать флаг в `exitSession` значит открывать окно для второго
+`finish` ровно в момент выхода.
 
 **Порядок «факт → кадр»** уже выражен цепочкой
 `beginUniqueWork(chain, KEEP, bake).then(photo)` (`SyncRepository.kt:63-67`) и
@@ -685,8 +929,12 @@ Runtime-гейт (живой PocketBase, обязателен — статиче
 | R4 | возврат по коду | второй полки не появилось; `bake_stats` не задвоились; счётчик выпечек тот же |
 | R5 | спящую полку оживил другой человек | он владелец; переименование и ротация кода ему доступны |
 
-Готово, когда: python-контракты зелёные; R1–R5 отработаны на живом PB и записаны
-в `workflow/evidence/cycle28/runtime.md`.
+К ним обязательна живая матрица ACL (R6–R10) и провенанс прогона — раздел
+«Runtime-гейт: провенанс и живая матрица ACL» ниже. Без него строки R1–R5 —
+пересказ, а не доказательство.
+
+Готово, когда: python-контракты зелёные; R1–R10 отработаны на живом PB и
+записаны в `workflow/evidence/cycle28/runtime.md` вместе с провенансом.
 
 ### Коммит 2 — `feat: shelf-settings-truth`
 
@@ -698,14 +946,18 @@ Runtime-гейт (живой PocketBase, обязателен — статиче
 
 - `account/FamilyBookState.kt` — П2 + `withoutInviteCode()`.
 - `account/FamilyAccountRepository.kt` — П1: `_state`/`state`, удаление поля
- `account`, `Mutex`, `revision`, `publish`/`publishFresh`, `Loading` из
- репозитория. Публикуют все: `restore`, `refresh`, `signIn`, `register`,
- `createFamily`, `joinFamily`, `rotateInviteCode`, `renameFamily`, `leaveFamily`,
- `signOut`, `clearInviteCode`.
-- `viewmodel/FamilyBookViewModel.kt` — `state` = поток репозитория;
- `runNetwork` больше не пишет `Loading`; `clearInviteCode` больше не правит
- состояние сам (`:44-59` схлопывается до вызова репозитория); `inFlight` и
- `passwordReset` остаются; появляется `refreshFamily()`.
+ `account`, `token` как `AtomicReference`, `Mutex` с разделением
+ «публичная точка входа / `*Locked`-помощник», `revision`,
+ `publish`/`publishFresh`, `Loading` из репозитория. Публикуют все: `restore`,
+ `refresh`, `signIn`, `register`, `createFamily`, `joinFamily`,
+ `rotateInviteCode`, `renameFamily`, `leaveFamily`, `signOut`,
+ `clearInviteCode`. `register` зовёт `signInLocked`, а не `signIn`.
+- `viewmodel/FamilyBookViewModel.kt` — П2б: поле `_state` (`:24-25`)
+ **удаляется**, `state` становится псевдонимом `repository.state`; `restore`
+ читает `repository.state.value`; `clearInviteCode` (`:44-59`) схлопывается до
+ одного вызова репозитория; `signOut` (`:98-100`) ничего не присваивает;
+ `runNetwork` не пишет ни `Loading`, ни результат; `inFlight` и
+ `_passwordReset` остаются; появляется `refreshFamily()`.
 - `viewmodel/ShelfViewModel.kt` — П3: новая подпись `refresh`, без вызовов
  `restore()`/`refresh()` репозитория (`:50-51`).
 - `navigation/MadreNavHost.kt` — П3: объявление рядом с `:72`, сбор состояния,
@@ -735,12 +987,15 @@ Runtime-гейт (живой PocketBase, обязателен — статиче
 | `FamilyAccountStateFlowTest` | `app/src/test/java/com/polinalinen/madre/account/FamilyAccountStateFlowTest.kt` | поток отдаёт то же, что возвращает метод: `signIn`, `createFamily`, `renameFamily`, `leaveFamily`, `signOut`; `Loading` публикует репозиторий и он несёт аккаунт |
 | `FamilyAccountSerializationTest` | `app/src/test/java/com/polinalinen/madre/account/FamilyAccountSerializationTest.kt` | два одновременных вызова не перетирают друг друга (rename + refresh на медленном фейке api → в потоке новое имя, не старое) |
 | `FamilyAccountStaleResponseTest` | `app/src/test/java/com/polinalinen/madre/account/FamilyAccountStaleResponseTest.kt` | `signOut` во время висящего запроса → ответ выброшен, состояние `SignedOut`; `clearInviteCode` во время висящего `rotate` → состояние без кода |
-| `FamilyBookRenameVisibilityTest` | `app/src/test/java/com/polinalinen/madre/viewmodel/FamilyBookRenameVisibilityTest.kt` | две ViewModel на одном репозитории: rename в одной → у второй новое `familyName`, и второго `restore()`/`auth` в `api.calls` нет (USER DECISION 2) |
+| `FamilyAccountLockTest` | `app/src/test/java/com/polinalinen/madre/account/FamilyAccountLockTest.kt` | **`register` не самоблокируется**: `withTimeout(2_000) { repository.register(…) }` возвращает `SignedIn`, и в `api.calls` есть и `register`, и `authWithPassword`. Плюс тот же `withTimeout` вокруг **каждой** из одиннадцати операций (`restore`, `refresh`, `signIn`, `register`, `createFamily`, `joinFamily`, `rotateInviteCode`, `renameFamily`, `leaveFamily`, `requestPasswordReset`, `listFamilyUsers`) и ассерт на переход состояния у каждой: не «оно не висит», а «оно не висит и делает своё» |
+| `FamilyBookViewModelSingleStateTest` | `app/src/test/java/com/polinalinen/madre/viewmodel/FamilyBookViewModelSingleStateTest.kt` | рефлексией по объявленным полям `FamilyBookViewModel`: `MutableStateFlow` ровно один и это `_passwordReset` (П2б); `viewModel.state` — тот же экземпляр, что `repository.state` |
+| `FamilyBookRenameVisibilityTest` | `app/src/test/java/com/polinalinen/madre/viewmodel/FamilyBookRenameVisibilityTest.kt` | **переписан под П2б**: две ViewModel на одном репозитории, rename зовётся у первой; у второй `state.value` — новое `familyName` без единого её собственного вызова (ни `restore()`, ни `refreshFamily()`), и в `api.calls` нет второго `authRefresh`/`authWithPassword`. Ассерт стоит на **значении у второй ViewModel**, а не на «оба потока это один объект»: совпадение экземпляров — деталь реализации, видимое имя полки — требование USER DECISION 2 |
 | `FamilyBookLoadingKeepsAccountTest` | `app/src/test/java/com/polinalinen/madre/viewmodel/FamilyBookLoadingKeepsAccountTest.kt` | в `Loading` `state.account` не null на rename/rotate/leave; после успешного rotate новый код лежит в состоянии (USER DECISION 3) |
 | `LeaveKeepsBookTest` | `app/src/test/java/com/polinalinen/madre/account/LeaveKeepsBookTest.kt` | `leaveFamily` → `SignedIn` без семьи, токен цел, в `api.calls` нет выхода из аккаунта |
 | `ShelfViewModelDoesNotWriteAccountTest` | `app/src/test/java/com/polinalinen/madre/viewmodel/ShelfViewModelDoesNotWriteAccountTest.kt` | `refresh` не зовёт `restore()`/`refresh()` репозитория; список участников по-прежнему не схлопывается на сбое сети |
 | `SettingsShelfTruthUiTest` | `app/src/test/java/com/polinalinen/madre/settingsui/SettingsShelfTruthUiTest.kt` | на экране есть «Уйти с полки · можно вернуться»; «Выйти · книга на телефоне останется» нет; после rotate код виден и формы входа нет ни в одном кадре; свод hard rule №9 |
 | `SettingsShelfFailureUiTest` | `app/src/test/java/com/polinalinen/madre/settingsui/SettingsShelfFailureUiTest.kt` | rename/rotate/leave с `OFFLINE` → на экране `NetworkFailure.OFFLINE.message`, и имя полки со списком людей остались на месте (П14) |
+| `SettingsShelfLoadingKeepsShelfUiTest` | `app/src/test/java/com/polinalinen/madre/settingsui/SettingsShelfLoadingKeepsShelfUiTest.kt` | состояние `Loading(account)` с **известным** аккаунтом, отрисованное как есть: на экране название полки, имена участников и тихая строка «проверяем полку»; формы входа нет — ни поля почты, ни «Подключить полку». Ассерт на композицию, а не на состояние: `FamilyBookLoadingKeepsAccountTest` держит поток, этот — то, что нарисовано (П14) |
 | `ShelfPeopleListUiTest` | `app/src/test/java/com/polinalinen/madre/settingsui/ShelfPeopleListUiTest.kt` | имена всех участников видны, у основателя «кто завёл полку» (USER DECISION 4) |
 | `SettingsSignOutHomeUiTest` | `app/src/test/java/com/polinalinen/madre/ui/screens/SettingsSignOutHomeUiTest.kt` | «Выйти · книга на телефоне останется» есть в общих Настройках и только у вошедшего (П4) |
 
@@ -829,18 +1084,25 @@ findings № 3, № 4, № 5, № 9, № 10.
 - `sync/SyncRepository.kt` — реализует `ShelfSync`, строит план и исполняет его;
  поведение очереди (имена, `KEEP`, цепочка) не меняется.
 - `MadreApplication.kt:74` — тип `syncRepository` меняется на `ShelfSync`.
-- `viewmodel/BakingViewModel.kt` — П16: `finish(...)`; автоотправка из
- `advanceStep` (`:259-269`) убрана вместе с чтением prefs; `shareBakeStats`
- становится приватным; П13: `completedAt` и явный `completedAtMillis` в
- `bakeHistoryRepository.record`.
+- `viewmodel/BakingViewModel.kt` — П16: `BakeCompletion`, `_completions`,
+ `reserveCompletion` (атомарный резерв до первого приостанова), `finishing`,
+ `finish(...)`, `restoreCompletion(...)`; `bakeRecordIds` (`:119`) удаляется;
+ автоотправка из `advanceStep` (`:259-269`) убрана вместе с чтением prefs;
+ `shareBakeStats` становится приватным; П13: явный `completedAtMillis` в
+ `bakeHistoryRepository.record` и `ledger.forget(id)` + `finishing -= id` в
+ `startBaking`.
+- `utils/BakeSessionLedger.kt` — новый, П13: sessionId → recordId в
+ `madre_prefs`, ключ `bake_record_session_<id>`, `remember`/`recordIdFor`/`forget`.
+ В `LegacyPrefs` этот префикс **не** попадает: ключ живой, и путать его с
+ `shelf_share_mode` нельзя (П15).
 - `data/repository/BakeHistoryRepository.kt` — `record(...)` принимает
  `completedAtMillis` (default сохраняется, схема Room не меняется).
 - `ui/photo/PhotoRoad.kt` — новый, П10: чистый автомат дороги.
 - `ui/photo/PhotoAttachment.kt` — П10: `onCancelled`, автомат вместо россыпи
  флагов; поведение удачной вклейки не меняется.
-- `ui/screens/BakingCompleteScreen.kt` — печать с датой из записи (П13) и без
- `clickable`; под ней один `BookButton(repeatable = true)`, крутящий два
- значения; лист (`:253-299`), штамп «на полке» (`:234-240`) и
+- `ui/screens/BakingCompleteScreen.kt` — печать с датой из состояния завершения
+ (П13) и без `clickable`; `LaunchedEffect(sessionId) { viewModel.restoreCompletion(sessionId) }`;
+ под ней один `BookButton(repeatable = true)`, крутящий два значения; лист (`:253-299`), штамп «на полке» (`:234-240`) и
  `askDismissed`/`onShelf`/`pendingPhotoShare` уходят; «На главную» ведёт в
  `finish` (П16) и в дорогу кадра при необходимости (П10); `BackHandler` — П12;
  `PastedPhotoPrompt` (`:338`) переводится на `bookAction`.
@@ -868,26 +1130,106 @@ findings № 3, № 4, № 5, № 9, № 10.
 | `BakingCompleteShelfButtonUiTest` | `app/src/test/java/com/polinalinen/madre/ui/screens/BakingCompleteShelfButtonUiTest.kt` | дефолтная подпись `на полке · с кадром`; тап → `себе`; четыре тапа = четыре смены (гейта нет); листа «Поставить на полку?» нет; строки «тап — себе» нет; без токена кнопки нет вовсе |
 | `BakingFinishOrderTest` | `app/src/test/java/com/polinalinen/madre/viewmodel/BakingFinishOrderTest.kt` | на фейковом `ShelfSync`: кадр записан **до** постановки в очередь, выход — **после** обоих; при `себе` очередь пуста; при `с кадром` `wantsPhoto` доехал до `SyncRepository` (finding № 9) |
 | `BakingShareOnceTest` | `app/src/test/java/com/polinalinen/madre/viewmodel/BakingShareOnceTest.kt` | два `finish` подряд → один вызов `shareBakeStat`; `advanceStep` сам по себе не ставит в очередь ничего (finding № 9) |
+| `BakeCompletionOnceTest` | `app/src/test/java/com/polinalinen/madre/viewmodel/BakeCompletionOnceTest.kt` | на фейковом `BakeHistoryRepository` с **придержанным** `record` (insert возвращает id только после того, как тест отпустит гейт): два `advanceStep` подряд → **один** insert и одно состояние завершения; `finish`, нажатый до отпускания гейта, ждёт и отправляет **после** того, как запись легла; два одновременных `finish` → один attach, один `shareBakeStat`, один `exitSession`, один `onExit`; insert так и не вернулся → по `RECORD_WAIT_MS` выход состоялся, а в очередь не ушло ничего (finding № 2 круга 2) |
+| `BakeSessionLedgerTest` | `app/src/test/java/com/polinalinen/madre/utils/BakeSessionLedgerTest.kt` | `remember`/`recordIdFor`/`forget` на фейковых prefs; формат ключа `bake_record_session_<id>`; **переиспользование номера**: после `forget` при выдаче того же id указателя нет, и старый recordId к новой выпечке не прилипает (П13) |
+| `BakedSealRehydrationTest` | `app/src/test/java/com/polinalinen/madre/viewmodel/BakedSealRehydrationTest.kt` | **новая** ViewModel + уже лежащая в Room запись + указатель в журнале: `restoreCompletion(sessionId)` поднимает `completedAtMillis` из Room, и это число записи, а не «сегодня». Запись сделана в 23:58 местного времени при `TimeZone` не UTC, часы теста — уже следующий день: на сургуче стоит день записи. Указателя нет → состояние `None`, подписи-даты нет, и **никакой** сегодняшней (finding № 3 круга 2) |
 | `ShelfSharePlanTest` | `app/src/test/java/com/polinalinen/madre/sync/ShelfSharePlanTest.kt` | с кадром — два шага в порядке «факт, кадр»; без кадра — один; имя работы `sync-bake-chain-<id>`, политика `KEEP` |
 | `PhotoRoadTest` | `app/src/test/java/com/polinalinen/madre/ui/photo/PhotoRoadTest.kt` | «отмена» звучит ровно один раз на каждый из семи отказов и ни разу после удачной вклейки; двойной `onDismiss` листа источника (`PhotoSourceChooser.kt:124`) не даёт второго сигнала |
 | `BakingCompleteMissingPhotoUiTest` | `app/src/test/java/com/polinalinen/madre/ui/screens/BakingCompleteMissingPhotoUiTest.kt` | «На главную» при `с кадром` и без фото открывает выбор источника и **не уходит**; отказ — остались на «Испечено», очередь пуста, подпись кнопки прежняя; удача — кадр, потом одна отправка, потом выход (finding № 3) |
 | `BakingCompleteBackIsPrivateTest` | `app/src/test/java/com/polinalinen/madre/ui/screens/BakingCompleteBackIsPrivateTest.kt` | системная «назад» при `на полке · с кадром`: очередь пуста, выбор источника не открылся, сессия закрыта; «На главную» при том же значении — отправка ровно одна (finding № 4) |
 | `BakedSealNotAControlTest` | `app/src/test/java/com/polinalinen/madre/ui/screens/BakedSealNotAControlTest.kt` | у печати «ИСПЕЧЕНО» нет `OnClick`; дата в подписи есть |
 | `BakedSealDateTest` | `app/src/test/java/com/polinalinen/madre/ui/screens/BakedSealDateTest.kt` | дата взята из `completedAtMillis`, а не из часов: сдвиг часов за полночь и пересоздание композиции её не меняют; при неизвестном ещё времени подписи нет, а не сегодняшней (finding № 5) |
-| `LegacyPrefsShelfShareTest` | `app/src/test/java/com/polinalinen/madre/utils/LegacyPrefsShelfShareTest.kt` | `obsoleteKeys` берёт `shelf_share_mode` и **не берёт** `my_name`, `calm_mode`, `coffee_ring_*` (finding № 10) |
+| `LegacyPrefsShelfShareTest` | `app/src/test/java/com/polinalinen/madre/utils/LegacyPrefsShelfShareTest.kt` | `obsoleteKeys` берёт `shelf_share_mode` и **не берёт** `my_name`, `calm_mode`, `coffee_ring_*` и `bake_record_session_*` — последний живой и заведён этим же циклом (finding № 10 круга 1, П13) |
 
 Правятся существующие: `ShelfSharePolicyTest` — `:11-32` (снятые функции режима),
 `:43-48` (`parse`) и `:50-58` (подписи листа и настройки) удаляются как проверки
 удалённой фичи; `:34-41` (`shouldEnqueue`/`wantsPhoto`) остаётся и дополняется
 кругом.
 
-Runtime-гейт: отправка «с кадром» и «без кадра» на живом PB; отказ от кадра
-ничего не отправляет; системная «назад» ничего не отправляет; повторный вход на
-экран готовности не создаёт второй записи.
+Runtime-гейт (R11–R14, тот же провенанс, что у коммита 1 — раздел «Runtime-гейт:
+провенанс и живая матрица ACL»): R11 — отправка «с кадром» на живом PB, одна
+строка `bake_stats` и кадр при ней; R12 — «себе»: в `bake_stats` не появилось
+ничего; R13 — отказ от кадра и системная «назад»: в `bake_stats` не появилось
+ничего, статусы и тела записаны; R14 — повторный вход на экран готовности и
+второе «На главную»: строк по-прежнему одна, `client_event_id` тот же. У каждой
+строки — id записи `bake_records`, `client_event_id` и id строки `bake_stats`.
 
 Готово, когда: до «На главную» на полку не уходит ничего; после — ровно один раз
 и ровно выбранное; отказ от кадра оставляет человека на «Испечено» с прежней
 подписью кнопки.
+
+---
+
+## Runtime-гейт: провенанс и живая матрица ACL
+
+Добавлено в редакции 3. Раньше runtime-проверки были названы сценариями («R1
+отработан»), но не было сказано, **чем** доказывается, что сценарий шёл против
+нужного кода на нужном сервере. Предыдущий runtime-файл цикла
+(`workflow/evidence/cycle27/runtime.md`, 10 строк) — ровно тот случай: он
+пересказывает, но не доказывает. Ниже — обязательная форма, и она обязательна
+целиком: строка сценария без провенанса гейт не проходит.
+
+### Провенанс прогона — обязательные поля
+
+Пишется один раз в начале `workflow/evidence/cycle28/runtime.md`, до сценариев.
+Каждое поле — вывод названной команды, дословно, а не пересказ.
+
+| Поле | Как получено | Форма |
+|---|---|---|
+| `run_id` | из `workflow/CYCLE.yaml` → `runtime.run_id` | `cycle28-…` |
+| git HEAD клиента | `git rev-parse HEAD` на 108 | полные 40 hex, не короткий |
+| git HEAD бэкенда | тот же коммит; плюс `git status --porcelain backend/` | пусто = деплой шёл из коммита, а не из-под руки |
+| SHA-256 хука в репозитории | `sha256sum backend/pb_hooks/madre_family.pb.js` | 64 hex |
+| SHA-256 **задеплоенного** хука | `sha256sum` того же файла **на сервере**, полный путь | 64 hex, обязан совпасть с предыдущим |
+| SHA-256 хука **до** деплоя | тот же `sha256sum` до копирования | обязан **не** совпадать: иначе деплоя не было |
+| версия PocketBase | `pocketbase --version` и `GET /api/health` | строка версии + тело ответа |
+| перезапуск | команда рестарта + `GET /api/health` после него | статус 200 и время ответа после времени рестарта |
+| применённые миграции | список id из `backend/pb_migrations/` и подтверждение из PB | id миграций, а не «все» |
+| снимок схемы | экспорт правил и полей `bake_stats`, `feeding_stats`, `families`, `users` | `listRule`/`viewRule`/`createRule`/`updateRule`/`deleteRule` дословно + поля `family`, `user` с их `cascadeDelete` |
+| фикстуры | id всех созданных записей | user id каждого участника, family id, id строк `bake_stats` |
+| каждый HTTP-вызов | метод, путь, роль вызывающего, **статус и тело ответа** | тело — дословно, включая текст ошибки |
+
+**Доказательство, что загружен именно этот хук** — три вещи вместе, потому что
+по отдельности каждая лжёт: (1) совпадение `sha256sum` на сервере с репозиторием
+и несовпадение с тем, что лежало до деплоя; (2) рестарт PB **после** копирования
+файла, с временем в журнале; (3) поведенческая проба, которую старый хук пройти
+не может — уход последнего участника, после которого `GET
+/api/collections/families/records/{id}` отвечает 200, а не 404. Старый хук на
+этом месте удалял запись (`madre_family.pb.js:246`), значит 200 здесь и есть
+подпись нового кода.
+
+**Токены.** Все сценарии — только обычными пользовательскими токенами
+(`POST /api/collections/users/auth-with-password`). Ни один шаг не выполняется
+superuser-токеном и не проверяется через админку: правило `family =
+@request.auth.family` (`1784937780_family_rules_for_stats.js:29`) для superuser не
+действует, и любая проверка его глазами админа доказывает противоположное тому,
+что нужно доказать. Если для подготовки фикстур superuser всё же понадобился, он
+называется отдельной строкой с перечнем того, что им сделано, и ни одна проверка
+ACL на него не опирается.
+
+### Живая матрица ACL — R6–R10
+
+Проверяется чтением `GET /api/collections/bake_stats/records` (и `view` по
+конкретному id) токеном названной роли. «Отказано» — это `403`, либо `200` с
+**пустым** `items` там, где правило list просто не отдаёт чужого; какой именно
+случай — записывается статусом и телом, а не словом «отказано».
+
+| № | Кто читает | Что ожидаем |
+|---|---|---|
+| R6 | ушедший с полки (`family` пуст) | своих прежних строк **не видит**; `view` по известному id отказан. Строки при этом целы — их видит оставшийся (R7) |
+| R7 | оставшийся участник / новый владелец | видит все строки полки, включая строки ушедшего; количество совпадает с тем, что было до ухода |
+| R8 | человек другой полки | не видит ни одной строки этой полки ни списком, ни по id — при живой своей полке и валидном токене |
+| R9 | прежний владелец после ухода | отказан **до** возврата; после `join` тем же кодом снова видит те же строки |
+| R10 | вернувшийся по коду | строк ровно столько же, сколько до ухода: ни дубля, ни потери. Список id строк совпадает поимённо с записанным в фикстурах |
+
+R9 — не повтор R6: R6 про обычного участника, R9 про **владельца**, у которого
+`families.owner` продолжает указывать на него и после ухода (это метка спящей
+полки, коммит 1). Проверить надо именно то, что метка владельца **не даёт**
+доступа к статистике: доступ даёт членство, и только оно.
+
+Каждая строка R1–R10 несёт: `run_id`, git HEAD, SHA-256 задеплоенного хука, id
+фикстур, и по каждому вызову — метод, путь, роль, статус, тело. Одна и та же
+шапка провенанса на весь файл; в строке — ссылка на неё и то, что своё.
 
 ---
 
@@ -958,8 +1300,34 @@ runtime.
 
 **Р11. Мёртвый код после четырёх правок.** `SettingsChoiceDialog`, `DecorGroup`,
 `DecorChip`, `LocationChip`, ветка `FamilyBookSection:643-685`, большая часть
-`ShelfSharePolicy`, `ShelfShareMode`, `ShelfShareDecision.PUT`. Убирать в том же
-коммите, иначе следующий цикл будет читать две правды.
+`ShelfSharePolicy`, `ShelfShareMode`, `ShelfShareDecision.PUT`, поле
+`bakeRecordIds` в `BakingViewModel`. Убирать в том же коммите, иначе следующий
+цикл будет читать две правды.
+
+**Р12. Журнал `sessionId → recordId` в prefs — указатель, живущий дольше
+сессии.** Номера сессий переиспользуются после смерти процесса (П13), поэтому
+без `ledger.forget(id)` в `startBaking` новая выпечка получила бы чужую дату.
+Второе следствие: если процесс умер между завершением и «На главную», ключ
+остаётся лежать — до следующей выдачи того же номера, которая его и стирает.
+Мусора это накопит не больше, чем номеров выдано. Ловится
+`BakeSessionLedgerTest` (случай переиспользования назван отдельным тестом).
+
+**Р13. `RECORD_WAIT_MS` — ожидание с потолком.** «На главную» обязана
+сработать, поэтому у ожидания готовности записи есть граница (5 с). Цена: при
+патологически медленной базе выпечка уйдёт с экрана, не попав на полку. Обмен
+осознанный — альтернатива «ждать вечно» означает кнопку, которая не отвечает.
+Молча это не проходит: ложного штампа «на полке» на экране нет вовсе (П11), и
+факт в формуляре остаётся. Ловится `BakeCompletionOnceTest` (случай «insert так
+и не вернулся»).
+
+**Р14. Правило `*Locked` держится соглашением, а не компилятором.** Kotlin не
+умеет «эта функция требует владения локом». Значит следующий автор может
+завести публичный suspend-метод, который зовёт другой публичный, и получить
+deadlock, которого не было. Смягчение — три вещи: имя (`…Locked`), первая
+строка KDoc, и `FamilyAccountLockTest`, где под `withTimeout` стоят **все**
+одиннадцать операций, а не одна `register`. Новая операция без строки в этом
+тесте — незакрытая дверь, и это сказано здесь, чтобы гейт кода спрашивал именно
+это.
 
 ---
 
@@ -979,6 +1347,10 @@ runtime.
  №9 возьмёт файл при следующей его правке, как и записано в `CLAUDE.md`.
 - **О5.** Формулировки `onClickLabel` («без оттиска» и т.п.) — служебные подписи
  для TalkBack, не видимый текст.
+- **О6.** Рехидратация экрана готовности возвращает дату завершения и только её
+ (П13). Фотокарточка после смерти процесса на этом экране не показывается — она
+ в формуляре книги. Тянуть `photoPath` из Room на этот экран — отдельная работа
+ следующего цикла; здесь пустой слот честнее догадки.
 
 ---
 
@@ -993,12 +1365,21 @@ runtime.
 - Возвращать настройку «Ставить выпечку на полку» ни под каким именем.
 - Заводить `work-testing` ради одного ассерта (см. П16).
 - «Прибирать» `MarginNoteEntity`/`SealedNoteEntity` и трогать схему Room: в этом
- цикле база не меняется вообще, миграций нет.
+ цикле база не меняется вообще, миграций нет. Указатель `sessionId → recordId`
+ в `family_settings` не писать — это ящик экслибриса (П13).
+- Брать `mutex` внутри `*Locked`-помощника и звать публичный метод репозитория из
+ другого публичного метода (П1). Заводить операцию репозитория без её строки в
+ `FamilyAccountLockTest` (Р14).
+- Проверять ACL полки superuser-токеном или глазами админки: правило
+ `family = @request.auth.family` для superuser не действует, и такая проверка
+ доказывает противоположное.
+- Записывать runtime-строку без провенанса — «R3 отработан» без HEAD, sha хука,
+ id фикстур и тел ответов гейт не проходит.
 - Ослаблять тест, чтобы позеленело. Три попытки — и стоп с полным выводом падения.
 
 ---
 
-## Гейт плана: три REVISE и как они закрыты
+## Гейт плана, круг 1: три REVISE и как они закрыты
 
 Пакет гейта по `docs/CURSOR-FIRST-WORKFLOW.md` §3, три судьи только читают.
 Все трое вернули **VERDICT: REVISE** по редакции 1 плана.
@@ -1034,25 +1415,70 @@ runtime.
 
 ---
 
+## Гейт плана, круг 2: восемь замечаний и как они закрыты
+
+Редакция 2 ушла на второй круг тем же трём судьям. Замечания пришли сведённым
+списком из восьми пунктов. Три из них (1, 2, 3) — не «неполно», а **неверно**:
+редакция 2 в этих местах описывала конструкцию, которая на исполнении вешается,
+дублирует запись или теряет дату. Так и написано ниже, без смягчения.
+
+| № | Замечание круга 2 | Чем закрыто | Чем ловится |
+|---|---|---|---|
+| 1 | Лок в репозитории не реентрантный: «каждый suspend-метод целиком в `withLock`» вешает `register`, который зовёт публичный `signIn`. Нужны только публичные точки входа с локом, вся работа в приватных `*Locked`, явное владение у `adopt`/`remember` и тесты на отсутствие deadlock у **всех** операций | **П1** переписан: три правила владения, таблица «точка входа → `*Locked`», `register` → `signInLocked`, помощники переименованы в `*Locked`, `token` стал `AtomicReference` (не-suspend `signOut` лока взять не может) | `FamilyAccountLockTest`: `withTimeout` вокруг `register` и вокруг каждой из одиннадцати операций, с ассертом перехода у каждой; Р14 назвал цену соглашения |
+| 2 | Завершение «ровно один раз»: резерв `FINALIZING` обязан быть атомарным **до первого приостанова**; готовностью `recordId`/`completedAt` обязан владеть один объект; `finish` обязан ждать персистентной готовности; повтор и одновременность не должны дублировать attach, enqueue, `exitSession` и `onExit` | **П16** переписан: `BakeCompletion` (дата + `CompletableDeferred` готовности) как единственный держатель, `reserveCompletion` на `MutableStateFlow.compareAndSet` до `launch`, `finishing` синхронно до `launch`, `finish` ждёт `recordId.await()` под `withTimeoutOrNull`; `bakeRecordIds` удалён; исправлена ошибка редакции 2 про несуществующее поле `sharedSessionIds` | `BakeCompletionOnceTest` (придержанный insert, два `advanceStep`, два одновременных `finish`, «insert не вернулся»), `BakingShareOnceTest`, `BakingFinishOrderTest` |
+| 3 | Дата на сургуче обязана переживать пересоздание ViewModel и процесса: подниматься из Room по стабильной связи с `recordId`; проверить новой ViewModel на уже лежащей записи, около полуночи и в местном поясе | **П13** переписан: дата фиксируется при резерве и уходит в Room явным аргументом; связь `sessionId → recordId` — `utils/BakeSessionLedger.kt` в `madre_prefs` (Room не меняется, `family_settings` не трогаем); `restoreCompletion` поднимает дату из Room; названа ловушка переиспользования номеров сессий и её лечение в `startBaking`; граница про фото — О6 | `BakedSealRehydrationTest` (новая ViewModel, запись 23:58, пояс не UTC, часы уже следующего дня), `BakeSessionLedgerTest`, `BakedSealDateTest` |
+| 4 | Живая матрица ACL: ушедший и человек другой полки отказаны; оставшийся/новый владелец допущен; прежний владелец отказан до возврата; возврат видит те же нераздвоенные строки. Только обычные пользовательские токены | Новый раздел «Runtime-гейт: провенанс и живая матрица ACL», сценарии **R6–R10**; отдельно сказано, почему R9 не повтор R6 (метка владельца на спящей полке доступа не даёт) и почему superuser-токен доказывает не то | R6–R10 на живом PB со статусами и телами; «отказано» записывается как `403` либо `200` с пустым `items`, а не словом |
+| 5 | Провенанс runtime обязателен: точный git HEAD, SHA-256 задеплоенного хука, версия PB, id миграций и снимок схемы, id фикстур, каждый статус и тело, рестарт и health, доказательство что загружен именно этот хук. Привязать R1–R5 и негативы ACL | Тот же раздел: таблица обязательных полей с командами; доказательство загрузки хука — три вещи вместе (совпадение sha с репозиторием, несовпадение с предыдущим, рестарт после копирования, плюс поведенческая проба «`families` жив после ухода последнего»); шапка провенанса привязана к каждой строке R1–R14 | форма файла `workflow/evidence/cycle28/runtime.md`; строка без провенанса гейт не проходит |
+| 6 | Не сказано, что `FamilyBookViewModel._state` удаляется и `state` становится псевдонимом потока репозитория; тест на две ViewModel надо переписать; нужен compose-ассерт на `Loading` с известным аккаунтом | Новый **П2б** (дословный список правок: `:24-25` удалить, `restore`/`clearInviteCode`/`signOut`/`runNetwork` переписать, `_passwordReset` остаётся) | `FamilyBookViewModelSingleStateTest`, переписанный `FamilyBookRenameVisibilityTest`, `SettingsShelfLoadingKeepsShelfUiTest` |
+| 7 | Остатки `6.7.0` в тексте и противоречие про `valueColor`: сигнатура nullable, а текст называет параметр обязательным | Версия в VERDICT исправлена на **6.6.1** (единственное вхождение `6.7.0` в файле); в **П5** сказано точно: `valueColor: Color? = null` как у `SettingsRow`, «обязателен» — про call site у «Напоминаний», и почему непустой параметр был бы хуже | `SettingsStarterSectionGoldenTest` (цвет проверяется снимком, не текстом); версия — `scripts/release_cycle.py prepare-version` |
+| 8 | Пустая папка артефактов гейта | Наблюдение принято к сведению и **не** закрывается правкой плана: выводы трёх судей приходят из внешних сессий и копируются в `workflow/evidence/cycle28/` после этой редакции (`docs/CURSOR-FIRST-WORKFLOW.md` §3 — судьи работают в отдельных сессиях с неизменяемым packet). Планировщик судейские файлы не сочиняет | — |
+
+Ни одно USER DECISION в круге 2 не менялось. Решения, которые редакция 3
+сохраняет дословно: настройки «Ставить выпечку на полку» нет вовсе (7); дефолт
+кнопки на «Испечено» — константа `на полке · с кадром` (8); отмена не публикует
+ничего (П10); системная «назад» приватна (П12); крутилка остаётся формой всех
+оставшихся выборов, включая круги из трёх-пяти значений (9); ветка —
+`maintenance/28`, версия — `6.6.1`.
+
+---
+
 ## VERDICT
 
 **APPROVE_FOR_GATE.**
 
-Десять замечаний гейта закрыты правками плана, а не обещаниями: у каждого назван
-файл, решение и тест, и ни одно не оставлено «на усмотрение автора кода». Три
-пункта редакции 1 отменены целиком, потому что были неправильны, а не неполны:
-старый П7 (исключение для места хранения), старый П9 (настройка задаёт дефолт) и
-старый П10 (отказ от кадра публикует факт без кадра). Единственный UNKNOWN
-прошлой редакции — О1, «уход последнего распускает полку» — закрыт не оговоркой
-в копирайте, а правкой бэкенда.
+Восемь замечаний второго круга закрыты правками плана, а не обещаниями: у
+каждого назван файл, решение и тест. Три из восьми потребовали отменить
+конструкцию редакции 2, а не дополнить её, — и это сказано на месте, а не
+спрятано в формулировке:
+
+- **П1** — «каждый suspend-метод целиком в `withLock`» вешал `register` на
+ собственном локе. Теперь лок берут только публичные точки входа, работа живёт
+ в `*Locked`, и `register` зовёт `signInLocked`.
+- **П16** — «линейный порядок внутри одного `launch`» не мешал ни второму
+ `advanceStep` завести вторую строку формуляра, ни `finish` уехать раньше
+ записи. Теперь резерв атомарен до первого приостанова, готовностью владеет один
+ объект, а `finish` её ждёт.
+- **П13** — дата жила в памяти ViewModel и умирала вместе с ней. Теперь она
+ фиксируется один раз, лежит в Room и поднимается оттуда по стабильному
+ указателю; ловушка переиспользования номеров сессий названа и вылечена.
+
+Замечания 4 и 5 добавили в план то, чего в нём не было вовсе: живую матрицу ACL
+(R6–R10, только пользовательские токены) и обязательный провенанс runtime — с
+точным HEAD, SHA-256 задеплоенного хука, версией PB, id миграций и фикстур,
+статусами и телами каждого вызова и тройным доказательством того, что загружен
+именно этот хук. Замечание 6 стало отдельным П2б, замечание 7 — правкой версии и
+формулировки про `valueColor`. Замечание 8 — про внешние судейские артефакты — по
+процессу не может быть закрыто планировщиком и закрыто не будет: судейские файлы
+приходят из своих сессий.
 
 Порядок коммитов — `полка переживает уход последнего` → `shelf-settings-truth` →
 `tap-cycle-controls` → `baked-seal-toggle`; зависимости однонаправленные, каждый
 коммит собирается и зелёный сам по себе.
 
-Границы неизменны: Room версии 10 без новых миграций, `recipes.json` не тронут,
-новой видимой строки в цикле ровно одна («Где стоит закваска», О3), `versionName`
-только через `scripts/release_cycle.py prepare-version` → `6.7.0`, магазин не
-трогаем.
+Границы неизменны: Room версии 10 без новых миграций и без правки `family_settings`,
+`recipes.json` не тронут, новой видимой строки в цикле ровно одна («Где стоит
+закваска», О3), ветка `maintenance/28`, `versionName` только через
+`scripts/release_cycle.py prepare-version` → `6.6.1`, версия не поднимается в
+этой сессии, магазин не трогаем, Kotlin по этому плану пишет Cursor Codex.
 
 PLAN_READY

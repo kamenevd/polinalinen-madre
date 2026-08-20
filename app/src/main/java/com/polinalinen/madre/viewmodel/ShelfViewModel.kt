@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.polinalinen.madre.MadreApplication
+import com.polinalinen.madre.account.FamilyAccount
 import com.polinalinen.madre.data.db.entities.BakeRecordEntity
 import com.polinalinen.madre.data.remote.BakeStatRecord
 import com.polinalinen.madre.shelf.FamilyShelf
@@ -43,16 +44,11 @@ class ShelfViewModel(app: Application) : AndroidViewModel(app) {
     private var currentRefreshGeneration = 0
     private var lastConfirmedMembers: List<ShelfMember> = emptyList()
 
-    fun refresh(localName: String, localRecords: List<BakeRecordEntity>) {
+    fun refresh(account: FamilyAccount?, localName: String, localRecords: List<BakeRecordEntity>) {
         val myGeneration = ++currentRefreshGeneration
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                madreApp.familyAccountRepository.restore()
-                madreApp.familyAccountRepository.refresh()
-            }
             if (myGeneration != currentRefreshGeneration) return@launch  // older refresh cancelled by newer
 
-            val account = madreApp.familyAccountRepository.currentAccount()
             _myUserId.value = account?.userId
             _familyName.value = account?.familyName
             if (account == null || !account.hasFamily) {

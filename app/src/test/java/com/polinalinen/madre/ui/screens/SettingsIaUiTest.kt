@@ -147,9 +147,6 @@ class SettingsIaUiTest {
                     onRegister = { _, _, _ -> },
                     onCreateFamily = {},
                     onJoinFamily = {},
-                    onRotateInvite = {},
-                    onSignOut = {},
-                    onCodeHandled = {},
                 )
             }
         }

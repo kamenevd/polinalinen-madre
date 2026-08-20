@@ -33,6 +33,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.polinalinen.madre.account.FamilyAccount
 import com.polinalinen.madre.data.db.entities.BakeRecordEntity
 import com.polinalinen.madre.shelf.FamilyShelf
 import com.polinalinen.madre.shelf.ShelfLedgerRow
@@ -54,6 +55,7 @@ fun ShelfScreen(
     localRecords: List<BakeRecordEntity>,
     onBack: () -> Unit,
     onOpenBook: (ownerId: String) -> Unit,
+    account: FamilyAccount?,
     shelfViewModel: ShelfViewModel = viewModel(),
 ) {
     val colors = AppColors.current
@@ -62,8 +64,8 @@ fun ShelfScreen(
     val familyName by shelfViewModel.familyName.collectAsState()
     val unreachable by shelfViewModel.unreachable.collectAsState()
 
-    LaunchedEffect(myName, localRecords) {
-        shelfViewModel.refresh(myName, localRecords)
+    LaunchedEffect(account?.familyId, account?.familyName, myName, localRecords) {
+        shelfViewModel.refresh(account, myName, localRecords)
     }
 
     Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {

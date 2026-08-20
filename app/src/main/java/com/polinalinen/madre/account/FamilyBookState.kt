@@ -23,7 +23,7 @@ sealed interface FamilyBookState {
     val localBookAvailable: Boolean get() = true
 
     /** Идёт запрос — токен проверяется или книга заводится. */
-    data object Loading : FamilyBookState
+    data class Loading(override val account: FamilyAccount? = null) : FamilyBookState
 
     /** Аккаунта нет: приложение живёт локально, общей книги просто не видно. */
     data object SignedOut : FamilyBookState
@@ -96,4 +96,19 @@ enum class NetworkFailure(val message: String) {
                 else -> UNKNOWN
             }
     }
+}
+
+/** Убрать одноразовый код из аккаунта, не теряя остального состояния. */
+fun FamilyBookState.withoutInviteCode(): FamilyBookState = when (this) {
+    is FamilyBookState.SignedIn ->
+        if (account.inviteCode == null) this else copy(account = account.copy(inviteCode = null))
+    is FamilyBookState.Failed -> {
+        val known = account
+        if (known?.inviteCode == null) this else copy(account = known.copy(inviteCode = null))
+    }
+    is FamilyBookState.Loading -> {
+        val known = account
+        if (known?.inviteCode == null) this else copy(account = known.copy(inviteCode = null))
+    }
+    FamilyBookState.SignedOut -> this
 }

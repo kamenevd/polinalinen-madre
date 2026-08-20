@@ -1,8 +1,6 @@
 package com.polinalinen.madre.ui.screens
 
 import android.content.Intent
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.provider.Settings
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.defaultMinSize
@@ -52,7 +50,6 @@ import com.polinalinen.madre.notifications.MadreNotifier
 import com.polinalinen.madre.sourdough.FeedingInterval
 import com.polinalinen.madre.sourdough.StarterName
 import com.polinalinen.madre.account.FamilyBookState
-import com.polinalinen.madre.account.InviteCode
 import com.polinalinen.madre.account.PasswordReset
 import com.polinalinen.madre.account.PasswordResetNotice
 import com.polinalinen.madre.ui.components.BackLabel
@@ -207,6 +204,14 @@ fun SettingsScreen(
                     value = "›",
                     onClick = onOpenShelfSettings,
                 )
+                if (account != null) {
+                    HairRule(Modifier.padding(horizontal = 22.dp, vertical = 12.dp))
+                    TextAction(
+                        "Выйти · книга на телефоне останется",
+                        onClick = familyBookViewModel::signOut,
+                        modifier = Modifier.padding(horizontal = 14.dp),
+                    )
+                }
             }
 
             // ————— 4. Вид —————
@@ -518,17 +523,12 @@ internal fun FamilyBookSection(
     onRegister: (String, String, String) -> Unit,
     onCreateFamily: (String) -> Unit,
     onJoinFamily: (String) -> Unit,
-    onRotateInvite: () -> Unit,
-    onSignOut: () -> Unit,
-    onCodeHandled: () -> Unit,
     passwordResetNotice: PasswordResetNotice = PasswordResetNotice.Idle,
     onRequestPasswordReset: (String) -> Unit = {},
 ) {
     val colors = AppColors.current
-    val context = LocalContext.current
-    // rememberSaveable, а не remember: лист «Отправить» и смена кода уводят
-    // Activity в фон и переживают её пересоздание — набранные почта, пароль,
-    // подпись, название и код не должны обнуляться под руками.
+    // rememberSaveable, а не remember: пересоздание Activity не должно стирать
+    // набранные почту, пароль, подпись, название и код.
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var displayName by rememberSaveable { mutableStateOf("") }
@@ -545,12 +545,6 @@ internal fun FamilyBookSection(
     // об ошибке над пустым местом не объяснило бы ничего. Именно раскрыть, а не
     // «считать раскрытым»: иначе «Не сейчас» под формой перестал бы работать.
     LaunchedEffect(failed) { if (failed != null) showForm = true }
-
-    // Одноразовый код не должен пережить уход со страницы: как только секция
-    // покидает композицию, просим ViewModel забыть открытый код из состояния.
-    DisposableEffect(Unit) {
-        onDispose { onCodeHandled() }
-    }
 
     Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 8.dp)) {
         Text(
@@ -638,50 +632,6 @@ internal fun FamilyBookSection(
                     enabled = inviteCode.isNotBlank(),
                     onClick = { onJoinFamily(inviteCode) },
                 )
-                TextAction("Выйти · книга на телефоне останется", onClick = onSignOut)
-            }
-            else -> {
-                Text(
-                    "полка: ${account.familyName ?: "семья"}",
-                    color = colors.espresso,
-                    fontFamily = FontFamily.Serif,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
-                )
-                val code = account.inviteCode
-                if (code != null) {
-                    val printedCode = InviteCode.format(code)
-                    Text(
-                        printedCode,
-                        color = colors.crust,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 17.sp,
-                        modifier = Modifier.padding(top = 10.dp),
-                    )
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
-                        TextAction("Скопировать", onClick = {
-                            val clipboard = context.getSystemService(ClipboardManager::class.java)
-                            clipboard?.setPrimaryClip(ClipData.newPlainText("Код полки", printedCode))
-                            onCodeHandled()
-                        }, modifier = Modifier.weight(1f))
-                        TextAction("Отправить", onClick = {
-                            val share = Intent(Intent.ACTION_SEND)
-                                .setType("text/plain")
-                                .putExtra(Intent.EXTRA_TEXT, "Вступите на полку «${account.familyName ?: "Мадре"}»: $printedCode")
-                            context.startActivity(Intent.createChooser(share, "Отправить приглашение"))
-                            onCodeHandled()
-                        }, modifier = Modifier.weight(1f))
-                    }
-                }
-                if (account.isFamilyOwner) {
-                    Spacer(Modifier.height(8.dp))
-                    BookButton(
-                        label = "Обновить код приглашения",
-                        variant = BookButtonVariant.SECONDARY,
-                        onClick = onRotateInvite,
-                    )
-                }
-                TextAction("Выйти · книга на телефоне останется", onClick = onSignOut)
             }
         }
     }

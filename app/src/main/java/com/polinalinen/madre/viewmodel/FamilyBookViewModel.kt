@@ -21,8 +21,7 @@ class FamilyBookViewModel internal constructor(
 ) : AndroidViewModel(app) {
     constructor(app: Application) : this(app, (app as MadreApplication).familyAccountRepository)
 
-    private val _state = MutableStateFlow<FamilyBookState>(FamilyBookState.SignedOut)
-    val state: StateFlow<FamilyBookState> = _state.asStateFlow()
+    val state: StateFlow<FamilyBookState> = repository.state
 
     private val _passwordReset = MutableStateFlow<PasswordResetNotice>(PasswordResetNotice.Idle)
     val passwordReset: StateFlow<PasswordResetNotice> = _passwordReset.asStateFlow()
@@ -36,26 +35,13 @@ class FamilyBookViewModel internal constructor(
     private val inFlight = AtomicBoolean(false)
 
     fun restore() {
-        if (_state.value is FamilyBookState.Loading || _state.value is FamilyBookState.SignedIn) return
+        if (repository.state.value is FamilyBookState.Loading || repository.state.value is FamilyBookState.SignedIn) return
         runNetwork { repository.restore() }
     }
 
     /** Keep the one-time invite code out of both the screen and the repository. */
     fun clearInviteCode() {
         repository.clearInviteCode()
-        when (val current = _state.value) {
-            is FamilyBookState.SignedIn ->
-                if (current.account.inviteCode != null) {
-                    _state.value = current.copy(account = current.account.copy(inviteCode = null))
-                }
-            is FamilyBookState.Failed -> {
-                val account = current.account
-                if (account?.inviteCode != null) {
-                    _state.value = current.copy(account = account.copy(inviteCode = null))
-                }
-            }
-            else -> Unit
-        }
     }
 
     fun signIn(email: String, password: String) = runNetwork {
@@ -95,18 +81,19 @@ class FamilyBookViewModel internal constructor(
 
     fun leaveFamily() = runNetwork { repository.leaveFamily() }
 
+    fun refreshFamily() = runNetwork { repository.refresh() }
+
     fun signOut() {
-        _state.value = repository.signOut()
+        repository.signOut()
     }
 
     private fun runNetwork(action: suspend () -> FamilyBookState) {
-        // Взвести флаг до launch: guard по _state пропускал двойной тап, пока
-        // Loading ещё не выставлен. compareAndSet впускает ровно первого.
+        // Взвести флаг до launch: compareAndSet впускает ровно первого и не
+        // даёт отправить второй такой же запрос, пока первый ещё в пути.
         if (!inFlight.compareAndSet(false, true)) return
-        _state.value = FamilyBookState.Loading
         viewModelScope.launch {
             try {
-                _state.value = action()
+                action()
             } finally {
                 inFlight.set(false)
             }

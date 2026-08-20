@@ -1,3 +1,4 @@
+Approved role workflow: docs/CURSOR-FIRST-WORKFLOW.md. Read it before planning, coding, or reviewing.
 # Cursor on LXC108
 
 Read AGENTS.md first (paths, stop-state, lexicon). Architecture is CLAUDE.md.

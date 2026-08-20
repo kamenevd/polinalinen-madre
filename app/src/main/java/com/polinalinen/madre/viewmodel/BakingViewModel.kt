@@ -9,6 +9,7 @@ import androidx.work.WorkManager
 import androidx.work.workDataOf
 import com.polinalinen.madre.MadreApplication
 import com.polinalinen.madre.data.db.entities.ActiveBakeEntity
+import com.polinalinen.madre.data.repository.BakeHistory
 import com.polinalinen.madre.model.BakingClock
 import com.polinalinen.madre.model.BakingSession
 import com.polinalinen.madre.model.BakingTick
@@ -21,11 +22,17 @@ import com.polinalinen.madre.notifications.BakingProgress
 import com.polinalinen.madre.notifications.BakingProgressService
 import com.polinalinen.madre.notifications.MadreNotifier
 import com.polinalinen.madre.notifications.NotificationLedger
+import com.polinalinen.madre.shelf.ShelfShareDecision
 import com.polinalinen.madre.sourdough.StarterName
 import com.polinalinen.madre.shelf.ShelfSharePolicy
+import com.polinalinen.madre.sync.ShelfSync
 import com.polinalinen.madre.ui.components.CoffeeRing
+import com.polinalinen.madre.utils.BakeSessionLedger
+import com.polinalinen.madre.utils.PhotoStore
+import com.polinalinen.madre.utils.PrefsBakeSessionLedger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -37,6 +44,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * v4 BakingViewModel — holds a LIST of independent baking sessions, not one.
@@ -49,13 +58,18 @@ import kotlinx.coroutines.withContext
  * по id (advanceStep/exitSession) и все разом в onCleared — ни один не
  * остаётся висеть в фоне.
  */
-class BakingViewModel(app: Application) : AndroidViewModel(app) {
+class BakingViewModel @JvmOverloads constructor(
+    app: Application,
+    private val bakeHistory: BakeHistory = (app as MadreApplication).bakeHistoryRepository,
+    private val shelfSync: ShelfSync = (app as MadreApplication).syncRepository,
+    private val sessionLedger: BakeSessionLedger = PrefsBakeSessionLedger(
+        app.getSharedPreferences("madre_prefs", android.content.Context.MODE_PRIVATE),
+    ),
+) : AndroidViewModel(app) {
 
     private val madreApp = app as MadreApplication
     private val recipeRepository = madreApp.recipeRepository
-    private val bakeHistoryRepository = madreApp.bakeHistoryRepository
     private val activeBakeRepository = madreApp.activeBakeRepository
-    private val syncRepository = madreApp.syncRepository
     private val sourdoughRepository = madreApp.sourdoughRepository
 
     private val _recipes = MutableStateFlow<List<Recipe>>(emptyList())
@@ -105,7 +119,7 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
     // оглавления (DESIGN-V4.md Cycle 4, WornPages). Ноль новых таблиц: это
     // просто иной разрез той же bake_records, что кормит формуляр.
     val bakeCounts: StateFlow<Map<String, Int>> =
-        bakeHistoryRepository.observeAll()
+        bakeHistory.observeAll()
             .map { records -> records.groupingBy { it.recipeId }.eachCount() }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
@@ -114,10 +128,27 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
     private val _bakePhotoPaths = MutableStateFlow<Map<Long, String>>(emptyMap())
     val bakePhotoPaths: StateFlow<Map<Long, String>> = _bakePhotoPaths.asStateFlow()
 
-    // sessionId → id записи формуляра: нужен, чтобы фотокарточка, выбранная на
-    // Complete-экране, легла именно в свою строку bake_records.
-    private val bakeRecordIds = mutableMapOf<Long, Long>()
-    private val sharedPhotoSessionIds = mutableSetOf<Long>()
+    class BakeCompletion(
+        val recipeId: String,
+        val recipeName: String,
+        val portions: Int,
+        val completedAtMillis: Long,
+    ) {
+        val recordId = CompletableDeferred<Long>()
+        private val recordStarted = AtomicBoolean(false)
+
+        fun reserveRecordInsert(): Boolean = recordStarted.compareAndSet(false, true)
+    }
+
+    private val _completions = MutableStateFlow<Map<Long, BakeCompletion>>(emptyMap())
+    val completions: StateFlow<Map<Long, BakeCompletion>> = _completions.asStateFlow()
+
+    private val _finishing = MutableStateFlow<Set<Long>>(emptySet())
+    val finishing: StateFlow<Set<Long>> = _finishing.asStateFlow()
+
+    private companion object {
+        const val RECORD_WAIT_MS = 5_000L
+    }
 
     /**
      * Cycle 17: есть ли куда делиться. Без аккаунта общей книги не существует,
@@ -223,6 +254,9 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
             kotlinx.coroutines.runBlocking { sessionIdsReady.await() }
         }
         val id = nextSessionId++
+        sessionLedger.forget(id)
+        _completions.update { it - id }
+        _finishing.update { it - id }
         _sessions.update { it + BakingSession.start(id = id, recipe = recipe, scaleFactor = scaleFactor) }
         rememberActiveBake(id)
         restartTimer(id)
@@ -248,25 +282,15 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
             // Выпечка дошла до конца — строка хода ей больше не нужна, даже
             // если человек ещё стоит на странице «Готово» и вклеивает фото.
             publishProgress()
-            // Формуляр книги и хитмэп на Полке читают именно эту таблицу — пишем
-            // один раз, ровно в момент завершения (не раньше, не задним числом).
-            //
-            // Cycle 17: отправка в общую книгу переехала ВНУТРЬ этой корутины.
-            // Раньше она стояла следующей строкой снаружи и потому уходила
-            // раньше, чем insert возвращал id: ключ события брался из номера
-            // сессии просто потому, что id записи в тот момент ещё не
-            // существовало. Отсюда и росла подмена ключей (см. SyncEventId.forBake).
-            viewModelScope.launch {
-                val recordId =
-                    bakeHistoryRepository.record(s.recipe.id, s.recipe.name, s.scaleFactor.toInt().coerceAtLeast(1))
-                bakeRecordIds[id] = recordId
-                val prefs = getApplication<Application>()
-                    .getSharedPreferences(ShelfSharePolicy.PREFS, android.content.Context.MODE_PRIVATE)
-                val mode = ShelfSharePolicy.read(prefs)
-                if (ShelfSharePolicy.shouldShareOnComplete(mode, _sharingAvailable.value)) {
-                    shareBakeStats(id)
-                }
-            }
+            val completedAtMillis = s.completedAt ?: nowWallClock
+            val completion = reserveCompletion(
+                sessionId = id,
+                recipeId = s.recipe.id,
+                recipeName = s.recipe.name,
+                portions = s.scaleFactor.toInt().coerceAtLeast(1),
+                completedAtMillis = completedAtMillis,
+            )
+            startRecordInsert(id, completion)
         } else {
             rememberActiveBake(id)
             restartTimer(id)
@@ -349,69 +373,176 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Отправить статистику этой выпечки в общую книгу (Cycle 5). Идемпотентно
-     * дважды: unique work name «sync-bake-record-<recordId>» + KEEP гасит
-     * повтор, пока запись ещё в очереди этого устройства, а client_event_id —
-     * повтор, который очереди уже не виден (доставленный POST с потерянным
-     * ответом, доотправка после переустановки).
-     *
-     * Cycle 17: ключ считается от id строки формуляра, поэтому до записи в
-     * bake_records отправлять нечего — [advanceStep] зовёт этот метод сразу
-     * после insert'а при политике «всегда», а лист «Поставить на полку?» —
-     * позже, с экрана готовности.
+     * Отложенный кадр «Испечено»: только в памяти до finish(), без записи в Room.
+     * При замене прошлый файл чистится, если ни одна сессия больше на него не смотрит.
      */
-    fun shareBakeStats(id: Long, withPhoto: Boolean = false) {
-        val s = session(id) ?: return
-        val recordId = bakeRecordIds[id] ?: return
-        val account = madreApp.familyAccountRepository.currentAccount()
-        val photoPath = if (withPhoto) _bakePhotoPaths.value[id] else null
-        viewModelScope.launch {
-            val bakedAtMillis = bakeHistoryRepository.getCompletedAt(recordId) ?: return@launch
-            if (withPhoto && !photoPath.isNullOrBlank()) sharedPhotoSessionIds += id
-            syncRepository.shareBakeStat(
-                recordId = recordId,
-                recipeId = s.recipe.id,
-                recipeName = s.recipe.name,
-                portions = s.scaleFactor.toInt().coerceAtLeast(1),
-                bakedAtMillis = bakedAtMillis,
-                displayName = account?.displayName,
-                familyName = account?.familyName,
-                photoPath = photoPath,
-            )
+    fun stageBakePhoto(sessionId: Long, path: String) {
+        if (_finishing.value.contains(sessionId)) return
+        if (path.isBlank()) return
+        val previous = _bakePhotoPaths.value[sessionId]
+        _bakePhotoPaths.update { it + (sessionId to path) }
+        if (!previous.isNullOrBlank() && previous != path) {
+            val referenced = _bakePhotoPaths.value.values.toSet()
+            viewModelScope.launch(Dispatchers.IO) {
+                PhotoStore.deleteIfUnreferenced(getApplication(), previous) { candidate ->
+                    candidate in referenced
+                }
+            }
         }
     }
 
     /**
-     * «Старое фото» (Cycle 6 → Cycle 11): вклеить готовый снимок в запись
-     * формуляра этой выпечки. На вход приходит путь ОТНОСИТЕЛЬНО filesDir
-     * (Cycle 15, PhotoStore.commit) — копированием, поворотом и оформлением
-     * занимается ui/photo/PhotoAttachment, а content-URI до Room не доходит
-     * вовсе. Обратно в файл его собирает PhotoStore.resolve.
-     *
-     * Запись формуляра создаётся асинхронно в advanceStep, но к моменту, когда
-     * человек выбрал и оформил кадр, insert давно завершён — bakeRecordIds
-     * уже заполнен.
+     * Снять отложенный кадр до finish(): только память и файл. Room/сеть не трогаем.
      */
-    fun attachBakePhoto(sessionId: Long, path: String) {
-        if (path.isBlank()) return
-        _bakePhotoPaths.update { it + (sessionId to path) }
-        val recordId = bakeRecordIds[sessionId] ?: return
-        viewModelScope.launch { bakeHistoryRepository.attachPhoto(recordId, path) }
-        // Личный кадр не становится семейным автоматически. Отправка бывает
-        // только в явном действии «Поставить с кадром» внутри shareBakeStats.
+    fun unstageBakePhoto(sessionId: Long) {
+        if (_finishing.value.contains(sessionId)) return
+        val previous = _bakePhotoPaths.value[sessionId] ?: return
+        _bakePhotoPaths.update { it - sessionId }
+        val referenced = _bakePhotoPaths.value.values.toSet()
+        viewModelScope.launch(Dispatchers.IO) {
+            PhotoStore.deleteIfUnreferenced(getApplication(), previous) { candidate ->
+                candidate in referenced
+            }
+        }
     }
 
     /**
-     * Cycle 11: убрать фотокарточку со страницы. Файл в filesDir намеренно не
-     * удаляем: та же карточка может быть уже вписана в запись формуляра, и
-     * стирать её из-под истории книги эта кнопка не должна.
+     * Завершение «Испечено»: idempotent guard, запись фото в личный формуляр и
+     * (по решению) постановка факта на полку.
      */
-    fun clearBakePhoto(sessionId: Long) {
-        _bakePhotoPaths.update { it - sessionId }
-        val recordId = bakeRecordIds[sessionId] ?: return
-        if (sessionId in sharedPhotoSessionIds) {
-            syncRepository.clearBakePhoto(recordId)
-            sharedPhotoSessionIds -= sessionId
+    fun finish(sessionId: Long, decision: ShelfShareDecision, onExit: () -> Unit = {}) {
+        val stagedPhoto = _bakePhotoPaths.value[sessionId]
+        // P10: обещали поставить с кадром, а кадра нет — finish не стартует.
+        if (ShelfSharePolicy.wantsPhoto(decision) && stagedPhoto.isNullOrBlank()) return
+        if (!markFinishing(sessionId)) return
+        val frozenPhoto = stagedPhoto
+
+        viewModelScope.launch {
+            val completion = ensureCompletion(sessionId)
+            try {
+                val recordId = completion?.let { withTimeoutOrNull(RECORD_WAIT_MS) { it.recordId.await() } }
+                if (recordId != null && completion != null) {
+                    if (!frozenPhoto.isNullOrBlank()) {
+                        runCatching { bakeHistory.attachPhoto(recordId, frozenPhoto) }
+                    }
+                    if (ShelfSharePolicy.shouldEnqueue(decision)) {
+                        val account = madreApp.familyAccountRepository.currentAccount()
+                        runCatching {
+                            shelfSync.shareBakeStat(
+                                recordId = recordId,
+                                recipeId = completion.recipeId,
+                                recipeName = completion.recipeName,
+                                portions = completion.portions,
+                                bakedAtMillis = completion.completedAtMillis,
+                                displayName = account?.displayName,
+                                familyName = account?.familyName,
+                                photoPath = if (ShelfSharePolicy.wantsPhoto(decision)) frozenPhoto else null,
+                            )
+                        }
+                    }
+                }
+            } finally {
+                if (session(sessionId) != null) {
+                    exitSession(sessionId)
+                }
+                onExit()
+            }
+        }
+    }
+
+    fun restoreCompletion(sessionId: Long?) {
+        if (sessionId == null) return
+        viewModelScope.launch { restoreCompletionNow(sessionId) }
+    }
+
+    private suspend fun ensureCompletion(sessionId: Long): BakeCompletion? {
+        _completions.value[sessionId]?.let { return it }
+        val activeSession = session(sessionId)
+        if (activeSession != null && activeSession.isCompleted) {
+            val completion = reserveCompletion(
+                sessionId = sessionId,
+                recipeId = activeSession.recipe.id,
+                recipeName = activeSession.recipe.name,
+                portions = activeSession.scaleFactor.toInt().coerceAtLeast(1),
+                completedAtMillis = activeSession.completedAt ?: BakingClock.wallClock(),
+            )
+            startRecordInsert(sessionId, completion)
+            return completion
+        }
+        return restoreCompletionNow(sessionId)
+    }
+
+    private suspend fun restoreCompletionNow(sessionId: Long): BakeCompletion? {
+        _completions.value[sessionId]?.let { return it }
+        val recordId = sessionLedger.recordIdFor(sessionId) ?: return null
+        val record = bakeHistory.get(recordId) ?: return null
+        val candidate = BakeCompletion(
+            recipeId = record.recipeId,
+            recipeName = record.recipeName,
+            portions = record.portions,
+            completedAtMillis = record.completedAtMillis,
+        )
+        candidate.recordId.complete(recordId)
+        val completion = putCompletionIfAbsent(sessionId, candidate)
+        if (!completion.recordId.isCompleted) {
+            completion.recordId.complete(recordId)
+        }
+        return completion
+    }
+
+    private fun reserveCompletion(
+        sessionId: Long,
+        recipeId: String,
+        recipeName: String,
+        portions: Int,
+        completedAtMillis: Long,
+    ): BakeCompletion {
+        while (true) {
+            val current = _completions.value
+            current[sessionId]?.let { return it }
+            val candidate = BakeCompletion(
+                recipeId = recipeId,
+                recipeName = recipeName,
+                portions = portions,
+                completedAtMillis = completedAtMillis,
+            )
+            val next = current + (sessionId to candidate)
+            if (_completions.compareAndSet(current, next)) return candidate
+        }
+    }
+
+    private fun putCompletionIfAbsent(sessionId: Long, candidate: BakeCompletion): BakeCompletion {
+        while (true) {
+            val current = _completions.value
+            current[sessionId]?.let { return it }
+            val next = current + (sessionId to candidate)
+            if (_completions.compareAndSet(current, next)) return candidate
+        }
+    }
+
+    private fun startRecordInsert(sessionId: Long, completion: BakeCompletion) {
+        if (!completion.reserveRecordInsert()) return
+        viewModelScope.launch {
+            val recordId = runCatching {
+                bakeHistory.record(
+                    recipeId = completion.recipeId,
+                    recipeName = completion.recipeName,
+                    portions = completion.portions,
+                    completedAtMillis = completion.completedAtMillis,
+                )
+            }.getOrNull() ?: return@launch
+            if (sessionLedger.remember(sessionId, recordId) && !completion.recordId.isCompleted) {
+                completion.recordId.complete(recordId)
+            }
+        }
+    }
+
+    private fun markFinishing(sessionId: Long): Boolean {
+        while (true) {
+            val current = _finishing.value
+            if (current.contains(sessionId)) return false
+            val next = current + sessionId
+            if (_finishing.compareAndSet(current, next)) return true
         }
     }
 
@@ -446,8 +577,9 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
         // оставались висеть: «время вышло» от выпечки, которой давно нет.
         notificationLedger.forgetSession(id).forEach { key -> notifier.cancelByKey(key) }
         publishProgress()
-        bakeRecordIds.remove(id)
-        sharedPhotoSessionIds -= id
+        _bakePhotoPaths.update { it - id }
+        _completions.update { it - id }
+        sessionLedger.forget(id)
     }
 
     /**

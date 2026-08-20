@@ -235,8 +235,6 @@ fun MadreNavHost(
                 BakingCompleteScreen(
                     sessionId = sessionId,
                     onHome = {
-                        // Убирает только ЭТУ сессию — если печётся что-то ещё, оно продолжает идти.
-                        sessionId?.let { bakingViewModel.exitSession(it) }
                         navController.popBackStack(MadreDestinations.HOME, inclusive = false)
                     },
                     viewModel = bakingViewModel,

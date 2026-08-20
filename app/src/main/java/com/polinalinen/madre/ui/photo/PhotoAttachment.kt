@@ -50,22 +50,33 @@ import java.io.File
 fun rememberPhotoAttachment(
     kind: PhotoStore.PhotoKind,
     key: Long,
+    onCancelled: () -> Unit = {},
     onAttached: (String) -> Unit,
 ): () -> Unit {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val attached by rememberUpdatedState(onAttached)
+    val cancelled by rememberUpdatedState(onCancelled)
 
     var chooserVisible by remember { mutableStateOf(false) }
     // Cycle 17: пути, а не File, и rememberSaveable — камера часто убивает
     // процесс, и remember терял кадр молча (success=true, file=null).
     var stagedPath by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingCameraPath by rememberSaveable { mutableStateOf<String?>(null) }
+    var road by rememberSaveable { mutableStateOf(PhotoRoad()) }
     val staged = stagedPath?.let { File(it) }
-    val pendingCameraFile = pendingCameraPath?.let { File(it) }
+
+    fun reportCancelOnce() {
+        val result = road.cancel()
+        road = result.next
+        if (result.shouldNotify) cancelled()
+    }
 
     val galleryPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
+        if (uri == null) {
+            reportCancelOnce()
+            return@rememberLauncherForActivityResult
+        }
         scope.launch {
             stagedPath = withContext(Dispatchers.IO) { PhotoStore.stage(context, uri, kind)?.absolutePath }
         }
@@ -82,7 +93,12 @@ fun rememberPhotoAttachment(
         pendingCameraPath = null
         // Пустой файл — это отменённая съёмка на части прошивок: success там
         // приходит true, а JPEG так и не записан.
-        if (success && file != null && file.length() > 0L) stagedPath = file.absolutePath else PhotoStore.discard(file)
+        if (success && file != null && file.length() > 0L) {
+            stagedPath = file.absolutePath
+        } else {
+            PhotoStore.discard(file)
+            reportCancelOnce()
+        }
     }
 
     fun launchCamera() {
@@ -124,6 +140,7 @@ fun rememberPhotoAttachment(
             },
             onDismiss = {
                 cameraDenied = false
+                reportCancelOnce()
                 openSettings()
             },
         )
@@ -131,7 +148,10 @@ fun rememberPhotoAttachment(
 
     PhotoSourceChooser(
         visible = chooserVisible,
-        onDismiss = { chooserVisible = false },
+        onDismiss = {
+            chooserVisible = false
+            reportCancelOnce()
+        },
         onPickGallery = {
             galleryPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
         },
@@ -150,14 +170,19 @@ fun rememberPhotoAttachment(
             onCancel = {
                 stagedPath = null
                 PhotoStore.discard(file)
+                reportCancelOnce()
             },
             onSaved = { path ->
                 stagedPath = null
                 PhotoStore.discard(file)
+                road = road.attached()
                 attached(path)
             },
         )
     }
 
-    return { chooserVisible = true }
+    return {
+        road = road.begin()
+        chooserVisible = true
+    }
 }

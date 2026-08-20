@@ -11,29 +11,39 @@ import kotlinx.coroutines.withContext
 class BakeHistoryRepository(
     private val context: Context,
     db: MadreDatabase,
-) {
+) : BakeHistory {
     private val dao = db.bakeRecordDao()
 
-    fun observeAll(): Flow<List<BakeRecordEntity>> = dao.observeAll()
+    override fun observeAll(): Flow<List<BakeRecordEntity>> = dao.observeAll()
 
-    suspend fun record(recipeId: String, recipeName: String, portions: Int): Long = withContext(Dispatchers.IO) {
+    override suspend fun record(
+        recipeId: String,
+        recipeName: String,
+        portions: Int,
+        completedAtMillis: Long,
+    ): Long = withContext(Dispatchers.IO) {
         dao.insert(
             BakeRecordEntity(
                 recipeId = recipeId,
                 recipeName = recipeName,
                 portions = portions,
+                completedAtMillis = completedAtMillis,
             )
         )
     }
 
     /** «Старое фото» (Cycle 6): вклеить фотокарточку; прежний JPEG убираем. */
-    suspend fun attachPhoto(recordId: Long, path: String) = withContext(Dispatchers.IO) {
+    override suspend fun attachPhoto(recordId: Long, path: String) = withContext(Dispatchers.IO) {
         val previous = dao.photoPath(recordId)
         dao.attachPhoto(recordId, path)
         PhotoStore.deleteIfUnreferenced(context, previous) { it == path }
     }
 
-    suspend fun getCompletedAt(recordId: Long): Long? = withContext(Dispatchers.IO) {
+    override suspend fun getCompletedAt(recordId: Long): Long? = withContext(Dispatchers.IO) {
         dao.getCompletedAt(recordId)
+    }
+
+    override suspend fun get(recordId: Long): BakeRecordEntity? = withContext(Dispatchers.IO) {
+        dao.get(recordId)
     }
 }

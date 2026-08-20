@@ -1,5 +1,7 @@
 package com.polinalinen.madre.ui.photo
 
+import androidx.compose.runtime.saveable.Saver
+
 /**
  * One-attempt cancel dedupe for photo attachment flows.
  *
@@ -10,6 +12,13 @@ package com.polinalinen.madre.ui.photo
 data class PhotoRoad(
     private val cancelReported: Boolean = false,
 ) {
+    companion object {
+        val Saver: Saver<PhotoRoad, Boolean> = Saver(
+            save = { it.cancelReported },
+            restore = { PhotoRoad(cancelReported = it) },
+        )
+    }
+
     fun begin(): PhotoRoad = PhotoRoad(cancelReported = false)
 
     fun attached(): PhotoRoad = PhotoRoad(cancelReported = false)

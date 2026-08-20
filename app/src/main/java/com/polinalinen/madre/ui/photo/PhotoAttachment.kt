@@ -63,7 +63,7 @@ fun rememberPhotoAttachment(
     // процесс, и remember терял кадр молча (success=true, file=null).
     var stagedPath by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingCameraPath by rememberSaveable { mutableStateOf<String?>(null) }
-    var road by rememberSaveable { mutableStateOf(PhotoRoad()) }
+    var road by rememberSaveable(stateSaver = PhotoRoad.Saver) { mutableStateOf(PhotoRoad()) }
     val staged = stagedPath?.let { File(it) }
 
     fun reportCancelOnce() {

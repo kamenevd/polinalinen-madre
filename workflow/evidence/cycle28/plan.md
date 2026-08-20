@@ -849,7 +849,13 @@ private fun reserveCompletion(sessionId: Long, completedAtMillis: Long): BakeCom
 fun finish(sessionId: Long, decision: ShelfShareDecision, onExit: () -> Unit)
 ```
 
-Первая строка синхронная и до `launch`:
+Сначала, **до** `finishing.add` и до `launch`, fail-closed страж П10:
+`wantsPhoto(decision) && photoPath(sessionId)==null` → return без очереди, без
+`exitSession`, без `onExit`. Вызов `finish` в этом случае — ошибка UI; экран
+обязан открыть Камеру/Галерею и остаться. Страж есть и на живой сессии, и после
+рехидратации (кадра в памяти нет).
+
+Дальше синхронно до `launch`:
 `if (!finishing.add(sessionId)) return` (`finishing` —
 `ConcurrentHashMap.newKeySet<Long>()`). Второй, третий и одновременный `finish`
 уходят ни с чем: не дублируется ни attach, ни enqueue, ни `exitSession`, ни
@@ -868,8 +874,8 @@ fun finish(sessionId: Long, decision: ShelfShareDecision, onExit: () -> Unit)
  `bakeHistoryRepository.attachPhoto(recordId, path)` **с ожиданием**
  (`BakeHistoryRepository.kt:30-34`); затем `shouldEnqueue(decision)` → ровно один
  `sync.shareBakeStat(...)` с `recipeId`/`recipeName`/`portions` из
- `BakeRecordEntity` по этому `recordId`, **не** из `session(id)` (после смерти
- процесса сессии нет). Повторный attach того же пути безвреден: прежний
+ `bakeHistoryRepository.get(recordId): BakeRecordEntity?` (новый тонкий accessor
+ рядом с `getCompletedAt`, схема Room не меняется), **не** из `session(id)`. Повторный attach того же пути безвреден: прежний
  файл удаляется только если он **другой** (`:33`);
 4. `exitSession(sessionId)`;
 5. `onExit()`.
@@ -1193,6 +1199,7 @@ findings № 3, № 4, № 5, № 9, № 10.
 | `BakingCompleteShelfButtonUiTest` | `app/src/test/java/com/polinalinen/madre/ui/screens/BakingCompleteShelfButtonUiTest.kt` | дефолтная подпись `на полке · с кадром`; тап → `себе`; четыре тапа = четыре смены (гейта нет); листа «Поставить на полку?» нет; строки «тап — себе» нет; без токена кнопки нет вовсе |
 | `BakingFinishOrderTest` | `app/src/test/java/com/polinalinen/madre/viewmodel/BakingFinishOrderTest.kt` | на фейковом `ShelfSync`: кадр записан **до** постановки в очередь, выход — **после** обоих; при `себе` очередь пуста; при `с кадром` `wantsPhoto` доехал до `SyncRepository` (finding № 9) |
 | `BakingShareOnceTest` | `app/src/test/java/com/polinalinen/madre/viewmodel/BakingShareOnceTest.kt` | два `finish` подряд → один вызов `shareBakeStat`; `advanceStep` сам по себе не ставит в очередь ничего (finding № 9) |
+| `BakingRestoreFinishFromRecordTest` | `app/src/test/java/com/polinalinen/madre/viewmodel/BakingRestoreFinishFromRecordTest.kt` | ViewModel без сессии, запись в Room: `PUT_WITH_PHOTO` с кадром — один share из полей записи; без кадра — очередь пуста, `onExit` не звался, `finishing` не ставился |
 | `BakeCompletionOnceTest` | `app/src/test/java/com/polinalinen/madre/viewmodel/BakeCompletionOnceTest.kt` | на фейковом `BakeHistoryRepository` с **придержанным** `record` (insert возвращает id только после того, как тест отпустит гейт): два `advanceStep` подряд → **один** insert и одно состояние завершения; `finish`, нажатый до отпускания гейта, ждёт и отправляет **после** того, как запись легла; два одновременных `finish` → один attach, один `shareBakeStat`, один `exitSession`, один `onExit`; insert так и не вернулся → по `RECORD_WAIT_MS` выход состоялся, а в очередь не ушло ничего (finding № 2 круга 2) |
 | `BakeSessionLedgerTest` | `app/src/test/java/com/polinalinen/madre/utils/BakeSessionLedgerTest.kt` | `remember`/`recordIdFor`/`forget` на фейковых prefs; формат ключа `bake_record_session_<id>`; **переиспользование номера**: после `forget` при выдаче того же id указателя нет, и старый recordId к новой выпечке не прилипает (П13) |
 | `BakedSealRehydrationTest` | `app/src/test/java/com/polinalinen/madre/viewmodel/BakedSealRehydrationTest.kt` | **новая** ViewModel + уже лежащая в Room запись + указатель в журнале: `restoreCompletion(sessionId)` поднимает `completedAtMillis` из Room, и это число записи, а не «сегодня». Запись сделана в 23:58 местного времени при `TimeZone` не UTC, часы теста — уже следующий день: на сургуче стоит день записи. Указателя нет → состояние `None`, подписи-даты нет, и **никакой** сегодняшней (finding № 3 круга 2) |

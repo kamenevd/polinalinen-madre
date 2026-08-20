@@ -334,20 +334,36 @@ private fun publishFresh(seen: Long, next: FamilyBookState): FamilyBookState
 они успевают сменить поколение. Поэтому **запись токена, AtomicReference и
 публикация состояния — одна граница свежести**, а не три.
 
+`private val authGate = Any()` — обычный монитор JVM, не корутинный Mutex.
+Проверка поколения и запись токена/store/состояния живут **внутри одного**
+`synchronized(authGate)`. Иначе `signOut` вклинивается между `revision.get()==seen`
+и `token.set`.
+
 `adoptLocked(seen, tokenValue, account)`:
 
-1. если `revision.get() != seen` — **не пишет токен**, не трогает store,
-   не публикует; возвращает `_state.value`;
-2. иначе `token.set(tokenValue)`, `tokenStore.save(tokenValue)`,
-   `publishFresh(seen, SignedIn(account))`.
+```
+synchronized(authGate) {
+  if (revision.get() != seen) return _state.value
+  token.set(tokenValue)
+  tokenStore.save(tokenValue)
+  return publishFresh(seen, SignedIn(account))
+}
+```
 
-`signOut()` атомарно относительно позднего ответа: `revision.incrementAndGet()`,
-`token.set(null)`, `tokenStore.clear()`, `_state.value = SignedOut`.
-Порядок важен: сначала поколение, потом чистка. Иначе `adoptLocked` успеет
-записать токен между `clear` и `revision++`.
+`signOut()`:
 
-`clearInviteCode()` только `revision.incrementAndGet()` + публикует
-`withoutInviteCode()`; токен не трогает.
+```
+synchronized(authGate) {
+  revision.incrementAndGet()
+  token.set(null)
+  tokenStore.clear()
+  _state.value = SignedOut
+}
+```
+
+`clearInviteCode()` тоже под `authGate`: increment + `withoutInviteCode()`.
+Корутинный mutex по-прежнему сериализует сетевые методы; `authGate` закрывает
+окно с не-suspend писателями.
 
 Если `revision` не менялся — ответ публикуется как есть. Если менялся:
 
@@ -804,10 +820,11 @@ private fun reserveCompletion(sessionId: Long, completedAtMillis: Long): BakeCom
 наступила, а если нет — снимать с полки нечего, потому что туда ничего и не
 уходило.
 
-Дальше в `launch`: `record(...)` с явной датой → `ledger.remember(sessionId,
-recordId)` → `completion.recordId.complete(recordId)`. Insert упал —
-`complete(null)`, и это не «ничего не произошло»: ждущий `finish` получает
-ответ, а не висит.
+Дальше в `launch`: `record(...)` с явной датой →
+`val kept = ledger.remember(sessionId, recordId)` (`commit()`, не `apply()`) →
+`completion.recordId.complete(if (kept) recordId else null)`. Insert упал или
+`commit()==false` — `complete(null)`; ждущий `finish` получает ответ и не
+публикует.
 
 **`finish` — единственная дверь наружу, и она ждёт готовности.**
 

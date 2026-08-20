@@ -39,8 +39,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.polinalinen.madre.account.FamilyBookState
 import com.polinalinen.madre.account.InviteCode
 import com.polinalinen.madre.data.db.entities.BakeRecordEntity
-import com.polinalinen.madre.shelf.ShelfShareMode
-import com.polinalinen.madre.shelf.ShelfSharePolicy
 import com.polinalinen.madre.shelf.ShelfMember
 import com.polinalinen.madre.ui.components.BackLabel
 import com.polinalinen.madre.ui.components.BookButton
@@ -54,7 +52,7 @@ import com.polinalinen.madre.viewmodel.FamilyBookViewModel
 import com.polinalinen.madre.viewmodel.ShelfViewModel
 
 /**
- * Полка в колофоне: имя, люди, код, как ставить выпечку, уйти.
+ * Полка в колофоне: имя, люди, код приглашения и уход с полки.
  * Вход и заведение живут здесь же — отдельных экранов под почту нет.
  */
 @Composable
@@ -70,9 +68,6 @@ fun SettingsShelfScreen(
     val familyBookState by familyBookViewModel.state.collectAsState()
     val passwordResetNotice by familyBookViewModel.passwordReset.collectAsState()
     val members by shelfViewModel.members.collectAsState()
-    val prefs = remember { context.getSharedPreferences(ShelfSharePolicy.PREFS, android.content.Context.MODE_PRIVATE) }
-    var shareMode by remember { mutableStateOf(ShelfSharePolicy.read(prefs)) }
-    var pickingShare by rememberSaveable { mutableStateOf(false) }
     var renaming by rememberSaveable { mutableStateOf(false) }
     var draftName by rememberSaveable { mutableStateOf("") }
 
@@ -212,11 +207,6 @@ fun SettingsShelfScreen(
                         )
                     }
                     HairRule(Modifier.padding(horizontal = 22.dp, vertical = 12.dp))
-                    SettingsShelfShareRow(
-                        mode = shareMode,
-                        onClick = { pickingShare = true },
-                    )
-                    HairRule(Modifier.padding(horizontal = 22.dp, vertical = 12.dp))
                     TextAction(
                         "Уйти с полки · можно вернуться",
                         onClick = familyBookViewModel::leaveFamily,
@@ -226,42 +216,6 @@ fun SettingsShelfScreen(
             }
             SyncStatusLine(Modifier.padding(horizontal = 22.dp, vertical = 8.dp))
         }
-    }
-
-    if (pickingShare) {
-        AlertDialog(
-            onDismissRequest = { pickingShare = false },
-            shape = RoundedCornerShape(4.dp),
-            containerColor = colors.cream,
-            title = {
-                Text(ShelfSharePolicy.SETTING_LABEL, color = colors.espresso, fontFamily = FontFamily.Serif, fontSize = 20.sp)
-            },
-            text = {
-                Column {
-                    listOf(ShelfShareMode.ALWAYS, ShelfShareMode.ASK).forEach { mode ->
-                        val label = ShelfSharePolicy.labelOf(mode)
-                        Box(
-                            Modifier.fillMaxWidth().then(bookAction(label) {
-                                shareMode = mode
-                                ShelfSharePolicy.write(prefs, mode)
-                                pickingShare = false
-                            }),
-                            contentAlignment = Alignment.CenterStart,
-                        ) {
-                            Text(
-                                label,
-                                color = if (mode == shareMode) colors.crust else colors.espresso,
-                                fontFamily = FontFamily.Serif,
-                                fontSize = 16.sp,
-                                fontWeight = if (mode == shareMode) FontWeight.Bold else FontWeight.Normal,
-                            )
-                        }
-                    }
-                }
-            },
-            confirmButton = {},
-            dismissButton = { TextAction("Оставить как есть", onClick = { pickingShare = false }) },
-        )
     }
 
     if (renaming && account?.isFamilyOwner == true) {
@@ -320,27 +274,5 @@ internal fun ShelfPeopleList(members: List<ShelfMember>, familyOwnerId: String?)
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun SettingsShelfShareRow(mode: ShelfShareMode, onClick: () -> Unit) {
-    val colors = AppColors.current
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .then(bookAction("${ShelfSharePolicy.SETTING_LABEL}: ${ShelfSharePolicy.labelOf(mode)}", onClick = onClick))
-            .padding(horizontal = 22.dp, vertical = 14.dp),
-        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(ShelfSharePolicy.SETTING_LABEL, color = colors.espresso, fontFamily = FontFamily.Serif, fontSize = 15.sp)
-        Text(
-            ShelfSharePolicy.labelOf(mode),
-            color = colors.cocoa,
-            fontFamily = FontFamily.Serif,
-            fontStyle = FontStyle.Italic,
-            fontSize = 14.sp,
-        )
     }
 }

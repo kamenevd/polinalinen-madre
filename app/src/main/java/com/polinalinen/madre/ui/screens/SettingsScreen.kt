@@ -62,6 +62,8 @@ import com.polinalinen.madre.sync.SyncStatus
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.HeavyRule
 import com.polinalinen.madre.ui.components.PageLabel
+import com.polinalinen.madre.ui.components.TapCycle
+import com.polinalinen.madre.ui.components.TapCycleRow
 import com.polinalinen.madre.ui.components.TextAction
 import com.polinalinen.madre.ui.theme.AppColors
 import com.polinalinen.madre.ui.theme.CalmModeSetting
@@ -283,21 +285,15 @@ private fun SettingsSection(
     content()
 }
 
-/**
- * Cycle 19: «как часто кормить» вместо «Кормить: раз в 48 часов».
- *
- * До этого строка перебирала пять значений по кругу от нажатия к нажатию:
- * чтобы вернуть предыдущее, нужно было пройти всю пятёрку, а увидеть весь
- * список было негде вовсе. Теперь список открывается и показывает, из чего
- * выбор, — включая то, что выбрано сейчас.
- */
+/** Cycle 28: ритм кормления снова крутится по кругу одной строкой. */
 @Composable
 private fun FeedingRhythmRow(intervalHours: Int, onChange: (Int) -> Unit) {
-    var picking by rememberSaveable { mutableStateOf(false) }
-    SettingsRow(
+    TapCycleRow(
         label = "Как часто кормить",
         value = "Ваш ритм: ${FeedingInterval.label(intervalHours)}",
-        onClick = { picking = true },
+        onClick = {
+            onChange(TapCycle.next(FeedingInterval.HOURS, intervalHours))
+        },
     )
     Text(
         "Руководство Levito Madre: при хранении на средней полке холодильника 4–6°C — каждые 3–5 дней. Это ориентир, не замена вашему ритму.",
@@ -306,18 +302,6 @@ private fun FeedingRhythmRow(intervalHours: Int, onChange: (Int) -> Unit) {
         fontSize = 12.sp,
         modifier = Modifier.padding(horizontal = 22.dp, vertical = 4.dp),
     )
-    if (picking) {
-        SettingsChoiceDialog(
-            title = "Как часто кормить",
-            options = FeedingInterval.HOURS.map { it to FeedingInterval.label(it) },
-            selected = intervalHours,
-            onPick = {
-                onChange(it)
-                picking = false
-            },
-            onDismiss = { picking = false },
-        )
-    }
 }
 
 /**
@@ -347,11 +331,18 @@ private fun RemindersRow(remindersEnabled: Boolean, onRemindersEnabledChange: (B
     }
 
     if (allowed) {
-        SettingsRow(
+        TapCycleRow(
             label = "Напоминания",
             value = if (remindersEnabled) "вкл" else "выкл",
             valueColor = if (remindersEnabled) colors.sage else colors.cocoa,
-            onClick = { onRemindersEnabledChange(!remindersEnabled) },
+            onClick = {
+                onRemindersEnabledChange(
+                    TapCycle.next(
+                        options = listOf(true, false),
+                        current = remindersEnabled,
+                    ),
+                )
+            },
         )
     } else {
         // Переключать нечего: телефон запретил книге писать, и «вкл» здесь было
@@ -382,102 +373,20 @@ private fun RemindersRow(remindersEnabled: Boolean, onRemindersEnabledChange: (B
     }
 }
 
-/**
- * Cycle 19: оба варианта оформления названы и стоят рядом.
- *
- * Строка-переключатель показывала одно слово и меняла его от нажатия: чтобы
- * узнать, что бывает кроме «спокойного», нужно было нажать и посмотреть, что
- * стало. Здесь оба слова видны сразу, выбранное подчёркнуто.
- */
+/** Cycle 28: оформление крутится одной строкой, как и остальные значения. */
 @Composable
 private fun CalmModeRow(calmMode: Boolean, onCalmModeChange: (Boolean) -> Unit) {
-    val colors = AppColors.current
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 22.dp, vertical = 4.dp),
-        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text("Оформление", color = colors.espresso, fontFamily = FontFamily.Serif, fontSize = 15.sp)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            listOf(true, false).forEach { calm ->
-                val label = CalmModeSetting.label(calm)
-                val chosen = calm == calmMode
-                Box(
-                    Modifier
-                        .then(bookAction(label = "Оформление: $label") { onCalmModeChange(calm) })
-                        .padding(start = 14.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        label,
-                        color = if (chosen) colors.espresso else colors.flour,
-                        fontFamily = FontFamily.Serif,
-                        fontSize = 15.sp,
-                        fontWeight = if (chosen) FontWeight.Bold else FontWeight.Normal,
-                        modifier = Modifier.drawBehind {
-                            if (!chosen) return@drawBehind
-                            val thickness = 1.5.dp.toPx()
-                            drawLine(
-                                color = colors.crust,
-                                start = androidx.compose.ui.geometry.Offset(0f, size.height + 2.dp.toPx()),
-                                end = androidx.compose.ui.geometry.Offset(size.width, size.height + 2.dp.toPx()),
-                                strokeWidth = thickness,
-                            )
-                        },
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
- * Выбор из нескольких значений — страницей книги, а не material-списком.
- * Форма та же, что у [com.polinalinen.madre.ui.components.ConfirmDialog]:
- * скругление 4dp, бумага Cream. Каждая строка — `bookAction`, то есть роль
- * кнопки, подпись для TalkBack и мишень не меньше 48dp.
- */
-@Composable
-private fun <T> SettingsChoiceDialog(
-    title: String,
-    options: List<Pair<T, String>>,
-    selected: T,
-    onPick: (T) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val colors = AppColors.current
-    androidx.compose.material3.AlertDialog(
-        onDismissRequest = onDismiss,
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
-        containerColor = colors.cream,
-        title = {
-            Text(title, color = colors.espresso, fontFamily = FontFamily.Serif, fontSize = 20.sp)
+    TapCycleRow(
+        label = "Оформление",
+        value = CalmModeSetting.label(calmMode),
+        onClick = {
+            onCalmModeChange(
+                TapCycle.next(
+                    options = listOf(true, false),
+                    current = calmMode,
+                ),
+            )
         },
-        text = {
-            Column(Modifier.fillMaxWidth()) {
-                options.forEach { (value, label) ->
-                    val chosen = value == selected
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .then(bookAction(label = label) { onPick(value) }),
-                        contentAlignment = Alignment.CenterStart,
-                    ) {
-                        Text(
-                            label,
-                            color = if (chosen) colors.crust else colors.espresso,
-                            fontFamily = FontFamily.Serif,
-                            fontSize = 16.sp,
-                            fontWeight = if (chosen) FontWeight.Bold else FontWeight.Normal,
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = { TextAction("Оставить как есть", onClick = onDismiss) },
     )
 }
 

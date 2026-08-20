@@ -2,18 +2,14 @@ package com.polinalinen.madre.ui.photo
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -46,8 +42,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.polinalinen.madre.ui.components.BackLabel
+import com.polinalinen.madre.ui.components.BookButton
+import com.polinalinen.madre.ui.components.BookButtonVariant
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.PageLabel
+import com.polinalinen.madre.ui.components.TapCycle
+import com.polinalinen.madre.ui.components.TapCycleRow
 import com.polinalinen.madre.ui.theme.AppColors
 import com.polinalinen.madre.utils.PhotoStore
 import kotlinx.coroutines.Dispatchers
@@ -151,12 +152,7 @@ fun PhotoDesignerDialog(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Box(
-                        Modifier.heightIn(min = 48.dp).clickable { onCancel() }.padding(vertical = 14.dp),
-                        contentAlignment = Alignment.CenterStart,
-                    ) {
-                        PageLabel("← Отмена")
-                    }
+                    BackLabel("Отмена", onClick = onCancel)
                     PageLabel("Стол оформления")
                 }
 
@@ -211,42 +207,39 @@ fun PhotoDesignerDialog(
                 }
 
                 HairRule(Modifier.padding(horizontal = 22.dp))
-
-                DecorGroup("Рамка") {
-                    PhotoFrame.entries.forEach { frame ->
-                        DecorChip(
-                            label = frame.label,
-                            selected = decor.frame == frame,
-                            onClick = { decor = decor.withFrame(frame) },
+                TapCycleRow(
+                    label = "Рамка",
+                    value = decor.frame.label,
+                    onClick = {
+                        decor = decor.withFrame(
+                            TapCycle.next(
+                                options = PhotoFrame.entries,
+                                current = decor.frame,
+                            ),
                         )
-                    }
-                }
-
-                DecorGroup("Тёплый свет") {
-                    DecorChip(
-                        label = "прогреть",
-                        selected = decor.warm,
-                        onClick = { if (!decor.warm) decor = decor.toggleWarm() },
-                    )
-                    DecorChip(
-                        label = "как снято",
-                        selected = !decor.warm,
-                        onClick = { if (decor.warm) decor = decor.toggleWarm() },
-                    )
-                }
-
-                DecorGroup("Оттиск") {
-                    PhotoStamp.entries.forEach { stamp ->
-                        DecorChip(
-                            label = stamp.label,
-                            selected = decor.stamp == stamp,
-                            onClick = { decor = decor.withStamp(stamp) },
+                    },
+                )
+                TapCycleRow(
+                    label = "Тёплый свет",
+                    value = if (decor.warm) "прогреть" else "как снято",
+                    onClick = { decor = decor.toggleWarm() },
+                )
+                TapCycleRow(
+                    label = "Оттиск",
+                    value = decor.stamp?.label ?: "без оттиска",
+                    onClick = {
+                        val options = listOf<PhotoStamp?>(null) + PhotoStamp.entries
+                        decor = decor.copy(
+                            stamp = TapCycle.next(
+                                options = options,
+                                current = decor.stamp,
+                            ),
                         )
-                    }
-                }
+                    },
+                )
                 Text(
-                    if (decor.stamp == null) "оттиск не обязателен — можно оставить карточку чистой"
-                    else "тап по выбранному оттиску снимает его",
+                    if (decor.stamp == null) "оттиск не обязателен — в круге есть «без оттиска»"
+                    else "оттиск выбран — угол можно сменить следующей строкой",
                     color = colors.cocoa,
                     fontFamily = FontFamily.Serif,
                     fontStyle = FontStyle.Italic,
@@ -255,59 +248,36 @@ fun PhotoDesignerDialog(
                 )
 
                 if (decor.stamp != null) {
-                    DecorGroup("Угол") {
-                        StampCorner.entries.forEach { corner ->
-                            DecorChip(
-                                label = corner.label,
-                                selected = decor.stampCorner == corner,
-                                onClick = { decor = decor.withCorner(corner) },
+                    TapCycleRow(
+                        label = "Угол",
+                        value = decor.stampCorner.label,
+                        onClick = {
+                            decor = decor.withCorner(
+                                TapCycle.next(
+                                    options = StampCorner.entries,
+                                    current = decor.stampCorner,
+                                ),
                             )
-                        }
-                    }
+                        },
+                    )
                 }
 
                 Spacer(Modifier.height(18.dp))
-
-                Box(
-                    Modifier
-                        .padding(horizontal = 22.dp)
-                        .fillMaxWidth()
-                        .clickable(enabled = source != null && !saving) { finish(decor) }
-                        .drawBehind { drawRoundRect(colors.espresso, cornerRadius = CornerRadius(4.dp.toPx())) }
-                        .padding(vertical = 14.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        if (saving) "вклеиваем…" else "Готово",
-                        color = colors.paper,
-                        fontFamily = FontFamily.Serif,
-                        fontSize = 16.sp,
-                        letterSpacing = 1.sp,
-                    )
-                }
-
-                Box(
-                    Modifier
-                        .padding(horizontal = 22.dp, vertical = 10.dp)
-                        .fillMaxWidth()
-                        .clickable(enabled = !saving) { finish(null) }
-                        .drawBehind {
-                            drawRoundRect(
-                                colors.espresso,
-                                cornerRadius = CornerRadius(4.dp.toPx()),
-                                style = Stroke(1.5.dp.toPx()),
-                            )
-                        }
-                        .padding(vertical = 12.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        "Без оформления",
-                        color = colors.espresso,
-                        fontFamily = FontFamily.Serif,
-                        fontSize = 14.sp,
-                    )
-                }
+                BookButton(
+                    label = if (saving) "вклеиваем…" else "Готово",
+                    enabled = source != null && !saving,
+                    onClick = { finish(decor) },
+                    modifier = Modifier.padding(horizontal = 22.dp),
+                    repeatable = true,
+                )
+                BookButton(
+                    label = "Без оформления",
+                    enabled = !saving,
+                    onClick = { finish(null) },
+                    modifier = Modifier.padding(horizontal = 22.dp, vertical = 10.dp),
+                    variant = BookButtonVariant.SECONDARY,
+                    repeatable = true,
+                )
             }
         }
     }
@@ -315,54 +285,3 @@ fun PhotoDesignerDialog(
 
 /** Превью держим мелким: рендер идёт на каждый тап по кнопке оформления. */
 private const val PREVIEW_EDGE_PX = 900
-
-/**
- * Ряд переключателей одного свойства. FlowRow, а не Row: подписи русские и
- * длинные («сверху слева»), в одну строку на узком экране они не встают.
- */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun DecorGroup(title: String, content: @Composable () -> Unit) {
-    Column(Modifier.padding(horizontal = 22.dp, vertical = 10.dp)) {
-        PageLabel(title, color = AppColors.current.espresso)
-        FlowRow(
-            Modifier.fillMaxWidth().padding(top = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            content()
-        }
-    }
-}
-
-/** Штамп-переключатель из «Живой книги»: рамка 1.5dp, скругление 4dp, без заливки-пилюли. */
-@Composable
-private fun DecorChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    val colors = AppColors.current
-    Box(
-        Modifier
-            .heightIn(min = 44.dp)
-            .clickable { onClick() }
-            .drawBehind {
-                if (selected) {
-                    drawRoundRect(colors.espresso, cornerRadius = CornerRadius(4.dp.toPx()))
-                } else {
-                    drawRoundRect(
-                        colors.cocoa,
-                        cornerRadius = CornerRadius(4.dp.toPx()),
-                        style = Stroke(1.5.dp.toPx()),
-                    )
-                }
-            }
-            .padding(horizontal = 10.dp, vertical = 12.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            label,
-            color = if (selected) colors.paper else colors.cocoa,
-            fontFamily = FontFamily.Serif,
-            fontSize = 12.sp,
-            maxLines = 1,
-        )
-    }
-}

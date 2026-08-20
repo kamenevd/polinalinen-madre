@@ -11,6 +11,7 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
@@ -110,14 +111,30 @@ class SettingsIaUiTest {
         rule.onNodeWithText("раз в 24 часа", useUnmergedTree = true).assertDoesNotExist()
     }
 
-    /**
-     * Оба оформления названы и стоят рядом: узнать, что бывает кроме
-     * «спокойного», больше не нужно нажатием вслепую.
-     */
+    /** Cycle 28: оформление крутится одной строкой, текущее значение видно сразу. */
     @Test
-    fun `both looks are named at once, so neither has to be discovered by tapping`() {
-        showSettings(calmMode = true)
+    fun `look row shows current value and tap advances to next`() {
+        rule.setContent {
+            val calmMode = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(true) }
+            MadreTheme {
+                SettingsScreen(
+                    myName = "Полина",
+                    onMyNameChange = {},
+                    onBack = {},
+                    starterName = "Соня",
+                    calmMode = calmMode.value,
+                    onCalmModeChange = { calmMode.value = it },
+                )
+            }
+        }
         rule.onNodeWithText("спокойное").assertExists()
+        val clickables = rule.onAllNodes(hasClickAction(), useUnmergedTree = true)
+        val targetIndex = clickables.fetchSemanticsNodes().indexOfFirst {
+            it.config.getOrNull(SemanticsActions.OnClick)?.label == "Оформление: спокойное"
+        }
+        assertThat(targetIndex).isAtLeast(0)
+        clickables[targetIndex].performSemanticsAction(SemanticsActions.OnClick)
+        rule.waitForIdle()
         rule.onNodeWithText("живое").assertExists()
     }
 

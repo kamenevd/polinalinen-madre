@@ -15,6 +15,7 @@ import com.polinalinen.madre.data.remote.MadreApi
 import com.polinalinen.madre.data.remote.MadreApiFactory
 import com.polinalinen.madre.data.remote.PocketBaseFilter
 import com.polinalinen.madre.utils.PhotoStore
+import java.io.IOException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -80,7 +81,12 @@ class SyncWorker(
     }
 
     private suspend fun uploadPhoto(api: MadreApi, token: String, payload: BakePhotoPayload) {
-        val recordId = findShelfRecordId(api, token, payload.clientEventId) ?: error("запись ещё не на полке")
+        val recordId = findShelfRecordId(api, token, payload.clientEventId)
+        if (recordId == null) {
+            // missing server bake is retryable; bake POST may still be in flight
+            // or delayed share; do not GIVE_UP
+            throw IOException("server bake record not yet visible for ${payload.clientEventId}")
+        }
         val file = PhotoStore.resolve(applicationContext, payload.photoPath)
         if (!file.isFile) {
             // Кадра на телефоне нет — факта это не отменяет, и выдумывать

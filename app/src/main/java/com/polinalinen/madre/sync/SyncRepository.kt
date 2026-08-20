@@ -55,6 +55,7 @@ class SyncRepository(private val context: Context) {
             displayName = displayName?.trim()?.takeIf { it.isNotEmpty() },
             familyName = familyName?.trim()?.takeIf { it.isNotEmpty() },
         )
+        // Chain first bake POST before photo mutation (photo may be attached later or at share time)
         enqueue("sync-bake-record-$recordId", SyncWorker.KIND_BAKE, gson.toJson(record))
         val photo = photoPath?.trim().orEmpty()
         if (photo.isNotEmpty()) {
@@ -68,7 +69,9 @@ class SyncRepository(private val context: Context) {
             clientEventId = SyncEventId.forBake(deviceId, recordId),
             photoPath = photoPath,
         )
-        enqueue("sync-bake-photo-$recordId", SyncWorker.KIND_BAKE_PHOTO, gson.toJson(payload))
+        // Serialize photo desired-state: use one queue per record + REPLACE so
+        // upload A then clear -> final clear; upload A then upload B -> final B
+        enqueue("sync-bake-photo-$recordId", SyncWorker.KIND_BAKE_PHOTO, gson.toJson(payload), ExistingWorkPolicy.REPLACE)
     }
 
     fun clearBakePhoto(recordId: Long) {
@@ -77,7 +80,7 @@ class SyncRepository(private val context: Context) {
             clientEventId = SyncEventId.forBake(deviceId, recordId),
             photoPath = "",
         )
-        enqueue("sync-bake-photo-clear-$recordId", SyncWorker.KIND_BAKE_PHOTO_CLEAR, gson.toJson(payload))
+        enqueue("sync-bake-photo-$recordId", SyncWorker.KIND_BAKE_PHOTO_CLEAR, gson.toJson(payload), ExistingWorkPolicy.REPLACE)
     }
 
     fun shareFeedingStat(feedingId: Long, flourGrams: Int, waterGrams: Int, fedAtMillis: Long) {
@@ -92,13 +95,13 @@ class SyncRepository(private val context: Context) {
         enqueue("sync-feeding-$feedingId", SyncWorker.KIND_FEEDING, gson.toJson(record))
     }
 
-    private fun enqueue(uniqueName: String, kind: String, payload: String) {
+    private fun enqueue(uniqueName: String, kind: String, payload: String, policy: ExistingWorkPolicy = ExistingWorkPolicy.KEEP) {
         val request = OneTimeWorkRequestBuilder<SyncWorker>()
             .setInputData(workDataOf(SyncWorker.KEY_KIND to kind, SyncWorker.KEY_PAYLOAD to payload))
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
             .build()
-        WorkManager.getInstance(context).enqueueUniqueWork(uniqueName, ExistingWorkPolicy.KEEP, request)
+        WorkManager.getInstance(context).enqueueUniqueWork(uniqueName, policy, request)
     }
 }
 

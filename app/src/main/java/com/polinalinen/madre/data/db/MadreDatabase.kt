@@ -121,6 +121,9 @@ interface BakeRecordDao {
 
     @Query("SELECT photoPath FROM bake_records WHERE id = :recordId")
     suspend fun photoPath(recordId: Long): String?
+
+    @Query("SELECT completedAtMillis FROM bake_records WHERE id = :recordId")
+    suspend fun getCompletedAt(recordId: Long): Long?
 }
 
 /**

@@ -117,6 +117,7 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
     // sessionId → id записи формуляра: нужен, чтобы фотокарточка, выбранная на
     // Complete-экране, легла именно в свою строку bake_records.
     private val bakeRecordIds = mutableMapOf<Long, Long>()
+    private val bakeCompletedAt = mutableMapOf<Long, Long>()
     private val sharedSessionIds = mutableSetOf<Long>()
 
     /**
@@ -260,6 +261,8 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
                 val recordId =
                     bakeHistoryRepository.record(s.recipe.id, s.recipe.name, s.scaleFactor.toInt().coerceAtLeast(1))
                 bakeRecordIds[id] = recordId
+                val completed = bakeHistoryRepository.getCompletedAt(recordId) ?: System.currentTimeMillis()
+                bakeCompletedAt[id] = completed
                 val prefs = getApplication<Application>()
                     .getSharedPreferences(ShelfSharePolicy.PREFS, android.content.Context.MODE_PRIVATE)
                 val mode = ShelfSharePolicy.read(prefs)
@@ -365,12 +368,13 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
         val recordId = bakeRecordIds[id] ?: return
         val account = madreApp.familyAccountRepository.currentAccount()
         val photoPath = if (withPhoto) _bakePhotoPaths.value[id] else null
+        val bakedAtMillis = bakeCompletedAt[id] ?: System.currentTimeMillis()
         syncRepository.shareBakeStat(
             recordId = recordId,
             recipeId = s.recipe.id,
             recipeName = s.recipe.name,
             portions = s.scaleFactor.toInt().coerceAtLeast(1),
-            bakedAtMillis = System.currentTimeMillis(),
+            bakedAtMillis = bakedAtMillis,
             displayName = account?.displayName,
             familyName = account?.familyName,
             photoPath = photoPath,
@@ -443,6 +447,8 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
         // оставались висеть: «время вышло» от выпечки, которой давно нет.
         notificationLedger.forgetSession(id).forEach { key -> notifier.cancelByKey(key) }
         publishProgress()
+        bakeRecordIds.remove(id)
+        bakeCompletedAt.remove(id)
     }
 
     /**

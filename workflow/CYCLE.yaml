@@ -1,26 +1,43 @@
 {
   "schema_version": 1,
   "cycle": {
-    "number": 26,
+    "number": 27,
     "kind": "feature",
-    "version": "6.5.0",
-    "branch": "cycle/26",
+    "version": "6.6.0",
+    "branch": "cycle/27",
     "stage": "releasable",
     "created_at": "2026-08-12T19:20:00Z",
-    "updated_at": "2026-08-19T05:19:32Z"
+    "updated_at": "2026-08-20T10:00:00Z"
   },
   "features": [
     {
-      "id": "factual-starter-guidance",
-      "title": "Фактическое расписание, гидратация и дневник закваски",
+      "id": "shelf-of-books",
+      "title": "Семейная полка с личными книгами",
       "needs_generated_asset": false,
       "acceptance": [
-        "Home action uses exact due datetime and shared schedule logic from sourdough config",
-        "hydration in form and table is automatic and persisted as final computed hydration (no manual confirmation required)",
-        "comment snapshot is immutable and survives schema migration, with weather included only when available/permissioned",
-        "non-destructive Room migrations 8->9 and 9->10 with exact schema 10 and no legacy mutation",
-        "history ordering for last feeding and prior hydration uses deterministic insertion order (id DESC)",
-        "latest watering defaults are labeled editable 50/100/50 and not presented as calculated result"
+        "полка означает семью, книга означает одного человека; строка журнала не является переходом",
+        "настройки полки находятся на отдельном экране из Настроек",
+        "выпечки публикуются по политике всегда или спрошу в конце; кормления не публикуются",
+        "семейные записи проверяют участника аккаунта, а не device_id; фото требует явного действия и удаляется сервером"
+      ]
+    },
+    {
+      "id": "password-reset-inline",
+      "title": "Восстановление пароля без лишних экранов",
+      "needs_generated_asset": false,
+      "acceptance": [
+        "ссылка находится на форме входа и использует уже введённую почту",
+        "ответ не раскрывает существование аккаунта; письмо отправляет kdnfx@kdnfx.ru"
+      ]
+    },
+    {
+      "id": "living-copy",
+      "title": "Нейтральные тексты и живой голос закваски",
+      "needs_generated_asset": false,
+      "acceptance": [
+        "главный экран говорит Домашняя пекарня без имени владельца",
+        "обращение к пользователю не предполагает пол; женский род допустим только в голосе закваски",
+        "голос содержит не менее 40 уникальных строк и не повторяет строку до полного круга"
       ]
     }
   ],
@@ -28,46 +45,42 @@
     "plan": {
       "status": "pass",
       "evidence": [
-        "workflow/evidence/cycle26/plan.md"
+        "workflow/evidence/cycle27/plan.md"
       ]
     },
     "tdd": {
       "status": "pass",
       "evidence": [
-        "workflow/evidence/cycle26/final-gates.md"
+        "workflow/evidence/cycle27/tests.md"
       ]
     },
     "build": {
       "status": "pass",
       "evidence": [
-        "workflow/evidence/cycle26/final-gates.md"
+        "workflow/evidence/cycle27/tests.md"
       ]
     },
     "review": {
       "status": "pass",
       "evidence": [
-        "workflow/evidence/cycle26/final-review.md"
+        "workflow/evidence/cycle27/review.md"
       ]
     },
     "visual": {
       "status": "pass",
       "evidence": [
-        "workflow/evidence/cycle26/release-screenshots.md",
-        "app/src/test/snapshots"
+        "workflow/evidence/cycle27/visual.md"
       ]
     },
     "runtime": {
       "status": "pass",
       "evidence": [
-        "workflow/evidence/cycle26/runtime-head84.md",
-        "workflow/evidence/cycle26/final-gates.md"
+        "workflow/evidence/cycle27/runtime.md"
       ]
     },
     "release": {
-      "status": "pass",
-      "evidence": [
-        "workflow/evidence/cycle26/release-artifacts.md"
-      ]
+      "status": "pending",
+      "evidence": []
     }
   },
   "reviews": [],
@@ -79,16 +92,16 @@
   },
   "blockers": [],
   "decisions": [
-    "2026-08-18: baseline for Cycle 26 Room schema and migration chain is `v8 -> 9 -> 10`; `v9` is a non-released populated-baseline step",
-    "2026-08-18: Dima authorized user-visible alignment with the Levito Madre booklet",
-    "2026-08-18: preserve personal reminder cadence; booklet cadence remains labelled guidance",
-    "2026-08-18: planned 6.5.0 is workflow planning; Gradle remains versionName 6.4.5 / versionCode 33 until release preparation"
+    "2026-08-19: Дима утвердил HTML-прототип полки как основу 6.6.0",
+    "2026-08-19: полка = семья; книга = один человек; выражение общая книга удаляется из UI",
+    "2026-08-19: настройки полки вынесены на отдельный экран; под полкой журнал без переходов",
+    "2026-08-19: восстановление пароля выполняется на форме входа; SMTP-отправитель kdnfx@kdnfx.ru"
   ],
   "runtime": {
-    "run_id": "cycle26-final-gate-order-20260819",
-    "base_sha": "84c5c8a353deb87d9a23b292344ef69c40e5d6cc",
-    "manifest_sha256": "f195f4c116dd87425c73a3d44b6df864b787562a7bc270dfd5a0e4a76677ef35",
+    "run_id": "cycle27-20260820",
+    "base_sha": "28a9296a34698b8678451e415d0382f0b0604c21",
+    "manifest_sha256": "f7dde6decc73348a9e14680a7d0c7c265f1ef80a399fb2d384130499390e995d",
     "operation_keys": {},
-    "last_safe_checkpoint": "initialized"
+    "last_safe_checkpoint": "tests_pass"
   }
 }

@@ -40,10 +40,18 @@ class ShelfViewModel(app: Application) : AndroidViewModel(app) {
     val unreachable: StateFlow<Boolean> = _unreachable.asStateFlow()
 
     private var remoteBakes: List<BakeStatRecord> = emptyList()
+    private var currentRefreshGeneration = 0
+    private var lastConfirmedMembers: List<ShelfMember> = emptyList()
 
     fun refresh(localName: String, localRecords: List<BakeRecordEntity>) {
+        val myGeneration = ++currentRefreshGeneration
         viewModelScope.launch {
-            withContext(Dispatchers.IO) { madreApp.familyAccountRepository.restore() }
+            withContext(Dispatchers.IO) {
+                madreApp.familyAccountRepository.restore()
+                madreApp.familyAccountRepository.refresh()
+            }
+            if (myGeneration != currentRefreshGeneration) return@launch  // older refresh cancelled by newer
+
             val account = madreApp.familyAccountRepository.currentAccount()
             _myUserId.value = account?.userId
             _familyName.value = account?.familyName
@@ -52,6 +60,7 @@ class ShelfViewModel(app: Application) : AndroidViewModel(app) {
                 _members.value = listOf(mine)
                 _ledger.value = FamilyShelf.ledgerFromLocal(localRecords, mine.displayName)
                 remoteBakes = emptyList()
+                lastConfirmedMembers = listOf(mine)
                 _unreachable.value = false
                 return@launch
             }
@@ -62,22 +71,45 @@ class ShelfViewModel(app: Application) : AndroidViewModel(app) {
                 _members.value = listOf(mine)
                 _ledger.value = FamilyShelf.ledgerFromLocal(localRecords, mine.displayName)
                 remoteBakes = emptyList()
+                lastConfirmedMembers = listOf(mine)
                 _unreachable.value = false
                 return@launch
             }
-            val users = runCatching {
+            // users: on failure keep last confirmed (do not collapse to empty/local)
+            val usersResult = runCatching {
                 withContext(Dispatchers.IO) { madreApp.familyAccountRepository.listFamilyUsers() }
-            }.getOrDefault(emptyList())
-            val stats = runCatching {
+            }
+            val users = usersResult.getOrNull() ?: emptyList()
+            if (usersResult.isSuccess) {
+                lastConfirmedMembers = FamilyShelf.membersFromUsers(users, account.userId).ifEmpty {
+                    listOf(FamilyShelf.localMember(account.displayName.ifBlank { localName }))
+                }
+            }
+            // stats: on failure keep last remoteBakes
+            val statsResult = runCatching {
                 withContext(Dispatchers.IO) { madreApp.madreApi.listBakeStats(token) }
             }
-            _unreachable.value = stats.isFailure
-            remoteBakes = stats.getOrNull()?.items.orEmpty()
-            val members = FamilyShelf.membersFromUsers(users, account.userId).ifEmpty {
+            if (myGeneration != currentRefreshGeneration) return@launch
+            _unreachable.value = statsResult.isFailure || usersResult.isFailure
+            if (statsResult.isSuccess) {
+                remoteBakes = statsResult.getOrNull()?.items.orEmpty()
+            } // else keep previous remoteBakes
+            val members = if (usersResult.isSuccess) lastConfirmedMembers else lastConfirmedMembers.ifEmpty {
                 listOf(FamilyShelf.localMember(account.displayName.ifBlank { localName }))
             }
             _members.value = members
-            _ledger.value = FamilyShelf.ledgerFromStats(remoteBakes)
+            // ledger: if stats fail, mix local + kept remote, dedupe by record identity (bakedAt + user + chapter)
+            val ledger = if (statsResult.isSuccess) {
+                FamilyShelf.ledgerFromStats(remoteBakes)
+            } else {
+                val who = members.firstOrNull { it.isMe }?.displayName ?: localName
+                val localLedger = FamilyShelf.ledgerFromLocal(localRecords, who)
+                val remoteLedger = FamilyShelf.ledgerFromStats(remoteBakes)
+                (localLedger + remoteLedger)
+                    .distinctBy { Triple(it.bakedAtMillis, it.userId, it.chapter) }
+                    .sortedByDescending { it.bakedAtMillis }
+            }
+            _ledger.value = ledger
         }
     }
 

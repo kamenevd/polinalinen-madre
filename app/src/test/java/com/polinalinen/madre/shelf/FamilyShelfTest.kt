@@ -95,14 +95,27 @@ class FamilyShelfTest {
     }
 
     @Test
-    fun `another person's book never invents a photo already on the server`() {
+    fun `another person's book gets server photo URL when id and photo present`() {
         val records = listOf(
             bake("u-dima", "Багет", 1, displayName = "Дима", photo = "crust.jpg"),
         )
         val mapped = FamilyShelf.recordsForUser(records, "u-dima")
         assertThat(mapped).hasSize(1)
-        assertThat(mapped.single().photoPath).isNull()
+        val path = mapped.single().photoPath
+        assertThat(path).isNotNull()
+        assertThat(path).contains("api/files/bake_stats/")
+        assertThat(path).contains("u-dima-Багет-1")
+        assertThat(path).contains("crust.jpg")
         assertThat(mapped.single().recipeName).isEqualTo("Багет")
+    }
+
+    @Test
+    fun `recordsForUser sets no photoPath if id or photo blank`() {
+        val records = listOf(
+            bake("u-dima", "Багет", 1, displayName = "Дима", photo = null),
+        )
+        val mapped = FamilyShelf.recordsForUser(records, "u-dima")
+        assertThat(mapped.single().photoPath).isNull()
     }
 
     @Test

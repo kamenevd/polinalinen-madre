@@ -38,6 +38,25 @@ class FamilyAccountRepository(
         return adopt(response)
     }
 
+    /**
+     * Re-read current family record (incl. owner) without full re-auth.
+     * Needed so a surviving member sees themselves as owner after previous owner left,
+     * without forcing re-login. Does not touch token.
+     */
+    suspend fun refresh(): FamilyBookState {
+        val authorization = token ?: return fail(NetworkFailure.SIGNED_OUT)
+        val current = account ?: return fail(NetworkFailure.SIGNED_OUT)
+        if (!current.hasFamily) return FamilyBookState.SignedIn(current)
+        val family = runCatching { api.family(authorization, current.familyId!!) }.getOrNull()
+            ?: return FamilyBookState.SignedIn(current)
+        val updated = current.copy(
+            familyName = family.name,
+            familyOwnerId = family.owner,
+        )
+        account = updated
+        return FamilyBookState.SignedIn(updated)
+    }
+
     suspend fun signIn(email: String, password: String): FamilyBookState {
         val response = runCatching { api.authWithPassword(PasswordAuthRequest(email, password)) }
             .getOrElse { return fail(NetworkFailure.classify(it, NetworkFailure.INVALID_CREDENTIALS)) }
@@ -143,9 +162,8 @@ class FamilyAccountRepository(
     }
 
     suspend fun listFamilyUsers(): List<UserRecord> {
-        val authorization = token ?: return emptyList()
-        return runCatching { api.listFamilyUsers(authorization).items }
-            .getOrDefault(emptyList())
+        val authorization = token ?: throw IllegalStateException("Missing token for listFamilyUsers")
+        return api.listFamilyUsers(authorization).items
     }
 
     fun signOut(): FamilyBookState {

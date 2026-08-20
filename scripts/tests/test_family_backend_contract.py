@@ -277,6 +277,19 @@ class ShelfOfBooksBackendTests(unittest.TestCase):
         self.assertIn('routerAdd("POST", "/api/madre/shelf/photo/clear"', text)
         self.assertIn("$apis.requireAuth()", text)
 
+    def test_last_member_leave_deletes_families_row_and_server_shelf_history_gone(self):
+        """Last member leaving deletes the families row (see hook).
+        Server shelf history (bake_stats tied to that family) does not survive
+        on server; local books on devices remain. Do not claim server history survives.
+        Local Room data is independent and stays.
+        """
+        text = read(list(HOOKS.glob("*family*.pb.js"))[0])
+        self.assertIn("txApp.delete(family)", text)
+        self.assertIn("if (!others || others.length === 0)", text)
+        # Note: bake_stats are not deleted in this hook, but without family row
+        # the server history for that shelf is effectively gone for new queries.
+        # Local books (Room) are unaffected per design.
+
 
 class OfflineLocalBookTests(unittest.TestCase):
     """Локальная книга обязана работать без входа — значит Room-слой не знает

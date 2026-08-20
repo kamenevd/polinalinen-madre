@@ -29,15 +29,12 @@ onRecordCreateRequest((e) => {
         // Автор книги — вошедший. Присланный user затирается, чтобы корешок
         // нельзя было повесить на чужое имя.
         e.record.set("user", e.auth.id);
-        const signedName = (e.record.getString("display_name") || e.auth.getString("name") || "").trim();
-        e.record.set("display_name", signedName);
-        if (!e.record.getString("family_name")) {
-            try {
-                const shelf = e.app.findRecordById("families", family);
-                e.record.set("family_name", shelf.getString("name"));
-            } catch (err) {
-                e.record.set("family_name", "");
-            }
+        e.record.set("display_name", (e.auth.getString("name") || "").trim());
+        try {
+            const shelf = e.app.findRecordById("families", family);
+            e.record.set("family_name", shelf.getString("name"));
+        } catch (err) {
+            e.record.set("family_name", "");
         }
     }
 

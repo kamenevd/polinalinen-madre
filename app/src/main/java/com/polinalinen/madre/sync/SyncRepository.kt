@@ -5,6 +5,7 @@ import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequest
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
@@ -55,11 +56,17 @@ class SyncRepository(private val context: Context) {
             displayName = displayName?.trim()?.takeIf { it.isNotEmpty() },
             familyName = familyName?.trim()?.takeIf { it.isNotEmpty() },
         )
-        // Chain first bake POST before photo mutation (photo may be attached later or at share time)
-        enqueue("sync-bake-record-$recordId", SyncWorker.KIND_BAKE, gson.toJson(record))
+        val chainName = "sync-bake-chain-$recordId"
+        val bakeRequest = request(SyncWorker.KIND_BAKE, gson.toJson(record))
         val photo = photoPath?.trim().orEmpty()
+        val manager = WorkManager.getInstance(context)
         if (photo.isNotEmpty()) {
-            shareBakePhoto(recordId, photo)
+            val payload = BakePhotoPayload(clientEventId = clientEventId, photoPath = photo)
+            manager.beginUniqueWork(chainName, ExistingWorkPolicy.KEEP, bakeRequest)
+                .then(request(SyncWorker.KIND_BAKE_PHOTO, gson.toJson(payload)))
+                .enqueue()
+        } else {
+            manager.enqueueUniqueWork(chainName, ExistingWorkPolicy.KEEP, bakeRequest)
         }
     }
 
@@ -69,9 +76,7 @@ class SyncRepository(private val context: Context) {
             clientEventId = SyncEventId.forBake(deviceId, recordId),
             photoPath = photoPath,
         )
-        // Serialize photo desired-state: use one queue per record + REPLACE so
-        // upload A then clear -> final clear; upload A then upload B -> final B
-        enqueue("sync-bake-photo-$recordId", SyncWorker.KIND_BAKE_PHOTO, gson.toJson(payload), ExistingWorkPolicy.REPLACE)
+        enqueuePhotoMutation(recordId, SyncWorker.KIND_BAKE_PHOTO, payload)
     }
 
     fun clearBakePhoto(recordId: Long) {
@@ -80,7 +85,7 @@ class SyncRepository(private val context: Context) {
             clientEventId = SyncEventId.forBake(deviceId, recordId),
             photoPath = "",
         )
-        enqueue("sync-bake-photo-$recordId", SyncWorker.KIND_BAKE_PHOTO_CLEAR, gson.toJson(payload), ExistingWorkPolicy.REPLACE)
+        enqueuePhotoMutation(recordId, SyncWorker.KIND_BAKE_PHOTO_CLEAR, payload)
     }
 
     fun shareFeedingStat(feedingId: Long, flourGrams: Int, waterGrams: Int, fedAtMillis: Long) {
@@ -95,13 +100,27 @@ class SyncRepository(private val context: Context) {
         enqueue("sync-feeding-$feedingId", SyncWorker.KIND_FEEDING, gson.toJson(record))
     }
 
-    private fun enqueue(uniqueName: String, kind: String, payload: String, policy: ExistingWorkPolicy = ExistingWorkPolicy.KEEP) {
-        val request = OneTimeWorkRequestBuilder<SyncWorker>()
+    private fun enqueuePhotoMutation(recordId: Long, kind: String, payload: BakePhotoPayload) {
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            "sync-bake-chain-$recordId",
+            ExistingWorkPolicy.APPEND_OR_REPLACE,
+            request(kind, gson.toJson(payload)),
+        )
+    }
+
+    private fun request(kind: String, payload: String): OneTimeWorkRequest =
+        OneTimeWorkRequestBuilder<SyncWorker>()
             .setInputData(workDataOf(SyncWorker.KEY_KIND to kind, SyncWorker.KEY_PAYLOAD to payload))
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
             .build()
-        WorkManager.getInstance(context).enqueueUniqueWork(uniqueName, policy, request)
+
+    private fun enqueue(uniqueName: String, kind: String, payload: String) {
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            uniqueName,
+            ExistingWorkPolicy.KEEP,
+            request(kind, payload),
+        )
     }
 }
 

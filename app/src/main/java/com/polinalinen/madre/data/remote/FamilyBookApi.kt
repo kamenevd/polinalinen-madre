@@ -81,7 +81,7 @@ interface FamilyBookApi {
     suspend fun listFamilyUsers(
         @Header("Authorization") token: String,
         @Query("perPage") perPage: Int = 50,
-        @Query("fields") fields: String = "id,email,name,family",
+        @Query("fields") fields: String = "id,name,family",
     ): RecordsPage<UserRecord>
 }
 

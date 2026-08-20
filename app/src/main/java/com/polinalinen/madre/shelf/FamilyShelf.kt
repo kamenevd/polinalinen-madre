@@ -1,6 +1,7 @@
 package com.polinalinen.madre.shelf
 
 import com.polinalinen.madre.data.db.entities.BakeRecordEntity
+import com.polinalinen.madre.BuildConfig
 import com.polinalinen.madre.data.remote.BakeStatRecord
 import com.polinalinen.madre.data.remote.PocketBaseDates
 import com.polinalinen.madre.data.remote.UserRecord
@@ -111,21 +112,26 @@ object FamilyShelf {
             .sortedByDescending { it.bakedAtMillis }
 
     /**
-     * Чужие выпечки для формуляра. Путь к фото не подставляем: снимка на
-     * этом телефоне нет, а выдумывать, что он уже на сервере, книга не будет.
+     * Чужие выпечки для формуляра. Если BakeStatRecord.id и photo оба non-blank,
+     * подставляем URL `{base}/api/files/bake_stats/{id}/{photo}` используя
+     * BuildConfig.MADRE_API_URL. Журнал (ledger) остаётся text-only (без фото).
      */
     fun recordsForUser(records: List<BakeStatRecord>, userId: String): List<BakeRecordEntity> {
         if (userId.isBlank() || userId == OWN_ID) return emptyList()
         return records
             .filter { it.userId == userId }
             .mapIndexed { index, record ->
+                val photoPath = if (!record.id.isNullOrBlank() && !record.photo.isNullOrBlank()) {
+                    val base = BuildConfig.MADRE_API_URL.trimEnd('/')
+                    "$base/api/files/bake_stats/${record.id}/${record.photo}"
+                } else null
                 BakeRecordEntity(
                     id = index + 1L,
                     recipeId = record.recipeId,
                     recipeName = record.recipeName,
                     portions = record.portions,
                     completedAtMillis = PocketBaseDates.parseOrNull(record.bakedAt) ?: 0L,
-                    photoPath = null,
+                    photoPath = photoPath,
                 )
             }
             .filter { it.completedAtMillis > 0L }

@@ -58,6 +58,124 @@ class MigrationTest {
             }
         }
 
+    @Test
+    fun migrate_8_to_9_preservesFeedingAndPhoto() {
+        helper.createDatabase(TEST_DB, 8).use { db ->
+            db.execSQL("INSERT INTO sourdough_configs (id,userId,name,intervalHours,remindersEnabled,lastFeedingMillis) VALUES (1,1,'Мадре',72,1,1700000000000)")
+            db.execSQL("INSERT INTO feedings (id,sourdoughConfigId,timestampMillis,flourGrams,waterGrams,storageLocation,notes,photoPath) VALUES (9,1,1700000000000,50,25,'FRIDGE','note','feeding_photos/kept.jpg')")
+            db.execSQL("INSERT INTO feedings (id,sourdoughConfigId,timestampMillis,flourGrams,waterGrams,storageLocation,notes,photoPath) VALUES (10,1,1700000001000,60,30,'KITCHEN',NULL,NULL)")
+        }
+        val db = helper.runMigrationsAndValidate(TEST_DB, 9, true, *MadreDatabase.MIGRATIONS)
+        assertThat(db.queryLong("SELECT COUNT(*) FROM feedings WHERE id=9")).isEqualTo(1)
+        assertThat(db.queryLong("SELECT COUNT(*) FROM feedings")).isEqualTo(2)
+        assertThat(db.queryNullableString("SELECT photoPath FROM feedings WHERE id=9")).isEqualTo("feeding_photos/kept.jpg")
+        assertThat(db.queryNullableString("SELECT hydrationPercent FROM feedings WHERE id=9")).isNull()
+        assertThat(db.queryNullableString("SELECT starterObservation FROM feedings WHERE id=9")).isNull()
+        assertThat(db.queryNullableString("SELECT notes FROM feedings WHERE id=10")).isNull()
+        assertThat(db.queryNullableString("SELECT photoPath FROM feedings WHERE id=10")).isNull()
+        assertThat(db.queryNullableString("SELECT hydrationPercent FROM feedings WHERE id=10")).isNull()
+        assertThat(db.tableNames()).containsAtLeast("margin_notes", "sealed_notes", "active_bakes")
+        db.close()
+    }
+
+    /**
+     * v9 → v10 (Cycle 26): кормление становится расчётом — к feedings
+     * добавляются оставленная закваска, посчитанная гидратация и снимок
+     * «Комментария закваски».
+     *
+     * Главное здесь — что миграция НИЧЕГО не переписывает: legacy-гидратация,
+     * наблюдение, время наблюдения, заметка и путь к фотокарточке обязаны
+     * доехать буква в букву, а новые колонки у старых записей — остаться NULL.
+     * Задним числом посчитать гидратацию за те кормления нельзя: масс закваски
+     * в них никто не называл.
+     */
+    @Test
+    @Throws(IOException::class)
+    fun migrate_9_to_10_keepsLegacyFactsAndAddsEmptyColumns() {
+        helper.createDatabase(TEST_DB, 9).use { db ->
+            db.execSQL(
+                "INSERT INTO sourdough_configs " +
+                    "(id,userId,name,intervalHours,remindersEnabled,lastFeedingMillis) " +
+                    "VALUES (1,1,'Мадре',72,1,1700000000000)"
+            )
+            // Запись с подтверждённой руками гидратацией и наблюдением (v9).
+            db.execSQL(
+                "INSERT INTO feedings " +
+                    "(id,sourdoughConfigId,timestampMillis,flourGrams,waterGrams,storageLocation," +
+                    "notes,photoPath,hydrationPercent,starterObservation,observedAtMillis) VALUES " +
+                    "(11,1,1700000000000,50,25,'FRIDGE','пахнет яблоками'," +
+                    "'feeding_photos/kept.jpg',80,'На пике',1700000000500)"
+            )
+            // И запись ещё старше — без гидратации вовсе.
+            db.execSQL(
+                "INSERT INTO feedings " +
+                    "(id,sourdoughConfigId,timestampMillis,flourGrams,waterGrams,storageLocation," +
+                    "notes,photoPath) VALUES " +
+                    "(12,1,1700000001000,60,30,'KITCHEN',NULL,NULL)"
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 10, true, *MadreDatabase.MIGRATIONS)
+
+        assertThat(db.columnsOf("feedings")).containsAtLeast(
+            "retainedStarterGrams",
+            "finalHydrationPercent",
+            "generatedComment",
+        )
+        // Ни одна запись не потерялась и ни одна не переписана.
+        assertThat(db.queryLong("SELECT COUNT(*) FROM feedings")).isEqualTo(2)
+        assertThat(db.queryNullableString("SELECT notes FROM feedings WHERE id=11"))
+            .isEqualTo("пахнет яблоками")
+        assertThat(db.queryNullableString("SELECT photoPath FROM feedings WHERE id=11"))
+            .isEqualTo("feeding_photos/kept.jpg")
+        assertThat(db.queryNullableString("SELECT hydrationPercent FROM feedings WHERE id=11"))
+            .isEqualTo("80")
+        assertThat(db.queryNullableString("SELECT starterObservation FROM feedings WHERE id=11"))
+            .isEqualTo("На пике")
+        assertThat(db.queryNullableString("SELECT observedAtMillis FROM feedings WHERE id=11"))
+            .isEqualTo("1700000000500")
+        // Новые колонки у старых записей пусты — и это единственный честный ответ.
+        assertThat(db.queryNullableString("SELECT retainedStarterGrams FROM feedings WHERE id=11")).isNull()
+        assertThat(db.queryNullableString("SELECT finalHydrationPercent FROM feedings WHERE id=11")).isNull()
+        assertThat(db.queryNullableString("SELECT generatedComment FROM feedings WHERE id=11")).isNull()
+        assertThat(db.queryNullableString("SELECT hydrationPercent FROM feedings WHERE id=12")).isNull()
+        assertThat(db.queryNullableString("SELECT finalHydrationPercent FROM feedings WHERE id=12")).isNull()
+        db.close()
+    }
+
+    /** Полная дорога с первой версии до сегодняшней — с фото и заметкой. */
+    @Test
+    @Throws(IOException::class)
+    fun migrate_1_to_10() {
+        helper.createDatabase(TEST_DB, 1).use { db ->
+            db.execSQL(
+                "INSERT INTO users (id, name, isActive, createdAtMillis) " +
+                    "VALUES (1, 'Полина', 1, 1700000000000)"
+            )
+            db.execSQL(
+                "INSERT INTO sourdough_configs " +
+                    "(id, userId, name, intervalHours, remindersEnabled, lastFeedingMillis) " +
+                    "VALUES (1, 1, 'Мадре', 12, 1, 1700000000000)"
+            )
+            db.execSQL(
+                "INSERT INTO feedings " +
+                    "(id, sourdoughConfigId, timestampMillis, flourGrams, waterGrams, " +
+                    "storageLocation, notes, photoPath) VALUES " +
+                    "(1, 1, 1700000000000, 50, 50, 'ROOM', 'первое кормление', " +
+                    "'/data/user/0/com.polinalinen.madre/files/feeding_photos/feed_1_11.jpg')"
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 10, true, *MadreDatabase.MIGRATIONS)
+
+        assertThat(db.queryNullableString("SELECT photoPath FROM feedings WHERE id = 1"))
+            .isEqualTo("feeding_photos/feed_1_11.jpg")
+        assertThat(db.queryNullableString("SELECT notes FROM feedings WHERE id = 1"))
+            .isEqualTo("первое кормление")
+        assertThat(db.queryNullableString("SELECT generatedComment FROM feedings WHERE id = 1")).isNull()
+        db.close()
+    }
+
     /**
      * Полная дорога с самой первой версии. Данные кладём настоящие: миграция,
      * которая проходит на пустой БД и роняет заполненную, — обычное дело.

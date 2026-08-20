@@ -22,6 +22,7 @@ import com.polinalinen.madre.notifications.BakingProgressService
 import com.polinalinen.madre.notifications.MadreNotifier
 import com.polinalinen.madre.notifications.NotificationLedger
 import com.polinalinen.madre.sourdough.StarterName
+import com.polinalinen.madre.shelf.ShelfSharePolicy
 import com.polinalinen.madre.ui.components.CoffeeRing
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -116,6 +117,7 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
     // sessionId → id записи формуляра: нужен, чтобы фотокарточка, выбранная на
     // Complete-экране, легла именно в свою строку bake_records.
     private val bakeRecordIds = mutableMapOf<Long, Long>()
+    private val sharedPhotoSessionIds = mutableSetOf<Long>()
 
     /**
      * Cycle 17: есть ли куда делиться. Без аккаунта общей книги не существует,
@@ -258,7 +260,12 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
                 val recordId =
                     bakeHistoryRepository.record(s.recipe.id, s.recipe.name, s.scaleFactor.toInt().coerceAtLeast(1))
                 bakeRecordIds[id] = recordId
-                shareBakeStats(id)
+                val prefs = getApplication<Application>()
+                    .getSharedPreferences(ShelfSharePolicy.PREFS, android.content.Context.MODE_PRIVATE)
+                val mode = ShelfSharePolicy.read(prefs)
+                if (ShelfSharePolicy.shouldShareOnComplete(mode, _sharingAvailable.value)) {
+                    shareBakeStats(id)
+                }
             }
         } else {
             rememberActiveBake(id)
@@ -350,20 +357,28 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
      *
      * Cycle 17: ключ считается от id строки формуляра, поэтому до записи в
      * bake_records отправлять нечего — [advanceStep] зовёт этот метод сразу
-     * после insert'а, а кнопка «Поделиться» на Complete-экране всегда
-     * нажимается позже. Записи нет — молчим: выдумать ключ значит вернуть ту
-     * самую подмену, ради которой всё это и переписано.
+     * после insert'а при политике «всегда», а лист «Поставить на полку?» —
+     * позже, с экрана готовности.
      */
-    fun shareBakeStats(id: Long) {
+    fun shareBakeStats(id: Long, withPhoto: Boolean = false) {
         val s = session(id) ?: return
         val recordId = bakeRecordIds[id] ?: return
-        syncRepository.shareBakeStat(
-            recordId = recordId,
-            recipeId = s.recipe.id,
-            recipeName = s.recipe.name,
-            portions = s.scaleFactor.toInt().coerceAtLeast(1),
-            bakedAtMillis = System.currentTimeMillis(),
-        )
+        val account = madreApp.familyAccountRepository.currentAccount()
+        val photoPath = if (withPhoto) _bakePhotoPaths.value[id] else null
+        viewModelScope.launch {
+            val bakedAtMillis = bakeHistoryRepository.getCompletedAt(recordId) ?: return@launch
+            if (withPhoto && !photoPath.isNullOrBlank()) sharedPhotoSessionIds += id
+            syncRepository.shareBakeStat(
+                recordId = recordId,
+                recipeId = s.recipe.id,
+                recipeName = s.recipe.name,
+                portions = s.scaleFactor.toInt().coerceAtLeast(1),
+                bakedAtMillis = bakedAtMillis,
+                displayName = account?.displayName,
+                familyName = account?.familyName,
+                photoPath = photoPath,
+            )
+        }
     }
 
     /**
@@ -382,6 +397,8 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
         _bakePhotoPaths.update { it + (sessionId to path) }
         val recordId = bakeRecordIds[sessionId] ?: return
         viewModelScope.launch { bakeHistoryRepository.attachPhoto(recordId, path) }
+        // Личный кадр не становится семейным автоматически. Отправка бывает
+        // только в явном действии «Поставить с кадром» внутри shareBakeStats.
     }
 
     /**
@@ -391,6 +408,11 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun clearBakePhoto(sessionId: Long) {
         _bakePhotoPaths.update { it - sessionId }
+        val recordId = bakeRecordIds[sessionId] ?: return
+        if (sessionId in sharedPhotoSessionIds) {
+            syncRepository.clearBakePhoto(recordId)
+            sharedPhotoSessionIds -= sessionId
+        }
     }
 
     fun stepBack(id: Long) {
@@ -424,6 +446,8 @@ class BakingViewModel(app: Application) : AndroidViewModel(app) {
         // оставались висеть: «время вышло» от выпечки, которой давно нет.
         notificationLedger.forgetSession(id).forEach { key -> notifier.cancelByKey(key) }
         publishProgress()
+        bakeRecordIds.remove(id)
+        sharedPhotoSessionIds -= id
     }
 
     /**

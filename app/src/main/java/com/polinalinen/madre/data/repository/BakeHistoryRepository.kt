@@ -32,4 +32,8 @@ class BakeHistoryRepository(
         dao.attachPhoto(recordId, path)
         PhotoStore.deleteIfUnreferenced(context, previous) { it == path }
     }
+
+    suspend fun getCompletedAt(recordId: Long): Long? = withContext(Dispatchers.IO) {
+        dao.getCompletedAt(recordId)
+    }
 }

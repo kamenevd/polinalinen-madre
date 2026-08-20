@@ -97,13 +97,17 @@ class SettingsIaUiTest {
         rule.onNodeWithText("Тираж").assertDoesNotExist()
     }
 
-    /** Ритм кормления говорит по-человечески, а не ключом из базы. */
+    /** Ритм кормления остаётся одной accessible-кнопкой с merged label. */
     @Test
-    fun `the feeding rhythm is spoken in days, not in bare hours`() {
+    fun `the feeding rhythm is exposed as one accessible control`() {
         showSettings(intervalHours = 24)
-        rule.onNodeWithText("Как часто кормить").assertExists()
-        rule.onNodeWithText("раз в сутки").assertExists()
-        rule.onNodeWithText("раз в 24 часа").assertDoesNotExist()
+        val label = "Как часто кормить: Ваш ритм: раз в сутки"
+        val node = rule.onAllNodes(hasClickAction(), useUnmergedTree = true)
+            .fetchSemanticsNodes()
+            .single { it.config.getOrNull(SemanticsActions.OnClick)?.label == label }
+        assertThat(node.config.getOrNull(SemanticsProperties.Role)).isEqualTo(Role.Button)
+        assertThat(node.config.getOrNull(SemanticsActions.OnClick)?.label).isEqualTo(label)
+        rule.onNodeWithText("раз в 24 часа", useUnmergedTree = true).assertDoesNotExist()
     }
 
     /**
@@ -150,9 +154,9 @@ class SettingsIaUiTest {
             }
         }
         rule.onAllNodes(hasSetTextAction()).assertCountEquals(0)
-        rule.onNodeWithText("Подключить семью…").assertExists()
+        rule.onNodeWithText("Подключить полку…").assertExists()
 
-        rule.onNodeWithText("Подключить семью…").performClick()
+        rule.onNodeWithText("Подключить полку…").performClick()
         rule.waitForIdle()
 
         // Почта, пароль и подпись — три поля, и ни одного до просьбы.

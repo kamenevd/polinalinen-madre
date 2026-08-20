@@ -13,7 +13,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 /**
- * Cycle 18: напоминание о кормлении несёт кнопку «Покормила».
+ * Cycle 18: напоминание о кормлении несёт кнопку «Покормить».
  *
  * До этого шторка только звала: чтобы записать кормление, надо было открыть
  * книгу, дойти до дневника и оттуда до формы. Кнопка ведёт прямо в форму
@@ -43,7 +43,7 @@ class FeedingReminderActionTest {
         val notification = postReminder()
         val labels = notification.actions.orEmpty().map { it.title.toString() }
         assertThat(labels).containsExactly(FeedingReminderAction.LABEL)
-        assertThat(FeedingReminderAction.LABEL).isEqualTo("Покормила")
+        assertThat(FeedingReminderAction.LABEL).isEqualTo("Покормить")
     }
 
     /**

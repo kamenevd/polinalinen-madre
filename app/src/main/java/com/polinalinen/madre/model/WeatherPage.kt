@@ -42,6 +42,17 @@ object WeatherPage {
         else (0.05f + 0.02f * precipitationMm.toFloat()).coerceAtMost(0.14f)
 
     /**
+     * Cycle 26: сухая строка о погоде для комментария кормления — без советов
+     * и настроения, только измеренное: «+18°, влажность 60%». Отрицательный
+     * ноль не бывает: −0.4° округляются до «0°», а не «−0°».
+     */
+    fun factualCurrent(temperatureC: Double, humidityPercent: Int): String {
+        val degrees = Math.round(temperatureC).toInt()
+        val sign = if (degrees > 0) "+" else ""
+        return "$sign$degrees°, влажность $humidityPercent%"
+    }
+
+    /**
      * Заметка Мадре на полях. Приоритет: дождь → снег → влажно → жара →
      * холод; в мягкую сухую погоду Мадре молчит (null) — заметка должна
      * быть событием, а не постоянной плашкой.

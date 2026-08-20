@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.screens
 
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -63,4 +64,10 @@ class HomePathsUiTest {
         assertThat(rule.onAllNodesWithText("ОБЩАЯ СТАТИСТИКА").fetchSemanticsNodes()).isEmpty()
     }
 
+    @Test
+    fun `the masthead is a home bakery, not a dedication on the title`() {
+        rule.showFrontPage()
+        rule.onNodeWithText("ДОМАШНЯЯ ПЕКАРНЯ").assertIsDisplayed()
+        rule.onAllNodesWithText("ДОМАШНЯЯ ПЕКАРНЯ ПОЛИНЫ").assertCountEquals(0)
+    }
 }

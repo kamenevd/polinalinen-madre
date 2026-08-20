@@ -40,7 +40,7 @@ fun profileForInterval(hours: Int): SourdoughProfile = when (hours) {
         intervalHours = 12, temperature = 27, temperatureNote = "Тёплая, быстрый цикл",
         hydration = 100, hydrationNote = "Жидкая, 1:1 мука:вода",
         ratioStarter = 1, ratioFlour = 3, ratioWater = 3,
-        flourRecommendation = "Белая пшеничная", flourNote = "Высокий белок",
+        flourRecommendation = "По руководству: белая пшеничная высшего сорта", flourNote = "Белка больше 10 г на 100 г",
         peakHours = 4f, cycleHours = 12f,
         phaseLabels = PhaseLabels("0-1ч", "1-4ч", "4-6ч", "6-12ч"),
     )
@@ -48,7 +48,7 @@ fun profileForInterval(hours: Int): SourdoughProfile = when (hours) {
         intervalHours = 24, temperature = 24, temperatureNote = "Комнатная, классический цикл",
         hydration = 100, hydrationNote = "Жидкая, 1:1 мука:вода",
         ratioStarter = 1, ratioFlour = 5, ratioWater = 5,
-        flourRecommendation = "Пшеничная / ржаная", flourNote = "Смесь 50/50",
+        flourRecommendation = "По руководству: белая пшеничная высшего сорта", flourNote = "Белка больше 10 г на 100 г",
         peakHours = 6f, cycleHours = 24f,
         phaseLabels = PhaseLabels("0-2ч", "2-6ч", "6-8ч", "8-24ч"),
     )
@@ -56,7 +56,7 @@ fun profileForInterval(hours: Int): SourdoughProfile = when (hours) {
         intervalHours = 48, temperature = 20, temperatureNote = "Прохладная, замедленный цикл",
         hydration = 80, hydrationNote = "Полугустая, 100г муки · 80г воды",
         ratioStarter = 1, ratioFlour = 8, ratioWater = 8,
-        flourRecommendation = "Смесь пшеничной и ржаной", flourNote = "Больше нутриентов",
+        flourRecommendation = "По руководству: белая пшеничная высшего сорта", flourNote = "Белка больше 10 г на 100 г",
         peakHours = 10f, cycleHours = 48f,
         phaseLabels = PhaseLabels("0-4ч", "4-10ч", "10-14ч", "14-48ч"),
     )
@@ -64,7 +64,7 @@ fun profileForInterval(hours: Int): SourdoughProfile = when (hours) {
         intervalHours = 72, temperature = 4, temperatureNote = "Холодильник, замедляет метаболизм",
         hydration = 60, hydrationNote = "Густая, 100г муки · 60г воды",
         ratioStarter = 1, ratioFlour = 10, ratioWater = 10,
-        flourRecommendation = "Ржаная / цельнозерновая", flourNote = "Максимум нутриентов",
+        flourRecommendation = "По руководству: белая пшеничная высшего сорта", flourNote = "Белка больше 10 г на 100 г",
         peakHours = 24f, cycleHours = 72f,
         phaseLabels = PhaseLabels("0-8ч", "8-24ч", "24-36ч", "36-72ч"),
     )
@@ -72,7 +72,7 @@ fun profileForInterval(hours: Int): SourdoughProfile = when (hours) {
         intervalHours = 168, temperature = 4, temperatureNote = "Холодильник, еженедельное хранение",
         hydration = 60, hydrationNote = "Густая, 100г муки · 60г воды",
         ratioStarter = 1, ratioFlour = 20, ratioWater = 20,
-        flourRecommendation = "Ржаная обдирная", flourNote = "Долгий цикл, максимум нутриентов",
+        flourRecommendation = "По руководству: белая пшеничная высшего сорта", flourNote = "Белка больше 10 г на 100 г",
         peakHours = 48f, cycleHours = 168f,
         phaseLabels = PhaseLabels("0-12ч", "12-48ч", "48-72ч", "72-168ч"),
     )

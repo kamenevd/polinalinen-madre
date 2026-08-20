@@ -6,7 +6,10 @@ import com.polinalinen.madre.data.remote.FamilyBookApi
 import com.polinalinen.madre.data.remote.FamilyResponse
 import com.polinalinen.madre.data.remote.JoinFamilyRequest
 import com.polinalinen.madre.data.remote.PasswordAuthRequest
+import com.polinalinen.madre.data.remote.PasswordResetRequest
 import com.polinalinen.madre.data.remote.RegisterRequest
+import com.polinalinen.madre.data.remote.RenameFamilyRequest
+import com.polinalinen.madre.data.remote.UserRecord
 
 /**
  * Вход в общую книгу и работа с семьёй (DESIGN-V4.md Cycle 11, фича 28).
@@ -35,10 +38,49 @@ class FamilyAccountRepository(
         return adopt(response)
     }
 
+    /**
+     * Re-read current family record (incl. owner) without full re-auth.
+     * Needed so a surviving member sees themselves as owner after previous owner left,
+     * without forcing re-login. Does not touch token.
+     */
+    suspend fun refresh(): FamilyBookState {
+        val authorization = token ?: return fail(NetworkFailure.SIGNED_OUT)
+        val current = account ?: return fail(NetworkFailure.SIGNED_OUT)
+        if (!current.hasFamily) return FamilyBookState.SignedIn(current)
+        val family = runCatching { api.family(authorization, current.familyId!!) }.getOrNull()
+            ?: return FamilyBookState.SignedIn(current)
+        val updated = current.copy(
+            familyName = family.name,
+            familyOwnerId = family.owner,
+        )
+        account = updated
+        return FamilyBookState.SignedIn(updated)
+    }
+
     suspend fun signIn(email: String, password: String): FamilyBookState {
         val response = runCatching { api.authWithPassword(PasswordAuthRequest(email, password)) }
             .getOrElse { return fail(NetworkFailure.classify(it, NetworkFailure.INVALID_CREDENTIALS)) }
         return adopt(response)
+    }
+
+    /**
+     * Письмо со сбросом на ту же почту, что в поле входа. Токен и локальную
+     * книгу не трогает: неудача — строка на форме, не выход из книги.
+     */
+    suspend fun requestPasswordReset(email: String): PasswordResetResult {
+        val trimmed = email.trim()
+        if (trimmed.isEmpty()) return PasswordResetResult.Failed(PasswordReset.EMPTY_EMAIL)
+        val response = runCatching { api.requestPasswordReset(PasswordResetRequest(trimmed)) }
+            .getOrElse {
+                return PasswordResetResult.Failed(PasswordReset.messageFor(NetworkFailure.classify(it)))
+            }
+        if (response.isSuccessful) return PasswordResetResult.Sent
+        val failure = when (response.code()) {
+            400, 404, 422 -> NetworkFailure.INVALID_CREDENTIALS
+            in 500..599 -> NetworkFailure.SERVER
+            else -> NetworkFailure.UNKNOWN
+        }
+        return PasswordResetResult.Failed(PasswordReset.messageFor(failure))
     }
 
     /** Регистрация сразу заводит и вход — отдельного экрана «теперь войдите» нет. */
@@ -83,10 +125,53 @@ class FamilyAccountRepository(
         return remember(current, response)
     }
 
+    /**
+     * Новое название полки. Старые строки формуляра хранят снимок имени на
+     * сервере и здесь не переписываются — меняется только живой заголовок.
+     */
+    suspend fun renameFamily(name: String): FamilyBookState {
+        val authorization = token ?: return fail(NetworkFailure.SIGNED_OUT)
+        val current = account ?: return fail(NetworkFailure.SIGNED_OUT)
+        if (!current.isFamilyOwner) return fail(NetworkFailure.NOT_OWNER)
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return fail(NetworkFailure.UNKNOWN)
+        val response = runCatching { api.renameFamily(authorization, RenameFamilyRequest(trimmed)) }
+            .getOrElse { return fail(NetworkFailure.classify(it, NetworkFailure.NOT_OWNER)) }
+        val updated = current.copy(familyName = response.familyName)
+        account = updated
+        return FamilyBookState.SignedIn(updated)
+    }
+
+    /**
+     * Уйти с полки, остаться в книге на телефоне. Токен не выбрасывается:
+     * это не выход из аккаунта.
+     */
+    suspend fun leaveFamily(): FamilyBookState {
+        val authorization = token ?: return fail(NetworkFailure.SIGNED_OUT)
+        val current = account ?: return fail(NetworkFailure.SIGNED_OUT)
+        runCatching { api.leaveFamily(authorization) }
+            .getOrElse { return fail(NetworkFailure.classify(it)) }
+        val updated = current.copy(
+            familyId = null,
+            familyName = null,
+            inviteCode = null,
+            familyOwnerId = null,
+        )
+        account = updated
+        return FamilyBookState.SignedIn(updated)
+    }
+
+    suspend fun listFamilyUsers(): List<UserRecord> {
+        val authorization = token ?: throw IllegalStateException("Missing token for listFamilyUsers")
+        return api.listFamilyUsers(authorization).items
+    }
+
     fun signOut(): FamilyBookState {
         tokens.clear()
         return forget()
     }
+
+    fun currentAccount(): FamilyAccount? = account
 
     /**
      * Забыть открытый код: сервер отдаёт его один раз, и после показа он не

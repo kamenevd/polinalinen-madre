@@ -1,23 +1,43 @@
 {
   "schema_version": 1,
   "cycle": {
-    "number": 25,
-    "kind": "maintenance",
-    "version": "6.4.5",
-    "branch": "maintenance/25",
+    "number": 27,
+    "kind": "feature",
+    "version": "6.6.0",
+    "branch": "cycle/27",
     "stage": "releasable",
     "created_at": "2026-08-12T19:20:00Z",
-    "updated_at": "2026-08-12T19:14:23Z"
+    "updated_at": "2026-08-20T10:00:00Z"
   },
   "features": [
     {
-      "id": "toc-flush-right",
-      "title": "Номера оглавления максимально справа, точки до них",
+      "id": "shelf-of-books",
+      "title": "Семейная полка с личными книгами",
       "needs_generated_asset": false,
       "acceptance": [
-        "index at row end with minimal end padding",
-        "leaders fill full width under name via paper mask",
-        "works on narrow and wide screens"
+        "полка означает семью, книга означает одного человека; строка журнала не является переходом",
+        "настройки полки находятся на отдельном экране из Настроек",
+        "выпечки публикуются по политике всегда или спрошу в конце; кормления не публикуются",
+        "семейные записи проверяют участника аккаунта, а не device_id; фото требует явного действия и удаляется сервером"
+      ]
+    },
+    {
+      "id": "password-reset-inline",
+      "title": "Восстановление пароля без лишних экранов",
+      "needs_generated_asset": false,
+      "acceptance": [
+        "ссылка находится на форме входа и использует уже введённую почту",
+        "ответ не раскрывает существование аккаунта; письмо отправляет kdnfx@kdnfx.ru"
+      ]
+    },
+    {
+      "id": "living-copy",
+      "title": "Нейтральные тексты и живой голос закваски",
+      "needs_generated_asset": false,
+      "acceptance": [
+        "главный экран говорит Домашняя пекарня без имени владельца",
+        "обращение к пользователю не предполагает пол; женский род допустим только в голосе закваски",
+        "голос содержит не менее 40 уникальных строк и не повторяет строку до полного круга"
       ]
     }
   ],
@@ -25,32 +45,38 @@
     "plan": {
       "status": "pass",
       "evidence": [
-        "DESIGN-V4 Cycle 25"
+        "workflow/evidence/cycle27/plan.md"
       ]
     },
     "tdd": {
       "status": "pass",
       "evidence": [
-        "CI"
+        "workflow/evidence/cycle27/tests.md"
       ]
     },
     "build": {
       "status": "pass",
       "evidence": [
-        "assemble"
+        "workflow/evidence/cycle27/tests.md"
       ]
     },
     "review": {
-      "status": "pending",
-      "evidence": []
+      "status": "pass",
+      "evidence": [
+        "workflow/evidence/cycle27/review.md"
+      ]
     },
     "visual": {
-      "status": "pending",
-      "evidence": []
+      "status": "pass",
+      "evidence": [
+        "workflow/evidence/cycle27/visual.md"
+      ]
     },
     "runtime": {
-      "status": "pending",
-      "evidence": []
+      "status": "pass",
+      "evidence": [
+        "workflow/evidence/cycle27/runtime.md"
+      ]
     },
     "release": {
       "status": "pending",
@@ -66,6 +92,16 @@
   },
   "blockers": [],
   "decisions": [
-    "2026-08-12: TOC book layout paper-mask leaders"
-  ]
+    "2026-08-19: Дима утвердил HTML-прототип полки как основу 6.6.0",
+    "2026-08-19: полка = семья; книга = один человек; выражение общая книга удаляется из UI",
+    "2026-08-19: настройки полки вынесены на отдельный экран; под полкой журнал без переходов",
+    "2026-08-19: восстановление пароля выполняется на форме входа; SMTP-отправитель kdnfx@kdnfx.ru"
+  ],
+  "runtime": {
+    "run_id": "cycle27-20260820",
+    "base_sha": "28a9296a34698b8678451e415d0382f0b0604c21",
+    "manifest_sha256": "f7dde6decc73348a9e14680a7d0c7c265f1ef80a399fb2d384130499390e995d",
+    "operation_keys": {},
+    "last_safe_checkpoint": "tests_pass"
+  }
 }

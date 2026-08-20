@@ -27,7 +27,12 @@ class FeedingReminderWorker(
         val name = StarterName.sanitize(inputData.getString(KEY_STARTER_NAME).orEmpty())
         MadreNotifier(applicationContext).postFeedingReminder(
             title = StarterName.hungryTitle(name),
-            text = "Пора кормить — мука и вода по вашему обычному соотношению.",
+            text = "Пора кормить по вашему расписанию. Буклет: 2:1:2 (закваска:вода:мука), " +
+                "стартовая 50% и удобный редактируемый набор 50/100/50: " +
+                "это стартовые массы, не формула. " +
+                "Кормите в холодильнике при 4–6°C — лучше на белой хлебопекарной пшенице " +
+                "с белком >10 г на 100 г; в холоде обычно хватает каждые 3–5 дней, " +
+                "пик бывает около 3–5 часов.",
         )
         return Result.success()
     }

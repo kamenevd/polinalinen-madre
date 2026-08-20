@@ -6,14 +6,18 @@ import com.google.common.truth.Truth.assertThat
 import com.polinalinen.madre.account.AuthTokenStore
 import com.polinalinen.madre.account.FamilyAccountRepository
 import com.polinalinen.madre.account.FamilyBookState
+import com.polinalinen.madre.account.PasswordResetNotice
 import com.polinalinen.madre.data.remote.AuthResponse
 import com.polinalinen.madre.data.remote.CreateFamilyRequest
 import com.polinalinen.madre.data.remote.FamilyBookApi
 import com.polinalinen.madre.data.remote.FamilyRecord
 import com.polinalinen.madre.data.remote.FamilyResponse
 import com.polinalinen.madre.data.remote.JoinFamilyRequest
+import com.polinalinen.madre.data.remote.LeaveFamilyResponse
 import com.polinalinen.madre.data.remote.PasswordAuthRequest
+import com.polinalinen.madre.data.remote.PasswordResetRequest
 import com.polinalinen.madre.data.remote.RegisterRequest
+import com.polinalinen.madre.data.remote.RenameFamilyRequest
 import com.polinalinen.madre.data.remote.UserRecord
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -23,6 +27,9 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.Protocol
+import okhttp3.Request
+import okhttp3.ResponseBody
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.After
 import org.junit.Before
@@ -66,6 +73,17 @@ class FamilyBookViewModelTest {
             return AuthResponse("pb_token_1", UserRecord("u1", "anya@example.com", "Аня", ""))
         }
 
+        override suspend fun requestPasswordReset(body: PasswordResetRequest): Response<ResponseBody> {
+            calls += "reset"
+            val raw = okhttp3.Response.Builder()
+                .request(Request.Builder().url("https://madre-api.kdnfx.space/").build())
+                .protocol(Protocol.HTTP_1_1)
+                .code(204)
+                .message("No Content")
+                .build()
+            return Response.success(null, raw)
+        }
+
         override suspend fun authRefresh(token: String): AuthResponse =
             AuthResponse("pb_token_1", UserRecord("u1", "anya@example.com", "Аня", ""))
 
@@ -88,6 +106,22 @@ class FamilyBookViewModelTest {
             calls += "family"
             return FamilyRecord("f1", "Ивановы", "u1")
         }
+
+        override suspend fun renameFamily(token: String, body: RenameFamilyRequest): FamilyResponse {
+            calls += "rename"
+            return FamilyResponse("f1", body.name, null)
+        }
+
+        override suspend fun leaveFamily(token: String): LeaveFamilyResponse {
+            calls += "leave"
+            return LeaveFamilyResponse(ok = true)
+        }
+
+        override suspend fun listFamilyUsers(
+            token: String,
+            perPage: Int,
+            fields: String,
+        ) = com.polinalinen.madre.data.remote.RecordsPage<UserRecord>(1, perPage, 0, emptyList())
     }
 
     private fun viewModel(api: FakeApi): FamilyBookViewModel {
@@ -154,5 +188,21 @@ class FamilyBookViewModelTest {
         val state = vm.state.value
         assertThat(state).isInstanceOf(FamilyBookState.Failed::class.java)
         assertThat((state as FamilyBookState.Failed).account?.inviteCode).isNull()
+    }
+
+    @Test
+    fun `password reset keeps signed out and never turns the book into loading`() = runTest(dispatcher) {
+        val api = FakeApi()
+        val vm = viewModel(api)
+
+        vm.requestPasswordReset("anya@example.com")
+        assertThat(vm.state.value).isEqualTo(FamilyBookState.SignedOut)
+        assertThat(vm.passwordReset.value).isEqualTo(PasswordResetNotice.Sending)
+
+        advanceUntilIdle()
+
+        assertThat(vm.state.value).isEqualTo(FamilyBookState.SignedOut)
+        assertThat(vm.passwordReset.value).isEqualTo(PasswordResetNotice.Sent)
+        assertThat(api.calls).containsExactly("reset")
     }
 }

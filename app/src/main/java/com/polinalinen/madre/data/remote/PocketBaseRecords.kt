@@ -38,6 +38,21 @@ data class BakeStatRecord(
     @SerializedName("recipe_name") val recipeName: String,
     @SerializedName("portions") val portions: Int,
     @SerializedName("baked_at") val bakedAt: String,
+    /**
+     * Cycle 27: автор книги на полке. Пишет сервер из токена; клиент в JSON
+     * может прислать что угодно — хук затрёт. Корешок считается по этому id,
+     * не по [deviceId].
+     */
+    @SerializedName("user") val userId: String? = null,
+    /** Снимок подписи на момент постановки. Переименование полки его не трогает. */
+    @SerializedName("display_name") val displayName: String? = null,
+    /** Снимок названия полки на момент постановки. */
+    @SerializedName("family_name") val familyName: String? = null,
+    /**
+     * Имя файла, если кадр уже на сервере. Пустое — снимка нет. Клиент не
+     * подставляет путь «на всякий случай».
+     */
+    @SerializedName("photo") val photo: String? = null,
 )
 
 data class FeedingStatRecord(
@@ -66,6 +81,13 @@ object PocketBaseFilter {
     /** Записи ДРУГИХ устройств семьи: свои книга знает и без сервера. */
     fun excludeDevice(deviceId: String): String =
         "(device_id!=\"${escape(deviceId)}\")"
+
+    /** Выпечки одного человека на полке — по user id, не по телефону. */
+    fun ofUser(userId: String): String =
+        "(user=\"${escape(userId)}\")"
+
+    fun ofClientEvent(clientEventId: String): String =
+        "(client_event_id=\"${escape(clientEventId)}\")"
 
     private fun escape(value: String): String =
         value.replace("\\", "\\\\").replace("\"", "\\\"")

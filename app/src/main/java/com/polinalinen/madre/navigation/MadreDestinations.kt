@@ -14,10 +14,10 @@ object MadreDestinations {
     const val FEEDING_FORM = "starter/feed"
     const val PHOTO_GALLERY = "photo-gallery"
     const val SETTINGS = "settings"
+    const val SETTINGS_SHELF = "settings/shelf"
 
-    // Полка (2026-07-20/21): своя книга + книги друзей. Друзья пока без бэка —
-    // экран BOOK_STATS с owner="me" работает на реальных данных, остальные владельцы
-    // показывают то, чем поделились (заглушка, пока нет сервера — см. DESIGN-V4.md).
+    // Полка (Cycle 27): корешки семьи и журнал. Формуляр выбранного человека —
+    // BOOK_STATS; своя книга — owner="me" или PocketBase user id.
     const val SHELF = "shelf"
     const val BOOK_STATS = "shelf/{ownerId}"
 

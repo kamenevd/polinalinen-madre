@@ -62,9 +62,40 @@ class PocketBaseRecordsTest {
     }
 
     @Test
-    fun `exclude device filter matches pocketbase syntax and escapes quotes`() {
-        assertThat(PocketBaseFilter.excludeDevice("self")).isEqualTo("(device_id!=\"self\")")
-        assertThat(PocketBaseFilter.excludeDevice("a\"b")).isEqualTo("(device_id!=\"a\\\"b\")")
+    fun `ofUser filter keys the shelf by pocketbase user id`() {
+        assertThat(PocketBaseFilter.ofUser("u1")).isEqualTo("(user=\"u1\")")
+        assertThat(PocketBaseFilter.ofUser("a\"b")).isEqualTo("(user=\"a\\\"b\")")
+    }
+
+    @Test
+    fun `bake stat snapshot fields serialize when present and vanish when absent`() {
+        val withNames = gson.toJson(
+            BakeStatRecord(
+                deviceId = "dev-1",
+                recipeId = "ciabatta",
+                recipeName = "Чиабатта",
+                portions = 2,
+                bakedAt = "2026-07-24 10:00:00Z",
+                clientEventId = "test",
+                displayName = "Аня",
+                familyName = "Каменевы",
+            )
+        )
+        assertThat(withNames).contains("\"display_name\":\"Аня\"")
+        assertThat(withNames).contains("\"family_name\":\"Каменевы\"")
+        val bare = gson.toJson(
+            BakeStatRecord(
+                deviceId = "dev-1",
+                recipeId = "ciabatta",
+                recipeName = "Чиабатта",
+                portions = 2,
+                bakedAt = "2026-07-24 10:00:00Z",
+                clientEventId = "test",
+            )
+        )
+        assertThat(bare).doesNotContain("display_name")
+        assertThat(bare).doesNotContain("\"user\"")
+        assertThat(bare).doesNotContain("\"photo\"")
     }
 
     @Test

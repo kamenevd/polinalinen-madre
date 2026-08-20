@@ -1,0 +1,5 @@
+# Cursor on LXC108
+
+Read AGENTS.md first (paths, stop-state, lexicon). Architecture is CLAUDE.md.
+Do not use /root/projects/madre or LXC103 /root trees as source.
+Store listing is Ges on 103. Code SSOT is this repo.

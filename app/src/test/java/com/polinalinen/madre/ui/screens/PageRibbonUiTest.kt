@@ -61,17 +61,15 @@ class PageRibbonUiTest {
     }
 
     @Test
-    fun `the mood ribbon at peak promises nothing`() {
+    fun `inferred peak ribbon is absent`() {
         showRibbon(hasActiveBake = false, phase = GrowthPhase.PEAK)
-        rule.onNodeWithContentDescription("Закваска на пике")
-            .assert(hasClickAction().not())
+        rule.onNodeWithContentDescription("Закваска на пике").assertDoesNotExist()
     }
 
     @Test
-    fun `the mood ribbon when hungry promises nothing`() {
+    fun `inferred hunger ribbon is absent`() {
         showRibbon(hasActiveBake = false, phase = GrowthPhase.HUNGRY)
-        rule.onNodeWithContentDescription("Закваска давно не кормлена")
-            .assert(hasClickAction().not())
+        rule.onNodeWithContentDescription("Закваска давно не кормлена").assertDoesNotExist()
     }
 
     /**

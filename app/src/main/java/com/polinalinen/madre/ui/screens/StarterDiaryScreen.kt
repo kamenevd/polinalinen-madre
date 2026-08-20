@@ -1,7 +1,6 @@
 package com.polinalinen.madre.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,51 +13,68 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.polinalinen.madre.data.db.entities.FeedingEntity
+import com.polinalinen.madre.data.db.entities.StorageLocation
 import com.polinalinen.madre.family.FamilyHand
 import com.polinalinen.madre.family.style
-import com.polinalinen.madre.sourdough.DiaryEntry
+import com.polinalinen.madre.model.RuShortDate
+import com.polinalinen.madre.notifications.FeedingSchedule
 import com.polinalinen.madre.sourdough.GrowthPhase
-import com.polinalinen.madre.sourdough.MadreVoice
 import com.polinalinen.madre.sourdough.SourdoughProfile
 import com.polinalinen.madre.sourdough.StarterName
+import com.polinalinen.madre.ui.components.AgedPhoto
 import com.polinalinen.madre.ui.components.BackLabel
 import com.polinalinen.madre.ui.components.BookButton
-import com.polinalinen.madre.ui.components.BubbleVignette
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.InkBlot
 import com.polinalinen.madre.ui.components.InkBlotSpot
 import com.polinalinen.madre.ui.components.PageLabel
+import com.polinalinen.madre.ui.components.bookAction
 import com.polinalinen.madre.ui.components.breathingPage
 import com.polinalinen.madre.ui.components.lightPage
 import com.polinalinen.madre.ui.theme.AppColors
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+
+data class DiaryEntry(
+    val timeLabel: String,
+    val text: String,
+    val isHighlight: Boolean,
+)
 
 /**
  * Закваска — «Дневник культуры» (DESIGN-V4.md, экран 4).
  * Механики: #1 дневник от первого лица, #4 формуляр, #5 дышащая страница.
+ *
+ * Cycle 26: «Формуляр кормлений» — настоящая таблица с прилипающей шапкой, а
+ * не раскрывающиеся карточки с прозой. Шесть узких колонок помещаются в
+ * портрет целиком, история едет через LazyColumn целиком (без потолка в
+ * десять строк), а длинная человеческая заметка и фотокарточка живут
+ * отдельным необязательным раскрытием под строкой — они дополняют таблицу,
+ * а не подменяют её.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun StarterDiaryScreen(
     dayNumber: Int,
@@ -71,17 +87,23 @@ fun StarterDiaryScreen(
     onOpenGallery: () -> Unit = {},
     cancelledBakeCount: Int = 0,
     starterName: String = StarterName.DEFAULT,
+    intervalHours: Int = 24,
+    currentYear: Int = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR),
+    nowMillis: Long? = null,
+    nowProvider: () -> Long = System::currentTimeMillis,
 ) {
     val colors = AppColors.current
     // «Клякса» — DESIGN-V4.md Cycle 3, фича InkBlot. Событие для seed — самое
     // свежее кормление (id), т.к. отдельного id у DiaryEntry/фазы нет.
     val inkEventId = history.firstOrNull()?.id ?: 0L
 
-    // history[0] — текущее кормление, оно уже показано выше как «Мадре пишет».
-    // Архив прошлых глав — всё остальное, и это единственный список экрана,
-    // который растёт без потолка: он и едет в LazyColumn как настоящие items.
-    val pastFeedings = history.drop(1)
-    var expandedArchiveId by rememberSaveable { mutableStateOf<Long?>(null) }
+    // Срок следующего кормления — тот же расчёт, что и на первой полосе:
+    // время последней записи плюс интервал из настроек, без «примерно».
+    val scheduleNowMillis by remember(nowMillis, nowProvider) {
+        mutableStateOf(nowMillis ?: nowProvider())
+    }
+    val nextFeedingStatus = history.firstOrNull()
+        ?.let { FeedingSchedule.nextFeedingStatus(FeedingSchedule.calculate(it.timestampMillis, intervalHours, scheduleNowMillis)) }
 
     Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
         // «Страница на просвет» (Cycle 4, LightPage): наклон телефона ловит
@@ -112,13 +134,23 @@ fun StarterDiaryScreen(
                     fontSize = 28.sp,
                     modifier = Modifier.padding(horizontal = 22.dp),
                 )
+
+                if (nextFeedingStatus != null) {
+                    Text(
+                        nextFeedingStatus,
+                        color = colors.espresso,
+                        fontFamily = FontFamily.Serif,
+                        fontSize = 15.sp,
+                        modifier = Modifier.padding(horizontal = 22.dp, vertical = 6.dp),
+                    )
+                }
             }
 
             // Дневник — рукописный шрифт, вертикальная линия полей слева.
             // Поверх — кляксы (InkBlot, Cycle 3): отменённая выпечка и голодная
             // фаза оставляют детерминированный след прямо на странице дневника.
-            // Записей всегда единицы (их порождает MadreVoice из одной фазы),
-            // поэтому это один item, а не items.
+            // Записей всегда единицы (их порождает вызывающий экран из одной
+            // фазы), поэтому это один item, а не items.
             item {
             Box(Modifier.padding(horizontal = 22.dp, vertical = 12.dp)) {
                 Column(
@@ -174,84 +206,7 @@ fun StarterDiaryScreen(
             }
             }
 
-            // «Прошлые главы» (Cycle 1, DiaryArchive) — единственный список без
-            // потолка: одна строка на каждое прошлое кормление за всю жизнь
-            // закваски. Ключ — id записи, поэтому раскрытая глава остаётся
-            // раскрытой, когда сверху добавляется новое кормление.
-            if (pastFeedings.isNotEmpty()) {
-                item { DiaryArchiveHeader() }
-                itemsIndexed(pastFeedings, key = { _, feeding -> feeding.id }) { i, feeding ->
-                    DiaryArchiveRow(
-                        feeding = feeding,
-                        // «Следующее» кормление, которым закончилась эта глава, —
-                        // на один индекс ближе к настоящему в исходном списке.
-                        nextFeedingMillis = history[i].timestampMillis,
-                        profile = profile,
-                        expanded = expandedArchiveId == feeding.id,
-                        onToggle = {
-                            expandedArchiveId = if (expandedArchiveId == feeding.id) null else feeding.id
-                        },
-                    )
-                }
-            }
-
             item {
-            BubbleVignette(phase, Modifier.padding(horizontal = 22.dp, vertical = 8.dp))
-
-            // Формуляр выпечки — механика #4. Он сознательно ограничен десятью
-            // последними строками, поэтому живёт одним item: разбивать его на
-            // items незачем, а клякса поверх требует общего Box.
-            PageLabel("Формуляр кормлений", Modifier.padding(start = 22.dp, top = 10.dp), color = colors.espresso)
-            Box(Modifier.padding(horizontal = 22.dp, vertical = 8.dp)) {
-            Column(
-                Modifier
-                    .drawBehind { drawRect(colors.cream) }
-                    .padding(12.dp)
-            ) {
-                Row(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
-                    FormHeader("дата", 1.2f)
-                    FormHeader("мука/вода", 2f)
-                    FormHeader("заметка", 1.5f, alignEnd = true)
-                }
-                Box(Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
-                    androidx.compose.foundation.Canvas(Modifier.fillMaxWidth().padding(0.dp)) {
-                        drawRect(colors.espresso, size = androidx.compose.ui.geometry.Size(size.width, 1.dp.toPx()))
-                    }
-                }
-                history.take(10).forEach { feeding ->
-                    Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.Bottom) {
-                        Text(
-                            romanDate(feeding.timestampMillis),
-                            color = colors.cocoa, fontFamily = FontFamily.Serif, fontSize = 12.sp,
-                            modifier = Modifier.weight(1.2f),
-                        )
-                        Text(
-                            "${feeding.flourGrams}г · ${feeding.waterGrams}г",
-                            color = colors.espresso, fontFamily = FontFamily.Serif, fontSize = 12.sp,
-                            modifier = Modifier.weight(2f),
-                        )
-                        Text(
-                            feeding.notes ?: "—",
-                            color = colors.sage, fontFamily = FontFamily.Cursive, fontSize = 13.sp,
-                            modifier = Modifier.weight(1.5f),
-                            textAlign = androidx.compose.ui.text.style.TextAlign.End,
-                            maxLines = 1,
-                        )
-                    }
-                    HairRule()
-                }
-            }
-                // Та же отменённая выпечка — вторая, отдельная клякса в формуляре
-                // (другой offset seed'а — форма не совпадает с той, что в дневнике).
-                if (cancelledBakeCount > 0) {
-                    InkBlotSpot(
-                        seed = InkBlot.seedFor(inkEventId, FORMULARY_BLOT_OFFSET + cancelledBakeCount),
-                        color = colors.cocoa,
-                        modifier = Modifier.align(Alignment.TopEnd).size(32.dp),
-                    )
-                }
-            }
-
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 14.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -264,84 +219,61 @@ fun StarterDiaryScreen(
                     modifier = Modifier.weight(1f),
                 )
             }
+            PageLabel("Советы из руководства", Modifier.padding(horizontal = 22.dp, vertical = 8.dp), color = colors.espresso)
+            Text(
+                "В буклете Levito Madre указано соотношение базового кормления 2:1:2 (закваска:вода:мука) и стартовая гидратация 50%. " +
+                    "Мадре и закваску кормят белой пшеничной мукой высшего сорта с содержанием белка >10 г на 100 г. " +
+                    "Хранение в холодильнике при 4–6°C обычно даёт интервал кормления 3–5 дней. " +
+                    "Пик чаще всего бывает около 3–5 часов, но фактически зависит от температуры, муки, печи и вашего ритма. " +
+                    "Стартовые значения формы 50/100/50 — это редактируемые удобные массы, а не формула.",
+                color = colors.cocoa, fontFamily = FontFamily.Serif, fontSize = 13.sp, lineHeight = 19.sp,
+                modifier = Modifier.padding(horizontal = 22.dp, vertical = 6.dp),
+            )
+            PageLabel("Формуляр кормлений", Modifier.padding(start = 22.dp, top = 10.dp), color = colors.espresso)
+            }
+
+            // Шапка липнет к верху: пролистывая историю на год назад, человек
+            // всё ещё видит, какая колонка чем является.
+            stickyHeader { FormularyHeader() }
+
+            items(history, key = { feeding -> feeding.id }) { feeding ->
+                FormularyRow(feeding = feeding, currentYear = currentYear)
             }
         }
         }
     }
 }
 
-/**
- * Заголовок «Прошлых глав» (DESIGN-V4.md Cycle 1, фича DiaryArchive) —
- * оглавление второго тома. Отдельный item списка: строки архива ниже едут
- * как настоящие items с ключами, и общего Column у них больше нет.
- */
+/** Шесть колонок формуляра — одна ширина на шапку и на строки. */
+private val COLUMN_WEIGHTS = listOf(1.35f, 0.95f, 0.95f, 0.95f, 1.0f, 1.25f)
+private val COLUMN_TITLES = listOf("Дата", "Закв.", "Мука", "Вода", "Гидр.", "Хранение")
+private const val FORMULARY_HEADER_DESCRIPTION =
+    "Дата, Закваска, Мука, Вода, Гидратация, Хранение"
+
 @Composable
-private fun DiaryArchiveHeader(modifier: Modifier = Modifier) {
+private fun FormularyHeader() {
     val colors = AppColors.current
-    Row(
-        modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .drawBehind { drawRect(colors.paper) }
+            .semantics {
+                heading()
+                contentDescription = FORMULARY_HEADER_DESCRIPTION
+            },
     ) {
-        HairRule(Modifier.weight(1f))
-        PageLabel("Прошлые главы", color = colors.espresso, modifier = Modifier.padding(horizontal = 10.dp))
-        HairRule(Modifier.weight(1f))
-    }
-}
-
-/**
- * Одна прошлая глава: дата римскими + первая строка записи, тап разворачивает,
- * чем эта глава закончилась ([nextFeedingMillis] — кормление, которое её
- * оборвало).
- */
-@Composable
-private fun DiaryArchiveRow(
-    feeding: FeedingEntity,
-    nextFeedingMillis: Long,
-    profile: SourdoughProfile,
-    expanded: Boolean,
-    onToggle: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val colors = AppColors.current
-    // Своя рука на прошлую главу — FamilyHand, fallback-ключ = id кормления
-    // (у FeedingEntity нет userId, но каждая запись всё же выглядит по-своему).
-    val hand = FamilyHand.forUser(null, feeding.id).style()
-
-    Column(modifier.fillMaxWidth().padding(horizontal = 22.dp)) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .clickable { onToggle() }
-                .padding(vertical = 8.dp)
-        ) {
-            Row(verticalAlignment = Alignment.Top) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 8.dp)) {
+            COLUMN_TITLES.forEachIndexed { index, title ->
                 Text(
-                    romanDate(feeding.timestampMillis),
+                    title,
                     color = colors.cocoa,
                     fontFamily = FontFamily.SansSerif,
-                    fontSize = 11.sp,
-                    letterSpacing = 1.sp,
-                    modifier = Modifier.width(56.dp).padding(top = 3.dp),
-                )
-                Text(
-                    MadreVoice.archiveFirstLine(feeding),
-                    color = hand.ink,
-                    fontFamily = FontFamily.Cursive,
-                    fontWeight = hand.fontWeight,
-                    fontSize = 16.sp,
-                    maxLines = if (expanded) Int.MAX_VALUE else 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f).rotate(hand.rotationDeg),
-                )
-            }
-            AnimatedVisibility(visible = expanded) {
-                Text(
-                    MadreVoice.archiveFate(feeding, nextFeedingMillis, profile),
-                    color = colors.sage,
-                    fontFamily = FontFamily.Cursive,
-                    fontSize = 15.sp,
-                    lineHeight = 21.sp,
-                    modifier = Modifier.padding(start = 56.dp, top = 3.dp),
+                    fontSize = 10.sp,
+                    letterSpacing = 0.5.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Clip,
+                    textAlign = if (index == 0) TextAlign.Start else TextAlign.End,
+                    modifier = Modifier.weight(COLUMN_WEIGHTS[index]),
                 )
             }
         }
@@ -349,27 +281,115 @@ private fun DiaryArchiveRow(
     }
 }
 
-// Разные offset'ы у одного и того же inkEventId — клякса в дневнике и клякса
-// в формуляре не совпадают по форме, хоть и рождены одним событием (InkBlot).
-private const val HUNGRY_BLOT_OFFSET = 97
-private const val FORMULARY_BLOT_OFFSET = 211
-
+/**
+ * Одна строка формуляра: шесть фактов и ничего сверх них. Для TalkBack строка
+ * объявляется одним предложением по порядку колонок — иначе шесть отдельных
+ * чисел без подписей читаются как считалка. Незаполненная гидратация старой
+ * записи объявляется «не указана», а не выдумывается.
+ */
 @Composable
-private fun androidx.compose.foundation.layout.RowScope.FormHeader(text: String, weight: Float, alignEnd: Boolean = false) {
-    Text(
-        text.uppercase(),
-        color = AppColors.current.cocoa,
-        fontFamily = FontFamily.SansSerif,
-        fontSize = 9.sp,
-        letterSpacing = 1.sp,
-        modifier = Modifier.weight(weight),
-        textAlign = if (alignEnd) androidx.compose.ui.text.style.TextAlign.End else androidx.compose.ui.text.style.TextAlign.Start,
+private fun FormularyRow(feeding: FeedingEntity, currentYear: Int) {
+    val colors = AppColors.current
+    var expanded by rememberSaveable(feeding.id) { mutableStateOf(false) }
+
+    val hydration = feeding.finalHydrationPercent ?: feeding.hydrationPercent
+    val storageShort = if (feeding.storageLocation == StorageLocation.FRIDGE) "холод" else "кухня"
+    val storageSpoken = if (feeding.storageLocation == StorageLocation.FRIDGE) "холодильник" else "кухня"
+    val cells = listOf(
+        RuShortDate.visible(feeding.timestampMillis, currentYear),
+        feeding.retainedStarterGrams?.toString() ?: "—",
+        feeding.flourGrams.toString(),
+        feeding.waterGrams.toString(),
+        hydration?.let { "$it%" } ?: "—",
+        storageShort,
     )
+    val spoken = buildString {
+        append(RuShortDate.accessible(feeding.timestampMillis))
+        append(". Закваска: ")
+        append(feeding.retainedStarterGrams?.let { "$it граммов" } ?: "не указана")
+        append(". Мука: ${feeding.flourGrams} граммов")
+        append(". Вода: ${feeding.waterGrams} граммов")
+        append(". Гидратация: ")
+        append(hydration?.let { "$it процентов" } ?: "не указана")
+        append(". Хранение: $storageSpoken.")
+    }
+    val detail = feeding.generatedComment ?: feeding.starterObservation
+    val hasDetail = detail != null || feeding.notes != null || feeding.photoPath != null
+
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 22.dp, vertical = 10.dp)
+                .clearAndSetSemantics { contentDescription = spoken },
+        ) {
+            cells.forEachIndexed { index, cell ->
+                Text(
+                    cell,
+                    color = if (index == 0) colors.cocoa else colors.espresso,
+                    fontFamily = if (index == 0) FontFamily.SansSerif else FontFamily.Serif,
+                    fontSize = if (index == 0) 11.sp else 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Clip,
+                    textAlign = if (index == 0) TextAlign.Start else TextAlign.End,
+                    modifier = Modifier.weight(COLUMN_WEIGHTS[index]),
+                )
+            }
+        }
+
+        if (hasDetail) {
+            // Отдельное действие, а не часть строки: таблица остаётся таблицей,
+            // а длинный текст раскрывается по желанию. Текст раскрытия лежит
+            // СНАРУЖИ нажимаемой площади — иначе TalkBack прочитал бы его
+            // дважды, второй раз как подпись к кнопке.
+            Box(
+                Modifier
+                    .padding(start = 22.dp)
+                    .then(
+                        bookAction(
+                            if (expanded) "Свернуть подробности кормления ${RuShortDate.accessible(feeding.timestampMillis)}"
+                            else "Показать подробности кормления ${RuShortDate.accessible(feeding.timestampMillis)}"
+                        ) { expanded = !expanded }
+                    ),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                PageLabel(if (expanded) "свернуть" else "подробнее", color = colors.crust)
+            }
+            if (expanded) {
+                Column(Modifier.padding(start = 22.dp, end = 22.dp, bottom = 8.dp)) {
+                    detail?.let {
+                        Text(
+                            it,
+                            color = colors.cocoa,
+                            fontFamily = FontFamily.Serif,
+                            fontSize = 13.sp,
+                            lineHeight = 19.sp,
+                        )
+                    }
+                    feeding.notes?.let {
+                        Text(
+                            "Заметка: $it",
+                            color = colors.espresso,
+                            fontFamily = FontFamily.Cursive,
+                            fontSize = 15.sp,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
+                    feeding.photoPath?.let {
+                        Box(Modifier.padding(top = 8.dp)) {
+                            AgedPhoto(
+                                photoPath = it,
+                                takenAtMillis = feeding.timestampMillis,
+                                height = 140.dp,
+                                caption = "Фотокарточка кормления",
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        HairRule()
+    }
 }
 
-/** «18.VII» — день + месяц римскими, как в библиотечном формуляре. */
-private fun romanDate(millis: Long): String {
-    val roman = listOf("I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII")
-    val cal = java.util.Calendar.getInstance().apply { timeInMillis = millis }
-    return "${cal.get(java.util.Calendar.DAY_OF_MONTH)}.${roman[cal.get(java.util.Calendar.MONTH)]}"
-}
+private const val HUNGRY_BLOT_OFFSET = 97

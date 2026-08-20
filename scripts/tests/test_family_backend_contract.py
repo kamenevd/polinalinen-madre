@@ -248,6 +248,49 @@ class ProductionEndpointTests(unittest.TestCase):
         self.assertNotIn('android:usesCleartextTraffic="true"', manifest)
 
 
+class ShelfOfBooksBackendTests(unittest.TestCase):
+    """Cycle 27: полка считает книги по user id, переименование не переписывает
+    старые страницы, кадр снимается отдельно от факта выпечки."""
+
+    def test_bake_stats_gain_user_display_name_and_optional_photo(self):
+        matches = list(MIGRATIONS.glob("*_bake_stats_shelf.js"))
+        self.assertEqual(1, len(matches), "нужна миграция bake_stats для полки")
+        text = read(matches[0])
+        for field in ("user", "display_name", "family_name", "photo"):
+            self.assertIn(f'"name": "{field}"', text, field)
+        self.assertIn('"type": "relation"', text)
+        self.assertIn('"type": "file"', text)
+        self.assertIn("collection.updateRule = null", text)
+
+    def test_family_hook_can_rename_and_leave(self):
+        text = read(list(HOOKS.glob("*family*.pb.js"))[0])
+        self.assertIn('routerAdd("PATCH", "/api/madre/family/rename"', text)
+        self.assertIn('routerAdd("POST", "/api/madre/family/leave"', text)
+        rename = text[text.index("/api/madre/family/rename") :]
+        self.assertIn("$apis.requireAuth()", rename[: rename.find("routerAdd(", 1)])
+        self.assertNotIn("bake_stats", rename[: rename.find("routerAdd(", 1)])
+
+    def test_stats_hook_stamps_user_from_auth_and_has_photo_routes(self):
+        text = read(HOOKS / "madre_stats.pb.js")
+        self.assertIn('e.record.set("user", e.auth.id)', text)
+        self.assertIn('routerAdd("POST", "/api/madre/shelf/photo"', text)
+        self.assertIn('routerAdd("POST", "/api/madre/shelf/photo/clear"', text)
+        self.assertIn("$apis.requireAuth()", text)
+
+    def test_last_member_leave_deletes_families_row_and_server_shelf_history_gone(self):
+        """Last member leaving deletes the families row (see hook).
+        Server shelf history (bake_stats tied to that family) does not survive
+        on server; local books on devices remain. Do not claim server history survives.
+        Local Room data is independent and stays.
+        """
+        text = read(list(HOOKS.glob("*family*.pb.js"))[0])
+        self.assertIn("txApp.delete(family)", text)
+        self.assertIn("if (!others || others.length === 0)", text)
+        # Note: bake_stats are not deleted in this hook, but without family row
+        # the server history for that shelf is effectively gone for new queries.
+        # Local books (Room) are unaffected per design.
+
+
 class OfflineLocalBookTests(unittest.TestCase):
     """Локальная книга обязана работать без входа — значит Room-слой не знает
     ни про аккаунт, ни про сеть."""

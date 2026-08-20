@@ -2831,7 +2831,8 @@ RuStore 6.6.0(35) и 6.5.0(34) не трогаем, Kotlin по этому пл�
 - `finish` оборачивает attach/get/share в `try/catch/finally`; `exitSession` и
   `onExit` всегда выполняет один владелец `finishing`. `BakingFinishFailureTest`
   по очереди бросает из `attachPhoto`, `get`, `shareBakeStat`: очередь не
-  дублируется, `onExit` ровно один, busy-экран не остаётся.
+  дублируется, `exitSession` ровно один, `onExit` ровно один, busy-экран не
+  остаётся.
 - Шесть прямых GET исторического кадра обязаны дать именно `403/404`; любой 2xx
   — блокер, даже без image bytes.
 - Superuser строго read-only для аудита журнала. R18 с мутацией удалён;

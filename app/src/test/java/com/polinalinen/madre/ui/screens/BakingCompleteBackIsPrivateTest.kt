@@ -12,8 +12,10 @@ class BakingCompleteBackIsPrivateTest {
             "src/main/java/com/polinalinen/madre/ui/screens/BakingCompleteScreen.kt",
         ).readText()
 
-        assertThat(source).contains("BackHandler(enabled = !busy)")
+        assertThat(source).contains("BackHandler {")
+        assertThat(source).contains("if (busy) return@BackHandler")
         assertThat(source).contains("viewModel.finish(id, ShelfShareDecision.KEEP, onHome)")
+        assertThat(source).doesNotContain("if (session == null) return@BackHandler onHome()")
         assertThat(source).contains("viewModel.finish(id, shelfDecision, onHome)")
     }
 }

@@ -88,9 +88,9 @@ fun BakingCompleteScreen(
     var pendingFinish by rememberSaveable { mutableStateOf(false) }
 
     // Системная «назад» с «Испечено» — личный выбор: не ставить на полку.
-    BackHandler(enabled = !busy) {
+    BackHandler {
+        if (busy) return@BackHandler
         val id = sessionId ?: return@BackHandler onHome()
-        if (session == null) return@BackHandler onHome()
         viewModel.finish(id, ShelfShareDecision.KEEP, onHome)
     }
 
@@ -248,7 +248,6 @@ fun BakingCompleteScreen(
                 enabled = !busy,
                 onClick = {
                     val id = sessionId ?: return@BookButton onHome()
-                    if (session == null) return@BookButton onHome()
                     val needsPhoto = ShelfSharePolicy.wantsPhoto(shelfDecision)
                     if (needsPhoto && photoPath == null) {
                         pendingFinish = true

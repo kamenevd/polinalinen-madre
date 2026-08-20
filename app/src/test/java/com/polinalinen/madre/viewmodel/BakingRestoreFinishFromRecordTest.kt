@@ -62,6 +62,7 @@ class BakingRestoreFinishFromRecordTest {
         val vm = BakingViewModel(app, history, sync, ledger)
         advanceUntilIdle()
 
+        assertThat(vm.session(7L)).isNull()
         vm.stageBakePhoto(7L, "bake_photos/restored.jpg")
         var exits = 0
         vm.finish(7L, ShelfShareDecision.PUT_WITH_PHOTO) { exits += 1 }
@@ -91,6 +92,7 @@ class BakingRestoreFinishFromRecordTest {
         val vm = BakingViewModel(app, history, sync, ledger)
         advanceUntilIdle()
 
+        assertThat(vm.session(12L)).isNull()
         var exits = 0
         vm.finish(12L, ShelfShareDecision.PUT_WITH_PHOTO) { exits += 1 }
         advanceUntilIdle()

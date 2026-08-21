@@ -184,7 +184,7 @@ dependencies {
 
     // ZXing core — QR гостевой страницы (Cycle 7, GuestPage). Только кодер
     // (чистая Java, без камеры/сканера) — рисуем BitMatrix сами на Canvas.
-    implementation("com.google.zxing:core:3.5.3")
+    implementation("com.google.zxing:core:3.5.4")
 
     // Testing
     testImplementation("junit:junit:4.13.2")

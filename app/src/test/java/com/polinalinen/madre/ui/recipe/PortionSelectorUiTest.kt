@@ -2,6 +2,7 @@ package com.polinalinen.madre.ui.recipe
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
@@ -37,7 +38,7 @@ class PortionSelectorUiTest {
 
     private fun open(initial: Int = 1) {
         rule.setContent {
-            var portions by mutableIntStateOf(initial)
+            var portions by remember { mutableIntStateOf(initial) }
             MadreTheme { PortionSelector(portions = portions, onSelect = { portions = it }) }
         }
     }

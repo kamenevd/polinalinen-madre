@@ -45,9 +45,6 @@ class FamilyBookSectionUiTest {
                     onRegister = { _, _, _ -> },
                     onCreateFamily = {},
                     onJoinFamily = {},
-                    onRotateInvite = {},
-                    onSignOut = {},
-                    onCodeHandled = {},
                 )
             }
         }
@@ -75,9 +72,6 @@ class FamilyBookSectionUiTest {
                     onRegister = { _, _, _ -> },
                     onCreateFamily = {},
                     onJoinFamily = {},
-                    onRotateInvite = {},
-                    onSignOut = {},
-                    onCodeHandled = {},
                 )
             }
         }

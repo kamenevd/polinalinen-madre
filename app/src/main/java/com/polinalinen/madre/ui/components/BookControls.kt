@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.Role
@@ -82,9 +83,10 @@ fun BookButton(
     variant: BookButtonVariant = BookButtonVariant.PRIMARY,
     enabled: Boolean = true,
     caption: String? = null,
+    repeatable: Boolean = false,
 ) {
     val colors = AppColors.current
-    val gate = remember { TapGate() }
+    val gate = remember(repeatable) { if (repeatable) null else TapGate() }
     val primary = variant == BookButtonVariant.PRIMARY
     // Выключенная кнопка гасится, но остаётся читаемой: это страница книги,
     // а не серый прямоугольник.
@@ -104,7 +106,10 @@ fun BookButton(
                     enabled = enabled,
                     onClickLabel = label,
                     role = Role.Button,
-                ) { if (gate.accept(System.currentTimeMillis())) onClick() }
+                ) {
+                    val accepted = repeatable || gate?.accept(System.currentTimeMillis()) == true
+                    if (accepted) onClick()
+                }
                 .drawBehind {
                     val radius = CornerRadius(4.dp.toPx())
                     if (primary) {
@@ -190,6 +195,50 @@ fun TextAction(
     }
 }
 
+/**
+ * Строка-крутилка: одно значение видно сразу, следующий тап ведёт к следующему.
+ * repeatable=true — это осознанный быстрый круг, где гейт двойного тапа не нужен.
+ */
+@Composable
+fun TapCycleRow(
+    label: String,
+    value: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    valueColor: Color = AppColors.current.cocoa,
+    enabled: Boolean = true,
+) {
+    val colors = AppColors.current
+    Row(
+        modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = MinTouchTarget)
+            .then(
+                if (enabled) {
+                    bookAction(
+                        label = "$label: $value",
+                        repeatable = true,
+                        onClick = onClick,
+                    )
+                } else {
+                    Modifier
+                },
+            )
+            .padding(horizontal = 22.dp, vertical = 14.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, color = colors.espresso, fontFamily = FontFamily.Serif, fontSize = 15.sp)
+        Text(
+            value,
+            color = valueColor,
+            fontFamily = FontFamily.Serif,
+            fontStyle = FontStyle.Italic,
+            fontSize = 14.sp,
+        )
+    }
+}
+
 /** Кегль тихого действия — тот же, что у основного текста страницы. */
 val TextActionSize = 15.sp
 
@@ -210,13 +259,15 @@ val TextActionSize = 15.sp
 fun bookAction(
     label: String,
     enabled: Boolean = true,
+    repeatable: Boolean = false,
     onClick: () -> Unit,
 ): Modifier {
-    val gate = remember { TapGate() }
+    val gate = remember(repeatable) { if (repeatable) null else TapGate() }
     return Modifier
         .defaultMinSize(minHeight = MinTouchTarget)
         .clickable(enabled = enabled, onClickLabel = label, role = Role.Button) {
-            if (gate.accept(System.currentTimeMillis())) onClick()
+            val accepted = repeatable || gate?.accept(System.currentTimeMillis()) == true
+            if (accepted) onClick()
         }
 }
 

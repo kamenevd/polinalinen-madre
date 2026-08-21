@@ -124,6 +124,9 @@ interface BakeRecordDao {
 
     @Query("SELECT completedAtMillis FROM bake_records WHERE id = :recordId")
     suspend fun getCompletedAt(recordId: Long): Long?
+
+    @Query("SELECT * FROM bake_records WHERE id = :recordId LIMIT 1")
+    suspend fun get(recordId: Long): BakeRecordEntity?
 }
 
 /**

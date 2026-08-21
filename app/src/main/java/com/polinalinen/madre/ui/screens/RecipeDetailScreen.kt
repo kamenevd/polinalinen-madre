@@ -1,22 +1,18 @@
 package com.polinalinen.madre.ui.screens
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,7 +30,6 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
@@ -50,11 +45,12 @@ import com.polinalinen.madre.model.RecipeScaler
 import com.polinalinen.madre.ui.components.BackLabel
 import com.polinalinen.madre.ui.components.BookButton
 import com.polinalinen.madre.ui.components.DottedLeaderRow
-import com.polinalinen.madre.ui.components.MinTouchTarget
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.HandwrittenEditSurface
 import com.polinalinen.madre.ui.components.HeavyRule
 import com.polinalinen.madre.ui.components.PageLabel
+import com.polinalinen.madre.ui.components.TapCycle
+import com.polinalinen.madre.ui.components.TapCycleRow
 import com.polinalinen.madre.ui.components.CoffeeRing
 import com.polinalinen.madre.ui.components.DustLayer
 import com.polinalinen.madre.ui.components.coffeeRings
@@ -425,64 +421,16 @@ private fun StatCell(
     }
 }
 
-/**
- * «НА СКОЛЬКО ПЕЧЁМ» — pill-паттерн: активная ячейка залита Espresso и шире
- * остальных («×3 семьи»). Единственное место применения референса Yandex Music.
- *
- * Экранному диктору ячейка называет себя словами: «×2» он читает как «умножить
- * на два», а выбор порций меняет все граммы рецепта разом — угадывать здесь
- * нечего. Ряд объявлен группой выбора (selectableGroup), поэтому TalkBack
- * говорит «2 из 5» и не притворяется, что кнопки не связаны.
- */
+/** «На сколько печём» — одна строка-крутилка по кругу 1…5→1. */
 @Composable
 internal fun PortionSelector(portions: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
-    val colors = AppColors.current
-    Column(modifier) {
-        PageLabel("На сколько печём", color = colors.espresso)
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp)
-                .selectableGroup()
-                .drawBehind {
-                    drawRoundRect(
-                        colors.espresso,
-                        style = Stroke(1.5.dp.toPx()),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx()),
-                    )
-                }
-        ) {
-            (RecipeScale.MIN_PORTIONS..RecipeScale.MAX_PORTIONS).forEach { n ->
-                val active = n == portions
-                Box(
-                    Modifier
-                        .weight(if (active) 1.5f else 1f)
-                        // Ячейка выходила ростом около 40dp — палец промахивался
-                        // на соседнюю порцию, а выбор порций меняет все граммы
-                        // рецепта разом.
-                        .defaultMinSize(minHeight = MinTouchTarget)
-                        .selectable(
-                            selected = active,
-                            role = Role.RadioButton,
-                            onClick = { onSelect(n) },
-                        )
-                        .semantics { contentDescription = portionLabel(n) }
-                        .drawBehind { if (active) drawRect(colors.espresso) }
-                        .padding(vertical = 9.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        if (active) "×$n ${familyWord(n)}" else "×$n",
-                        color = if (active) colors.paper else colors.cocoa,
-                        fontFamily = FontFamily.Serif,
-                        fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
-                        fontSize = 14.sp,
-                        maxLines = 1,
-                    )
-                }
-            }
-        }
-    }
+    val options = (RecipeScale.MIN_PORTIONS..RecipeScale.MAX_PORTIONS).toList()
+    TapCycleRow(
+        label = "На сколько печём",
+        value = "×$portions ${familyWord(portions)}",
+        modifier = modifier,
+        onClick = { onSelect(TapCycle.next(options, portions)) },
+    )
 }
 
 /**

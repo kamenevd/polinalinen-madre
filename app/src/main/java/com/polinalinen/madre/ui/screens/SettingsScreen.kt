@@ -1,8 +1,6 @@
 package com.polinalinen.madre.ui.screens
 
 import android.content.Intent
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.provider.Settings
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.defaultMinSize
@@ -52,7 +50,6 @@ import com.polinalinen.madre.notifications.MadreNotifier
 import com.polinalinen.madre.sourdough.FeedingInterval
 import com.polinalinen.madre.sourdough.StarterName
 import com.polinalinen.madre.account.FamilyBookState
-import com.polinalinen.madre.account.InviteCode
 import com.polinalinen.madre.account.PasswordReset
 import com.polinalinen.madre.account.PasswordResetNotice
 import com.polinalinen.madre.ui.components.BackLabel
@@ -65,6 +62,8 @@ import com.polinalinen.madre.sync.SyncStatus
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.HeavyRule
 import com.polinalinen.madre.ui.components.PageLabel
+import com.polinalinen.madre.ui.components.TapCycle
+import com.polinalinen.madre.ui.components.TapCycleRow
 import com.polinalinen.madre.ui.components.TextAction
 import com.polinalinen.madre.ui.theme.AppColors
 import com.polinalinen.madre.ui.theme.CalmModeSetting
@@ -207,6 +206,14 @@ fun SettingsScreen(
                     value = "›",
                     onClick = onOpenShelfSettings,
                 )
+                if (account != null) {
+                    HairRule(Modifier.padding(horizontal = 22.dp, vertical = 12.dp))
+                    TextAction(
+                        "Выйти · книга на телефоне останется",
+                        onClick = familyBookViewModel::signOut,
+                        modifier = Modifier.padding(horizontal = 14.dp),
+                    )
+                }
             }
 
             // ————— 4. Вид —————
@@ -278,21 +285,15 @@ private fun SettingsSection(
     content()
 }
 
-/**
- * Cycle 19: «как часто кормить» вместо «Кормить: раз в 48 часов».
- *
- * До этого строка перебирала пять значений по кругу от нажатия к нажатию:
- * чтобы вернуть предыдущее, нужно было пройти всю пятёрку, а увидеть весь
- * список было негде вовсе. Теперь список открывается и показывает, из чего
- * выбор, — включая то, что выбрано сейчас.
- */
+/** Cycle 28: ритм кормления снова крутится по кругу одной строкой. */
 @Composable
 private fun FeedingRhythmRow(intervalHours: Int, onChange: (Int) -> Unit) {
-    var picking by rememberSaveable { mutableStateOf(false) }
-    SettingsRow(
+    TapCycleRow(
         label = "Как часто кормить",
         value = "Ваш ритм: ${FeedingInterval.label(intervalHours)}",
-        onClick = { picking = true },
+        onClick = {
+            onChange(TapCycle.next(FeedingInterval.HOURS, intervalHours))
+        },
     )
     Text(
         "Руководство Levito Madre: при хранении на средней полке холодильника 4–6°C — каждые 3–5 дней. Это ориентир, не замена вашему ритму.",
@@ -301,18 +302,6 @@ private fun FeedingRhythmRow(intervalHours: Int, onChange: (Int) -> Unit) {
         fontSize = 12.sp,
         modifier = Modifier.padding(horizontal = 22.dp, vertical = 4.dp),
     )
-    if (picking) {
-        SettingsChoiceDialog(
-            title = "Как часто кормить",
-            options = FeedingInterval.HOURS.map { it to FeedingInterval.label(it) },
-            selected = intervalHours,
-            onPick = {
-                onChange(it)
-                picking = false
-            },
-            onDismiss = { picking = false },
-        )
-    }
 }
 
 /**
@@ -342,11 +331,18 @@ private fun RemindersRow(remindersEnabled: Boolean, onRemindersEnabledChange: (B
     }
 
     if (allowed) {
-        SettingsRow(
+        TapCycleRow(
             label = "Напоминания",
             value = if (remindersEnabled) "вкл" else "выкл",
             valueColor = if (remindersEnabled) colors.sage else colors.cocoa,
-            onClick = { onRemindersEnabledChange(!remindersEnabled) },
+            onClick = {
+                onRemindersEnabledChange(
+                    TapCycle.next(
+                        options = listOf(true, false),
+                        current = remindersEnabled,
+                    ),
+                )
+            },
         )
     } else {
         // Переключать нечего: телефон запретил книге писать, и «вкл» здесь было
@@ -377,102 +373,20 @@ private fun RemindersRow(remindersEnabled: Boolean, onRemindersEnabledChange: (B
     }
 }
 
-/**
- * Cycle 19: оба варианта оформления названы и стоят рядом.
- *
- * Строка-переключатель показывала одно слово и меняла его от нажатия: чтобы
- * узнать, что бывает кроме «спокойного», нужно было нажать и посмотреть, что
- * стало. Здесь оба слова видны сразу, выбранное подчёркнуто.
- */
+/** Cycle 28: оформление крутится одной строкой, как и остальные значения. */
 @Composable
 private fun CalmModeRow(calmMode: Boolean, onCalmModeChange: (Boolean) -> Unit) {
-    val colors = AppColors.current
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 22.dp, vertical = 4.dp),
-        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text("Оформление", color = colors.espresso, fontFamily = FontFamily.Serif, fontSize = 15.sp)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            listOf(true, false).forEach { calm ->
-                val label = CalmModeSetting.label(calm)
-                val chosen = calm == calmMode
-                Box(
-                    Modifier
-                        .then(bookAction(label = "Оформление: $label") { onCalmModeChange(calm) })
-                        .padding(start = 14.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        label,
-                        color = if (chosen) colors.espresso else colors.flour,
-                        fontFamily = FontFamily.Serif,
-                        fontSize = 15.sp,
-                        fontWeight = if (chosen) FontWeight.Bold else FontWeight.Normal,
-                        modifier = Modifier.drawBehind {
-                            if (!chosen) return@drawBehind
-                            val thickness = 1.5.dp.toPx()
-                            drawLine(
-                                color = colors.crust,
-                                start = androidx.compose.ui.geometry.Offset(0f, size.height + 2.dp.toPx()),
-                                end = androidx.compose.ui.geometry.Offset(size.width, size.height + 2.dp.toPx()),
-                                strokeWidth = thickness,
-                            )
-                        },
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
- * Выбор из нескольких значений — страницей книги, а не material-списком.
- * Форма та же, что у [com.polinalinen.madre.ui.components.ConfirmDialog]:
- * скругление 4dp, бумага Cream. Каждая строка — `bookAction`, то есть роль
- * кнопки, подпись для TalkBack и мишень не меньше 48dp.
- */
-@Composable
-private fun <T> SettingsChoiceDialog(
-    title: String,
-    options: List<Pair<T, String>>,
-    selected: T,
-    onPick: (T) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val colors = AppColors.current
-    androidx.compose.material3.AlertDialog(
-        onDismissRequest = onDismiss,
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
-        containerColor = colors.cream,
-        title = {
-            Text(title, color = colors.espresso, fontFamily = FontFamily.Serif, fontSize = 20.sp)
+    TapCycleRow(
+        label = "Оформление",
+        value = CalmModeSetting.label(calmMode),
+        onClick = {
+            onCalmModeChange(
+                TapCycle.next(
+                    options = listOf(true, false),
+                    current = calmMode,
+                ),
+            )
         },
-        text = {
-            Column(Modifier.fillMaxWidth()) {
-                options.forEach { (value, label) ->
-                    val chosen = value == selected
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .then(bookAction(label = label) { onPick(value) }),
-                        contentAlignment = Alignment.CenterStart,
-                    ) {
-                        Text(
-                            label,
-                            color = if (chosen) colors.crust else colors.espresso,
-                            fontFamily = FontFamily.Serif,
-                            fontSize = 16.sp,
-                            fontWeight = if (chosen) FontWeight.Bold else FontWeight.Normal,
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = { TextAction("Оставить как есть", onClick = onDismiss) },
     )
 }
 
@@ -518,17 +432,12 @@ internal fun FamilyBookSection(
     onRegister: (String, String, String) -> Unit,
     onCreateFamily: (String) -> Unit,
     onJoinFamily: (String) -> Unit,
-    onRotateInvite: () -> Unit,
-    onSignOut: () -> Unit,
-    onCodeHandled: () -> Unit,
     passwordResetNotice: PasswordResetNotice = PasswordResetNotice.Idle,
     onRequestPasswordReset: (String) -> Unit = {},
 ) {
     val colors = AppColors.current
-    val context = LocalContext.current
-    // rememberSaveable, а не remember: лист «Отправить» и смена кода уводят
-    // Activity в фон и переживают её пересоздание — набранные почта, пароль,
-    // подпись, название и код не должны обнуляться под руками.
+    // rememberSaveable, а не remember: пересоздание Activity не должно стирать
+    // набранные почту, пароль, подпись, название и код.
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var displayName by rememberSaveable { mutableStateOf("") }
@@ -545,12 +454,6 @@ internal fun FamilyBookSection(
     // об ошибке над пустым местом не объяснило бы ничего. Именно раскрыть, а не
     // «считать раскрытым»: иначе «Не сейчас» под формой перестал бы работать.
     LaunchedEffect(failed) { if (failed != null) showForm = true }
-
-    // Одноразовый код не должен пережить уход со страницы: как только секция
-    // покидает композицию, просим ViewModel забыть открытый код из состояния.
-    DisposableEffect(Unit) {
-        onDispose { onCodeHandled() }
-    }
 
     Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 8.dp)) {
         Text(
@@ -638,50 +541,6 @@ internal fun FamilyBookSection(
                     enabled = inviteCode.isNotBlank(),
                     onClick = { onJoinFamily(inviteCode) },
                 )
-                TextAction("Выйти · книга на телефоне останется", onClick = onSignOut)
-            }
-            else -> {
-                Text(
-                    "полка: ${account.familyName ?: "семья"}",
-                    color = colors.espresso,
-                    fontFamily = FontFamily.Serif,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
-                )
-                val code = account.inviteCode
-                if (code != null) {
-                    val printedCode = InviteCode.format(code)
-                    Text(
-                        printedCode,
-                        color = colors.crust,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 17.sp,
-                        modifier = Modifier.padding(top = 10.dp),
-                    )
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
-                        TextAction("Скопировать", onClick = {
-                            val clipboard = context.getSystemService(ClipboardManager::class.java)
-                            clipboard?.setPrimaryClip(ClipData.newPlainText("Код полки", printedCode))
-                            onCodeHandled()
-                        }, modifier = Modifier.weight(1f))
-                        TextAction("Отправить", onClick = {
-                            val share = Intent(Intent.ACTION_SEND)
-                                .setType("text/plain")
-                                .putExtra(Intent.EXTRA_TEXT, "Вступите на полку «${account.familyName ?: "Мадре"}»: $printedCode")
-                            context.startActivity(Intent.createChooser(share, "Отправить приглашение"))
-                            onCodeHandled()
-                        }, modifier = Modifier.weight(1f))
-                    }
-                }
-                if (account.isFamilyOwner) {
-                    Spacer(Modifier.height(8.dp))
-                    BookButton(
-                        label = "Обновить код приглашения",
-                        variant = BookButtonVariant.SECONDARY,
-                        onClick = onRotateInvite,
-                    )
-                }
-                TextAction("Выйти · книга на телефоне останется", onClick = onSignOut)
             }
         }
     }

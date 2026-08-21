@@ -70,7 +70,7 @@ class FamilyBookStateTest {
         val account = FamilyAccount(userId = "u1", email = "a@b.c", displayName = "Аня")
         assertThat(FamilyBookState.SignedIn(account).canUseNetwork).isTrue()
         assertThat(FamilyBookState.SignedOut.canUseNetwork).isFalse()
-        assertThat(FamilyBookState.Loading.canUseNetwork).isFalse()
+        assertThat(FamilyBookState.Loading().canUseNetwork).isFalse()
         assertThat(FamilyBookState.Failed(NetworkFailure.OFFLINE).canUseNetwork).isFalse()
     }
 
@@ -92,7 +92,7 @@ class FamilyBookStateTest {
     @Test
     fun `local book stays readable in every network state`() {
         val states = listOf(
-            FamilyBookState.Loading,
+            FamilyBookState.Loading(),
             FamilyBookState.SignedOut,
             FamilyBookState.Failed(NetworkFailure.OFFLINE),
             FamilyBookState.SignedIn(FamilyAccount("u1", "a@b.c", "Аня")),

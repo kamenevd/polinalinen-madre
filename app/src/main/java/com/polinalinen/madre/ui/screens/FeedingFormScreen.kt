@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -38,7 +37,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -61,6 +59,8 @@ import com.polinalinen.madre.ui.components.BackLabel
 import com.polinalinen.madre.ui.components.BookButton
 import com.polinalinen.madre.ui.components.MinTouchTarget
 import com.polinalinen.madre.ui.components.PageLabel
+import com.polinalinen.madre.ui.components.TapCycle
+import com.polinalinen.madre.ui.components.TapCycleRow
 import com.polinalinen.madre.ui.components.TextAction
 import com.polinalinen.madre.ui.components.bookAction
 import com.polinalinen.madre.ui.components.drawPhotoHolders
@@ -213,23 +213,20 @@ fun FeedingFormScreen(
                 )
             }
 
-            Row(
-                Modifier.padding(horizontal = 22.dp, vertical = 2.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                LocationChip(
-                    "Кухня",
-                    active = location == StorageLocation.KITCHEN,
-                    rotation = -2f,
-                    onClick = { location = StorageLocation.KITCHEN },
-                )
-                LocationChip(
-                    "Холод",
-                    active = location == StorageLocation.FRIDGE,
-                    rotation = 1f,
-                    onClick = { location = StorageLocation.FRIDGE },
-                )
-            }
+            TapCycleRow(
+                label = "Где стоит закваска",
+                value = when (location) {
+                    StorageLocation.KITCHEN -> "Кухня"
+                    StorageLocation.FRIDGE -> "Холод"
+                },
+                modifier = Modifier.padding(vertical = 2.dp),
+                onClick = {
+                    location = TapCycle.next(
+                        options = listOf(StorageLocation.KITCHEN, StorageLocation.FRIDGE),
+                        current = location,
+                    )
+                },
+            )
 
             // Слот фотокарточки:
             //  - пустой — нажимаемый (bookAction: роль, подпись, мишень 48dp)
@@ -575,35 +572,3 @@ private fun StepButton(symbol: String, label: String, enabled: Boolean, onClick:
     }
 }
 
-/**
- * Штамп-переключатель места хранения. Как и другие штампы в книге (Stamp
- * в BookComponents.kt) — рамка 1.5dp, лёгкий поворот, НИКОГДА заливка
- * (DESIGN-V4.md §«Графический язык»/Штампы). Активное состояние отличается
- * насыщенностью рамки/текста, не подложкой.
- */
-@Composable
-private fun LocationChip(text: String, active: Boolean, rotation: Float, onClick: () -> Unit) {
-    val colors = AppColors.current
-    val border = if (active) colors.espresso else colors.flour
-    val ink = if (active) colors.espresso else colors.cocoa
-    Box(
-        Modifier
-            .rotate(rotation)
-            // Штамп рисуется прежним, «бумажным» размером, а мишень под ним —
-            // в полный палец: до Cycle 12 в него надо было попасть в 25dp.
-            .defaultMinSize(minWidth = MinTouchTarget, minHeight = MinTouchTarget)
-            .selectable(
-                selected = active,
-                role = Role.RadioButton,
-                onClick = onClick,
-            )
-            .padding(vertical = 9.dp)
-            .drawBehind {
-                drawRoundRect(border, style = Stroke(width = 1.5.dp.toPx()), cornerRadius = CornerRadius(3.dp.toPx()))
-            }
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(text.uppercase(), color = ink, fontFamily = FontFamily.SansSerif, fontSize = 11.sp, letterSpacing = 2.sp)
-    }
-}

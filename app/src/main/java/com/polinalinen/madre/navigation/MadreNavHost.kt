@@ -41,6 +41,7 @@ import com.polinalinen.madre.ui.theme.LocalCalmMode
 import com.polinalinen.madre.ui.theme.SharedPreferencesFlagStore
 import com.polinalinen.madre.viewmodel.BakingViewModel
 import com.polinalinen.madre.viewmodel.FeedingSaveState
+import com.polinalinen.madre.viewmodel.FamilyBookViewModel
 import com.polinalinen.madre.viewmodel.SourdoughViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 
@@ -70,6 +71,7 @@ fun MadreNavHost(
     val bakingViewModel: BakingViewModel = viewModel()
     val sourdoughViewModel: SourdoughViewModel = viewModel()
     val shelfViewModel: ShelfViewModel = viewModel()
+    val familyBookViewModel: FamilyBookViewModel = viewModel()
     val app = context.applicationContext as MadreApplication
 
     val enterFeedingForm = {
@@ -127,6 +129,7 @@ fun MadreNavHost(
     // Реальная история выпечек — питает Формуляр книги / хитмэп на Полке.
     val bakeRecords by app.bakeHistoryRepository.observeAll().collectAsState(initial = emptyList())
     val recipesForStats by bakingViewModel.recipes.collectAsState()
+    val familyBookState by familyBookViewModel.state.collectAsState()
 
     // Реальное sourdough-состояние (Cycle 3): конфиг и история кормлений из Room,
     // через SourdoughViewModel — реактивно, без ручного refetch после кормления.
@@ -232,8 +235,6 @@ fun MadreNavHost(
                 BakingCompleteScreen(
                     sessionId = sessionId,
                     onHome = {
-                        // Убирает только ЭТУ сессию — если печётся что-то ещё, оно продолжает идти.
-                        sessionId?.let { bakingViewModel.exitSession(it) }
                         navController.popBackStack(MadreDestinations.HOME, inclusive = false)
                     },
                     viewModel = bakingViewModel,
@@ -306,6 +307,7 @@ fun MadreNavHost(
                     calmMode = calmMode,
                     onCalmModeChange = setCalmMode,
                     onOpenShelfSettings = { navController.navigate(MadreDestinations.SETTINGS_SHELF) },
+                    familyBookViewModel = familyBookViewModel,
                 )
             }
             composable(MadreDestinations.SETTINGS_SHELF) {
@@ -313,6 +315,7 @@ fun MadreNavHost(
                     myName = myName,
                     localRecords = bakeRecords,
                     onBack = { navController.popBackStack() },
+                    familyBookViewModel = familyBookViewModel,
                     shelfViewModel = shelfViewModel,
                 )
             }
@@ -322,6 +325,7 @@ fun MadreNavHost(
                     localRecords = bakeRecords,
                     onBack = { navController.popBackStack() },
                     onOpenBook = { ownerId -> navController.navigate(MadreDestinations.bookStats(ownerId)) },
+                    account = familyBookState.account,
                     shelfViewModel = shelfViewModel,
                 )
             }

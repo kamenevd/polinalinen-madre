@@ -9,3 +9,4 @@ ADR фиксируют решения, которые иначе снова ст
 решения создаёт новый ADR со ссылкой на старый; история не переписывается.
 - `0003-missing-cycle-evidence.md` — missing cycle15/16 gate artifacts
 - `0004-distribution-and-targetsdk.md` — GitHub Releases, targetSdk 35
+- `0005-dormant-shelf-and-membership-ledger.md` — sleeping shelf + proof of prior membership

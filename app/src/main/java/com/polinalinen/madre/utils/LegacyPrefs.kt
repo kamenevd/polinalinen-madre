@@ -20,9 +20,12 @@ object LegacyPrefs {
 
     /** Префиксы ключей, которых в книге больше нет. */
     private val OBSOLETE_PREFIXES = listOf("stuck_pages_freed_")
+    private val OBSOLETE_KEYS = setOf("shelf_share_mode")
 
     fun obsoleteKeys(allKeys: Set<String>): Set<String> =
-        allKeys.filterTo(mutableSetOf()) { key -> OBSOLETE_PREFIXES.any { key.startsWith(it) } }
+        allKeys.filterTo(mutableSetOf()) { key ->
+            key in OBSOLETE_KEYS || OBSOLETE_PREFIXES.any { key.startsWith(it) }
+        }
 
     /** Возвращает, сколько ключей убрано — ноль на всех запусках после первого. */
     fun purge(prefs: SharedPreferences): Int {

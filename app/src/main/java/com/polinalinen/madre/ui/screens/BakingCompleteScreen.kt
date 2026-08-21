@@ -2,7 +2,6 @@ package com.polinalinen.madre.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,8 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,7 +22,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -35,7 +31,6 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -49,12 +44,12 @@ import com.polinalinen.madre.ui.components.AgedPhoto
 import com.polinalinen.madre.ui.components.BookButton
 import com.polinalinen.madre.ui.components.BookButtonVariant
 import com.polinalinen.madre.ui.components.HairRule
-import com.polinalinen.madre.ui.components.Stamp
 import com.polinalinen.madre.ui.components.TextAction
 import com.polinalinen.madre.ui.components.TracingPaper
 import com.polinalinen.madre.ui.components.WaxSealStamp
 import com.polinalinen.madre.ui.components.drawPhotoHolders
 import com.polinalinen.madre.ui.photo.rememberPhotoAttachment
+import com.polinalinen.madre.shelf.ShelfShareDecision
 import com.polinalinen.madre.shelf.ShelfSharePolicy
 import com.polinalinen.madre.ui.theme.AppColors
 import com.polinalinen.madre.utils.PhotoStore
@@ -79,29 +74,29 @@ fun BakingCompleteScreen(
 ) {
     val colors = AppColors.current
 
-    // Системная кнопка «назад» со страницы «Готово» означает ровно то же, что
-    // кнопка «На главную»: сессию надо закрыть, иначе она осталась бы висеть
-    // в списке активных выпечек уже завершённой.
-    BackHandler { onHome() }
-
     val sessions by viewModel.sessions.collectAsState()
     val session = sessionId?.let { id -> sessions.find { it.id == id } }
+    val completions by viewModel.completions.collectAsState()
+    val completion = sessionId?.let { completions[it] }
     val photoPaths by viewModel.bakePhotoPaths.collectAsState()
     val sharingAvailable by viewModel.sharingAvailable.collectAsState()
+    val finishing by viewModel.finishing.collectAsState()
+    val busy = sessionId != null && finishing.contains(sessionId)
     val photoPath = sessionId?.let { photoPaths[it] }
-    val context = LocalContext.current
-    val sharePrefs = remember {
-        context.getSharedPreferences(ShelfSharePolicy.PREFS, android.content.Context.MODE_PRIVATE)
+    val sealMillis = completion?.completedAtMillis ?: session?.completedAt
+    var shelfDecision by rememberSaveable { mutableStateOf(ShelfSharePolicy.DEFAULT_DECISION) }
+    var pendingFinish by rememberSaveable { mutableStateOf(false) }
+
+    // Системная «назад» с «Испечено» — личный выбор: не ставить на полку.
+    BackHandler {
+        if (busy) return@BackHandler
+        val id = sessionId ?: return@BackHandler onHome()
+        viewModel.finish(id, ShelfShareDecision.KEEP, onHome)
     }
-    val shareMode = remember { ShelfSharePolicy.read(sharePrefs) }
-    var onShelf by rememberSaveable {
-        mutableStateOf(ShelfSharePolicy.showOnShelfStamp(shareMode, sharingAvailable))
+
+    LaunchedEffect(sessionId) {
+        viewModel.restoreCompletion(sessionId)
     }
-    var askDismissed by rememberSaveable { mutableStateOf(false) }
-    var pendingPhotoShare by rememberSaveable { mutableStateOf(false) }
-    val ask = sessionId != null && session != null &&
-        ShelfSharePolicy.shouldAskOnComplete(shareMode, sharingAvailable) &&
-        !onShelf && !askDismissed
 
     // Камера и галерея — одна общая дорога (ui/photo/PhotoAttachment): выбор
     // источника, «Стол оформления» и сохранение живут там, экран получает уже
@@ -109,20 +104,14 @@ fun BakingCompleteScreen(
     val openPhotoSource = rememberPhotoAttachment(
         kind = PhotoStore.PhotoKind.BAKE,
         key = sessionId ?: 0L,
+        onCancelled = { pendingFinish = false },
     ) { path ->
         sessionId?.let { id ->
-            viewModel.attachBakePhoto(id, path)
-            if (pendingPhotoShare) {
-                viewModel.shareBakeStats(id, withPhoto = true)
-                onShelf = true
-                pendingPhotoShare = false
+            viewModel.stageBakePhoto(id, path)
+            if (pendingFinish) {
+                pendingFinish = false
+                viewModel.finish(id, shelfDecision, onHome)
             }
-        }
-    }
-
-    LaunchedEffect(sharingAvailable, shareMode) {
-        if (ShelfSharePolicy.showOnShelfStamp(shareMode, sharingAvailable)) {
-            onShelf = true
         }
     }
 
@@ -146,7 +135,7 @@ fun BakingCompleteScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Spacer(Modifier.height(28.dp))
-            WaxSeal(dateLabel = romanDate(System.currentTimeMillis()))
+            WaxSeal(dateLabel = sealMillis?.let { romanDate(it) })
             Spacer(Modifier.height(22.dp))
 
             Text(
@@ -205,7 +194,11 @@ fun BakingCompleteScreen(
                     Modifier.fillMaxWidth().padding(top = 4.dp),
                     horizontalArrangement = Arrangement.Center,
                 ) {
-                    TextAction("заменить фотокарточку", onClick = { openPhotoSource() })
+                    TextAction(
+                        "заменить фотокарточку",
+                        enabled = !busy,
+                        onClick = { openPhotoSource() },
+                    )
                     Text(
                         "·",
                         color = colors.cocoa,
@@ -213,10 +206,17 @@ fun BakingCompleteScreen(
                         fontSize = 12.sp,
                         modifier = Modifier.padding(horizontal = 6.dp),
                     )
-                    TextAction("убрать", onClick = { viewModel.clearBakePhoto(sessionId) })
+                    TextAction(
+                        "убрать",
+                        enabled = !busy,
+                        onClick = { viewModel.unstageBakePhoto(sessionId) },
+                    )
                 }
             } else {
-                PastedPhotoPrompt(onPick = { openPhotoSource() })
+                PastedPhotoPrompt(
+                    enabled = !busy,
+                    onPick = { openPhotoSource() },
+                )
             }
 
             Text(
@@ -229,13 +229,14 @@ fun BakingCompleteScreen(
                 modifier = Modifier.padding(top = 18.dp),
             )
 
-            // Cycle 27: на полку — штамп после «всегда», либо один лист
-            // «Поставить на полку?». Кнопки «Поделиться статистикой» больше нет.
-            if (onShelf) {
-                Stamp(
-                    ShelfSharePolicy.ON_SHELF_STAMP,
-                    colors.sage,
-                    modifier = Modifier.padding(top = 8.dp, bottom = 10.dp),
+            if (sharingAvailable && session != null) {
+                BookButton(
+                    label = ShelfSharePolicy.labelOf(shelfDecision),
+                    variant = BookButtonVariant.SECONDARY,
+                    enabled = !busy,
+                    repeatable = true,
+                    onClick = { shelfDecision = ShelfSharePolicy.next(shelfDecision) },
+                    modifier = Modifier.padding(top = 8.dp),
                 )
             }
 
@@ -244,58 +245,20 @@ fun BakingCompleteScreen(
 
             BookButton(
                 label = "На главную",
-                onClick = onHome,
+                enabled = !busy,
+                onClick = {
+                    val id = sessionId ?: return@BookButton onHome()
+                    val needsPhoto = ShelfSharePolicy.wantsPhoto(shelfDecision)
+                    if (needsPhoto && photoPath == null) {
+                        pendingFinish = true
+                        openPhotoSource()
+                        return@BookButton
+                    }
+                    viewModel.finish(id, shelfDecision, onHome)
+                },
                 modifier = Modifier.padding(bottom = 8.dp),
             )
         }
-        }
-
-        if (ask && sessionId != null) {
-            AlertDialog(
-                onDismissRequest = { askDismissed = true },
-                shape = RoundedCornerShape(4.dp),
-                containerColor = colors.cream,
-                title = {
-                    Text(
-                        ShelfSharePolicy.SHEET_TITLE,
-                        fontFamily = FontFamily.Serif,
-                        fontSize = 20.sp,
-                        color = colors.espresso,
-                    )
-                },
-                text = {
-                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        BookButton(
-                            label = ShelfSharePolicy.PUT_LABEL,
-                            onClick = {
-                                viewModel.shareBakeStats(sessionId, withPhoto = false)
-                                onShelf = true
-                                askDismissed = true
-                            },
-                        )
-                        BookButton(
-                            label = ShelfSharePolicy.PUT_WITH_PHOTO_LABEL,
-                            variant = BookButtonVariant.SECONDARY,
-                            onClick = {
-                                if (photoPath != null) {
-                                    viewModel.shareBakeStats(sessionId, withPhoto = true)
-                                    onShelf = true
-                                } else {
-                                    pendingPhotoShare = true
-                                    openPhotoSource()
-                                }
-                                askDismissed = true
-                            },
-                        )
-                        BookButton(
-                            label = ShelfSharePolicy.KEEP_LABEL,
-                            variant = BookButtonVariant.SECONDARY,
-                            onClick = { askDismissed = true },
-                        )
-                    }
-                },
-                confirmButton = {},
-            )
         }
     }
 }
@@ -306,8 +269,13 @@ fun BakingCompleteScreen(
  * (ui/components/BookComponents.kt, Cycle 2).
  */
 @Composable
-private fun WaxSeal(dateLabel: String, modifier: Modifier = Modifier) {
-    WaxSealStamp(title = "ИСПЕЧЕНО", caption = dateLabel, color = AppColors.current.sage, modifier = modifier)
+private fun WaxSeal(dateLabel: String?, modifier: Modifier = Modifier) {
+    WaxSealStamp(
+        title = "ИСПЕЧЕНО",
+        caption = dateLabel.orEmpty(),
+        color = AppColors.current.sage,
+        modifier = modifier,
+    )
 }
 
 @Composable
@@ -327,7 +295,7 @@ private fun CompletedStat(value: String, label: String) {
 
 /** Пустой слот фотокарточки: пунктирная рамка + уголки-держатели, тап открывает модалку «Камера / Галерея». */
 @Composable
-private fun PastedPhotoPrompt(onPick: () -> Unit) {
+private fun PastedPhotoPrompt(enabled: Boolean, onPick: () -> Unit) {
     val colors = AppColors.current
     Column(
         Modifier
@@ -335,7 +303,13 @@ private fun PastedPhotoPrompt(onPick: () -> Unit) {
             .rotate(-1f)
             .drawBehind { drawRect(colors.cream) }
             .padding(10.dp)
-            .clickable { onPick() }
+            .then(
+                com.polinalinen.madre.ui.components.bookAction(
+                    label = "Вклеить фотокарточку",
+                    enabled = enabled,
+                    onClick = onPick,
+                ),
+            )
             .drawBehind {
                 drawRoundRect(
                     color = colors.flour,

@@ -70,6 +70,13 @@ routerAdd("POST", "/api/madre/family/create", (e) => {
 
         member.set("family", created.id);
         txApp.save(member);
+
+        const ledger = txApp.findCollectionByNameOrId("family_members");
+        const row = new Record(ledger);
+        row.set("family", created.id);
+        row.set("user", e.auth.id);
+        row.set("status", "active");
+        txApp.save(row);
     });
 
     // Открытый код показывается ровно один раз — второго шанса нет, дальше
@@ -129,6 +136,42 @@ routerAdd("POST", "/api/madre/family/join", (e) => {
             throw new BadRequestError(JOIN_FAILURE, null);
         }
 
+        let current = null;
+        try {
+            current = txApp.findRecordsByFilter(
+                "users",
+                "family = {:family}",
+                "created,id",
+                1,
+                0,
+                { family: joined.id },
+            );
+        } catch (err) {
+            throw new BadRequestError(JOIN_FAILURE, null);
+        }
+        if (!current) {
+            throw new BadRequestError(JOIN_FAILURE, null);
+        }
+        const dormant = current.length === 0;
+
+        let proof = null;
+        try {
+            const rows = txApp.findRecordsByFilter(
+                "family_members",
+                "family = {:family} && user = {:user}",
+                "created,id",
+                1,
+                0,
+                { family: joined.id, user: e.auth.id },
+            );
+            proof = rows && rows.length > 0 ? rows[0] : null;
+        } catch (err) {
+            throw new BadRequestError(JOIN_FAILURE, null);
+        }
+        if (dormant && !proof) {
+            throw new BadRequestError(JOIN_FAILURE, null);
+        }
+
         const member = txApp.findRecordById("users", e.auth.id);
         // Та же гонка, что в create: внешняя проверка пропускает два
         // параллельных join. Перечитываем членство до записи и отвечаем тем же
@@ -139,6 +182,30 @@ routerAdd("POST", "/api/madre/family/join", (e) => {
         }
         member.set("family", joined.id);
         txApp.save(member);
+
+        if (proof) {
+            proof.set("status", "active");
+            txApp.save(proof);
+        } else {
+            const ledger = txApp.findCollectionByNameOrId("family_members");
+            const row = new Record(ledger);
+            row.set("family", joined.id);
+            row.set("user", e.auth.id);
+            row.set("status", "active");
+            txApp.save(row);
+        }
+
+        if (dormant) {
+            joined.set("owner", e.auth.id);
+            joined.set("invite_code_hash", $security.hs256(
+                $security.randomStringWithAlphabet(
+                    $app.store().get("madre:invite:length"),
+                    $app.store().get("madre:invite:alphabet"),
+                ),
+                pepper,
+            ));
+            txApp.save(joined);
+        }
     });
 
     return e.json(200, {
@@ -225,26 +292,46 @@ routerAdd("POST", "/api/madre/family/leave", (e) => {
         }
 
         const family = txApp.findRecordById("families", familyId);
-        let others = [];
-        try {
-            others = txApp.findRecordsByFilter(
-                "users",
-                "family = {:family} && id != {:id}",
-                "",
-                200,
-                0,
-                { family: familyId, id: e.auth.id },
-            );
-        } catch (err) {
-            others = [];
-        }
+        const others = txApp.findRecordsByFilter(
+            "users",
+            "family = {:family} && id != {:id}",
+            "created,id",
+            200,
+            0,
+            { family: familyId, id: e.auth.id },
+        );
 
         member.set("family", "");
         txApp.save(member);
 
-        if (!others || others.length === 0) {
-            txApp.delete(family);
-        } else if (family.getString("owner") === e.auth.id) {
+        let proof = null;
+        try {
+            const rows = txApp.findRecordsByFilter(
+                "family_members",
+                "family = {:family} && user = {:user}",
+                "created,id",
+                1,
+                0,
+                { family: familyId, user: e.auth.id },
+            );
+            proof = rows && rows.length > 0 ? rows[0] : null;
+        } catch (err) {
+            proof = null;
+        }
+
+        if (proof) {
+            proof.set("status", "left");
+            txApp.save(proof);
+        } else {
+            const ledger = txApp.findCollectionByNameOrId("family_members");
+            const row = new Record(ledger);
+            row.set("family", familyId);
+            row.set("user", e.auth.id);
+            row.set("status", "left");
+            txApp.save(row);
+        }
+
+        if (others && others.length > 0 && family.getString("owner") === e.auth.id) {
             family.set("owner", others[0].id);
             txApp.save(family);
         }

@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit
  * потому что его могут вклеить уже после того, как факт встал в очередь.
  * Снять кадр с полки факт не трогает.
  */
-class SyncRepository(private val context: Context) {
+class SyncRepository(private val context: Context) : ShelfSync {
 
     private val gson = Gson()
 
@@ -34,15 +34,15 @@ class SyncRepository(private val context: Context) {
      * @param recordId id строки bake_records — он же ключ события. Номер
      *   сессии сюда больше не приходит: см. [SyncEventId.forBake].
      */
-    fun shareBakeStat(
+    override fun shareBakeStat(
         recordId: Long,
         recipeId: String,
         recipeName: String,
         portions: Int,
         bakedAtMillis: Long,
-        displayName: String? = null,
-        familyName: String? = null,
-        photoPath: String? = null,
+        displayName: String?,
+        familyName: String?,
+        photoPath: String?,
     ) {
         val deviceId = DeviceIdentity.id(context)
         val clientEventId = SyncEventId.forBake(deviceId, recordId)
@@ -56,17 +56,26 @@ class SyncRepository(private val context: Context) {
             displayName = displayName?.trim()?.takeIf { it.isNotEmpty() },
             familyName = familyName?.trim()?.takeIf { it.isNotEmpty() },
         )
-        val chainName = "sync-bake-chain-$recordId"
-        val bakeRequest = request(SyncWorker.KIND_BAKE, gson.toJson(record))
         val photo = photoPath?.trim().orEmpty()
-        val manager = WorkManager.getInstance(context)
-        if (photo.isNotEmpty()) {
-            val payload = BakePhotoPayload(clientEventId = clientEventId, photoPath = photo)
-            manager.beginUniqueWork(chainName, ExistingWorkPolicy.KEEP, bakeRequest)
-                .then(request(SyncWorker.KIND_BAKE_PHOTO, gson.toJson(payload)))
-                .enqueue()
+        val photoPayload = if (photo.isNotEmpty()) {
+            gson.toJson(BakePhotoPayload(clientEventId = clientEventId, photoPath = photo))
         } else {
-            manager.enqueueUniqueWork(chainName, ExistingWorkPolicy.KEEP, bakeRequest)
+            null
+        }
+        val plan = ShelfSharePlan.bake(
+            recordId = recordId,
+            bakePayload = gson.toJson(record),
+            photoPayload = photoPayload,
+        )
+        val manager = WorkManager.getInstance(context)
+        val first = plan.steps.firstOrNull() ?: return
+        if (plan.steps.size == 1) {
+            manager.enqueueUniqueWork(plan.workName, plan.policy, request(first.kind, first.payload))
+        } else {
+            val second = plan.steps[1]
+            manager.beginUniqueWork(plan.workName, plan.policy, request(first.kind, first.payload))
+                .then(request(second.kind, second.payload))
+                .enqueue()
         }
     }
 

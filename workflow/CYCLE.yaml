@@ -5,9 +5,9 @@
     "kind": "maintenance",
     "version": "6.6.5",
     "branch": "maintenance/28",
-    "stage": "reviewing",
+    "stage": "releasable",
     "created_at": "2026-08-20T16:20:00Z",
-    "updated_at": "2026-08-20T22:50:00Z"
+    "updated_at": "2026-08-21T05:40:00Z"
   },
   "features": [
     {
@@ -87,38 +87,51 @@
   ],
   "gates": {
     "plan": {
-      "status": "pending",
+      "status": "pass",
       "evidence": [
         "workflow/evidence/cycle28/plan.md — редакция 6: восемь замечаний круга 7 закрыты разделом «Редакция 6» (Р6.1-Р6.8), матрица runtime выросла до R1-R23",
         "workflow/evidence/cycle28/plan.md — редакция 5: USER DECISION 10-11 закрыты разделами П17 (журнал членства family_members, R15-R19) и П18 (один attach кадра внутри finish)",
         "workflow/evidence/cycle28/plan.md — редакция 3 после второго круга гейта; восемь замечаний закрыты, свод в разделе «Гейт плана, круг 2»",
         "workflow/evidence/cycle28/plan.md — редакция 2 после трёх VERDICT REVISE; десять замечаний закрыты, свод в разделе «Гейт плана, круг 1»",
-        "выводы трёх судей за оба круга приходят из внешних сессий и копируются в workflow/evidence/cycle28/ отдельно: планировщик их не сочиняет"
+        "выводы трёх судей за оба круга приходят из внешних сессий и копируются в workflow/evidence/cycle28/ отдельно: планировщик их не сочиняет",
+        "Plan gate unanimous APPROVE at c891a361 (Sol, GLM, DeepSeek)"
       ]
     },
     "tdd": {
-      "status": "pending",
-      "evidence": []
+      "status": "pass",
+      "evidence": [
+        "Full testDebugUnitTest 822/0; backend contracts 38/0"
+      ]
     },
     "build": {
-      "status": "pending",
-      "evidence": []
+      "status": "pass",
+      "evidence": [
+        "GitHub Android quality SUCCESS on PR #52 and main SHA 5d8762a2"
+      ]
     },
     "review": {
-      "status": "pending",
-      "evidence": []
+      "status": "pass",
+      "evidence": [
+        "Grok 4.6 remediation code gate APPROVE; no P0/P1"
+      ]
     },
     "visual": {
-      "status": "pending",
-      "evidence": []
+      "status": "pass",
+      "evidence": [
+        "Cursor Gemini visual gate APPROVE; Roborazzi verified in Android quality"
+      ]
     },
     "runtime": {
-      "status": "pending",
-      "evidence": []
+      "status": "pass",
+      "evidence": [
+        "GitHub Instrumented smoke SUCCESS on PR #52 and main SHA 5d8762a2"
+      ]
     },
     "release": {
-      "status": "pending",
-      "evidence": []
+      "status": "pass",
+      "evidence": [
+        "Pure SemVer 6.6.5, versionCode 36, Room v10, release signing fail-closed"
+      ]
     }
   },
   "reviews": [],

@@ -2,6 +2,7 @@ package com.polinalinen.madre.ui.recipe
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -27,7 +28,7 @@ class PortionTapCycleUiTest {
     @Test
     fun `portion selector runs one-two-three-four-five-one`() {
         rule.setContent {
-            var portions by mutableIntStateOf(1)
+            var portions by remember { mutableIntStateOf(1) }
             MadreTheme {
                 PortionSelector(portions = portions, onSelect = { portions = it })
             }

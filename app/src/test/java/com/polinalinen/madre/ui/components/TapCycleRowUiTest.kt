@@ -2,6 +2,7 @@ package com.polinalinen.madre.ui.components
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
@@ -35,7 +36,7 @@ class TapCycleRowUiTest {
     fun `four taps perform four steps without gate swallowing`() {
         val options = listOf("один", "два", "три", "четыре")
         rule.setContent {
-            var current by mutableStateOf(options.first())
+            var current by remember { mutableStateOf(options.first()) }
             MadreTheme {
                 TapCycleRow(
                     label = "Круг",

@@ -3,6 +3,7 @@ package com.polinalinen.madre.ui.screens
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.getOrNull
@@ -34,7 +35,7 @@ class SettingsTapCycleUiTest {
     @Test
     fun `feeding rhythm rotates without dialog`() {
         rule.setContent {
-            var interval by mutableIntStateOf(24)
+            var interval by remember { mutableIntStateOf(24) }
             MadreTheme {
                 SettingsScreen(
                     myName = "Полина",
@@ -55,7 +56,7 @@ class SettingsTapCycleUiTest {
     @Test
     fun `look cycles by one tap`() {
         rule.setContent {
-            var calm by mutableStateOf(true)
+            var calm by remember { mutableStateOf(true) }
             MadreTheme {
                 SettingsScreen(
                     myName = "Полина",
@@ -81,7 +82,7 @@ class SettingsTapCycleUiTest {
     @Test
     fun `reminders row either cycles or stays intentionally fixed when denied by phone`() {
         rule.setContent {
-            var reminders by mutableStateOf(true)
+            var reminders by remember { mutableStateOf(true) }
             MadreTheme {
                 SettingsScreen(
                     myName = "Полина",

@@ -15,6 +15,7 @@ object MadreDestinations {
     const val PHOTO_GALLERY = "photo-gallery"
     const val SETTINGS = "settings"
     const val SETTINGS_SHELF = "settings/shelf"
+    const val ALICE = "settings/alice"
 
     // Полка (Cycle 27): корешки семьи и журнал. Формуляр выбранного человека —
     // BOOK_STATS; своя книга — owner="me" или PocketBase user id.

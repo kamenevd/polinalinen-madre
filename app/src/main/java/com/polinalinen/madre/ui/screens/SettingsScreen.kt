@@ -103,6 +103,7 @@ fun SettingsScreen(
     onMyNameChange: (String) -> Unit,
     onBack: () -> Unit,
     onOpenShelfSettings: () -> Unit = {},
+    onOpenAlice: () -> Unit = {},
     starterName: String = StarterName.DEFAULT,
     onStarterNameChange: (String) -> Unit = {},
     bakeCount: Int = 0,
@@ -230,6 +231,8 @@ fun SettingsScreen(
 
             // ————— 5. О книге —————
             SettingsSection(Sections.ABOUT) {
+                SettingsRow(label = "Алиса на кухне", value = "›", onClick = onOpenAlice)
+                HairRule(Modifier.padding(horizontal = 22.dp))
                 SettingsRow(
                     label = "В журнале",
                     value = "$bakeCount выпечек · $feedingCount кормлений",

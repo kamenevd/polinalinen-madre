@@ -210,6 +210,7 @@ fun MadreNavHost(
                     recipeId = recipeId,
                     onBack = { navController.popBackStack() },
                     onStartBaking = { sessionId -> navController.navigate(MadreDestinations.bakingTimer(sessionId.toString())) },
+                    onOpenAlice = { navController.navigate(MadreDestinations.ALICE) },
                     viewModel = bakingViewModel,
                 )
             }
@@ -217,6 +218,7 @@ fun MadreNavHost(
                 val sessionId = backStackEntry.arguments?.getString("sessionId")?.toLongOrNull() ?: return@composable
                 BakingTimerScreen(
                     sessionId = sessionId,
+                    onOpenAlice = { navController.navigate(MadreDestinations.ALICE) },
                     onBack = { navController.popBackStack(MadreDestinations.HOME, inclusive = false) },
                     onComplete = {
                         // Cycle 12: «Готово» не кладётся поверх таймера, а
@@ -307,8 +309,12 @@ fun MadreNavHost(
                     calmMode = calmMode,
                     onCalmModeChange = setCalmMode,
                     onOpenShelfSettings = { navController.navigate(MadreDestinations.SETTINGS_SHELF) },
+                    onOpenAlice = { navController.navigate(MadreDestinations.ALICE) },
                     familyBookViewModel = familyBookViewModel,
                 )
+            }
+            composable(MadreDestinations.ALICE) {
+                com.polinalinen.madre.ui.screens.AliceScreen(bakingViewModel, app.voiceCoordinator) { navController.popBackStack() }
             }
             composable(MadreDestinations.SETTINGS_SHELF) {
                 SettingsShelfScreen(

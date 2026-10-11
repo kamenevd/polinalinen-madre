@@ -237,7 +237,7 @@ fun HomeScreen(
                                 recipeName = s.recipe.name,
                                 stepIndex = s.currentStepIndex,
                                 stepCount = s.recipe.timeline.size,
-                                portions = s.scaleFactor.toInt().coerceAtLeast(1),
+                                portions = s.trustedPortions.takeIf { s.restoredStepValid },
                                 isPaused = s.isPaused,
                             )
                         }
@@ -462,7 +462,7 @@ private fun ActiveBakingTicket(
     recipeName: String,
     stepIndex: Int,
     stepCount: Int,
-    portions: Int,
+    portions: Int?,
     isPaused: Boolean,
 ) {
     val colors = AppColors.current
@@ -471,7 +471,7 @@ private fun ActiveBakingTicket(
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(recipeName, color = colors.espresso, fontFamily = FontFamily.Serif, fontSize = 17.sp)
                 Text(
-                    "  ×$portions ${familyWord(portions)}",
+                    if (portions == null) "  порции не сохранены" else "  ×$portions ${familyWord(portions)}",
                     color = colors.crust,
                     fontFamily = FontFamily.Serif,
                     fontStyle = FontStyle.Italic,

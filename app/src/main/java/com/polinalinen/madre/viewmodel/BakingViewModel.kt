@@ -30,6 +30,12 @@ import com.polinalinen.madre.ui.components.CoffeeRing
 import com.polinalinen.madre.utils.BakeSessionLedger
 import com.polinalinen.madre.utils.PhotoStore
 import com.polinalinen.madre.utils.PrefsBakeSessionLedger
+import com.polinalinen.madre.data.repository.activeSnapshot
+import com.polinalinen.madre.data.db.entities.VoiceCommandReceiptEntity
+import com.polinalinen.madre.voice.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CompletableDeferred
@@ -65,11 +71,16 @@ class BakingViewModel @JvmOverloads constructor(
     private val sessionLedger: BakeSessionLedger = PrefsBakeSessionLedger(
         app.getSharedPreferences("madre_prefs", android.content.Context.MODE_PRIVATE),
     ),
-) : AndroidViewModel(app) {
+) : AndroidViewModel(app), VoiceController {
 
     private val madreApp = app as MadreApplication
     private val recipeRepository = madreApp.recipeRepository
     private val activeBakeRepository = madreApp.activeBakeRepository
+    private val transitionGate = Mutex()
+    @Volatile private var controllerLive = true
+    private val _mutationError = MutableStateFlow<String?>(null)
+    val mutationError: StateFlow<String?> = _mutationError.asStateFlow()
+
     private val sourdoughRepository = madreApp.sourdoughRepository
 
     private val _recipes = MutableStateFlow<List<Recipe>>(emptyList())
@@ -204,7 +215,7 @@ class BakingViewModel @JvmOverloads constructor(
             _recipes.value = recipes
             // Cycle 15/17: посеять nextSessionId И восстановить UI-сессии из
             // active_bakes (policy A) до того, как startBaking выдаст новый id.
-            val saved = activeBakeRepository.all()
+            val saved = activeBakeRepository.initializeLegacyKeys()
             nextSessionId = maxOf(nextSessionId, saved.maxOfOrNull { it.sessionId + 1 } ?: 1L)
             val byId = recipes.associateBy { it.id }
             val nowElapsed = BakingClock.elapsed()
@@ -219,6 +230,10 @@ class BakingViewModel @JvmOverloads constructor(
                     pausedAtWallClock = row.pausedAtWallClock,
                     nowElapsed = nowElapsed,
                     nowWallClock = nowWall,
+                    scaleFactor = row.scaleFactor,
+                    bakeKey = requireNotNull(row.bakeKey),
+                    revision = row.revision,
+                    recipeRevision = row.recipeRevision,
                 )
             }
             if (restored.isNotEmpty()) {
@@ -233,7 +248,9 @@ class BakingViewModel @JvmOverloads constructor(
                     BakingProgressService.start(getApplication())
                 }
             }
+            recoverCancellationEffects()
             sessionIdsReady.complete(Unit)
+            madreApp.voiceCoordinator.attach(this@BakingViewModel)
         }
         // Токен под Keystore — диск, читаем на IO.
         viewModelScope.launch {
@@ -243,89 +260,83 @@ class BakingViewModel @JvmOverloads constructor(
         }
     }
 
+    override fun voiceSessions(): List<BakingSession> = _sessions.value
+    override fun voiceRecipeRevision(): String = recipeRepository.revision.orEmpty()
+    override suspend fun applyVoice(command: VoiceCommand, receivedElapsed: Long, authority: () -> VoiceAuthority) =
+        applyVoiceCommand(command, receivedElapsed, authority)
+
     fun session(id: Long): BakingSession? = _sessions.value.find { it.id == id }
 
-    /** Возвращает id новой сессии — экран таймера должен открыться именно на ней. */
-    fun startBaking(recipe: Recipe, scaleFactor: Double): Long {
-        // Cycle 17: не выдавать id=1, пока init не прочитал active_bakes.
-        if (!sessionIdsReady.isCompleted) {
-            // Явный wait нельзя на main без suspend API; блокируем через runBlocking
-            // только если init ещё в полёте — обычно уже complete.
-            kotlinx.coroutines.runBlocking { sessionIdsReady.await() }
+    /** A timer is opened only after the snapshot is durably created. */
+    suspend fun startBaking(recipe: Recipe, scaleFactor: Double): Long? {
+        sessionIdsReady.await()
+        return transitionGate.withLock {
+            try {
+                require(scaleFactor in 1.0..5.0 && scaleFactor == scaleFactor.toInt().toDouble())
+                check(controllerLive)
+                val id = nextSessionId++
+                val next = BakingSession.start(id, recipe, scaleFactor).copy(recipeRevision = recipeRepository.revision)
+                activeBakeRepository.commit(id, null, next.activeSnapshot(), valid = { controllerLive })
+                sessionLedger.forget(id)
+                _completions.update { it - id }
+                _finishing.update { it - id }
+                _sessions.update { it + next }
+                scheduleStepDeadline(next.activeSnapshot())
+                restartTimer(id)
+                publishProgress()
+                BakingProgressService.start(getApplication())
+                _mutationError.value = null
+                id
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { _mutationError.value = "Не удалось сохранить выпечку. Попробуй ещё раз."; null }
         }
-        val id = nextSessionId++
-        sessionLedger.forget(id)
-        _completions.update { it - id }
-        _finishing.update { it - id }
-        _sessions.update { it + BakingSession.start(id = id, recipe = recipe, scaleFactor = scaleFactor) }
-        rememberActiveBake(id)
-        restartTimer(id)
-        // Слепок публикуется ДО подъёма сервиса, а не после: сервис читает
-        // список сразу при создании, и пустой список для него означает «всё,
-        // выпечек нет» — он бы ушёл, не показав ни строки.
-        publishProgress()
-        // Строка хода выпечки в шторке. Сервис поднимается ровно здесь —
-        // из явного действия человека («Начать выпечку»), а не из фона, и
-        // потому не спотыкается об ограничения Android 12+.
-        BakingProgressService.start(getApplication())
-        return id
     }
 
-    fun advanceStep(id: Long) {
-        val nowElapsed = BakingClock.elapsed()
-        val nowWallClock = BakingClock.wallClock()
-        _sessions.update { list -> list.map { if (it.id == id) it.advance(nowElapsed, nowWallClock) else it } }
-        val s = session(id)
-        if (s?.isCompleted == true) {
-            stopTimer(id)
-            forgetActiveBake(id)
-            // Выпечка дошла до конца — строка хода ей больше не нужна, даже
-            // если человек ещё стоит на странице «Готово» и вклеивает фото.
-            publishProgress()
-            val completedAtMillis = s.completedAt ?: nowWallClock
-            val completion = reserveCompletion(
-                sessionId = id,
-                recipeId = s.recipe.id,
-                recipeName = s.recipe.name,
-                portions = s.scaleFactor.toInt().coerceAtLeast(1),
-                completedAtMillis = completedAtMillis,
-            )
+    fun advanceStep(id: Long, onCompleted: () -> Unit = {}) = launchTransition {
+        val old = session(id) ?: return@launchTransition
+        if (old.isCompleted) return@launchTransition
+        if (old.isLastStep && old.trustedPortions == null) {
+            _mutationError.value = "Сначала подтверди порции этой выпечки."
+            return@launchTransition
+        }
+        val next = old.advance(BakingClock.elapsed(), BakingClock.wallClock()).copy(revision = old.revision + 1)
+        persistTransition(old, next)
+        if (next.isCompleted) {
+            val completion = reserveCompletion(id, next.recipe.id, next.recipe.name,
+                requireNotNull(next.trustedPortions), requireNotNull(next.completedAt))
             startRecordInsert(id, completion)
-        } else {
-            rememberActiveBake(id)
-            restartTimer(id)
+            onCompleted()
         }
     }
 
-    /**
-     * Cycle 15: снимок текущего шага в active_bakes — по нему BootReceiver
-     * восстановит срок после перезагрузки телефона. Пишется на каждом переходе
-     * шага и на паузе, то есть ровно тогда, когда меняется срок его конца.
-     *
-     * Отметка паузы переводится в стенные часы: монотонных после ребута не
-     * существует. Перевод точный — [BakingSession.togglePause] держит обе
-     * отметки начала шага в одном моменте.
-     */
-    private fun rememberActiveBake(id: Long) {
-        val s = session(id) ?: return
-        val step = s.currentStep
-        val snapshot = ActiveBakeEntity(
-            sessionId = s.id,
-            recipeId = s.recipe.id,
-            recipeName = s.recipe.name,
-            stepTitle = step.title,
-            stepIndex = s.currentStepIndex,
-            stepDurationMinutes = step.durationMinutes,
-            isWaitStep = step.type == StepType.WAIT,
-            startedAtWallClock = s.startedAtWallClock,
-            pausedAtWallClock = s.pausedAtElapsed?.let {
-                s.startedAtWallClock + (it - s.startedAtElapsed)
-            },
-        )
-        viewModelScope.launch {
-            activeBakeRepository.remember(snapshot)
-            scheduleStepDeadline(snapshot)
+    private fun launchTransition(block: suspend () -> Unit) = viewModelScope.launch {
+        sessionIdsReady.await()
+        transitionGate.withLock {
+            try { check(controllerLive); block() }
+            catch (e: CancellationException) { throw e }
+            catch (_: Exception) { _mutationError.value = "Изменение не сохранено. Проверь выпечку на телефоне." }
         }
+    }
+
+    /** All local mutations and voice use this same durable-before-publish path. Caller owns transitionGate. */
+    private suspend fun persistTransition(old: BakingSession, next: BakingSession?) {
+        activeBakeRepository.commit(old.id, if (old.isCompleted) null else old.activeSnapshot(),
+            next?.takeUnless { it.isCompleted }?.activeSnapshot(),
+            preserveUnknownStep = !old.restoredStepValid, valid = { controllerLive })
+        publishTransition(old, next)
+        _mutationError.value = null
+    }
+
+    private fun publishTransition(old: BakingSession, next: BakingSession?) {
+        _sessions.update { list -> list.mapNotNull { if (it.id == old.id) next else it } }
+        if (next == null || next.isCompleted) {
+            stopTimer(old.id)
+            WorkManager.getInstance(getApplication()).cancelUniqueWork(BootRestorePlanner.uniqueWorkName(old.id))
+        } else {
+            scheduleStepDeadline(next.activeSnapshot())
+            restartTimer(old.id)
+        }
+        publishProgress()
     }
 
     /**
@@ -359,17 +370,6 @@ class BakingViewModel @JvmOverloads constructor(
                 )
             }
         }
-    }
-
-    /**
-     * Выпечка закончена или брошена — восстанавливать после ребута нечего.
-     * Снимаем и уже назначенный срок: уведомление «время вышло» от выпечки,
-     * которой больше нет, — тот же обман, что и застывшая строка в шторке.
-     */
-    private fun forgetActiveBake(id: Long) {
-        WorkManager.getInstance(getApplication())
-            .cancelUniqueWork(BootRestorePlanner.uniqueWorkName(id))
-        viewModelScope.launch { activeBakeRepository.forget(id) }
     }
 
     /**
@@ -410,15 +410,16 @@ class BakingViewModel @JvmOverloads constructor(
      * Завершение «Испечено»: idempotent guard, запись фото в личный формуляр и
      * (по решению) постановка факта на полку.
      */
-    fun finish(sessionId: Long, decision: ShelfShareDecision, onExit: () -> Unit = {}) {
+    fun finish(sessionId: Long, decision: ShelfShareDecision, onExit: () -> Unit = {}): Job? {
+        if (session(sessionId)?.trustedPortions == null && session(sessionId) != null) return null
         val stagedPhoto = _bakePhotoPaths.value[sessionId]
         // P10: обещали поставить с кадром, а кадра нет — finish не стартует.
-        if (ShelfSharePolicy.wantsPhoto(decision) && stagedPhoto.isNullOrBlank()) return
-        if (!markFinishing(sessionId)) return
+        if (ShelfSharePolicy.wantsPhoto(decision) && stagedPhoto.isNullOrBlank()) return null
+        if (!markFinishing(sessionId)) return null
         val frozenPhoto = stagedPhoto
 
-        viewModelScope.launch {
-            val completion = ensureCompletion(sessionId)
+        return viewModelScope.launch {
+            val completion = transitionGate.withLock { ensureCompletion(sessionId) }
             try {
                 val recordId = completion?.let { withTimeoutOrNull(RECORD_WAIT_MS) { it.recordId.await() } }
                 if (recordId != null && completion != null) {
@@ -443,7 +444,7 @@ class BakingViewModel @JvmOverloads constructor(
                 }
             } finally {
                 if (session(sessionId) != null) {
-                    exitSession(sessionId)
+                    transitionGate.withLock { exitSessionNow(sessionId) }
                 }
                 onExit()
             }
@@ -463,7 +464,7 @@ class BakingViewModel @JvmOverloads constructor(
                 sessionId = sessionId,
                 recipeId = activeSession.recipe.id,
                 recipeName = activeSession.recipe.name,
-                portions = activeSession.scaleFactor.toInt().coerceAtLeast(1),
+                portions = activeSession.trustedPortions ?: return null,
                 completedAtMillis = activeSession.completedAt ?: BakingClock.wallClock(),
             )
             startRecordInsert(sessionId, completion)
@@ -546,59 +547,102 @@ class BakingViewModel @JvmOverloads constructor(
         }
     }
 
-    fun stepBack(id: Long) {
-        val nowElapsed = BakingClock.elapsed()
-        val nowWallClock = BakingClock.wallClock()
-        _sessions.update { list -> list.map { if (it.id == id) it.retreat(nowElapsed, nowWallClock) else it } }
-        rememberActiveBake(id)
-        restartTimer(id)
+    fun confirmPortions(id: Long, portions: Int) = launchTransition {
+        val old = session(id) ?: return@launchTransition
+        if (portions !in 1..5 || old.trustedPortions != null || _finishing.value.contains(id)) return@launchTransition
+        persistTransition(old, old.copy(scaleFactor = portions.toDouble(), revision = old.revision + 1))
     }
 
-    fun togglePause(id: Long) {
-        val nowElapsed = BakingClock.elapsed()
-        _sessions.update { list -> list.map { if (it.id == id) it.togglePause(nowElapsed) else it } }
-        // Пауза сдвигает конец шага — снимок обязан узнать об этом сразу, иначе
-        // после ребута выпечка вернётся с чужим сроком.
-        rememberActiveBake(id)
-        // И шторка тоже: с Cycle 16 тик на паузе молчит, значит слово «пауза»
-        // (и снятие его) доносит сюда сам переход, а не следующая секунда.
-        publishProgress()
+    fun stepBack(id: Long) = launchTransition {
+        val old = session(id) ?: return@launchTransition
+        if (old.isCompleted || _finishing.value.contains(id)) return@launchTransition
+        persistTransition(old, old.retreat(BakingClock.elapsed(), BakingClock.wallClock()).copy(revision = old.revision + 1))
     }
 
-    /** Завершает и убирает ИМЕННО эту сессию — остальные активные продолжают идти нетронутыми. */
-    fun exitSession(id: Long) {
-        stopTimer(id)
-        forgetActiveBake(id)
-        _sessions.update { list -> list.filterNot { it.id == id } }
+    fun togglePause(id: Long) = launchTransition {
+        val old = session(id) ?: return@launchTransition
+        if (old.isCompleted || _finishing.value.contains(id)) return@launchTransition
+        persistTransition(old, old.togglePause(BakingClock.elapsed()).copy(revision = old.revision + 1))
+    }
+
+    fun exitSession(id: Long) = launchTransition { exitSessionNow(id) }
+
+    private suspend fun exitSessionNow(id: Long) {
+        val old = session(id) ?: return
+        persistTransition(old, null)
+        cleanExitedSession(id)
+    }
+
+    private fun cleanExitedSession(id: Long) {
         _remainingSeconds.update { it - id }
         remainingFlows.remove(id)
-        // Выпечка закрыта — её ключи в журнале больше ни к чему, а уже
-        // показанные уведомления о шагах надо снять. До Cycle 12 они
-        // оставались висеть: «время вышло» от выпечки, которой давно нет.
         notificationLedger.forgetSession(id).forEach { key -> notifier.cancelByKey(key) }
-        publishProgress()
         _bakePhotoPaths.update { it - id }
         _completions.update { it - id }
         sessionLedger.forget(id)
     }
 
-    /**
-     * Бросить выпечку до готовности — учитывается в [cancelledCount] (см.
-     * InkBlot) и оставляет «След от кружки» на развороте этого рецепта
-     * (DESIGN-V4.md Cycle 9, CoffeeRing): счётчик прерываний пишется в
-     * madre_prefs и, в отличие от клякс, переживает перезапуск — высохший
-     * кофейный круг со страницы уже не смыть.
-     */
-    fun cancelSession(id: Long) {
-        val s = session(id)
-        if (s?.isCompleted == false) {
+    fun cancelSession(id: Long) = launchTransition {
+        val old = session(id) ?: return@launchTransition
+        if (_finishing.value.contains(id)) return@launchTransition
+        persistTransition(old, null)
+        if (!old.isCompleted) {
             _cancelledCount.update { it + 1 }
-            val prefs = getApplication<Application>()
-                .getSharedPreferences("madre_prefs", android.content.Context.MODE_PRIVATE)
-            val key = CoffeeRing.prefsKey(s.recipe.id)
+            val prefs = getApplication<Application>().getSharedPreferences("madre_prefs", android.content.Context.MODE_PRIVATE)
+            val key = CoffeeRing.prefsKey(old.recipe.id)
             prefs.edit().putInt(key, prefs.getInt(key, 0) + 1).apply()
         }
-        exitSession(id)
+        cleanExitedSession(id)
+    }
+
+    /** The only voice write entry. Network code cannot write Room or mint an APPLIED acknowledgement. */
+    suspend fun applyVoiceCommand(
+        command: VoiceCommand,
+        receivedElapsed: Long,
+        authority: () -> VoiceAuthority,
+    ): VoiceCommandReceiptEntity? {
+        sessionIdsReady.await()
+        return transitionGate.withLock {
+            try {
+                val fingerprint = command.fingerprint()
+                val prior = activeBakeRepository.receipt(command.id)
+                if (prior != null) return@withLock prior.takeIf { it.fingerprint == fingerprint }
+                val old = _sessions.value.find { it.bakeKey == command.bakeKey } ?: return@withLock null
+                val decision = VoiceCommandPolicy.decide(command, old, authority(), BakingClock.elapsed(),
+                    BakingClock.wallClock(), receivedElapsed)
+                val proposed = if (decision.outcome == VoiceOutcome.APPLIED) decision.candidate else old
+                val receipt = VoiceCommandReceiptEntity(command.id, fingerprint, old.bakeKey, old.revision,
+                    decision.outcome.name, proposed?.revision ?: (old.revision + 1), command.expiresAt,
+                    command.operation.name, old.recipe.id)
+                val stored = activeBakeRepository.commit(old.id, old.activeSnapshot(), proposed?.activeSnapshot(), receipt) {
+                    controllerLive && authority().attached && authority().consented &&
+                        (decision.outcome != VoiceOutcome.APPLIED ||
+                            VoiceCommandPolicy.decide(command, old, authority(), BakingClock.elapsed(),
+                                BakingClock.wallClock(), receivedElapsed).outcome == VoiceOutcome.APPLIED)
+                }
+                if (decision.outcome == VoiceOutcome.APPLIED) {
+                    publishTransition(old, proposed)
+                    if (proposed == null) {
+                        _cancelledCount.update { it + 1 }
+                        cleanExitedSession(old.id)
+                        recoverCancellationEffects()
+                    }
+                }
+                stored
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { null } // No durable outcome is NOT an acknowledgement.
+        }
+    }
+
+    private suspend fun recoverCancellationEffects() {
+        val prefs = getApplication<Application>().getSharedPreferences("madre_prefs", android.content.Context.MODE_PRIVATE)
+        activeBakeRepository.applyPendingCancellationEffects { receipt ->
+            val marker = "voice_cancel_${receipt.commandId}"
+            if (prefs.getBoolean(marker, false)) true else {
+                val key = CoffeeRing.prefsKey(receipt.recipeId)
+                prefs.edit().putInt(key, prefs.getInt(key, 0) + 1).putBoolean(marker, true).commit()
+            }
+        }
     }
 
     private fun restartTimer(id: Long) {
@@ -726,6 +770,10 @@ class BakingViewModel @JvmOverloads constructor(
     }
 
     override fun onCleared() {
+        synchronized(activeBakeRepository.commitFence) {
+            controllerLive = false
+            madreApp.voiceCoordinator.detach(this)
+        }
         timerJobs.values.forEach { it.cancel() }
         timerJobs.clear()
         // Часы книги остановились — значит, обновлять строку хода выпечки

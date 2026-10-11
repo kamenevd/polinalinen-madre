@@ -67,6 +67,7 @@ class BakingProgressService : LifecycleService() {
 
     /** Чьё уведомление сейчас держит сервис на переднем плане. */
     private var foregroundSessionId: Long? = null
+    private var voiceJob: kotlinx.coroutines.Job? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -248,6 +249,9 @@ class BakingProgressService : LifecycleService() {
             return
         }
         foregroundSessionId = sessionId
+        if (sessionId != PLACEHOLDER_SESSION_ID && voiceJob?.isActive != true) {
+            voiceJob = lifecycleScope.launch { (application as MadreApplication).voiceCoordinator.runForeground() }
+        }
         shownSessionIds = shownSessionIds + sessionId
         // Прежнее переднеплановое уведомление после смены остаётся обычным —
         // если его выпечки уже нет, снимаем сами.
@@ -298,6 +302,9 @@ class BakingProgressService : LifecycleService() {
     }
 
     private fun clearAll() {
+        (application as MadreApplication).voiceCoordinator.stopForeground()
+        voiceJob?.cancel()
+        voiceJob = null
         shownSessionIds.forEach { manager.cancel(BakingProgress.notificationId(it)) }
         foregroundSessionId?.let { manager.cancel(BakingProgress.notificationId(it)) }
         shownSessionIds = emptySet()

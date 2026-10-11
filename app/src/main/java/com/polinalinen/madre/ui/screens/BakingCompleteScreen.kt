@@ -147,15 +147,19 @@ fun BakingCompleteScreen(
                 textAlign = TextAlign.Center,
             )
             if (session != null) {
-                val portions = session.scaleFactor.toInt().coerceAtLeast(1)
+                val portions = session.trustedPortions
                 Text(
-                    "×$portions ${familyWord(portions)}",
+                    if (portions == null) "Порции не сохранены" else "×$portions ${familyWord(portions)}",
                     color = colors.crust,
                     fontFamily = FontFamily.Serif,
                     fontStyle = FontStyle.Italic,
                     fontSize = 14.sp,
                     modifier = Modifier.padding(top = 2.dp),
                 )
+            }
+
+            if (session != null && session.trustedPortions == null) {
+                UnknownPortionsConfirmation(session.id) { viewModel.confirmPortions(session.id, it) }
             }
 
             // Юбилейная приписка — на самой странице, между печатью и цифрами.

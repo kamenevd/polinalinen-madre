@@ -57,15 +57,15 @@ class BakeCompletionOnceTest {
         val vm = BakingViewModel(app, history, sync, ledger)
 
         val id = seedActiveSession(vm, sessionId = 1L, recipe = sampleRecipe(), scaleFactor = 1.0)
-        vm.advanceStep(id)
-        vm.advanceStep(id)
+        vm.advanceStep(id).join()
+        vm.advanceStep(id).join()
         advanceUntilIdle()
 
         assertThat(history.recordCalls).hasSize(1)
 
         vm.stageBakePhoto(id, "bake_photos/frozen.jpg")
         var exits = 0
-        vm.finish(id, ShelfShareDecision.PUT_WITH_PHOTO) { exits += 1 }
+        val finishing = vm.finish(id, ShelfShareDecision.PUT_WITH_PHOTO) { exits += 1 }
         vm.finish(id, ShelfShareDecision.PUT_WITH_PHOTO) { exits += 1 }
 
         advanceTimeBy(1_000)
@@ -76,6 +76,7 @@ class BakeCompletionOnceTest {
         gate.complete(Unit)
         advanceUntilIdle()
 
+        finishing?.join()
         assertThat(history.attachCalls).hasSize(1)
         assertThat(sync.calls).hasSize(1)
         assertThat(exits).isEqualTo(1)
@@ -88,16 +89,17 @@ class BakeCompletionOnceTest {
         val vm = BakingViewModel(app, history, sync, FakeBakeSessionLedger())
 
         val id = seedActiveSession(vm, sessionId = 1L, recipe = sampleRecipe("timeout"), scaleFactor = 1.0)
-        vm.advanceStep(id)
+        vm.advanceStep(id).join()
         advanceUntilIdle()
 
         var exits = 0
-        vm.finish(id, ShelfShareDecision.KEEP) { exits += 1 }
+        val finishing = vm.finish(id, ShelfShareDecision.KEEP) { exits += 1 }
         advanceTimeBy(5_100)
         advanceUntilIdle()
 
         assertThat(history.attachCalls).isEmpty()
         assertThat(sync.calls).isEmpty()
+        finishing?.join()
         assertThat(vm.session(id)).isNull()
         assertThat(exits).isEqualTo(1)
     }

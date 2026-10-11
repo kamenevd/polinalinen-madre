@@ -20,6 +20,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -74,9 +76,12 @@ fun RecipeDetailScreen(
     recipeId: String,
     onBack: () -> Unit,
     onStartBaking: (sessionId: Long) -> Unit,
+    onOpenAlice: () -> Unit = {},
     viewModel: BakingViewModel = viewModel(),
 ) {
     val colors = AppColors.current
+    val startScope = rememberCoroutineScope()
+    val mutationError by viewModel.mutationError.collectAsState()
     val recipes by viewModel.recipes.collectAsState()
     val recipe = recipes.find { it.id == recipeId }
     // Книга ещё раскрывается (recipes.json читается с диска) — это не то же
@@ -156,6 +161,11 @@ fun RecipeDetailScreen(
             // скролла: он едет вместе с контентом, а не подрезает viewport.
             contentPadding = PaddingValues(bottom = 24.dp),
         ) {
+            item(key = "alice") {
+                BookButton("Алиса · читать рецепт и подключить выпечку", onClick = onOpenAlice,
+                    variant = com.polinalinen.madre.ui.components.BookButtonVariant.SECONDARY,
+                    modifier = Modifier.padding(horizontal = 22.dp, vertical = 8.dp))
+            }
             item(key = "header") {
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
@@ -245,8 +255,7 @@ fun RecipeDetailScreen(
                     BookButton(
                         label = "Начать выпечку",
                         onClick = {
-                            val sessionId = viewModel.startBaking(recipe, scaleFactor)
-                            onStartBaking(sessionId)
+                            startScope.launch { viewModel.startBaking(recipe, scaleFactor)?.let(onStartBaking) }
                         },
                         // Часы считаются от плана рецепта, а не от порций: время
                         // этапов от количества семей не зависит (RecipeScale.TIMING_NOTE).

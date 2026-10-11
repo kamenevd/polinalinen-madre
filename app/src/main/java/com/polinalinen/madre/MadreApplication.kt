@@ -53,6 +53,16 @@ class MadreApplication : Application() {
     // Cycle 15: незавершённые выпечки — их читает BakeRestoreWorker после
     // перезагрузки телефона, поэтому репозиторий нужен и без единого экрана.
     val activeBakeRepository: ActiveBakeRepository by lazy { ActiveBakeRepository(database) }
+    val voiceCoordinator: com.polinalinen.madre.voice.VoiceCoordinator by lazy {
+        com.polinalinen.madre.voice.VoiceCoordinator(
+            com.polinalinen.madre.voice.VoiceIdentityStore(getSharedPreferences("madre_voice", MODE_PRIVATE), KeystoreTokenCipher()),
+            com.polinalinen.madre.voice.HttpsVoiceApi(), activeBakeRepository.commitFence,
+        )
+    }
+    fun disconnectVoice() {
+        voiceCoordinator.revokeLocally()
+        appScope.launch { voiceCoordinator.disconnect() }
+    }
     val familySettingsRepository: FamilySettingsRepository by lazy { FamilySettingsRepository(database) }
     // Cycle 5: общая книга на PocketBase — клиент и очередь фоновой отправки.
     val madreApi: MadreApi by lazy { MadreApiFactory.create() }

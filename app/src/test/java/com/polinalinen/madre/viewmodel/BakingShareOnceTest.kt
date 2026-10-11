@@ -53,18 +53,19 @@ class BakingShareOnceTest {
         val vm = BakingViewModel(app, history, sync, ledger)
 
         val id = seedActiveSession(vm, sessionId = 1L, recipe = sampleRecipe(), scaleFactor = 1.0)
-        vm.advanceStep(id)
+        vm.advanceStep(id).join()
         advanceUntilIdle()
 
         assertThat(sync.calls).isEmpty()
 
         vm.stageBakePhoto(id, "bake_photos/photo_a.jpg")
         var exits = 0
-        vm.finish(id, ShelfShareDecision.PUT_WITH_PHOTO) { exits += 1 }
+        val finishing = vm.finish(id, ShelfShareDecision.PUT_WITH_PHOTO) { exits += 1 }
         vm.finish(id, ShelfShareDecision.PUT_WITH_PHOTO) { exits += 1 }
         advanceUntilIdle()
 
         assertThat(sync.calls).hasSize(1)
+        finishing?.join()
         assertThat(exits).isEqualTo(1)
     }
 }

@@ -55,6 +55,7 @@ fun BakingTimerScreen(
     sessionId: Long,
     onBack: () -> Unit,
     onComplete: () -> Unit,
+    onOpenAlice: () -> Unit = {},
     viewModel: BakingViewModel = viewModel(),
 ) {
     val colors = AppColors.current
@@ -109,7 +110,7 @@ fun BakingTimerScreen(
                     PageLabel("Шаг ${s.currentStepIndex + 1} из ${s.recipe.timeline.size}")
                 }
                 Text(
-                    "готовится ×${s.scaleFactor.toInt().coerceAtLeast(1)} ${portionWord(s.scaleFactor.toInt())}" +
+                    (s.trustedPortions?.takeIf { s.restoredStepValid }?.let { "готовится ×$it ${portionWord(it)}" } ?: "Порции не сохранены") +
                         if (otherActive > 0) " · ещё готовим: $otherActive" else "",
                     color = colors.crust,
                     fontFamily = FontFamily.Serif,
@@ -118,6 +119,8 @@ fun BakingTimerScreen(
                     modifier = Modifier.padding(horizontal = 22.dp),
                 )
 
+                BookButton("Алиса · связь и команды", onClick = onOpenAlice, variant = BookButtonVariant.SECONDARY,
+                    modifier = Modifier.padding(horizontal = 22.dp, vertical = 8.dp))
                 Text(
                     step.title,
                     color = colors.espresso,
@@ -162,13 +165,18 @@ fun BakingTimerScreen(
                 // с которым выпечку начали, и тем же, что на развороте рецепта.
                 // Чуть больше воздуха до кнопок (bottom 28 вместо 14).
                 Text(
-                    RecipeScaler.scaledStepText(step.description, s.scaleFactor, quantityBindings),
+                    s.trustedPortions.takeIf { s.restoredStepValid }?.let { RecipeScaler.scaledStepText(step.description, it.toDouble(), quantityBindings) }
+                        ?: "Порции не сохранены — выбери, сколько было в этой выпечке.",
                     color = colors.espresso,
                     fontFamily = FontFamily.Serif,
                     fontSize = 15.sp,
                     lineHeight = 22.sp,
                     modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 14.dp, bottom = 28.dp),
                 )
+
+                if (s.trustedPortions == null) {
+                    UnknownPortionsConfirmation(s.id) { viewModel.confirmPortions(s.id, it) }
+                }
 
                 // Масло-алерт (decision #22: за 30 мин до шага с requiresButterPrep)
                 val butterStepAhead = s.recipe.timeline
@@ -229,9 +237,9 @@ fun BakingTimerScreen(
                         }
                         BookButton(
                             label = if (s.isLastStep) "Готово" else "Дальше →",
+                            enabled = !s.isLastStep || s.trustedPortions != null,
                             onClick = {
-                                viewModel.advanceStep(s.id)
-                                if (s.isLastStep) onComplete()
+                                viewModel.advanceStep(s.id, onComplete)
                             },
                             modifier = Modifier.fillMaxWidth(),
                         )

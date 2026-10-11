@@ -1,0 +1,36 @@
+{
+  "checked_at": "2026-10-11T21:55:41.966050+00:00",
+  "source_base": "fe10334e52b767c0d2499ce430bc695d6fdc918a",
+  "android_packet_manifest_sha256": "bee878e60f8394040d4315c491ef3520bf286323bc5685f8f4f3c8a2093f799e",
+  "android_full": {
+    "suites": 154,
+    "tests": 871,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "failing": []
+  },
+  "android_tasks": {
+    "cleanTestDebugUnitTest testDebugUnitTest -Proborazzi.test.verify=true": "passed",
+    "assembleDebug lintDebug compileDebugAndroidTestKotlin": "passed; no connected device execution"
+  },
+  "lint": {
+    "errors": 0,
+    "warnings": 158,
+    "hints": 5
+  },
+  "debug_artifact": {
+    "kind": "internal debug, NOT release or install-over-production",
+    "applicationId": "com.polinalinen.madre",
+    "versionName": "6.6.5",
+    "versionCode": 36,
+    "bytes": 22675649,
+    "sha256": "a9a899a900c29f02a2cc454775e2bff34077cc687c9746a0e8607cb432f6687a",
+    "signer_sha256": "66ecc74e086caad26df4ca787619a597435d644c31102998dd49a03ed9cb0603"
+  },
+  "hardware": "NOT TESTED, owner acceptance stopped",
+  "production_deployed": false,
+  "catalog_changed": false,
+  "release_created": false,
+  "rustore_submitted": false
+}

@@ -2,6 +2,7 @@ package com.polinalinen.madre.viewmodel.fakes
 
 import com.polinalinen.madre.data.db.entities.BakeRecordEntity
 import com.polinalinen.madre.data.repository.BakeHistory
+import com.polinalinen.madre.data.repository.activeSnapshot
 import com.polinalinen.madre.model.Ingredient
 import com.polinalinen.madre.model.BakingSession
 import com.polinalinen.madre.model.Recipe
@@ -177,7 +178,13 @@ fun seedActiveSession(
 ): Long {
     val sessionsField = BakingViewModel::class.java.getDeclaredField("_sessions").apply { isAccessible = true }
     val sessions = sessionsField.get(vm) as MutableStateFlow<List<BakingSession>>
-    sessions.value = listOf(BakingSession.start(id = sessionId, recipe = recipe, scaleFactor = scaleFactor))
+    val seeded = BakingSession.start(id = sessionId, recipe = recipe, scaleFactor = scaleFactor)
+    sessions.value = listOf(seeded)
+    // The real controller now compare-and-commits a durable row before publishing a transition.
+    kotlinx.coroutines.runBlocking {
+        val app = vm.getApplication<com.polinalinen.madre.MadreApplication>()
+        app.activeBakeRepository.remember(seeded.activeSnapshot())
+    }
 
     val remainingField = BakingViewModel::class.java.getDeclaredField("_remainingSeconds").apply { isAccessible = true }
     val remaining = remainingField.get(vm) as MutableStateFlow<Map<Long, Long>>

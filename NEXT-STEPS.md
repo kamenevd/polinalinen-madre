@@ -1,14 +1,10 @@
-# NEXT-STEPS — указатель на текущий цикл
+# NEXT-STEPS — текущий цикл
 
-С 25.07.2026 этот файл — указатель, не очередь.
+Текущий: cycle/29 — Алиса и выбранная выпечка, implementing.
+Источник: workflow/CYCLE.yaml и workflow/evidence/cycle29/{plan,protocol,task}.md.
+Предыдущий: maintenance/28, выпущенный 6.6.5(36); исторический manifest сохранён.
 
-Источники:
-- `workflow/CYCLE.yaml` — versioned manifest
-- `docs/WORKFLOW-V2.md` — правила
-- `python3 scripts/cycle.py validate` — контракт
-
-**Текущий:** **maintenance/28** — правда полки, тап-крутилки, Испечено (`6.6.1`, planning).
-
-Предыдущий: **v6.6.0** (cycle/27, RuStore не слать повторно).
-
-Следом: план Cursor Opus → plan gate → Cursor Codex. `prepare-version` только перед релизом.
+Сначала точные code/security/UI/automated gates; A8/A9 остаются внешними holds.
+Версия пока 6.6.5(36), это не новый релиз. Перед релизом — fresh RuStore rows,
+prepare-version, reviewed PR, exact-main CI, signed workflow и полный readback.
+Никакой агентной phone/Station/AVD/Maestro приёмки.

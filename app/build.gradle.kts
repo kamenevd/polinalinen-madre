@@ -180,7 +180,7 @@ dependencies {
     implementation("com.squareup.retrofit2:converter-gson:2.11.0")
 
     // Coil — замена ручному BitmapFactory (закрывает баг v3 #4: OOM/jank на UI thread)
-    implementation("io.coil-kt:coil-compose:2.6.0")
+    implementation("io.coil-kt:coil-compose:2.7.0")
 
     // ZXing core — QR гостевой страницы (Cycle 7, GuestPage). Только кодер
     // (чистая Java, без камеры/сканера) — рисуем BitMatrix сами на Canvas.

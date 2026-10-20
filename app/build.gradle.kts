@@ -11,6 +11,8 @@ val keystorePath = System.getenv("KEYSTORE_PATH")
 val keystorePassword = System.getenv("KEYSTORE_PASSWORD")
 val releaseKeyAlias = System.getenv("KEY_ALIAS")
 val releaseKeyPassword = System.getenv("KEY_PASSWORD")
+// AppMetrica: ключ только из секрета CI; пусто = отчёты о падениях выключены.
+val appMetricaApiKey = System.getenv("MADRE_APPMETRICA_API_KEY").orEmpty()
 val releaseSigningInputs = listOf(
     keystorePath,
     keystorePassword,
@@ -36,11 +38,14 @@ android {
         versionName = "6.6.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // CI-скриншоты: TestStorage пишет PNG, AGP забирает их в additional_output.
+        testInstrumentationRunnerArguments["useTestStorageService"] = "true"
 
         // Cycle 11: PocketBase переехал из домашней сети в production и виден
         // только по HTTPS. Адрес меняется только здесь — код берёт его
         // исключительно из BuildConfig.MADRE_API_URL.
         buildConfigField("String", "MADRE_API_URL", "\"https://madre-api.kdnfx.space\"")
+        buildConfigField("String", "APPMETRICA_API_KEY", "\"$appMetricaApiKey\"")
     }
 
     signingConfigs {
@@ -213,5 +218,9 @@ dependencies {
     androidTestImplementation("androidx.room:room-testing:$roomVersion")
     androidTestImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
     androidTestImplementation("com.google.truth:truth:1.2.0")
+    androidTestImplementation("androidx.test.services:storage:1.4.2")
+    androidTestUtil("androidx.test.services:test-services:1.4.2")
+    // Отчёты о падениях (выключены без MADRE_APPMETRICA_API_KEY), см. docs/LEAN-FLOW.md.
+    implementation("io.appmetrica.analytics:analytics:8.6.0")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

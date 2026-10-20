@@ -1,0 +1,29 @@
+schema: spec-driven
+context: |
+  Все артефакты пиши по-русски; идентификаторы и Gherkin keywords сохраняй.
+  Единственный корень OpenSpec: LXC108 /home/claude/projects/madre/openspec.
+  Hermes LXC103 работает через /root/.local/bin/madre-openspec; локальный
+  /root/polinalinen-madre устарел и запрещён как рабочий контекст.
+  Источник истины продукта: актуальный исходный код и явные решения Димы.
+  Действующие Madre product locks и madre-cycle-orchestration выше generic OpenSpec.
+  CYCLE.yaml, DESIGN-V4.md и NEXT-STEPS.md сохраняются и не заменяются автоматически.
+  Kanban — единственная доска статуса/исполнения; tasks.md — только чеклист change.
+  REQUIREMENTS/PLAN не разрешают реализацию; BUILD требует явного разрешения
+  и независимых обязательных ревью. apply/verify/archive не дают разрешений
+  на телефон, AVD/Maestro, сборку, APK, релиз, push/PR/публикацию или обход ревью.
+  Настройка OpenSpec не начинает продуктовый цикл и не означает QA PASS.
+rules:
+  proposal:
+    - Указывай границы разрешения, вне scope, FACT/USER DECISION/UNKNOWN.
+  specs:
+    - Пиши проверяемые требования и сценарии Given/When/Then без вымышленных требований продукта.
+  tasks:
+    - Чеклист не новая доска; не отмечай тест успешным без фактического свидетельства.
+operations:
+  apply:
+    guidance:
+      - Проверь явное BUILD-разрешение и независимые gates; текущий setup разрешает только tooling/docs.
+      - Не меняй приложение/рецепты/версии и не запускай устройства или публикацию в рамках setup.
+  archive:
+    guidance:
+      - Archive означает только архив документации; перечисли непроверенные gates, не объявляй QA PASS.

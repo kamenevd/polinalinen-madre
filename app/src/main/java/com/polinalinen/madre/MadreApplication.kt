@@ -1,6 +1,7 @@
 package com.polinalinen.madre
 
 import android.app.Application
+import com.polinalinen.madre.crash.CrashReporting
 import com.polinalinen.madre.data.db.MadreDatabase
 import com.polinalinen.madre.data.repository.ActiveBakeRepository
 import com.polinalinen.madre.data.repository.BakeHistoryRepository
@@ -34,6 +35,7 @@ class MadreApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        CrashReporting.start(this)
         appScope.launch {
             LegacyPrefs.purge(getSharedPreferences("madre_prefs", MODE_PRIVATE))
         }

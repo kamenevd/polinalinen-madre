@@ -55,6 +55,10 @@ class PaperMaterialReviewTest {
             val values=listOf(1.7f,1.9f,2.3f,2.7f,3.05f).map{theta->medianRed(bitmap,fold.point(fold.px+theta*fold.radius,457.5f).x)}
             assertThat(values.max()-values.min()).isAtLeast(if(p==NightPaper)1 else 10)
             assertThat(values.min()).isLessThan(medianRed(bitmap,10f))
+            if(p==NightPaper) {
+                val back=fold.point(392f,457.5f)
+                assertThat(medianRed(bitmap,back.x)).isAtLeast(Color.red(p.bg.toArgb())+1)
+            }
         }
     }
     @Test fun actualEarlyFoldDarkensBothSidesAndRetainsPaperTexture() {

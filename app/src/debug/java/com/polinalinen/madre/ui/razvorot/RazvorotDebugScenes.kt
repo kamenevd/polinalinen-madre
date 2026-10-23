@@ -103,6 +103,7 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
         PageFooter(3,3,5) // explicit fixture position; runtime uses actual leaves
     }
 }
+internal fun Atmosphere.captureName()=if(this==Atmosphere.DUSK)"evening" else name.lowercase()
 internal fun debugCurlFold(w:Float,h:Float,scene:String):PaperFold {
     val pose=scene.removePrefix("gles2-").removeSuffix("-night")
     val grip=when(pose){"curl-top"->h*.027f;"curl-bottom"->h*.973f;else->h*.5f}

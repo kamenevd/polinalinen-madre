@@ -26,8 +26,9 @@ class RazvorotV3RenderTest {
         val recipes=runBlocking{RecipeRepository(context).getRecipes()}
         val module=if(File("app/src/main/AndroidManifest.xml").isFile)File("app") else File(".")
         fun capture(theme:Atmosphere?) {
-        val directory=if(theme==null)"f-v3" else "f-v3-matrix/${theme.name.lowercase()}"
-        val output=File(module,"build/outputs/roborazzi/$directory/$scene.png").absoluteFile
+        val directory=if(theme==null)"f-v3" else "f-v3-matrix/${theme.captureName()}"
+        val filename=if(theme==null)"$scene.png" else "$scene-${theme.captureName()}.png"
+        val output=File(module,"build/outputs/roborazzi/$directory/$filename").absoluteFile
         output.parentFile.mkdirs()
         captureRoboImage(filePath=output.path,roborazziOptions=RoborazziOptions(taskType=RoborazziTaskType.Record)) {
             RazvorotDebugScene(scene,recipes,theme)
@@ -43,7 +44,12 @@ class RazvorotV3RenderTest {
             val medians=xs.map{x->(640..820).map{android.graphics.Color.red(bitmap.getPixel(x,it))}.sorted()[90]}
             val night=theme==Atmosphere.NIGHT
             assertThat(medians.max()-medians.min()).isAtLeast(if(night)1 else 10)
-            File(output.parentFile,"$scene-pixel-profile.json").writeText("{\"renderer\":\"CPU24x48-native\",\"theme\":\"$theme\",\"projectedX\":$xs,\"medianR\":$medians}")
+            val highlight=fold.point(fold.px+PaperLight.HIGHLIGHT_ANGLE*fold.radius,fold.height/2).x
+            val edge=fold.point(fold.px+(kotlin.math.PI.toFloat()/2)*fold.radius,fold.height/2).x.toInt()
+            fun medianAt(x:Int)=(640..820).map{android.graphics.Color.red(bitmap.getPixel(x.coerceIn(0,411),it))}.sorted()[90]
+            val edgeInside=medianAt(edge-2);val edgeOutside=medianAt(edge+4)
+            if(night)assertThat(edgeInside-edgeOutside).isAtLeast(2)
+            File(output.parentFile,output.nameWithoutExtension+"-pixel-profile.json").writeText("{\"renderer\":\"CPU24x48-native\",\"theme\":\"${theme?.captureName()}\",\"projectedX\":$xs,\"medianR\":$medians,\"highlightTheta\":1.12,\"highlightProjectedX\":$highlight,\"silhouetteX\":$edge,\"edgeInsideR\":$edgeInside,\"edgeOutsideR\":$edgeOutside}")
         }
         bitmap.recycle()
         }

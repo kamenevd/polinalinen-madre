@@ -19,6 +19,9 @@ internal object PaperLight {
     const val VERSO_RANGE = .20f
     const val VERSO_TINT = .92f
     const val VERSO_NIGHT = .30f
+    // Canonical prototype/index.html FSH adds this BEFORE the7%print mix.
+    // Missing it made the night verso merge into the background.
+    const val VERSO_NIGHT_LIFT = .02f
     const val DESATURATION = .45f
     const val PRINT = .07f
     const val HIGHLIGHT = .035f

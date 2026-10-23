@@ -209,7 +209,7 @@ if(uMode>.5){float e=vD-uR*${PaperLight.SHADOW_START};float s=${PaperLight.SHADO
 if(e<0.)s*=smoothstep(-uR*${PaperLight.SHADOW_FADE},0.,e);gl_FragColor=vec4(t*(1.-min(s,${PaperLight.SHADOW_MAX}))+grain,1.);return;}
 float th=vTh;float crease=1.-${PaperLight.AO}*K*exp(-abs(vD)/(uR*${PaperLight.AO_RADIUS}+${PaperLight.AO_SOFT}));float sh;vec3 base;
 if(th<1.5708){sh=1.-${PaperLight.FACE}*(1.-cos(th));base=t;sh+=${PaperLight.HIGHLIGHT}*(1.-uNight*${PaperLight.HIGHLIGHT_NIGHT})*exp(-pow((th-${PaperLight.HIGHLIGHT_ANGLE})/${PaperLight.HIGHLIGHT_WIDTH},2.));}
-else{sh=${PaperLight.VERSO_BASE}+${PaperLight.VERSO_RANGE}*(-cos(th));vec3 g=vec3(dot(uPaper,vec3(1./3.)));base=mix(mix(uPaper,g,${PaperLight.DESATURATION})*(${PaperLight.VERSO_TINT}+uNight*${PaperLight.VERSO_NIGHT}),t,${PaperLight.PRINT});}
+else{sh=${PaperLight.VERSO_BASE}+${PaperLight.VERSO_RANGE}*(-cos(th));vec3 g=vec3(dot(uPaper,vec3(1./3.)));base=mix(mix(uPaper,g,${PaperLight.DESATURATION})*(${PaperLight.VERSO_TINT}+uNight*${PaperLight.VERSO_NIGHT})+uNight*${PaperLight.VERSO_NIGHT_LIFT},t,${PaperLight.PRINT});}
 if(vD<=0.)sh=1.;gl_FragColor=vec4(base*sh*crease+grain,1.);}
 """
     }

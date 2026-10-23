@@ -40,7 +40,7 @@ internal class PaperTexture(val front: Bitmap, private val paper: Int, private v
         val face=IntArray(count);val back=IntArray(count);val receiver=lower?.let{IntArray(count)}
         val gray=(Color.red(paper)+Color.green(paper)+Color.blue(paper))/3f
         val tint=PaperLight.VERSO_TINT+if(night)PaperLight.VERSO_NIGHT else 0f
-        fun paperChannel(value:Int)=(value*(1f-PaperLight.DESATURATION)+gray*PaperLight.DESATURATION)*tint
+        fun paperChannel(value:Int)=(value*(1f-PaperLight.DESATURATION)+gray*PaperLight.DESATURATION)*tint+if(night)PaperLight.VERSO_NIGHT_LIFT*255f else 0f
         val pr=paperChannel(Color.red(paper));val pg=paperChannel(Color.green(paper));val pb=paperChannel(Color.blue(paper))
         fun rgb(r:Float,g:Float,b:Float,shade:Float,grain:Float)=Color.rgb(
             (r*shade+grain).roundToInt().coerceIn(0,255),

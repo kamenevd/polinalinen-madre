@@ -22,6 +22,8 @@ import com.polinalinen.madre.ui.razvorot.DawnPaper
 import com.polinalinen.madre.ui.razvorot.DayPaper
 import com.polinalinen.madre.ui.razvorot.DuskPaper
 import com.polinalinen.madre.ui.razvorot.NightPaper
+import com.polinalinen.madre.ui.razvorot.PaperLight
+import com.polinalinen.madre.ui.razvorot.captureName
 import java.io.ByteArrayOutputStream
 import java.security.MessageDigest
 import java.util.concurrent.CountDownLatch
@@ -36,6 +38,7 @@ class MainScreensScreenshotTest {
     @get:Rule val rule=createAndroidComposeRule<RazvorotSceneActivity>()
     private var marginMedian=0
     private var pageSpan=0
+    private var compositeStableFrames=0
     private fun select(scene:String,theme:Atmosphere?=null) {
         rule.runOnIdle{rule.activity.scene=scene;rule.activity.atmosphere=theme}
         rule.waitUntil(15_000){rule.onAllNodesWithTag("scene-$scene").fetchSemanticsNodes().isNotEmpty()}
@@ -68,6 +71,12 @@ class MainScreensScreenshotTest {
     }
     private fun capture(name:String):String {
         rule.waitForIdle()
+        val automation=InstrumentationRegistry.getInstrumentation().uiAutomation
+        val roots=automation.windows.mapNotNull{it.root}+listOfNotNull(automation.rootInActiveWindow)
+        roots.forEach {root->
+            val notices=root.findAccessibilityNodeInfosByText("Viewing full screen")
+            check(notices.none{it.isVisibleToUser && it.packageName?.toString()=="com.android.systemui"}){"System fullscreen confirmation is covering the actual screen"}
+        }
         // Semantics/idle precede Surface presentation. Commit + PixelCopy fences the
         // actual current Window buffer, not a stale SurfaceFlinger screenshot.
         lateinit var committed:CountDownLatch
@@ -100,6 +109,7 @@ class MainScreensScreenshotTest {
             val expected=paper.bg.red*255f*.6f
             val tolerance=if(expected<30f)1f else 5f
             val deadline=android.os.SystemClock.uptimeMillis()+5_000L
+            var previous=-1;var stable=0
             // A dialog owns a separate animation clock. Its first committed
             // buffer can still have scrimAlpha≈0.025, despite activity idle.
             // Await the actual compositor pixels, not an arbitrary sleep count.
@@ -107,7 +117,10 @@ class MainScreensScreenshotTest {
                 bitmap=checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
                 assertThat(bitmap.width).isEqualTo(412);assertThat(bitmap.height).isEqualTo(915)
                 val observed=(80..280).map{android.graphics.Color.red(bitmap.getPixel(10,it))}.sorted()[100]
-                if(kotlin.math.abs(observed-expected)<=tolerance)break
+                val matches=kotlin.math.abs(observed-expected)<=tolerance
+                stable=if(matches && observed==previous)stable+1 else if(matches)1 else 0
+                previous=observed
+                if(stable>=3){compositeStableFrames=stable;break}
                 if(android.os.SystemClock.uptimeMillis()>=deadline) {
                     val failure=ByteArrayOutputStream();bitmap.compress(Bitmap.CompressFormat.PNG,100,failure)
                     TestStorage().openOutputFile("screenshots/$name-unsettled-composite.png").use{it.write(failure.toByteArray())}
@@ -120,6 +133,9 @@ class MainScreensScreenshotTest {
         }
         assertThat(bitmap.width).isEqualTo(412)
         assertThat(bitmap.height).isEqualTo(915)
+        val out=ByteArrayOutputStream();check(bitmap.compress(Bitmap.CompressFormat.PNG,100,out))
+        val bytes=out.toByteArray();assertThat(bytes.size).isGreaterThan(1000)
+        TestStorage().openOutputFile("screenshots/$name.png").use{it.write(bytes)}
         marginMedian=(80..280).map{android.graphics.Color.red(bitmap.getPixel(10,it))}.sorted()[100]
         val band=(80..280 step 2).flatMap{y->(80..260 step 2).map{x->android.graphics.Color.red(bitmap.getPixel(x,y))}}
         pageSpan=band.max()-band.min()
@@ -145,11 +161,14 @@ class MainScreensScreenshotTest {
             val night=rule.activity.atmosphere==Atmosphere.NIGHT
             assertThat(medians.max()-medians.min()).isAtLeast(if(night)1 else 10)
             val renderer=if(scene.startsWith("gles2-"))"REAL_GLES2" else "CPU24x48"
-            TestStorage().openOutputFile("screenshots/$name-pixel-profile.json").bufferedWriter().use{it.write("{\"renderer\":\"$renderer\",\"theme\":\"${rule.activity.atmosphere}\",\"width\":412,\"height\":915,\"projectedX\":$xs,\"medianR\":$medians}")}
+            val highlight=fold.point(fold.px+PaperLight.HIGHLIGHT_ANGLE*fold.radius,fold.height/2).x
+            val edge=fold.point(fold.px+kotlin.math.PI.toFloat()/2*fold.radius,fold.height/2).x.toInt()
+            fun medianAt(x:Int)=(640..820).map{android.graphics.Color.red(bitmap.getPixel(x.coerceIn(0,411),it))}.sorted()[90]
+            val inside=medianAt(edge-2);val outside=medianAt(edge+4)
+            TestStorage().openOutputFile("screenshots/$name-pixel-profile.json").bufferedWriter().use{it.write("{\"renderer\":\"$renderer\",\"theme\":\"${rule.activity.atmosphere?.captureName() ?: "dawn"}\",\"width\":412,\"height\":915,\"projectedX\":$xs,\"medianR\":$medians,\"highlightTheta\":1.12,\"highlightProjectedX\":$highlight,\"silhouetteX\":$edge,\"edgeInsideR\":$inside,\"edgeOutsideR\":$outside}")}
+            if(night)assertThat(inside-outside).isAtLeast(2)
         }
-        val out=ByteArrayOutputStream();check(bitmap.compress(Bitmap.CompressFormat.PNG,100,out));bitmap.recycle()
-        val bytes=out.toByteArray();assertThat(bytes.size).isGreaterThan(1000)
-        TestStorage().openOutputFile("screenshots/$name.png").use{it.write(bytes)}
+        bitmap.recycle()
         return MessageDigest.getInstance("SHA-256").digest(bytes).joinToString(""){"%02x".format(it)}
     }
     @Test fun actualNavigationAndNativeSceneMatrix() {
@@ -189,14 +208,14 @@ class MainScreensScreenshotTest {
     }
     @Test fun actualFourThemeCurlAndCompositedReadingSheet() {
         listOf(Atmosphere.DAWN,Atmosphere.DAY,Atmosphere.DUSK,Atmosphere.NIGHT).forEach {theme->
-            val suffix=theme.name.lowercase()
+            val suffix=theme.captureName()
             listOf("curl-mid","curl-back","gles2-curl-mid","gles2-curl-back").forEach {scene->select(scene,theme);capture("$scene-$suffix")}
             select("reader-text-16",theme);capture("scrim-baseline-$suffix")
             val before=marginMedian
             select("reading-sheet",theme);capture("reading-sheet-$suffix")
             assertThat(marginMedian.toFloat()).isWithin(if(theme==Atmosphere.NIGHT)1f else 5f).of(before*.6f)
             assertThat(pageSpan).isGreaterThan(20) // real page glyphs beneath the translucent scrim
-            TestStorage().openOutputFile("screenshots/reading-sheet-$suffix-composite.json").bufferedWriter().use{it.write("{\"capture\":\"actual-UiAutomation-system-composite\",\"beforeR\":$before,\"afterR\":$marginMedian,\"pageSpan\":$pageSpan,\"scrimAlpha\":0.4}")}
+            TestStorage().openOutputFile("screenshots/reading-sheet-$suffix-composite.json").bufferedWriter().use{it.write("{\"capture\":\"actual-UiAutomation-system-composite\",\"theme\":\"$suffix\",\"beforeR\":$before,\"afterR\":$marginMedian,\"pageSpan\":$pageSpan,\"scrimAlpha\":0.4,\"stableFrames\":$compositeStableFrames}")}
         }
     }
 }

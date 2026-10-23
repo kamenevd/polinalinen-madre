@@ -50,10 +50,10 @@ class StyleAuditRegressionTest {
         assertThat(result.single().layoutInput.style.letterSpacing.value).isEqualTo(1.8f)
     }
 
-    @Test fun fanChapterHeadingUsesRealMediumWeight() {
+    @Test fun tocChapterHeadingUsesRealMediumWeight() {
         val recipe=Recipe("audit","Глава для проверки","","",emptyMap(),listOf(TimelineStep(StepType.ACTION,"Замес","",5)))
         val prefs=ReadingPreferences(ApplicationProvider.getApplicationContext<Context>(),"audit-fan-weight")
-        rule.setContent {RazvorotTheme(prefs,Atmosphere.DAWN){ChapterCatalog(listOf(recipe,recipe.copy(id="second",name="Вторая"),recipe.copy(id="third",name="Третья")),{},{},{})}}
+        rule.setContent {RazvorotTheme(prefs,Atmosphere.DAWN){BookTocContent(listOf(recipe,recipe.copy(id="second",name="Вторая"),recipe.copy(id="third",name="Третья")),emptyList(),null,{_,_->},{})}}
         val results=mutableListOf<TextLayoutResult>()
         rule.onNodeWithText(recipe.name,useUnmergedTree=true).performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult){it(results)}
         assertThat(results.single().layoutInput.style.fontWeight).isEqualTo(FontWeight.Medium)

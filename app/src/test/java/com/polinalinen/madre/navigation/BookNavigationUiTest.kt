@@ -18,6 +18,9 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.polinalinen.madre.MadreApplication
 import com.polinalinen.madre.data.repository.RecipeRepository
 import com.polinalinen.madre.model.RecipeScaler
+import com.polinalinen.madre.model.BakingSession
+import com.polinalinen.madre.data.repository.activeSnapshot
+import kotlinx.coroutines.flow.MutableStateFlow
 import com.polinalinen.madre.ui.kit.*
 import com.polinalinen.madre.ui.razvorot.RazvorotReader
 import com.polinalinen.madre.ui.screens.Home
@@ -83,6 +86,31 @@ class BookNavigationUiTest {
         rule.onNodeWithTag("paper-turn").assert(SemanticsMatcher("real scaled ingredient") {
             it.config.getOrNull(SemanticsProperties.ContentDescription)?.any{line->line.contains(expected)}==true
         })
+    }
+    @Test fun notificationReturnsToOvenAndRestorationKeepsTheActualRoomBake() {
+        val recipe=runBlocking{app.recipeRepository.getRecipes()}.first()
+        val fixture=BakingSession.start(9001L,recipe,2.0).copy(recipeRevision=app.recipeRepository.revision)
+        runBlocking{app.activeBakeRepository.commit(fixture.id,null,fixture.activeSnapshot())}
+        val requested=MutableStateFlow<Long?>(fixture.id)
+        lateinit var nav:NavHostController
+        val restoration=StateRestorationTester(rule)
+        restoration.setContent {nav=rememberNavController();MadreNavHost(nav,pendingSessionId=requested)}
+        rule.waitUntil(10_000){nav.currentDestination?.route==MadreDestinations.BAKE &&
+            rule.onAllNodesWithText("Дальше →").fetchSemanticsNodes().isNotEmpty()}
+        assertEquals(fixture.id.toString(),nav.currentBackStackEntry?.arguments?.getString("sessionId"))
+        assertNull(requested.value)
+        rule.runOnIdle{rule.activity.viewModelStore.clear()}
+        restoration.emulateSavedInstanceStateRestore()
+        rule.waitUntil(10_000){nav.currentDestination?.route==MadreDestinations.BAKE &&
+            rule.onAllNodesWithText("Дальше →").fetchSemanticsNodes().isNotEmpty()}
+        assertEquals(fixture.id.toString(),nav.currentBackStackEntry?.arguments?.getString("sessionId"))
+        assertEquals(fixture.bakeKey,runBlocking{app.activeBakeRepository.all()}.single{it.sessionId==fixture.id}.bakeKey)
+        rule.runOnIdle{assertTrue(nav.popBackStack())}
+        rule.waitForIdle()
+        assertEquals(MadreDestinations.HOME,nav.currentDestination?.route)
+        assertEquals(1,nav.currentBackStackEntry?.savedStateHandle?.get<Int>("home_section"))
+        restoration.emulateSavedInstanceStateRestore();rule.waitForIdle()
+        assertEquals(MadreDestinations.HOME,nav.currentDestination?.route)
     }
     @Test fun fontScale200UsesTheSameChapterScrollRendererAndNotOtherChapters() {
         val recipe=recipes.single{it.id=="ciabatta"}

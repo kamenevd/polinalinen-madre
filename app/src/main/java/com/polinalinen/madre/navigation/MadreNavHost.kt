@@ -42,7 +42,6 @@ import com.polinalinen.madre.sourdough.StarterName
 import com.polinalinen.madre.sourdough.profileForInterval
 import com.polinalinen.madre.data.db.entities.FeedingEntity
 import com.polinalinen.madre.ui.screens.BakingCompleteScreen
-import com.polinalinen.madre.ui.screens.BakingTimerScreen
 import com.polinalinen.madre.ui.screens.BookStatsScreen
 import com.polinalinen.madre.ui.screens.FeedingFormScreen
 import com.polinalinen.madre.ui.screens.GalleryPhoto
@@ -374,12 +373,14 @@ fun MadreNavHost(
                 )
             }
             composable(MadreDestinations.CHAPTER,arguments=listOf(
-                navArgument("page"){type=NavType.IntType;defaultValue=-1},navArgument("step"){type=NavType.IntType;defaultValue=-1})) { backStackEntry ->
+                navArgument("page"){type=NavType.IntType;defaultValue=-1},navArgument("step"){type=NavType.IntType;defaultValue=-1}),
+                enterTransition={androidx.compose.animation.EnterTransition.None}) { backStackEntry ->
                 val recipeId = backStackEntry.arguments?.getString("recipeId").orEmpty()
                 val sessions by bakingViewModel.sessions.collectAsState()
                 var factor by rememberSaveable(recipeId) { mutableStateOf(bookPreferences.portions(recipeId).toDouble()) }
                 var calculator by rememberSaveable(recipeId) { mutableStateOf(false) }
                 val changeFactor:(Double)->Unit={value->factor=value;if(value in 1.0..5.0 && value==value.toInt().toDouble())bookPreferences.savePortions(recipeId,value.toInt())}
+                ChapterEntry(recipeId,readingPreferences.reducedMotion || calmMode) {
                 RazvorotReader(recipesForStats, recipeId, readingPreferences,
                     onBack = { navController.popBackStack() },
                     onBake = { recipe -> navigationScope.launch { bakingViewModel.startBakingWithUndo(recipe, factor)?.let { id -> navController.navigate(MadreDestinations.bake(id.toString())) } } },
@@ -394,6 +395,7 @@ fun MadreNavHost(
                     scrollContent={ RecipeDetailScreen(recipeId,{navController.popBackStack()},{},bakingViewModel,onOpenAlice={aliceSheet=true},
                         embedded=true,scaleFactorOverride=factor,textSize=readingPreferences.textSize) },
                 )
+                }
                 if(calculator)recipesForStats.firstOrNull{it.id==recipeId}?.let { recipe->BookPortionsSheet(recipe,factor,changeFactor){calculator=false} }
             }
             composable(MadreDestinations.BAKE) { backStackEntry ->

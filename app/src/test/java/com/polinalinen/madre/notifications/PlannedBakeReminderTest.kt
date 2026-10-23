@@ -6,7 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.work.Configuration
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
-import androidx.work.Worker
+import androidx.work.ListenableWorker
 import androidx.work.testing.TestWorkerBuilder
 import androidx.work.workDataOf
 import com.polinalinen.madre.MadreApplication
@@ -43,7 +43,7 @@ class PlannedBakeReminderTest {
         val plan=plan()
         BookPreferences(app).use{assertTrue(it.putPlan(plan))}
         val before=app.activeBakeRepository.all()
-        assertEquals(Worker.Result.success(),worker(plan.id).doWork())
+        assertEquals(ListenableWorker.Result.success(),worker(plan.id).doWork())
         assertEquals(before,app.activeBakeRepository.all())
         val posted=manager.activeNotifications.single{it.tag=="planned:${plan.id}"}.notification
         assertEquals(listOf("Начать","Через 30 мин"),posted.actions.map{it.title.toString()})
@@ -78,7 +78,7 @@ class PlannedBakeReminderTest {
         scheduler.cancel(first.id)
         assertTrue(wm.getWorkInfosForUniqueWork(PlannedBakeScheduler.uniqueName(first.id)).get().all{it.state.isFinished})
         assertTrue(wm.getWorkInfosForUniqueWork(PlannedBakeScheduler.uniqueName(second.id)).get().any{it.state==WorkInfo.State.ENQUEUED})
-        assertEquals(Worker.Result.success(),worker(first.id).doWork())
+        assertEquals(ListenableWorker.Result.success(),worker(first.id).doWork())
         assertTrue(manager.activeNotifications.none{it.tag=="planned:${first.id}"})
     }
     @Test fun startupReconcilesAPlanCommittedBeforeProcessDeathWithoutDuplicatingItsWork() {

@@ -130,8 +130,6 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
                     }
                     TextButton({onCalculator(recipe)},Modifier.fillMaxWidth().heightIn(min=48.dp)) {Text("Расчёт и заметки",fontSize=12.sp)}
                 }
-            } else Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
-                TextButton({move(page-1)},enabled=page>0) {Text("Назад")};SmallLabel("${page+1}",Modifier.padding(16.dp));TextButton({move(page+1)},enabled=page<leaves.lastIndex){Text("Дальше")}
             }
         } else Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) { CircularProgressIndicator() }
         if(settings)ReadingSettings(preferences){settings=false}

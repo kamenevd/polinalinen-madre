@@ -60,6 +60,16 @@ internal class PaperMotion(val direction: Int, val x0: Float, val y0: Float, var
     val latestMotion by rememberUpdatedState(motion)
     val debug = LocalPaperDebug.current
     val frameRate = remember { PaperFrameRate() }
+    SideEffect{if(!curl)debug.renderer="SLIDE"}
+    DisposableEffect(view,density,height) {
+        val previous=if(android.os.Build.VERSION.SDK_INT>=29)view.systemGestureExclusionRects.toList() else emptyList()
+        if(android.os.Build.VERSION.SDK_INT>=29) {
+            val center=(view.height.takeIf{it>0}?: (height*density).roundToInt())/2
+            val half=(100f*density).roundToInt()
+            view.systemGestureExclusionRects=listOf(android.graphics.Rect(0,(center-half).coerceAtLeast(0),(24f*density).roundToInt(),center+half))
+        }
+        onDispose{if(android.os.Build.VERSION.SDK_INT>=29)view.systemGestureExclusionRects=previous}
+    }
 
     // The next two pages in BOTH directions are laid out and captured before a gesture.
     // Theme/size/content changes invalidate these real Compose textures.
@@ -131,7 +141,7 @@ internal class PaperMotion(val direction: Int, val x0: Float, val y0: Float, var
     val underBitmap = textures[under]
     val glFrame = if (curl && fold != null && frontBitmap != null && underBitmap != null) PaperGlFrame(fold!!, frontBitmap, underBitmap, p.bg.toArgb(), p == NightPaper, debug.grid) else null
 
-    Box(modifier.fillMaxSize().onSizeChanged { width = it.width / density; height = it.height / density }.semantics {
+    Box(modifier.fillMaxSize().onSizeChanged { width = it.width / density; height = it.height / density }.semantics(mergeDescendants=true) {
         stateDescription = "Страница ${page + 1} из $count"
         customActions = listOf(
             CustomAccessibilityAction("Следующая страница") { if (page + 1 < count) { latestPage(page + 1); true } else false },
@@ -204,7 +214,7 @@ internal class PaperMotion(val direction: Int, val x0: Float, val y0: Float, var
                 }
             }
         }
-        if (curl) AndroidView(factory = { PaperGlView(it) { rendererFailed = true }.also { glView = it } },
+        if (curl) AndroidView(factory = { PaperGlView(it,failure={rendererFailed=true;debug.renderer="SLIDE"},ready={debug.renderer="GLES2"},presented={debug.renderedFrames++}).also { glView = it } },
             modifier = Modifier.fillMaxSize(), update = { it.prefetch(textures.values.toList()); it.submit(glFrame) })
     }
 }

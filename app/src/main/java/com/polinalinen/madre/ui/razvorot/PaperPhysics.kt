@@ -64,7 +64,10 @@ internal data class PaperFold(val width: Float, val height: Float, val grip: Flo
             return attached(width,height,grip,length,phi)
         }
         fun attached(width:Float,height:Float,grip:Float,length:Float,radians:Float):PaperFold {
-            var phi=radians
+            // Keep the bound exact in Float too; chained degree conversions can
+            // otherwise exceed37 degrees by one ULP at a corner.
+            val limit=Math.toRadians(37.0).toFloat()
+            var phi=radians.coerceIn(-limit,limit)
             val y = grip.coerceIn(8f, max(8f, height - 8f))
             repeat(8) {
                 val fold = PaperFold(width, height, y, length, phi)

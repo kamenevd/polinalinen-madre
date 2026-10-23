@@ -12,6 +12,8 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import com.polinalinen.madre.data.repository.RecipeRepository
 import com.polinalinen.madre.model.*
@@ -43,7 +45,7 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
     val recipe=recipes.firstOrNull()?:return
     CompositionLocalProvider(LocalPaperDebug provides debug) {
         RazvorotTheme(preferences,force=if(night)Atmosphere.NIGHT else Atmosphere.DAWN) {
-            Box(Modifier.fillMaxSize().background(LocalPaper.current.bg).safeDrawingPadding().testTag("scene-$scene")) {
+            Box(Modifier.fillMaxSize().background(LocalPaper.current.bg).safeDrawingPadding().testTag("scene-$scene").semantics{stateDescription="${debug.renderer}:${debug.renderedFrames}"}) {
                 when {
                     scene.startsWith("reader-title") -> TitleLeaf(if(scene.contains("last"))recipes.last() else recipe,if(scene.contains("last"))recipes.lastIndex else 0,recipes.size)
                     scene.startsWith("reader-text") -> DebugTextPage(recipe,preferences)
@@ -119,7 +121,7 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
     var revision by remember{mutableIntStateOf(0)}
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp)) {
         BookText("Бумага",36)
-        SmallLabel("FPS КАДРОВ UI · %.1f · ПОСЛЕДНИЙ ПЕРЕВОРОТ %.0f МС".format(debug.fps,debug.duration))
+        SmallLabel("${debug.renderer} · ${debug.renderedFrames} КАДРОВ · FPS UI %.1f · ПЕРЕВОРОТ %.0f МС".format(debug.fps,debug.duration))
         Text("Показать сетку и оси");Switch(debug.grid,{debug.grid=it})
         @Composable fun parameter(label:String,value:Float,range:ClosedFloatingPointRange<Float>,change:(Float)->Unit) {
             Text("$label · %.1f".format(value));Slider(value,{change(it);revision++},valueRange=range)

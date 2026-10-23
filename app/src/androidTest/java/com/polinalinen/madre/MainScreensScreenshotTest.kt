@@ -1,6 +1,9 @@
 package com.polinalinen.madre
 
 import android.graphics.Bitmap
+import android.os.ParcelFileDescriptor
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -44,5 +47,17 @@ class MainScreensScreenshotTest {
         select("curl-top");capture("05-reader-curl")
         select("alice-listening");capture("06-alice-sheet")
         RazvorotScenes.forEach {scene->select(scene);capture(scene)}
+    }
+    @Test fun gles2RendersActualNativePaperFrame() {
+        val automation=InstrumentationRegistry.getInstrumentation().uiAutomation
+        fun shell(command:String)=ParcelFileDescriptor.AutoCloseInputStream(automation.executeShellCommand(command)).bufferedReader().use{it.readText().trim()}
+        val old=shell("settings get global animator_duration_scale").toFloatOrNull()?:0f
+        try {
+            shell("settings put global animator_duration_scale 1")
+            select("reader-chrome")
+            rule.waitUntil(15_000){rule.onNodeWithTag("scene-reader-chrome").fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription)?.startsWith("GLES2:")==true}
+            rule.onNodeWithTag("paper-turn").performTouchInput{swipeLeft(durationMillis=150)}
+            rule.waitUntil(15_000){(rule.onNodeWithTag("scene-reader-chrome").fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription)?.substringAfter(':')?.toIntOrNull()?:0)>0}
+        } finally {shell("settings put global animator_duration_scale $old")}
     }
 }

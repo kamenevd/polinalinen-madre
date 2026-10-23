@@ -14,7 +14,7 @@ import java.nio.ByteOrder
 internal data class PaperGlFrame(val fold: PaperFold, val front: Bitmap, val under: Bitmap, val paper: Int, val night: Boolean, val grid: Boolean = false)
 
 /** GLES2 only; TextureView composes with native reader chrome. No AGSL/WebView. */
-internal class PaperGlView(context: Context, private val failure: () -> Unit) : TextureView(context), TextureView.SurfaceTextureListener {
+internal class PaperGlView(context: Context, private val failure: () -> Unit, private val ready:()->Unit = {},private val presented:()->Unit = {}) : TextureView(context), TextureView.SurfaceTextureListener {
     private val worker = HandlerThread("MadrePaperGL").apply { start() }
     private val handler = Handler(worker.looper)
     private var display = EGL14.EGL_NO_DISPLAY
@@ -74,6 +74,7 @@ internal class PaperGlView(context: Context, private val failure: () -> Unit) : 
                 GLES20.glDeleteShader(vertex); GLES20.glDeleteShader(fragment)
                 GLES20.glEnable(GLES20.GL_DEPTH_TEST); GLES20.glDepthFunc(GLES20.GL_LEQUAL)
                 pendingTextures.forEach{texture(it)}
+                post{ready()}
                 safeDraw()
             }.onFailure { post { failure() } }
         }
@@ -132,16 +133,24 @@ internal class PaperGlView(context: Context, private val failure: () -> Unit) : 
             }
             pass(f.under, true); pass(f.front, false)
             if (f.grid) {
-                one("uGrid", 1f); indices.position(0); GLES20.glDrawElements(GLES20.GL_LINES, nx * ny * 6, GLES20.GL_UNSIGNED_SHORT, indices); one("uGrid", 0f)
+                one("uGrid", 1f); indices.position(0); GLES20.glDrawElements(GLES20.GL_LINES, nx * ny * 6, GLES20.GL_UNSIGNED_SHORT, indices)
+                val axes=ByteBuffer.allocateDirect(8*4).order(ByteOrder.nativeOrder()).asFloatBuffer().apply {
+                    put(floatArrayOf(g.px-g.nx*g.width,g.py-g.ny*g.width,g.px+g.nx*g.width,g.py+g.ny*g.width,
+                        g.px+g.ny*g.height,g.py-g.nx*g.height,g.px-g.ny*g.height,g.py+g.nx*g.height));position(0)
+                }
+                GLES20.glDisable(GLES20.GL_DEPTH_TEST);one("uMode",1f)
+                GLES20.glVertexAttribPointer(a,2,GLES20.GL_FLOAT,false,0,axes);GLES20.glDrawArrays(GLES20.GL_LINES,0,4)
+                GLES20.glEnable(GLES20.GL_DEPTH_TEST);one("uGrid", 0f)
             }
             check(GLES20.glGetError() == GLES20.GL_NO_ERROR)
         }
         check(EGL14.eglSwapBuffers(display, eglSurface))
+        if(frame!=null)post{presented()}
     }
     companion object {
         private const val VS = """
-attribute vec2 a; uniform vec2 uP,uN,uS; uniform float uR,uMode;
-varying vec2 vUv; varying float vD,vTh;
+attribute vec2 a; uniform vec2 uP,uN,uS; uniform mediump float uR,uMode;
+varying mediump vec2 vUv; varying mediump float vD,vTh;
 void main(){vec2 v=a;float d=dot(v-uP,uN);vec3 pos=vec3(v,0.);float th=0.;
 if(uMode<.5&&d>0.){float PR=3.14159265*uR;vec2 base=v-uN*d;
 if(d<PR){th=d/uR;pos=vec3(base+uN*uR*sin(th),uR*(1.-cos(th)));}
@@ -151,15 +160,15 @@ gl_Position=vec4(pos.x/uS.x*2.-1.,1.-pos.y/uS.y*2.,uMode>.5?.5:-pos.z/400.,1.);}
 """
         private const val FS = """
 precision mediump float; uniform sampler2D uT; uniform vec3 uPaper;
-uniform float uR,uMode,uNight,uGrid; varying vec2 vUv; varying float vD,vTh;
+uniform float uR,uMode,uNight,uGrid; varying mediump vec2 vUv; varying mediump float vD,vTh;
 void main(){if(uGrid>.5){gl_FragColor=vec4(.8,.25,.1,1.);return;}
-vec3 t=texture2D(uT,vUv).rgb;float K=1.+uNight*.6;
+vec3 t=texture2D(uT,vUv).rgb;float K=1.+uNight*.6;float grain=(fract(sin(dot(vUv,vec2(12.9898,78.233)))*43758.5)-.5)*.015;
 if(uMode>.5){float e=vD-uR*.9;float s=.58*K*exp(-max(e,0.)/(uR*1.1+20.));
-if(e<0.)s*=smoothstep(-uR*1.75,0.,e);gl_FragColor=vec4(t*(1.-min(s,.8)),1.);return;}
+if(e<0.)s*=smoothstep(-uR*1.75,0.,e);gl_FragColor=vec4(t*(1.-min(s,.8))+grain,1.);return;}
 float th=vTh;float crease=1.-.24*K*exp(-abs(vD)/(uR*.45+6.));float sh;vec3 base;
 if(th<1.5708){sh=1.-.40*(1.-cos(th));base=t;sh+=.035*(1.-uNight*.6)*exp(-pow((th-1.12)/.06,2.));}
 else{sh=.60+.20*(-cos(th));vec3 g=vec3(dot(uPaper,vec3(.333)));base=mix(mix(uPaper,g,.45)*(.92+uNight*.3),t,.07);}
-if(vD<=0.)sh=1.;gl_FragColor=vec4(base*sh*crease,1.);}
+if(vD<=0.)sh=1.;gl_FragColor=vec4(base*sh*crease+grain,1.);}
 """
     }
 }

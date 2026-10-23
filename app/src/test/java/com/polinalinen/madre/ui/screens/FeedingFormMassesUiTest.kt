@@ -158,7 +158,7 @@ class FeedingFormMassesUiTest {
             onBack = { returned = true },
         )
 
-        rule.onNodeWithText("← ДНЕВНИК").performClick()
+        rule.onNodeWithContentDescription("Назад").performClick()
         assertThat(returned).isFalse()
     }
 
@@ -166,7 +166,7 @@ class FeedingFormMassesUiTest {
         var returned = false
         show(onBack = { returned = true })
 
-        rule.onNodeWithText("← ДНЕВНИК").performClick()
+        rule.onNodeWithContentDescription("Назад").performClick()
         assertThat(returned).isTrue()
     }
 

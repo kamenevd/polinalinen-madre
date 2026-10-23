@@ -300,6 +300,7 @@ private fun InkHistoryButton(
     PaperIconButton(
         onClick = onClick,
         enabled = enabled,
+        label = description,
     ) {
         Icon(icon, contentDescription = description, modifier = Modifier.size(20.dp))
     }

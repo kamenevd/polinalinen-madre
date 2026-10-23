@@ -176,7 +176,7 @@ class SettingsIaUiTest {
 
         // Почта, пароль и подпись — три поля, и ни одного до просьбы.
         rule.onAllNodes(hasSetTextAction()).assertCountEquals(3)
-        rule.onNodeWithText("Почта").assertExists()
+        rule.onNodeWithText("ПОЧТА").assertExists()
     }
 
     // ————— hard rule №9: язык кнопок на этой странице —————

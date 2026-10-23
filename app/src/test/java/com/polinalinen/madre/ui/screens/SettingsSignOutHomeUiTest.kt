@@ -13,7 +13,8 @@ class SettingsSignOutHomeUiTest {
         val shelfSource = File("src/main/java/com/polinalinen/madre/ui/screens/SettingsShelfScreen.kt")
             .readText()
 
-        assertThat(settingsSource).contains("onClick = familyBookViewModel::signOut")
+        assertThat(settingsSource).contains("familyBookViewModel::signOut")
+        assertThat(settingsSource).contains("onClick = onSignOut")
         assertThat(settingsSource).contains("Выйти · книга на телефоне останется")
         assertThat(shelfSource).doesNotContain("onClick = familyBookViewModel::signOut")
     }

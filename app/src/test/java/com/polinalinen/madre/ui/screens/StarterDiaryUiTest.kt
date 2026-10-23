@@ -243,7 +243,8 @@ class StarterDiaryUiTest {
             intervalHours = 24,
             nowMillis = momentOf(2025, Calendar.AUGUST, 20, 9, 0),
         )
-        rule.onNodeWithText("18 авг. 2025", useUnmergedTree = true).performScrollTo().assertIsDisplayed()
+        // Both fixtures are on18August; shared rows may compose both at once.
+        rule.onAllNodesWithText("18 авг. 2025", useUnmergedTree = true)[0].performScrollTo().assertIsDisplayed()
         rule.onNodeWithContentDescription(
             "18 августа 2025, 08:00. Закваска: 45 граммов. Мука: 150 граммов. " +
                 "Вода: 75 граммов. Гидратация: 86 процентов. Хранение: кухня.",

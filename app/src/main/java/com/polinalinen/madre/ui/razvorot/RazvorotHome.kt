@@ -53,7 +53,7 @@ import com.polinalinen.madre.ui.components.bookAction
                                     BookText(timerDigits(remaining),30,color=p.acc)
                                     Column(Modifier.padding(start=14.dp)) {SmallLabel("В ПЕЧИ · ШАГ ${s.currentStepIndex+1} ИЗ ${s.recipe.timeline.size}");BookText(s.recipe.name,18)}
                                 }
-                                Row {PaperTextButton({onContinueReading(s)},Modifier.weight(1f).heightIn(min=48.dp)){Text("Продолжить чтение")};PaperTextButton({onOpenTimer(s.id)},Modifier.weight(1f).heightIn(min=48.dp)){Text("К таймеру")}}
+                                Row {PaperTextButton({onContinueReading(s)},Modifier.weight(1f).heightIn(min=48.dp),label="Продолжить чтение"){Text("Продолжить чтение")};PaperTextButton({onOpenTimer(s.id)},Modifier.weight(1f).heightIn(min=48.dp),label="К таймеру"){Text("К таймеру")}}
                             }
                         }
                     }

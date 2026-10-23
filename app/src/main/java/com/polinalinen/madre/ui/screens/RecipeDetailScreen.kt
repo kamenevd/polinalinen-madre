@@ -257,6 +257,10 @@ fun RecipeDetailScreen(
                 }
             }
 
+            if (com.polinalinen.madre.config.FeatureFlags.ALICE) item(key = "alice") {
+                PaperAliceButton(onOpenAlice, Modifier.fillMaxWidth().padding(horizontal = 22.dp))
+            }
+
             // Просьба Полины (2026-07-21, помнить и не убирать): весь рецепт должен
             // быть написан целиком, книжным текстом, прямо на этой странице —
             // для тех, кто печёт по памяти рецепта, а не по шагам таймера.

@@ -118,7 +118,7 @@ fun SettingsShelfScreen(
                     if (failed != null) {
                         Text(
                             failed.failure.message,
-                            color = colors.rib,style = PaperType.body,
+                            color = colors.error,style = PaperType.body,
                             fontSize = 13.sp,
                             modifier = Modifier.padding(horizontal = 22.dp, vertical = 8.dp),
                         )

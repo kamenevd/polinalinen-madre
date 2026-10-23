@@ -230,6 +230,10 @@ fun BakingTimerScreen(
                 }
             }
 
+            if (com.polinalinen.madre.config.FeatureFlags.ALICE) {
+                PaperAliceButton(onOpenAlice, Modifier.fillMaxWidth())
+            }
+
             // «Бросить» — у нижнего края экрана, не рядом с «Дальше» (Cycle 12).
             Row(
                 Modifier

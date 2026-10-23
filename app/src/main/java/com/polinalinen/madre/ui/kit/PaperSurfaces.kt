@@ -76,7 +76,7 @@ import kotlin.random.Random
     modifier: Modifier = Modifier, actions: @Composable RowScope.() -> Unit = {}) {
     Column(modifier.fillMaxWidth()) {
         Row(Modifier.heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (onBack != null) PaperIconButton(onBack) {
+            if (onBack != null) PaperIconButton(onBack, label = "Назад") {
                 Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Назад", Modifier.size(24.dp))
             }
             if (overline != null) SmallLabel(overline, Modifier.weight(1f)) else Spacer(Modifier.weight(1f))

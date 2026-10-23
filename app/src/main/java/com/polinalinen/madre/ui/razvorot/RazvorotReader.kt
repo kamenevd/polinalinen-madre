@@ -136,7 +136,7 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
                         val active=activeSessions.firstOrNull{it.recipe.id==recipe.id}
                         PaperButton(active?.let{"Печь · шаг ${it.currentStepIndex+1}"}?:"Печь · ×${preferences.portions.toInt()}",{if(active!=null)onContinueBake(active.id)else onBake(recipe)},Modifier.weight(1f),primary=true)
                     }
-                    PaperTextButton({onCalculator(recipe)},Modifier.fillMaxWidth().heightIn(min=48.dp)) {Text("Расчёт и заметки",fontSize=12.sp)}
+                    PaperTextButton({onCalculator(recipe)},Modifier.fillMaxWidth().heightIn(min=48.dp),label="Расчёт и заметки") {Text("Расчёт и заметки",fontSize=12.sp)}
                 }
             }
         } else Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) { PaperProgress() }

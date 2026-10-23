@@ -7,6 +7,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.polinalinen.madre.MadreApplication
@@ -61,7 +62,7 @@ class PhotoDesignerTapCycleUiTest {
 
         rule.onNodeWithText("без оттиска").performClick()
         rule.onNodeWithText("колос").assertIsDisplayed()
-        rule.onNodeWithText("Угол").assertIsDisplayed()
+        rule.onNodeWithText("Угол").performScrollTo().assertIsDisplayed()
 
         rule.onNodeWithText("колос").performClick()
         rule.onNodeWithText("каравай").assertIsDisplayed()

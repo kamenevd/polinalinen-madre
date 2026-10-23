@@ -58,9 +58,9 @@ internal val BookRibbonHeight=44.dp
 }
 @Composable fun BookHeader(title: String, onBack: (() -> Unit)? = null, onAa: (() -> Unit)? = null) {
     Row(Modifier.fillMaxWidth().heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (onBack != null) PaperIconButton(onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Назад") }
+        if (onBack != null) PaperIconButton(onBack, label = "Назад") { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Назад") }
         SmallLabel(title, Modifier.weight(1f))
-        if(onAa!=null)PaperTextButton(onAa, Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp).testTag("reading-settings")) { BookText("Aa", 21) }
+        if(onAa!=null)PaperTextButton(onAa, Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp).testTag("reading-settings"), label = "Как читать") { BookText("Aa", 21) }
     }
 }
 @Composable fun BookCover(onOpen: () -> Unit, modifier: Modifier = Modifier) {
@@ -92,8 +92,8 @@ internal val BookRibbonHeight=44.dp
         SmallLabel("ПОТЯНИТЕ ОБЛОЖКУ ВЛЕВО — КНИГА ОТКРОЕТСЯ", Modifier.align(Alignment.CenterHorizontally))
         continuation()
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            PaperTextButton(onOpen) { Text("ОГЛАВЛЕНИЕ · ${recipes.size} глав", color = p.ink,style = PaperType.caption) }
-            PaperIconButton(onSettings) { Icon(Icons.Outlined.Settings,"Настройки") }
+            PaperTextButton(onOpen, label = "Открыть оглавление") { Text("ОГЛАВЛЕНИЕ · ${recipes.size} глав", color = p.ink,style = PaperType.caption) }
+            PaperIconButton(onSettings, label = "Настройки") { Icon(Icons.Outlined.Settings,"Настройки") }
         }
         Spacer(Modifier.height(20.dp))
     }
@@ -106,7 +106,7 @@ internal val BookRibbonHeight=44.dp
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             if(grid)BookText("${recipes.size} глав",38,Modifier.weight(1f))
             else Row(Modifier.weight(1f),verticalAlignment=Alignment.Bottom) {BookText("%02d".format(selected+1),78,weight=FontWeight.ExtraLight);BookText("/%02d".format(recipes.size),26,Modifier.padding(bottom=8.dp),color=LocalPaper.current.mut,weight=FontWeight.ExtraLight)}
-            PaperIconButton({ grid = !grid }) { Icon(if(grid) Icons.Outlined.ViewCarousel else Icons.Outlined.GridView, if(grid) "Веер глав" else "Вся книга") }
+            PaperIconButton({ grid = !grid }, label = if(grid) "Веер глав" else "Вся книга") { Icon(if(grid) Icons.Outlined.ViewCarousel else Icons.Outlined.GridView, if(grid) "Веер глав" else "Вся книга") }
         }
         if(grid) LazyVerticalGrid(GridCells.Fixed(3),Modifier.testTag(Home.LIST_TAG),horizontalArrangement = Arrangement.spacedBy(10.dp),verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(bottom=24.dp)) {
             itemsIndexed(recipes) { i,r -> Column(Modifier.clip(RoundedCornerShape(10.dp)).then(bookAction("Открыть главу: ${r.name}"){onOpen(r.id)}).testTag(Home.chapterRowTag(r.id))) {
@@ -165,7 +165,7 @@ internal val BookRibbonHeight=44.dp
             Row(Modifier.fillMaxWidth().heightIn(min=58.dp),verticalAlignment=Alignment.CenterVertically) { Text("Меньше движения",Modifier.weight(1f));PaperSwitch(preferences.reducedMotion||com.polinalinen.madre.ui.kit.LocalCalmMode.current,preferences::setReduced) }
             Row(Modifier.fillMaxWidth().heightIn(min=58.dp),verticalAlignment=Alignment.CenterVertically) { Text("Тактильные отклики",Modifier.weight(1f));PaperSwitch(preferences.haptics,preferences::chooseHaptics) }
             SmallLabel("На слабом устройстве и при выключенной системной анимации — плоский сдвиг.")
-            if(BuildConfig.DEBUG)PaperTextButton({context.startActivity(android.content.Intent().setClassName(context.packageName,"com.polinalinen.madre.ui.razvorot.RazvorotSceneActivity").putExtra("scene","paper"))},Modifier.fillMaxWidth().heightIn(min=48.dp)){Text("Бумага")}
+            if(BuildConfig.DEBUG)PaperTextButton({context.startActivity(android.content.Intent().setClassName(context.packageName,"com.polinalinen.madre.ui.razvorot.RazvorotSceneActivity").putExtra("scene","paper"))},Modifier.fillMaxWidth().heightIn(min=48.dp),label="Посмотреть бумагу"){Text("Бумага")}
             Spacer(Modifier.height(24.dp))
         }
     }

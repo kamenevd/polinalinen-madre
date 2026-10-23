@@ -223,7 +223,7 @@ fun MadreNavHost(
             composable(MadreDestinations.RECIPE_DETAIL) { backStackEntry ->
                 val recipeId = backStackEntry.arguments?.getString("recipeId").orEmpty()
                 val sessions by bakingViewModel.sessions.collectAsState()
-                if(readingPreferences.mode==ReadingMode.SCROLL || androidx.compose.ui.platform.LocalDensity.current.fontScale>1.3f) RecipeDetailScreen(recipeId,{navController.popBackStack()},{id->navController.navigate(MadreDestinations.bakingTimer(id.toString()))},bakingViewModel)
+                if(readingPreferences.mode==ReadingMode.SCROLL || androidx.compose.ui.platform.LocalDensity.current.fontScale>1.3f) RecipeDetailScreen(recipeId,{navController.popBackStack()},{id->navController.navigate(MadreDestinations.bakingTimer(id.toString()))},bakingViewModel,onOpenAlice={navController.navigate(MadreDestinations.ALICE)})
                 else RazvorotReader(recipesForStats, recipeId, readingPreferences,
                     onBack = { navController.popBackStack() },
                     onBake = { recipe -> navigationScope.launch { bakingViewModel.startBaking(recipe, readingPreferences.portions.toDouble())?.let { id -> navController.navigate(MadreDestinations.bakingTimer(id.toString())) } } },
@@ -236,7 +236,7 @@ fun MadreNavHost(
                 val id=entry.arguments?.getString("recipeId").orEmpty()
                 val step=entry.arguments?.getString("step")?.toIntOrNull()
                 val sessions by bakingViewModel.sessions.collectAsState()
-                if(readingPreferences.mode==ReadingMode.SCROLL || androidx.compose.ui.platform.LocalDensity.current.fontScale>1.3f) RecipeDetailScreen(id,{navController.popBackStack()},{sessionId->navController.navigate(MadreDestinations.bakingTimer(sessionId.toString()))},bakingViewModel)
+                if(readingPreferences.mode==ReadingMode.SCROLL || androidx.compose.ui.platform.LocalDensity.current.fontScale>1.3f) RecipeDetailScreen(id,{navController.popBackStack()},{sessionId->navController.navigate(MadreDestinations.bakingTimer(sessionId.toString()))},bakingViewModel,onOpenAlice={navController.navigate(MadreDestinations.ALICE)})
                 else RazvorotReader(recipesForStats,id,readingPreferences,{navController.popBackStack()},
                     {recipe-> navigationScope.launch { bakingViewModel.startBaking(recipe,readingPreferences.portions.toDouble())?.let { sessionId -> navController.navigate(MadreDestinations.bakingTimer(sessionId.toString())) } }},
                     {recipe->navController.navigate("recipe-calculator/${recipe.id}")},initialStep=step,activeSessions=sessions,
@@ -249,6 +249,7 @@ fun MadreNavHost(
                     onBack = { navController.popBackStack() },
                     onStartBaking = { sessionId -> navController.navigate(MadreDestinations.bakingTimer(sessionId.toString())) },
                     viewModel = bakingViewModel,
+                    onOpenAlice = { navController.navigate(MadreDestinations.ALICE) },
                 )
             }
             composable(MadreDestinations.BAKING_TIMER) { backStackEntry ->

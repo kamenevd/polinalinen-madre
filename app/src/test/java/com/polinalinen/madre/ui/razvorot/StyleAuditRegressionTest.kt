@@ -30,7 +30,7 @@ class StyleAuditRegressionTest {
     @Test fun everyAvailableMaterialColorRoleIsFromTheApprovedPalette() {
         for(p in listOf(DawnPaper,DayPaper,DuskPaper,NightPaper)) {
             val scheme=paperScheme(p)
-            val allowed=listOf(p.bg,p.bg2,p.card,p.ink,p.ink2,p.mut,p.line,p.acc,p.ribbon,Color.Black,Color.White).map{it.value.toLong()}
+            val allowed=listOf(p.bg,p.bg2,p.card,p.ink,p.ink2,p.mut,p.line,p.acc,p.acc2,p.ribbon,p.sage,p.sage2,p.error,Color.Black,Color.White).map{it.value.toLong()}
             val getters=ColorScheme::class.java.methods.filter{it.name.startsWith("get")&&it.parameterCount==0&&it.returnType==java.lang.Long.TYPE}
             assertThat(getters.size).isAtLeast(35)
             getters.forEach{g->assertWithMessage(g.name).that(g.invoke(scheme) as Long).isIn(allowed)}

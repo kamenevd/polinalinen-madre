@@ -14,6 +14,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
@@ -49,7 +50,7 @@ class SettingsTapCycleUiTest {
             }
         }
 
-        rule.onNodeWithText("Ваш ритм: раз в сутки").performClick()
+        rule.onNodeWithText("Ваш ритм: раз в сутки").performScrollTo().performClick()
         rule.onNodeWithText("Ваш ритм: раз в два дня").assertExists()
         rule.onAllNodesWithText("Оставить как есть").assertCountEquals(0)
     }

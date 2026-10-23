@@ -29,6 +29,8 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -85,7 +87,7 @@ enum class PaperButtonVariant { PRIMARY, ACCENT, SECONDARY, TEXT }
     enabled: Boolean = true, destructive: Boolean = false) {
     val p = LocalPaper.current
     val gate = remember { TapGate() }
-    TextButton({ if (gate.accept(System.currentTimeMillis())) onClick() }, modifier.heightIn(min = 48.dp), enabled = enabled,
+    TextButton({ if (gate.accept(System.currentTimeMillis())) onClick() }, modifier.heightIn(min = 48.dp).semantics { onClick(label, null) }, enabled = enabled,
         colors = ButtonDefaults.textButtonColors(contentColor = if (destructive) p.rib else p.acc,
             disabledContentColor = p.mut.copy(alpha = .4f))) {
         Text(label, style = PaperType.ui.copy(fontSize = 13.sp,
@@ -94,9 +96,9 @@ enum class PaperButtonVariant { PRIMARY, ACCENT, SECONDARY, TEXT }
 }
 
 @Composable fun PaperIconButton(onClick: () -> Unit, modifier: Modifier = Modifier,
-    enabled: Boolean = true, content: @Composable () -> Unit) {
+    enabled: Boolean = true, label: String, content: @Composable () -> Unit) {
     val p = LocalPaper.current
-    IconButton(onClick, modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp), enabled,
+    IconButton(onClick, modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp).semantics { onClick(label, null) }, enabled,
         colors = IconButtonDefaults.iconButtonColors(contentColor = p.ink,
             disabledContentColor = p.ink.copy(alpha = .4f)), content = content)
 }
@@ -136,28 +138,28 @@ enum class PaperButtonVariant { PRIMARY, ACCENT, SECONDARY, TEXT }
     visualTransformation: VisualTransformation = VisualTransformation.None) {
     val p = LocalPaper.current
     var focused by remember { mutableStateOf(false) }
-    Column(modifier) {
-        if (label != null) SmallLabel(label, Modifier.padding(bottom = 8.dp))
-        BasicTextField(value, onValueChange, enabled = enabled, singleLine = singleLine,
-            keyboardOptions = keyboardOptions, visualTransformation = visualTransformation,
-            cursorBrush = SolidColor(p.acc),
-            textStyle = (if (numeric) PaperType.ui else PaperType.title).copy(color = p.ink),
-            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)
-                .onFocusChanged { focused = it.isFocused }
-                .clip(RoundedCornerShape(14.dp)).background(p.bg2)
-                .drawBehind {
-                    if (focused || error != null) drawLine(if (error != null) p.error else p.acc,
-                        Offset(14.dp.toPx(), size.height - 1.dp.toPx()),
-                        Offset(size.width - 14.dp.toPx(), size.height - 1.dp.toPx()), 2.dp.toPx())
-                }.padding(horizontal = 16.dp, vertical = 14.dp),
-            decorationBox = { inner ->
-                Box {
+    // Caller semantics/focus must reach the editable node, not its non-focusable parent.
+    BasicTextField(value, onValueChange, enabled = enabled, singleLine = singleLine,
+        keyboardOptions = keyboardOptions, visualTransformation = visualTransformation,
+        cursorBrush = SolidColor(p.acc),
+        textStyle = (if (numeric) PaperType.ui else PaperType.title).copy(color = p.ink),
+        modifier = modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused },
+        decorationBox = { inner ->
+            Column {
+                if (label != null) SmallLabel(label, Modifier.padding(bottom = 8.dp))
+                Box(Modifier.fillMaxWidth().heightIn(min = 52.dp)
+                    .clip(RoundedCornerShape(14.dp)).background(p.bg2)
+                    .drawBehind {
+                        if (focused || error != null) drawLine(if (error != null) p.error else p.acc,
+                            Offset(14.dp.toPx(), size.height - 1.dp.toPx()),
+                            Offset(size.width - 14.dp.toPx(), size.height - 1.dp.toPx()), 2.dp.toPx())
+                    }.padding(horizontal = 16.dp, vertical = 14.dp)) {
                     if (value.isEmpty()) Text(placeholder, color = p.mut, style = PaperType.note)
                     inner()
                 }
-            })
-        if (error != null) Text(error, color = p.error, style = PaperType.note, modifier = Modifier.padding(top = 6.dp))
-    }
+                if (error != null) Text(error, color = p.error, style = PaperType.note, modifier = Modifier.padding(top = 6.dp))
+            }
+        })
 }
 
 @Composable fun PaperStepButton(symbol: String, label: String, enabled: Boolean = true, onClick: () -> Unit) {
@@ -217,8 +219,8 @@ enum class PaperButtonVariant { PRIMARY, ACCENT, SECONDARY, TEXT }
 }
 
 @Composable fun PaperTextButton(onClick: () -> Unit, modifier: Modifier = Modifier,
-    enabled: Boolean = true, content: @Composable RowScope.() -> Unit) {
-    TextButton(onClick, modifier.heightIn(min = 48.dp), enabled = enabled,
+    enabled: Boolean = true, label: String, content: @Composable RowScope.() -> Unit) {
+    TextButton(onClick, modifier.heightIn(min = 48.dp).semantics { onClick(label, null) }, enabled = enabled,
         colors = ButtonDefaults.textButtonColors(contentColor = LocalPaper.current.acc)) {
         ProvideTextStyle(PaperType.ui) { content() }
     }
@@ -226,7 +228,7 @@ enum class PaperButtonVariant { PRIMARY, ACCENT, SECONDARY, TEXT }
 
 /** Neutral kitchen flame, not a borrowed branded Alice asset. */
 @Composable fun PaperAliceButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    PaperTextButton(onClick, modifier) {
+    PaperTextButton(onClick, modifier, label = "Открыть Алису") {
         Icon(Icons.Outlined.LocalFireDepartment, contentDescription = null, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(8.dp))
         Text("Алиса", style = PaperType.ui)

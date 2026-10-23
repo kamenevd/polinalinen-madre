@@ -576,7 +576,7 @@ fun MadreNavHost(
                             try {
                                 storePlan(PlannedBake(id,portions,start),editing?.id)
                                 bookPreferences.savePortions(id,portions);startRecipeId=null;showHome(1)
-                                navigationScope.launch { navSnackbar.showSnackbar(if(com.polinalinen.madre.notifications.MadreNotifier(context).canPostNotifications())"Запланировано · напомним за 10 минут"
+                                navigationScope.launch { navSnackbar.showSnackbar(if(com.polinalinen.madre.notifications.MadreNotifier(context).canPost())"Запланировано · напомним за 10 минут"
                                     else "План сохранён. Уведомления отключены в настройках Android.") }
                             } catch(e:Exception) {
                                 if(e is kotlinx.coroutines.CancellationException)throw e

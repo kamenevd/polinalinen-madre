@@ -55,9 +55,16 @@ class MainScreensScreenshotTest {
         try {
             shell("settings put global animator_duration_scale 1")
             select("reader-chrome")
-            rule.waitUntil(15_000){rule.onNodeWithTag("scene-reader-chrome").fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription)?.startsWith("GLES2:")==true}
-            rule.onNodeWithTag("paper-turn").performTouchInput{swipeLeft(durationMillis=150)}
-            rule.waitUntil(15_000){(rule.onNodeWithTag("scene-reader-chrome").fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription)?.substringAfter(':')?.toIntOrNull()?:0)>0}
+            fun renderer()=rule.onNodeWithTag("scene-reader-chrome").fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription).orEmpty()
+            try {
+                rule.waitUntil(15_000){renderer().startsWith("GLES2:")}
+            } catch (error: ComposeTimeoutException) {
+                throw AssertionError("Real GLES2 readiness failed: ${renderer()}\n${rule.onRoot().printToString()}",error)
+            }
+            rule.onNodeWithTag("paper-turn").performTouchInput {
+                swipe(androidx.compose.ui.geometry.Offset(width*.95f,height*.5f),androidx.compose.ui.geometry.Offset(width*.08f,height*.5f),150)
+            }
+            rule.waitUntil(15_000){(renderer().split(':').getOrNull(1)?.toIntOrNull()?:0)>0}
         } finally {shell("settings put global animator_duration_scale $old")}
     }
 }

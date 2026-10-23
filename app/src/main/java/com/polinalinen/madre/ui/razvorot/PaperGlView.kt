@@ -14,7 +14,13 @@ import java.nio.ByteOrder
 internal data class PaperGlFrame(val fold: PaperFold, val front: Bitmap, val under: Bitmap, val paper: Int, val night: Boolean, val grid: Boolean = false)
 
 /** GLES2 only; TextureView composes with native reader chrome. No AGSL/WebView. */
-internal class PaperGlView(context: Context, private val failure: () -> Unit, private val ready:()->Unit = {},private val presented:()->Unit = {}) : TextureView(context), TextureView.SurfaceTextureListener {
+internal class PaperGlView(context: Context, private val failure: (String) -> Unit, private val ready:()->Unit = {},private val presented:()->Unit = {}) : TextureView(context), TextureView.SurfaceTextureListener {
+    private var stage = "awaiting-surface"
+    private fun reportFailure(error: Throwable) {
+        val reason="$stage: ${error.javaClass.simpleName}: ${error.message}; EGL=0x${EGL14.eglGetError().toString(16)}"
+        android.util.Log.e("MadrePaperGL",reason,error)
+        post { failure(reason) }
+    }
     private val worker = HandlerThread("MadrePaperGL").apply { start() }
     private val handler = Handler(worker.looper)
     private var display = EGL14.EGL_NO_DISPLAY
@@ -47,36 +53,43 @@ internal class PaperGlView(context: Context, private val failure: () -> Unit, pr
             textures.keys.toList().filter { it !in bitmaps && it !== frame?.front && it !== frame?.under }.forEach { bitmap ->
                 textures.remove(bitmap)?.let { GLES20.glDeleteTextures(1, intArrayOf(it), 0) }
             }
-        }.onFailure { post { failure() } }
+        }.onFailure { reportFailure(it) }
     } }
     override fun onSurfaceTextureAvailable(surface: SurfaceTexture, width: Int, height: Int) {
         handler.post {
             surfaceWidth = width; surfaceHeight = height
             runCatching {
+                stage="egl-initialize"
                 display = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY)
                 check(EGL14.eglInitialize(display, IntArray(2), 0, IntArray(2), 0))
+                stage="egl-config"
                 val configs = arrayOfNulls<EGLConfig>(1); val count = IntArray(1)
                 check(EGL14.eglChooseConfig(display, intArrayOf(EGL14.EGL_RENDERABLE_TYPE, EGL14.EGL_OPENGL_ES2_BIT, EGL14.EGL_RED_SIZE, 8, EGL14.EGL_GREEN_SIZE, 8, EGL14.EGL_BLUE_SIZE, 8, EGL14.EGL_ALPHA_SIZE, 8, EGL14.EGL_DEPTH_SIZE, 16, EGL14.EGL_NONE), 0, configs, 0, 1, count, 0) && count[0] > 0)
                 val config = checkNotNull(configs[0])
+                stage="egl-context"
                 eglContext = EGL14.eglCreateContext(display, config, EGL14.EGL_NO_CONTEXT, intArrayOf(EGL14.EGL_CONTEXT_CLIENT_VERSION, 2, EGL14.EGL_NONE), 0)
                 check(eglContext != EGL14.EGL_NO_CONTEXT)
+                stage="egl-window-${width}x$height"
                 window = Surface(surface)
                 eglSurface = EGL14.eglCreateWindowSurface(display, config, window, intArrayOf(EGL14.EGL_NONE), 0)
                 check(eglSurface != EGL14.EGL_NO_SURFACE)
                 check(EGL14.eglMakeCurrent(display, eglSurface, eglSurface, eglContext))
                 fun shader(type: Int, source: String): Int {
+                    stage=if(type==GLES20.GL_VERTEX_SHADER)"vertex-compile" else "fragment-compile"
                     val id = GLES20.glCreateShader(type); GLES20.glShaderSource(id, source); GLES20.glCompileShader(id)
                     val ok = IntArray(1); GLES20.glGetShaderiv(id, GLES20.GL_COMPILE_STATUS, ok, 0); check(ok[0] != 0) { GLES20.glGetShaderInfoLog(id) }; return id
                 }
                 val vertex = shader(GLES20.GL_VERTEX_SHADER, VS); val fragment = shader(GLES20.GL_FRAGMENT_SHADER, FS)
+                stage="shader-link"
                 program = GLES20.glCreateProgram(); GLES20.glAttachShader(program, vertex); GLES20.glAttachShader(program, fragment); GLES20.glLinkProgram(program)
-                val ok = IntArray(1); GLES20.glGetProgramiv(program, GLES20.GL_LINK_STATUS, ok, 0); check(ok[0] != 0)
+                val ok = IntArray(1); GLES20.glGetProgramiv(program, GLES20.GL_LINK_STATUS, ok, 0); check(ok[0] != 0) { GLES20.glGetProgramInfoLog(program) }
                 GLES20.glDeleteShader(vertex); GLES20.glDeleteShader(fragment)
                 GLES20.glEnable(GLES20.GL_DEPTH_TEST); GLES20.glDepthFunc(GLES20.GL_LEQUAL)
+                stage="texture-prefetch"
                 pendingTextures.forEach{texture(it)}
                 post{ready()}
                 safeDraw()
-            }.onFailure { post { failure() } }
+            }.onFailure { reportFailure(it) }
         }
     }
     override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) { handler.post { surfaceWidth = width; surfaceHeight = height; safeDraw() } }
@@ -111,7 +124,7 @@ internal class PaperGlView(context: Context, private val failure: () -> Unit, pr
         GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
         id[0]
     }
-    private fun safeDraw() { runCatching { draw() }.onFailure { post { failure() } } }
+    private fun safeDraw() { stage="draw-swap";runCatching { draw() }.onFailure { reportFailure(it) } }
     private fun draw() {
         if (stopped || program == 0) return
         GLES20.glViewport(0, 0, surfaceWidth, surfaceHeight); GLES20.glClearColor(0f, 0f, 0f, 0f)

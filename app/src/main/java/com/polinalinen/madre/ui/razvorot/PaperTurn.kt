@@ -43,6 +43,7 @@ internal class PaperMotion(val direction: Int, val x0: Float, val y0: Float, var
     val systemMotion = Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
     val power = context.getSystemService(Context.POWER_SERVICE) as PowerManager
     var rendererFailed by remember { mutableStateOf(false) }
+    var failureReason by remember { mutableStateOf("") }
     var slowSession by remember { mutableStateOf(false) }
     val curl = preferences.mode == ReadingMode.BOOK && !preferences.reducedMotion && !calm && systemMotion && !power.isPowerSaveMode && view.isHardwareAccelerated && !rendererFailed && !slowSession
     var width by remember { mutableFloatStateOf(360f) }
@@ -60,7 +61,23 @@ internal class PaperMotion(val direction: Int, val x0: Float, val y0: Float, var
     val latestMotion by rememberUpdatedState(motion)
     val debug = LocalPaperDebug.current
     val frameRate = remember { PaperFrameRate() }
-    SideEffect{if(!curl)debug.renderer="SLIDE"}
+    SideEffect {
+        if (!curl) {
+            debug.renderer="SLIDE"
+            debug.reason=when {
+                preferences.mode!=ReadingMode.BOOK -> "preference-${preferences.mode}"
+                preferences.reducedMotion -> "reduced-motion"
+                calm -> "calm-mode"
+                !systemMotion -> "system-animation-scale-zero"
+                power.isPowerSaveMode -> "power-save"
+                !view.isHardwareAccelerated -> "view-not-hardware-accelerated"
+                rendererFailed -> failureReason
+                slowSession -> "low-fps"
+                else -> "unknown"
+            }
+            android.util.Log.i("MadrePaperGL", "SLIDE: ${debug.reason}")
+        }
+    }
     DisposableEffect(view,density,height) {
         val previous=if(android.os.Build.VERSION.SDK_INT>=29)view.systemGestureExclusionRects.toList() else emptyList()
         if(android.os.Build.VERSION.SDK_INT>=29) {
@@ -195,7 +212,10 @@ internal class PaperMotion(val direction: Int, val x0: Float, val y0: Float, var
                     val bitmap=layer.toImageBitmap().asAndroidBitmap().copy(android.graphics.Bitmap.Config.ARGB_8888,false)
                     if(bitmap!=null && density>2f) android.graphics.Bitmap.createScaledBitmap(bitmap,(width*2f).roundToInt().coerceAtLeast(1),(height*2f).roundToInt().coerceAtLeast(1),true).also{if(it!==bitmap)bitmap.recycle()} else bitmap
                 }
-                    .onSuccess { if (it != null) textures[index] = it }.onFailure { rendererFailed = true }
+                    .onSuccess { if (it != null) textures[index] = it }.onFailure {
+                        failureReason="texture-capture-${it.javaClass.simpleName}: ${it.message}"
+                        android.util.Log.e("MadrePaperGL",failureReason,it); rendererFailed = true
+                    }
                 textures.keys.toList().filter { abs(it - page) > 2 }.forEach { textures.remove(it) }
             }
             Box(Modifier.fillMaxSize().then(if(index!=page)Modifier.clearAndSetSemantics{} else Modifier).drawWithContent {
@@ -214,7 +234,7 @@ internal class PaperMotion(val direction: Int, val x0: Float, val y0: Float, var
                 }
             }
         }
-        if (curl) AndroidView(factory = { PaperGlView(it,failure={rendererFailed=true;debug.renderer="SLIDE"},ready={debug.renderer="GLES2"},presented={debug.renderedFrames++}).also { glView = it } },
+        if (curl) AndroidView(factory = { PaperGlView(it,failure={reason->failureReason=reason;rendererFailed=true;debug.renderer="SLIDE";debug.reason=reason},ready={debug.renderer="GLES2";debug.reason="egl-shaders-ready"},presented={debug.renderedFrames++}).also { glView = it } },
             modifier = Modifier.fillMaxSize(), update = { it.prefetch(textures.values.toList()); it.submit(glFrame) })
     }
 }

@@ -61,13 +61,27 @@ class YandexAccountViewModel(application: Application) : AndroidViewModel(applic
     }
 
     fun signOut() {
-        (state.value as? YandexAccountState.SignedIn)?.profile?.let { profile ->
-            app.imageLoader.memoryCache?.remove(MemoryCache.Key(profile.avatarCacheKey))
-            viewModelScope.launch(Dispatchers.IO) { app.imageLoader.diskCache?.remove(profile.avatarCacheKey) }
-        }
-        // Synchronous local authority fence BEFORE either asynchronous network request.
+        // Synchronous local authority fence BEFORE any cache/metadata/network suspension.
         app.disconnectVoice()
-        viewModelScope.launch { controller.signOut() }
+        viewModelScope.launch {
+            val profile=(state.value as? YandexAccountState.SignedIn)?.profile ?: try { storage.read().profile }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { null }
+            clearPortraitCache(profile)
+            controller.signOut()
+        }
+    }
+
+    private fun clearPortraitCache(profile: VerifiedYandexProfile?) {
+        profile?.let { cached ->
+            try { app.imageLoader.memoryCache?.remove(MemoryCache.Key(cached.avatarCacheKey)) }
+            catch (_: Exception) { _offerError.value = "Не удалось удалить портрет из кэша. Выход из аккаунта продолжается." }
+            viewModelScope.launch(Dispatchers.IO) {
+                try { app.imageLoader.diskCache?.remove(cached.avatarCacheKey) }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { _offerError.value = "Не удалось удалить портрет из кэша. Выход из аккаунта продолжается." }
+            }
+        }
     }
 
     fun retryPendingUnbind() { viewModelScope.launch { controller.retryPendingUnbind() } }

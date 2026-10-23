@@ -56,6 +56,7 @@ private const val PRIVACY="Мадре получит только имя, пор
     val owner=LocalYandexAccountUi.current ?: return
     val state by owner.model.state.collectAsState()
     val pending by owner.model.pendingUnbind.collectAsState()
+    val notice by owner.model.offerError.collectAsState()
     var profileOpen by rememberSaveable{mutableStateOf(false)}
     var confirmOut by rememberSaveable{mutableStateOf(false)}
     val profile=(state as? YandexAccountState.SignedIn)?.profile
@@ -67,6 +68,10 @@ private const val PRIVACY="Мадре получит только имя, пор
                 Spacer(Modifier.height(16.dp))
             }
             YandexAccountPanel(state,pending,owner.signIn,{profileOpen=true},owner.model::retryPendingUnbind)
+            notice?.let{PaperNote(it)}
+            if(state is YandexAccountState.Error && !pending) {
+                PaperTextAction("Отключить аккаунт на этом телефоне",{confirmOut=true},destructive=true)
+            }
             if(profile!=null) {
                 PaperListRow("Алиса",note="Открыть настоящую связку навыка",onClick=onOpenAlice)
                 profile.bookNameSuggestion(myName)?.let{suggestion->

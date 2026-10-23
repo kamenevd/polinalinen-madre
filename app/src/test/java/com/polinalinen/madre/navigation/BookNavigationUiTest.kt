@@ -96,13 +96,13 @@ class BookNavigationUiTest {
         val restoration=StateRestorationTester(rule)
         restoration.setContent {nav=rememberNavController();MadreNavHost(nav,pendingSessionId=requested)}
         rule.waitUntil(10_000){nav.currentDestination?.route==MadreDestinations.BAKE &&
-            rule.onAllNodesWithText("Дальше →").fetchSemanticsNodes().isNotEmpty()}
+            rule.onAllNodesWithText("Дальше").fetchSemanticsNodes().isNotEmpty()}
         assertEquals(fixture.id.toString(),nav.currentBackStackEntry?.arguments?.getString("sessionId"))
         assertNull(requested.value)
         rule.runOnIdle{rule.activity.viewModelStore.clear()}
         restoration.emulateSavedInstanceStateRestore()
         rule.waitUntil(10_000){nav.currentDestination?.route==MadreDestinations.BAKE &&
-            rule.onAllNodesWithText("Дальше →").fetchSemanticsNodes().isNotEmpty()}
+            rule.onAllNodesWithText("Дальше").fetchSemanticsNodes().isNotEmpty()}
         assertEquals(fixture.id.toString(),nav.currentBackStackEntry?.arguments?.getString("sessionId"))
         assertEquals(fixture.bakeKey,runBlocking{app.activeBakeRepository.all()}.single{it.sessionId==fixture.id}.bakeKey)
         rule.runOnIdle{assertTrue(nav.popBackStack())}

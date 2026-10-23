@@ -14,9 +14,10 @@ class HttpsYandexAccountApi internal constructor(
     private val installationCredential: suspend () -> String,
     client: OkHttpClient,
     private val wallClock: () -> Long,
+    private val unbindCredential: suspend () -> String = installationCredential,
 ) : YandexAccountApi {
-    constructor(installationCredential: suspend () -> String) : this(
-        installationCredential, OkHttpClient(), System::currentTimeMillis)
+    constructor(installationCredential: suspend () -> String, unbindCredential: suspend () -> String) : this(
+        installationCredential, OkHttpClient(), System::currentTimeMillis, unbindCredential)
 
     private val http = client.newBuilder()
         .connectTimeout(3, TimeUnit.SECONDS).readTimeout(6, TimeUnit.SECONDS)
@@ -54,7 +55,8 @@ class HttpsYandexAccountApi internal constructor(
     }
 
     override suspend fun unbind(): Unit = safeRequest {
-        val credential = installationCredential()
+        // Never create/enroll a replacement identity to falsely acknowledge old-account logout.
+        val credential = unbindCredential()
         require(credential.matches(Regex("[A-Za-z0-9_-]{43}")))
         execute(request("yandex-unbind", credential, "{}")).use { response ->
             // 202/redirect/HTML/200 are not the contract's explicit revocation acknowledgement.

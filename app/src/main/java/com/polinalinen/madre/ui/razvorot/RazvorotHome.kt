@@ -40,6 +40,17 @@ import com.polinalinen.madre.ui.components.bookAction
     onStartRecipe:((Recipe)->Unit)?=null,onConfigureRecipe:((Recipe)->Unit)?=null,
     onConfigurePlan:((com.polinalinen.madre.navigation.PlannedBake)->Unit)?=null,
 ) {
+    val account=com.polinalinen.madre.account.yandex.LocalYandexAccountUi.current
+    if(account!=null) {
+        val offer by account.model.offerPending.collectAsState()
+        if(offer) {
+            val state by account.model.state.collectAsState()
+            val pending by account.model.pendingUnbind.collectAsState()
+            com.polinalinen.madre.account.yandex.YandexOfferContent(state,pending,account.signIn,
+                account.model::skipOffer,account.model::retryPendingUnbind)
+            return
+        }
+    }
     var section by rememberSaveable{mutableIntStateOf(initialSection)}
     LaunchedEffect(initialSection){section=initialSection}
     val tabStates=rememberSaveableStateHolder()

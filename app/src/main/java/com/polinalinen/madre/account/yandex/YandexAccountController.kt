@@ -37,7 +37,11 @@ class YandexAccountController(
     @Volatile private var closed = false
     private var sequence = 0L
     private var previousState: YandexAccountState = YandexAccountState.SignedOut
-    private var unbindPending = false
+    private val _pendingUnbind = MutableStateFlow(false)
+    val pendingUnbind = _pendingUnbind.asStateFlow()
+    private var unbindPending: Boolean
+        get() = _pendingUnbind.value
+        set(value) { _pendingUnbind.value = value }
     private var signInTimeout: Job? = null
     private val initialization = scope.launch {
         try {

@@ -17,6 +17,13 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Text
+import androidx.compose.ui.platform.LocalContext
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.polinalinen.madre.account.yandex.VerifiedYandexProfile
 import com.polinalinen.madre.R
 import com.polinalinen.madre.ui.components.TapGate
 
@@ -52,6 +59,22 @@ fun YandexIdButton(
             Image(painterResource(if (dark) R.drawable.yandex_id_button_white else R.drawable.yandex_id_button_black),
                 contentDescription = null, contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxWidth().height(artworkHeight))
+        }
+    }
+}
+
+/** Monogram stays visible on absent, failed or offline portraits. */
+@Composable fun YandexAccountPortrait(profile: VerifiedYandexProfile, size: Dp = 56.dp) {
+    val p = LocalPaper.current
+    val label = profile.displayName.ifBlank { profile.login }
+    Box(Modifier.size(size).clip(CircleShape).background(p.acc2)
+        .semantics { contentDescription = "Аккаунт Яндекса, $label" }, contentAlignment = Alignment.Center) {
+        Text(label.firstOrNull()?.uppercase().orEmpty(), color = p.acc, style = PaperType.h2)
+        profile.avatarUrl?.let { url ->
+            AsyncImage(model = ImageRequest.Builder(LocalContext.current).data(url)
+                .memoryCacheKey(profile.avatarCacheKey).diskCacheKey(profile.avatarCacheKey)
+                .crossfade(false).build(), contentDescription = null,
+                contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         }
     }
 }

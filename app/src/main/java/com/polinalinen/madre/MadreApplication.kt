@@ -53,11 +53,22 @@ class MadreApplication : Application() {
     // Cycle 15: незавершённые выпечки — их читает BakeRestoreWorker после
     // перезагрузки телефона, поэтому репозиторий нужен и без единого экрана.
     val activeBakeRepository: ActiveBakeRepository by lazy { ActiveBakeRepository(database) }
+    val voiceIdentityStore: com.polinalinen.madre.voice.VoiceIdentityStore by lazy {
+        com.polinalinen.madre.voice.VoiceIdentityStore(getSharedPreferences("madre_voice", MODE_PRIVATE), KeystoreTokenCipher())
+    }
     val voiceCoordinator: com.polinalinen.madre.voice.VoiceCoordinator by lazy {
         com.polinalinen.madre.voice.VoiceCoordinator(
-            com.polinalinen.madre.voice.VoiceIdentityStore(getSharedPreferences("madre_voice", MODE_PRIVATE), KeystoreTokenCipher()),
+            voiceIdentityStore,
             com.polinalinen.madre.voice.HttpsVoiceApi(), activeBakeRepository.commitFence,
         )
+    }
+    val yandexAccountStorage: com.polinalinen.madre.account.yandex.YandexAccountStorage by lazy {
+        com.polinalinen.madre.account.yandex.YandexAccountPrefs(this)
+    }
+    val yandexAccountApi: com.polinalinen.madre.account.yandex.YandexAccountApi by lazy {
+        val installation=com.polinalinen.madre.account.yandex.YandexInstallationAccess(
+            voiceIdentityStore,com.polinalinen.madre.voice.HttpsVoiceApi())
+        com.polinalinen.madre.account.yandex.HttpsYandexAccountApi(installation::forBind,installation::forUnbind)
     }
     fun disconnectVoice() {
         voiceCoordinator.revokeLocally()

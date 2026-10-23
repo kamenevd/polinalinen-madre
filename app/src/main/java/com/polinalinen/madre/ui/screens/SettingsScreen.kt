@@ -147,6 +147,8 @@ fun SettingsScreen(
         ) {
             PaperHeader("Настройки", onBack = onBack, overline = "Книга", modifier = Modifier.padding(horizontal = 22.dp))
 
+            com.polinalinen.madre.account.yandex.YandexSettingsSection(myName,onMyNameChange,onOpenAlice)
+
             Text(
                 "выходные данные книги",
                 color = colors.ink2,style = PaperType.body,

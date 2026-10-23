@@ -30,6 +30,10 @@ class VoiceIdentityStore(private val prefs: SharedPreferences, private val ciphe
         if (old != null) write(old.copy(bakeKey = null, generation = null, revokePending = true))
         else check(prefs.edit().putBoolean("revoked", true).commit())
     }
+    @Synchronized
+    fun readOrCreate(): VoiceIdentity = read() ?: create()
+
+    @Synchronized
     fun create(): VoiceIdentity {
         // Corruption is not permission to silently enroll another installation.
         check(!prefs.contains("identity")) { "Voice credential unavailable" }

@@ -33,16 +33,26 @@ import com.polinalinen.madre.ui.screens.Home
     var query by rememberSaveable { mutableStateOf("") }
     var filter by rememberSaveable { mutableStateOf(CatalogFilter.ALL) }
     val rows = remember(recipes, sessions, query, filter) { BookCatalog.search(recipes, query, filter, sessions) }
+    val account=com.polinalinen.madre.account.yandex.LocalYandexAccountUi.current
+    val accountState=account?.model?.state?.collectAsState()?.value
+    val profile=(accountState as? com.polinalinen.madre.account.yandex.YandexAccountState.SignedIn)?.profile
     Column(modifier.fillMaxSize().testTag(Home.LIST_TAG).verticalScroll(rememberScrollState()).padding(horizontal = 22.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             SmallLabel("${LocalAtmosphere.current.label} · КНИГА СЕМЬИ", Modifier.weight(1f).padding(top = 18.dp))
             PaperTextButton(onAa,label="Как читать") { BookText("Aa",21) }
-            PaperIconButton(onSettings, label = "Настройки") { Icon(Icons.Outlined.Settings, null) }
+            PaperIconButton(onSettings, label = profile?.let{"Аккаунт Яндекса, ${it.displayName.ifBlank{it.login}}"} ?: "Настройки") {
+                if(profile!=null)YandexAccountPortrait(profile,30.dp) else Icon(Icons.Outlined.Settings, null)
+            }
         }
         SmallLabel("КНИГА РЕЦЕПТОВ · ${recipes.size} ГЛАВ")
         BookText("Оглавление", 44, weight=androidx.compose.ui.text.font.FontWeight.Normal)
-        PaperNote("Мадре — книга рецептов на закваске · ${recipes.size} глав")
+        val greeting=when(LocalAtmosphere.current) {
+            Atmosphere.DAWN->"Доброе утро";Atmosphere.DAY->"Добрый день";Atmosphere.DUSK->"Добрый вечер"
+            Atmosphere.NIGHT->"Доброй ночи";else->"Здравствуйте"
+        }
+        PaperNote(if(profile==null)"Мадре — книга рецептов на закваске · ${recipes.size} глав"
+            else "$greeting, ${profile.displayName.ifBlank{profile.login}}.")
         bookmark?.let { saved -> recipes.firstOrNull { it.id == saved.recipeId }?.let { recipe ->
             PaperCard(Modifier.fillMaxWidth()) {
                 SmallLabel("ЗАКЛАДКА")

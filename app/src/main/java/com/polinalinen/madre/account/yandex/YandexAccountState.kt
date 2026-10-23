@@ -21,6 +21,7 @@ data class VerifiedYandexProfile(
     val avatarUrl: String?
         get() = avatarId?.takeUnless { avatarEmpty || it.isEmpty() }
             ?.let { "https://avatars.yandex.net/get-yapic/$it/islands-retina-middle" }
+    val avatarCacheKey: String get() = "yandex-avatar:$uidHash:${avatarId.orEmpty()}"
 
     /** An optional suggestion, NEVER a write into the user's ex libris. */
     fun bookNameSuggestion(currentName: String): String? =

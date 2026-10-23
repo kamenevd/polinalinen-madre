@@ -77,7 +77,7 @@ class VoiceCoordinator(private val store: VoiceIdentityStore, private val api: V
         val before = synchronized(fence) { epoch++; epoch }
         _state.value = _state.value.copy(status = VoiceStatus.LOADING, preview = null, message = null)
         try {
-            val existing = identity ?: withContext(Dispatchers.IO) { store.read() ?: store.create() }
+            val existing = identity ?: withContext(Dispatchers.IO) { store.readOrCreate() }
             // Old consent is invalidated locally BEFORE the first network operation.
             val disabled = existing.copy(bakeKey = null, generation = null, revokePending = true)
             synchronized(fence) { identity = disabled }

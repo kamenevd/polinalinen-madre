@@ -31,7 +31,7 @@ internal object Curl {
     }
     fun complete(direction: Int, progress: Float, vx: Float): Boolean {
         val along = -direction * vx.coerceIn(-V_MAX, V_MAX)
-        return along > V_FLICK || (progress > P_DONE && along > -V_KEEP)
+        return along >= V_FLICK || (progress > P_DONE && along > -V_KEEP)
     }
 }
 
@@ -60,7 +60,11 @@ internal data class PaperFold(val width: Float, val height: Float, val grip: Flo
             return anchored(width, height, y0, length, Curl.zone(y0, height) + delta)
         }
         fun anchored(width: Float, height: Float, grip: Float, length: Float, degrees: Float): PaperFold {
-            var phi = degrees * PI.toFloat() / 180f * ((2f * width - length) / (1.2f * width)).coerceIn(0f, 1f)
+            val phi = degrees * PI.toFloat() / 180f * ((2f * width - length) / (1.2f * width)).coerceIn(0f, 1f)
+            return attached(width,height,grip,length,phi)
+        }
+        fun attached(width:Float,height:Float,grip:Float,length:Float,radians:Float):PaperFold {
+            var phi=radians
             val y = grip.coerceIn(8f, max(8f, height - 8f))
             repeat(8) {
                 val fold = PaperFold(width, height, y, length, phi)

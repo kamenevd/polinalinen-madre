@@ -26,6 +26,7 @@ internal class PaperGlView(context: Context, private val failure: () -> Unit) : 
     private var surfaceHeight = 1
     private var stopped = false
     private var frame: PaperGlFrame? = null
+    private var pendingTextures:List<Bitmap> = emptyList()
     private val textures = linkedMapOf<Bitmap, Int>()
     private val nx = 40
     private val ny = 80
@@ -40,6 +41,7 @@ internal class PaperGlView(context: Context, private val failure: () -> Unit) : 
     init { isOpaque = false; surfaceTextureListener = this }
     fun submit(value: PaperGlFrame?) { handler.post { frame = value; if (!stopped && program != 0) safeDraw() } }
     fun prefetch(bitmaps: List<Bitmap>) { handler.post {
+        pendingTextures=bitmaps
         if (!stopped && program != 0) runCatching {
             bitmaps.forEach { texture(it) }
             textures.keys.toList().filter { it !in bitmaps && it !== frame?.front && it !== frame?.under }.forEach { bitmap ->
@@ -71,6 +73,7 @@ internal class PaperGlView(context: Context, private val failure: () -> Unit) : 
                 val ok = IntArray(1); GLES20.glGetProgramiv(program, GLES20.GL_LINK_STATUS, ok, 0); check(ok[0] != 0)
                 GLES20.glDeleteShader(vertex); GLES20.glDeleteShader(fragment)
                 GLES20.glEnable(GLES20.GL_DEPTH_TEST); GLES20.glDepthFunc(GLES20.GL_LEQUAL)
+                pendingTextures.forEach{texture(it)}
                 safeDraw()
             }.onFailure { post { failure() } }
         }
@@ -82,6 +85,7 @@ internal class PaperGlView(context: Context, private val failure: () -> Unit) : 
         return false
     }
     private fun releaseGl() {
+        if(stopped)return
         stopped = true
         if (display != EGL14.EGL_NO_DISPLAY) {
             textures.values.forEach { GLES20.glDeleteTextures(1, intArrayOf(it), 0) }; textures.clear()
@@ -91,7 +95,11 @@ internal class PaperGlView(context: Context, private val failure: () -> Unit) : 
             if (eglContext != EGL14.EGL_NO_CONTEXT) EGL14.eglDestroyContext(display, eglContext)
             EGL14.eglTerminate(display)
         }
-        window?.release(); frame = null; program = 0
+        window?.release(); frame = null; pendingTextures=emptyList(); program = 0
+    }
+    override fun onDetachedFromWindow() {
+        if(!isAvailable)handler.post{releaseGl();worker.quitSafely()}
+        super.onDetachedFromWindow()
     }
     private fun texture(bitmap: Bitmap): Int = textures.getOrPut(bitmap) {
         val id = IntArray(1); GLES20.glGenTextures(1, id, 0); GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, id[0])

@@ -63,7 +63,11 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
                             val blockWidth=if(step)(width-with(density){54.dp.roundToPx()}).coerceAtLeast(1) else width
                             fun measured(n:Int)=measurer.measure(heading,style.copy(fontSize=18.sp,lineHeight=25.sp),constraints=Constraints(maxWidth=blockWidth)).size.height+measurer.measure(rest.take(n).joinToString(" "),style,constraints=Constraints(maxWidth=blockWidth)).size.height+with(density){36.dp.roundToPx()}
                             if(used+measured(1)>height)flush()
-                            while(take>1&&used+measured(take)>height)take--
+                            if(used+measured(take)>height) {
+                                var lo=1;var hi=take
+                                while(lo<hi){val mid=(lo+hi+1)/2;if(used+measured(mid)<=height)lo=mid else hi=mid-1}
+                                take=lo
+                            }
                             if(lines.isEmpty())first="$bi:$offset"
                             fragmentIds.add("${r.id}:$bi:$offset")
                             val part=rest.take(take).joinToString(" ")
@@ -78,9 +82,12 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
         var page by rememberSaveable(recipeId) { mutableIntStateOf(0) }
         LaunchedEffect(leaves) {
             val target=if(seekActive) "$recipeId:${recipes.firstOrNull{it.id==recipeId}?.ingredients?.size?.plus(initialStep?:0)}:" else anchor.substringBeforeLast(':')+":"
+            val offset=if(seekActive)0 else anchor.substringAfterLast(':').toIntOrNull()?:0
+            val containing=leaves.withIndex().flatMap{(index,leaf)->leaf.blocks.filter{it.startsWith(target)}.mapNotNull{key->key.substringAfterLast(':').toIntOrNull()?.let{start->Triple(index,start,key)}}}.filter{it.second<=offset}.maxByOrNull{it.second}?.first
             page=leaves.indexOfFirst { it.anchor==anchor && !seekActive }.takeIf { it>=0 }
-                ?: leaves.indexOfFirst { leaf -> leaf.blocks.any{it.startsWith(target)} }.takeIf{it>=0}
+                ?: containing
                 ?: leaves.indexOfFirst { it.anchor.startsWith(recipeId+":") }.coerceAtLeast(0)
+            if(seekActive)anchor=leaves.getOrNull(page)?.anchor?:anchor
             seekActive=false
         }
         fun move(index:Int) { page=index.coerceIn(0,(leaves.size-1).coerceAtLeast(0));leaves.getOrNull(page)?.let { anchor=it.anchor } }

@@ -79,7 +79,7 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
 }
 @Composable private fun DebugTextPage(recipe:Recipe,preferences:ReadingPreferences) {
     Column(Modifier.fillMaxSize().padding(top=22.dp)) {
-        SmallLabel("ГЛАВА 01 · ${recipe.name.uppercase()}",Modifier.padding(horizontal=26.dp,bottom=22.dp))
+        SmallLabel("ГЛАВА 01 · ${recipe.name.uppercase()}",Modifier.padding(start=26.dp,end=26.dp,bottom=22.dp))
         recipe.timeline.drop(1).take(if(preferences.textSize>20f)2 else 4).forEachIndexed { i,step ->
             LeafBlock("%02d · %s · %d мин".format(i+2,step.title,step.durationMinutes),RecipeScaler.scaledStepText(step.description,1.0,RecipeScaler.scalableBindings(recipe)),preferences)
         }

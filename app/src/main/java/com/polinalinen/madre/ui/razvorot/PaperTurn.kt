@@ -75,8 +75,8 @@ internal class PaperMotion(val direction: Int, val x0: Float, val y0: Float, var
                 val m = motion ?: return@withFrameNanos
                 val a = 1f - exp(-dt / Curl.LAG_MS)
                 val length = m.fold.length + (m.target.length - m.fold.length) * a
-                val degrees = (m.fold.phi + (m.target.phi - m.fold.phi) * a) * 180f / PI.toFloat()
-                m.fold = PaperFold.anchored(width, height, m.y0, length, degrees)
+                val angle = m.fold.phi + (m.target.phi - m.fold.phi) * a
+                m.fold = PaperFold.attached(width, height, m.y0, length, angle)
                 fold = m.fold
             }
         }
@@ -85,14 +85,17 @@ internal class PaperMotion(val direction: Int, val x0: Float, val y0: Float, var
         val m = motion ?: return
         if (m.settling) return
         m.settling = true
+        val releaseV=(if(!tap&&m.direction<0)2f*vx else vx).coerceIn(-Curl.V_MAX,Curl.V_MAX)
         val progress = if (m.direction > 0) m.fold.length / (2f * width) else 1f - m.fold.length / (2f * width)
-        val complete = !cancelled && (tap || Curl.complete(m.direction, progress, vx))
-        val fast = abs(vx) > 1.2f
+        val complete = !cancelled && (tap || Curl.complete(m.direction, progress, releaseV))
+        val fast = abs(releaseV) > 1.2f
+        val targetTaper=((2f*width-m.target.length)/(1.2f*width)).coerceIn(0f,1f)
+        val baseDegrees=if(targetTaper>.001f)m.target.phi/targetTaper*180f/PI.toFloat() else 0f
         scope.launch {
             val started = withFrameNanos { it }
             var last = started
             val flip = complete == (m.direction > 0)
-            val spring = PaperSpring(width - m.fold.length, vx.coerceIn(-Curl.V_MAX, Curl.V_MAX) * 1000f,
+            val spring = PaperSpring(width - m.fold.length, releaseV * 1000f,
                 if (flip) -width - 150f else width,
                 if (!latestCurl) 60f else if (!complete) Curl.K_CANCEL else if (fast) Curl.K_FAST else Curl.K_DONE,
                 if (!complete && latestCurl) Curl.Z_CANCEL else Curl.Z_DONE)
@@ -108,7 +111,7 @@ internal class PaperMotion(val direction: Int, val x0: Float, val y0: Float, var
                 // Only the bounded tail is smoothly pushed home; the trajectory is a spring.
                 if (elapsed > max - 60f) spring.x += (spring.target - spring.x) * ((elapsed - max + 60f) / 60f).coerceIn(0f, 1f)
                 val length = (width - spring.x).coerceIn(0f, 2f * width + 150f)
-                m.fold = PaperFold.anchored(width, height, m.y0, length, m.target.phi * 180f / PI.toFloat())
+                m.fold = PaperFold.anchored(width, height, m.y0, length, baseDegrees)
                 fold = m.fold
                 val arrived = if (flip) spring.x <= -width - 30f else abs(spring.x - width) < 2.5f && abs(spring.velocity) < 40f
                 done = elapsed >= max || elapsed >= min && arrived
@@ -192,7 +195,7 @@ internal class PaperMotion(val direction: Int, val x0: Float, val y0: Float, var
                 if(motionNow==null)layers[page]?.let{drawLayer(it)}
                 else {
                     layers[under]?.let{drawLayer(it)}
-                    val offset=-(fold?.length?:0f)/2f*density
+                    val offset=-(fold?.length?:0f).coerceIn(0f,2f*width)/2f*density
                     layers[turning]?.let{layer->translate(left=offset){drawLayer(layer)}}
                     drawRect(Brush.horizontalGradient(listOf(Color.Transparent,Color.Black.copy(alpha=.25f),Color.Transparent),size.width+offset-30f*density,size.width+offset+30f*density))
                 }

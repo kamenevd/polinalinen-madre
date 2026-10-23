@@ -230,7 +230,8 @@ fun MadreNavHost(
                 val id=entry.arguments?.getString("recipeId").orEmpty()
                 val step=entry.arguments?.getString("step")?.toIntOrNull()
                 val sessions by bakingViewModel.sessions.collectAsState()
-                RazvorotReader(recipesForStats,id,readingPreferences,{navController.popBackStack()},
+                if(readingPreferences.mode==ReadingMode.SCROLL || androidx.compose.ui.platform.LocalDensity.current.fontScale>1.3f) RecipeDetailScreen(id,{navController.popBackStack()},{sessionId->navController.navigate(MadreDestinations.bakingTimer(sessionId.toString()))},bakingViewModel)
+                else RazvorotReader(recipesForStats,id,readingPreferences,{navController.popBackStack()},
                     {recipe-> val sessionId=bakingViewModel.startBaking(recipe,readingPreferences.portions.toDouble());navController.navigate(MadreDestinations.bakingTimer(sessionId.toString()))},
                     {recipe->navController.navigate("recipe-calculator/${recipe.id}")},initialStep=step,activeSessions=sessions,
                     onContinueBake={sessionId->navController.navigate(MadreDestinations.bakingTimer(sessionId.toString()))})

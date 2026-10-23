@@ -95,8 +95,8 @@ internal val BookRibbonHeight=44.dp
     val p = LocalPaper.current
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp)) {
         BookHeader("${LocalAtmosphere.current.label} · атмосфера по часам", onAa = onAa)
-        BookText(when(LocalAtmosphere.current) { Atmosphere.DAWN -> "Доброе утро,"; Atmosphere.DAY -> "Добрый день,"; Atmosphere.DUSK -> "Добрый вечер,"; else -> "Доброй ночи," }, 40)
-        BookText("пекарь", 44, italic = true, color = p.acc)
+        BookText(when(LocalAtmosphere.current) { Atmosphere.DAWN -> "Доброе утро,"; Atmosphere.DAY -> "Добрый день,"; Atmosphere.DUSK -> "Добрый вечер,"; else -> "Доброй ночи," },46,weight=FontWeight.Light,lineHeight=46.sp)
+        BookText("пекарь",46,italic=true,color=p.acc,weight=FontWeight.Light,lineHeight=46.sp)
         BookCover(onOpen)
         SmallLabel("ПОТЯНИТЕ ОБЛОЖКУ ВЛЕВО — КНИГА ОТКРОЕТСЯ", Modifier.align(Alignment.CenterHorizontally))
         continuation()

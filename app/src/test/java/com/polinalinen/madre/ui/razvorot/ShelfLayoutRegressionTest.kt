@@ -47,7 +47,7 @@ class ShelfLayoutRegressionTest {
             val ribbon=rule.onNodeWithTag("shelf-own-ribbon",useUnmergedTree=true).getUnclippedBoundsInRoot()
             val area=rule.onNodeWithTag("shelf-own-title-area",useUnmergedTree=true).getUnclippedBoundsInRoot()
             val text=rule.onNodeWithText(n,useUnmergedTree=true).getUnclippedBoundsInRoot()
-            assertThat(ribbon.height.value).isEqualTo(44f)
+            assertThat(ribbon.bottom.value-ribbon.top.value).isEqualTo(44f)
             assertWithMessage("$t scale=$s name=$n reserved=$area ribbon=$ribbon").that(area.top.value-ribbon.bottom.value).isAtLeast(8f)
             assertThat(text.top.value).isAtLeast(ribbon.bottom.value+8f-.5f)
             val layouts=mutableListOf<TextLayoutResult>()
@@ -73,7 +73,7 @@ class ShelfLayoutRegressionTest {
             val body=mutableListOf<TextLayoutResult>()
             rule.onNodeWithText(chapter).performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult){it(body)}
             assertThat(body.single().hasVisualOverflow).isFalse()
-            assertThat(row.height.value).isAtLeast(body.single().size.height.toFloat())
+            assertThat(row.bottom.value-row.top.value).isAtLeast(body.single().size.height.toFloat())
             rule.onNodeWithTag("nav-3").assertIsSelected()
         }
     }

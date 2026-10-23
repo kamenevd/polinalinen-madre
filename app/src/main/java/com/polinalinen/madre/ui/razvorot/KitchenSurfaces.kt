@@ -35,18 +35,18 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
     val p=LocalPaper.current
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal=22.dp)) {
         BookHeader("ПЕЧЬ СЕЙЧАС · ×${session.scaleFactor}",onBack)
-        BookText(session.recipe.name,31)
+        BookText(session.recipe.name,22,weight=FontWeight.Medium)
         Row(Modifier.fillMaxWidth().padding(top=26.dp),verticalAlignment=Alignment.Bottom) {
             BookText("%02d".format(session.currentStepIndex+1),100,weight=FontWeight.ExtraLight)
             BookText("/${session.recipe.timeline.size}",28,Modifier.padding(bottom=12.dp),color=p.mut)
             Spacer(Modifier.weight(1f));Column(horizontalAlignment=Alignment.End) {SmallLabel("ШАГ");BookText(session.currentStep.title,20,italic=true)}
         }
         val progress=timerProgress(session.currentStep.durationMinutes*60L,remaining)
-        TimerNumber(timerDigits(remaining),progress,72.sp,(-3).sp,p.ink,Modifier.fillMaxWidth().clickable(onClickLabel="Открыть большой таймер"){full=true}.padding(top=12.dp))
+        TimerNumber(timerDigits(remaining),progress,92.sp,(-5).sp,p.ink,Modifier.fillMaxWidth().clickable(onClickLabel="Открыть большой таймер"){full=true}.padding(top=12.dp))
         LinearProgressIndicator(progress={progress},Modifier.fillMaxWidth().padding(vertical=12.dp),color=p.acc,trackColor=p.bg2)
         SmallLabel(if(remaining==0L) "ВРЕМЯ ВЫШЛО" else "ОСТАЛОСЬ ИЗ ${session.currentStep.durationMinutes} МИН")
         val bindings=remember(session.recipe){RecipeScaler.scalableBindings(session.recipe)}
-        BookText(RecipeScaler.scaledStepText(session.currentStep.description,session.scaleFactor,bindings),21,Modifier.padding(top=24.dp))
+        BookText(RecipeScaler.scaledStepText(session.currentStep.description,session.scaleFactor,bindings),16,Modifier.padding(top=24.dp),color=p.ink2,lineHeight=25.sp)
         val temperatures=Regex("(\\d{2,3})\\s*[°º]\\s*[cсCС]?").findAll(session.currentStep.description).map{it.groupValues[1]+"°"}.distinct().toList()
         if(temperatures.isNotEmpty())Row(Modifier.padding(top=12.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)) {temperatures.forEach{Text(it,Modifier.background(p.bg2,RoundedCornerShape(16.dp)).padding(horizontal=12.dp,vertical=8.dp),fontFamily=Manrope,fontWeight=FontWeight.SemiBold,color=p.ink2)}}
         session.recipe.timeline.getOrNull(session.currentStepIndex+1)?.let { SmallLabel("ДАЛЬШЕ · ${it.title} · ${it.durationMinutes} МИН",Modifier.padding(top=16.dp)) }

@@ -17,7 +17,7 @@ enum class ReadingMode(val label: String) { BOOK("Как книга"), SLIDE("С
 val Literature = FontFamily(
     Font(R.font.literata_200,FontWeight.ExtraLight),Font(R.font.literata_300,FontWeight.Light),
     Font(R.font.literata_400,FontWeight.Normal),Font(R.font.literata_500,FontWeight.Medium),
-    Font(R.font.literata_italic_400,FontWeight.Normal,FontStyle.Italic),Font(R.font.literata_italic_500,FontWeight.Medium,FontStyle.Italic))
+    Font(R.font.literata_italic_300,FontWeight.Light,FontStyle.Italic),Font(R.font.literata_italic_400,FontWeight.Normal,FontStyle.Italic),Font(R.font.literata_italic_500,FontWeight.Medium,FontStyle.Italic))
 val Manrope = FontFamily(Font(R.font.manrope_400,FontWeight.Normal),Font(R.font.manrope_600,FontWeight.SemiBold),Font(R.font.manrope_700,FontWeight.Bold))
 internal val StaticTimerFonts=FontFamily(Font(R.font.manrope_200,FontWeight.ExtraLight),Font(R.font.manrope_400,FontWeight.Normal),Font(R.font.manrope_500,FontWeight.Medium),Font(R.font.manrope_600,FontWeight.SemiBold),Font(R.font.manrope_700,FontWeight.Bold),Font(R.font.manrope_800,FontWeight.ExtraBold))
 data class PaperColors(val bg:Color,val bg2:Color,val card:Color,val ink:Color,val ink2:Color,val mut:Color,val line:Color,val acc:Color,val ribbon:Color)

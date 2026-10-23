@@ -13,7 +13,7 @@ from fontTools.varLib.instancer import instantiateVariableFont
 ROOT = Path(__file__).resolve().parents[1]
 FONTS = ROOT / "app/src/main/res/font"
 RAW = ROOT / "app/src/main/res/raw"
-JOBS = [("literata", w, False) for w in (200, 300, 400, 500)] + [("literata_italic", w, True) for w in (400, 500)] + [("manrope", w, False) for w in (200, 400, 500, 600, 700, 800)]
+JOBS = [("literata", w, False) for w in (200, 300, 400, 500)] + [("literata_italic", w, True) for w in (300, 400, 500)] + [("manrope", w, False) for w in (200, 400, 500, 600, 700, 800)]
 
 
 def main():

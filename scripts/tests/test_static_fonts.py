@@ -39,7 +39,7 @@ def glyph(b, cp):
 class StaticFontTests(unittest.TestCase):
     def test_real_faces_weight_cmap_style_and_license(self):
         records = json.loads((RAW/"static_fonts_manifest.json").read_text())["fonts"]
-        self.assertEqual(len(records), 12)
+        self.assertEqual(len(records), 13)
         outlines = []
         for r in records:
             with self.subTest(face=r["file"]):

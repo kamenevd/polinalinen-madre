@@ -62,6 +62,21 @@
       "glyph_sha256": "d601d35acdf5748bf49b80e17cb3123732080a4edad9b318753ac0ad6f72a39d"
     },
     {
+      "file": "literata_italic_300.ttf",
+      "source": "literata_italic.ttf",
+      "source_sha256": "0c8f2303de854a12f05f5d3e4523391006dad85e683469b7266a19cc48b99c1b",
+      "weight": 300,
+      "italic": true,
+      "axes_pinned": {
+        "opsz": 12.0,
+        "wght": 300
+      },
+      "sha256": "ee2e092dffab6a7cbe675fdea34e4ea390d9ce82f2deea32b0e277288b104f43",
+      "cyrillic": true,
+      "license": "SIL OFL1.1",
+      "glyph_sha256": "21210207c4371f89bf3b8c91a596581c7f79593084de1d15041d0fd7eaa691c4"
+    },
+    {
       "file": "literata_italic_400.ttf",
       "source": "literata_italic.ttf",
       "source_sha256": "0c8f2303de854a12f05f5d3e4523391006dad85e683469b7266a19cc48b99c1b",

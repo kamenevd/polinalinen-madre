@@ -117,7 +117,9 @@ class NavigationSmokeTest {
         // куда-нибудь или остались стоять.
         rule.onNodeWithTag("paper-turn").assertIsDisplayed()
         rule.onNodeWithContentDescription(first.name).assertIsDisplayed()
-        rule.onNodeWithText(first.name).assertIsDisplayed()
+        // The visible reader chrome is now a canonical locale-aware CAPS
+        // overline. Keep an exact visible-text assertion, not ignoreCase/exists.
+        rule.onNodeWithText(first.name.uppercase(java.util.Locale.getDefault())).assertIsDisplayed()
 
         pressSystemBack()
         rule.onNodeWithTag(Home.LIST_TAG).assertIsDisplayed()

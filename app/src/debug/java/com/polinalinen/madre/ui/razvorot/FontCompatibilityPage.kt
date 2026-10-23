@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.sp
         SmallLabel("Статические шрифты · Android native")
         SmallLabel("Не проверка физического HarmonyOS")
         for(w in listOf(200,300,400,500))BookText("$w · Ёжик любит тёплый хлеб",20,weight=FontWeight(w))
+        BookText("300 italic · Доброе утро, пекарь",20,italic=true,weight=FontWeight.Light)
         BookText("400 italic · Живая закваска",20,italic=true)
         BookText("500 italic · Ждём подъёма",20,italic=true,weight=FontWeight.Medium)
         androidx.compose.material3.Text("Manrope400 · Печь, Ёё, Йй",fontFamily=Manrope,fontWeight=FontWeight.Normal,color=p.ink)

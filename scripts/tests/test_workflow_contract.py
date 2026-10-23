@@ -55,6 +55,39 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("lintDebug", lint)
         self.assertIn("lint-reports", lint)
 
+    def test_qa_signing_is_verified_before_upload_without_a_fallback(self):
+        text = self.read(".github/workflows/quality-gates.yml")
+        quality = text.split("  android-quality:\n", 1)[1].split("  lint-report:\n", 1)[0]
+        restore = quality.index("run: python3 scripts/restore_qa_signing.py\n")
+        build = quality.index("run: ./gradlew compileDebugKotlin")
+        verify = quality.index("id: verify_qa_signature")
+        upload = quality.index("name: Upload verified debug APK first")
+        self.assertLess(restore, build)
+        self.assertLess(build, verify)
+        self.assertLess(verify, upload)
+        gate = quality[quality.index("name: Verify stable QA APK identity"):quality.index("name: Extended visual verification")]
+        self.assertNotIn("continue-on-error", gate)
+        self.assertNotIn("if:", gate)
+        self.assertIn("scripts/verify_apk_signature.py app/build/outputs/apk/debug/app-debug.apk", gate)
+        self.assertIn("if: success() && steps.verify_qa_signature.outcome == 'success'", quality[upload:])
+        self.assertIn('MADRE_BUILD_TOOLS_VERSION: "36.0.0"', quality)
+        self.assertIn('sdkmanager "build-tools;${MADRE_BUILD_TOOLS_VERSION}"', quality)
+        for name in ("KEYSTORE_BASE64", "KEYSTORE_PASSWORD", "KEY_ALIAS", "KEY_PASSWORD", "SIGNING_CERT_SHA256"):
+            self.assertIn("secrets.MADRE_QA_" + name, quality)
+        self.assertNotIn("secrets.MADRE_KEYSTORE_", text)
+        self.assertIn("if: always()\n        run: python3 scripts/restore_qa_signing.py --cleanup", quality)
+
+    def test_debug_signing_has_its_own_identity_and_keeps_qa_isolation(self):
+        text = self.read("app/build.gradle.kts")
+        debug = text.split("        debug {", 1)[1].split("        release {", 1)[0]
+        self.assertIn('applicationIdSuffix = ".qa"', debug)
+        self.assertIn('signingConfig = signingConfigs.findByName("qa")', debug)
+        self.assertNotIn('getByName("debug")', debug)
+        for name in ("QA_KEYSTORE_PATH", "QA_KEYSTORE_PASSWORD", "QA_KEY_ALIAS", "QA_KEY_PASSWORD"):
+            self.assertIn('System.getenv("' + name + '")', text)
+        self.assertIn("QA signing inputs are incomplete", text)
+        self.assertIn('applicationId = "com.polinalinen.madre"', text)
+
     def test_style_boundary_is_a_real_checked_scanner_not_a_placeholder(self):
         text = self.read("app/src/test/java/com/polinalinen/madre/ui/StyleBoundaryTest.kt")
         self.assertIn('"scripts/style_boundary.py", "--check"', text)

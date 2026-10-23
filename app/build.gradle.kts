@@ -19,6 +19,16 @@ val releaseSigningInputs = listOf(
 )
 val hasCompleteReleaseSigning = releaseSigningInputs.all { !it.isNullOrBlank() }
 val hasAnyReleaseSigning = releaseSigningInputs.any { !it.isNullOrBlank() }
+// QA is a separate signing identity. Never fall back to the runner's debug key.
+val qaKeystorePath = System.getenv("QA_KEYSTORE_PATH")
+val qaKeystorePassword = System.getenv("QA_KEYSTORE_PASSWORD")
+val qaKeyAlias = System.getenv("QA_KEY_ALIAS")
+val qaKeyPassword = System.getenv("QA_KEY_PASSWORD")
+val qaSigningInputs = listOf(qaKeystorePath, qaKeystorePassword, qaKeyAlias, qaKeyPassword)
+val hasCompleteQaSigning = qaSigningInputs.all { !it.isNullOrBlank() }
+if (qaSigningInputs.any { !it.isNullOrBlank() } && !hasCompleteQaSigning) {
+    throw GradleException("QA signing inputs are incomplete")
+}
 // PR keeps domain/interaction tests + 20 key frames. Opt-in is mandatory for RC.
 val extendedVerification = providers.gradleProperty("madre.extendedVerification")
     .map { it.toBoolean() }.getOrElse(false)
@@ -60,6 +70,14 @@ android {
     }
 
     signingConfigs {
+        if (hasCompleteQaSigning) {
+            create("qa") {
+                storeFile = file(requireNotNull(qaKeystorePath))
+                storePassword = qaKeystorePassword
+                keyAlias = qaKeyAlias
+                keyPassword = qaKeyPassword
+            }
+        }
         if (hasCompleteReleaseSigning) {
             create("release") {
                 storeFile = file(requireNotNull(keystorePath))
@@ -73,6 +91,8 @@ android {
     buildTypes {
         debug {
             applicationIdSuffix = ".qa"
+            // Missing QA inputs produce an unsigned build, rejected by the mandatory CI verifier.
+            signingConfig = signingConfigs.findByName("qa")
             resValue("string", "app_name", "Мадре QA")
         }
         release {

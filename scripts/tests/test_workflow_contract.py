@@ -70,6 +70,7 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertNotIn("if:", gate)
         self.assertIn("scripts/verify_apk_signature.py app/build/outputs/apk/debug/app-debug.apk", gate)
         self.assertIn("if: success() && steps.verify_qa_signature.outcome == 'success'", quality[upload:])
+        self.assertIn("path: app/build/outputs/apk/debug/app-debug.apk", quality[upload:])
         self.assertIn('MADRE_BUILD_TOOLS_VERSION: "36.0.0"', quality)
         self.assertIn('sdkmanager "build-tools;${MADRE_BUILD_TOOLS_VERSION}"', quality)
         for name in ("KEYSTORE_BASE64", "KEYSTORE_PASSWORD", "KEY_ALIAS", "KEY_PASSWORD", "SIGNING_CERT_SHA256"):

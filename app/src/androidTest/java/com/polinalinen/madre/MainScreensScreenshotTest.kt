@@ -17,6 +17,7 @@ import com.polinalinen.madre.ui.razvorot.RazvorotSceneActivity
 import com.polinalinen.madre.ui.razvorot.RazvorotScenes
 import com.polinalinen.madre.ui.razvorot.Atmosphere
 import com.polinalinen.madre.ui.razvorot.debugCurlFold
+import com.polinalinen.madre.ui.razvorot.point
 import java.io.ByteArrayOutputStream
 import java.security.MessageDigest
 import java.util.concurrent.CountDownLatch

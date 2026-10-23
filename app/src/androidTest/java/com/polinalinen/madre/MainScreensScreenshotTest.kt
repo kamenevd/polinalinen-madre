@@ -39,11 +39,9 @@ class MainScreensScreenshotTest {
             try { rule.waitUntil(15_000) {
                 val state=rule.onNodeWithTag("scene-$scene").fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription).orEmpty()
                 check(!state.startsWith("SLIDE:")){"Native GL fixture failed: $state"}
-                // SwiftShader reports timestamp0 for its first static buffer.
-                // Do not fake a consumed count: real printed paper is attested
-                // by the Window PixelCopy pixel assertions in capture() below.
-                // The separate runtime gesture smoke still requires count>0.
-                state.startsWith("GLES2:")
+                // First-consumer redraw must reach a genuinely consumed paper
+                // buffer; PixelCopy also proves actual ink/paper below.
+                state.startsWith("GLES2:") && (state.split(':').getOrNull(1)?.toIntOrNull()?:0)>0
             } } catch(error:ComposeTimeoutException) { throw AssertionError("Static GL presentation: ${rule.onNodeWithTag("scene-$scene").fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription)}\n${rule.onRoot().printToString()}",error) }
         }
         if(scene.startsWith("starter-")) {

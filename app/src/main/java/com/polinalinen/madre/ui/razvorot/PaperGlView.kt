@@ -34,6 +34,7 @@ internal class PaperGlView(context: Context, private val failure: (String) -> Un
     private var frame: PaperGlFrame? = null
     private val presentation=PaperPresentation()
     private var canStamp=false
+    private var firstConsumerRedraw=false
     private var pendingTextures:List<Bitmap> = emptyList()
     private val textures = linkedMapOf<Bitmap, Int>()
     private val nx = 40
@@ -60,6 +61,7 @@ internal class PaperGlView(context: Context, private val failure: (String) -> Un
     override fun onSurfaceTextureAvailable(surface: SurfaceTexture, width: Int, height: Int) {
         handler.post {
             surfaceWidth = width; surfaceHeight = height
+            firstConsumerRedraw=false
             runCatching {
                 stage="egl-initialize"
                 display = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY)
@@ -103,6 +105,15 @@ internal class PaperGlView(context: Context, private val failure: (String) -> Un
         val paper=presentation.consumed(surface.timestamp)
         if(com.polinalinen.madre.BuildConfig.DEBUG)android.util.Log.d("MadrePaperGL","consumed timestamp=${surface.timestamp} paper=$paper")
         if(paper)presented()
+        if(surface.timestamp==0L)handler.post {
+            // The first TextureView consumer latch can expose its initial empty
+            // buffer. Re-present the CURRENT real GL frame once after that latch;
+            // animations normally do this naturally, static pages must do it too.
+            if(!stopped && program!=0 && !firstConsumerRedraw) {
+                firstConsumerRedraw=true
+                safeDraw()
+            }
+        }
     }
     override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
         handler.post { releaseGl(); surface.release(); worker.quitSafely() }

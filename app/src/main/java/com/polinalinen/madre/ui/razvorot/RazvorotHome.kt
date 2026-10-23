@@ -1,11 +1,13 @@
 package com.polinalinen.madre.ui.razvorot
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
-import androidx.compose.material3.*
+import androidx.compose.material3.Text
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
@@ -39,7 +41,7 @@ import com.polinalinen.madre.ui.components.bookAction
     var settings by remember{mutableStateOf(false)}
     val p=LocalPaper.current
     BackHandler(enabled=catalog||section!=0){catalog=false;section=0;onSectionChanged(0)}
-    Column(Modifier.fillMaxSize().background(p.bg).safeDrawingPadding()) {
+    Column(Modifier.fillMaxSize().paperBackground().safeDrawingPadding()) {
         Box(Modifier.weight(1f)) {
             when(section) {
                 0 -> if(catalog)ChapterCatalog(recipes,onOpenRecipe,{catalog=false},{settings=true})
@@ -51,7 +53,7 @@ import com.polinalinen.madre.ui.components.bookAction
                                     BookText(timerDigits(remaining),30,color=p.acc)
                                     Column(Modifier.padding(start=14.dp)) {SmallLabel("В ПЕЧИ · ШАГ ${s.currentStepIndex+1} ИЗ ${s.recipe.timeline.size}");BookText(s.recipe.name,18)}
                                 }
-                                Row {TextButton({onContinueReading(s)},Modifier.weight(1f).heightIn(min=48.dp)){Text("Продолжить чтение")};TextButton({onOpenTimer(s.id)},Modifier.weight(1f).heightIn(min=48.dp)){Text("К таймеру")}}
+                                Row {PaperTextButton({onContinueReading(s)},Modifier.weight(1f).heightIn(min=48.dp)){Text("Продолжить чтение")};PaperTextButton({onOpenTimer(s.id)},Modifier.weight(1f).heightIn(min=48.dp)){Text("К таймеру")}}
                             }
                         }
                     }
@@ -73,7 +75,7 @@ import com.polinalinen.madre.ui.components.bookAction
 }
 @Composable internal fun SpineBar(section:Int,onSelect:(Int)->Unit) {
     val p=LocalPaper.current
-    Row(Modifier.fillMaxWidth().background(p.bg.copy(alpha=.92f)).drawBehind{drawLine(p.line,Offset.Zero,Offset(size.width,0f),1.dp.toPx())}.height(IntrinsicSize.Min).heightIn(min=70.dp).testTag("spine-navigation"),verticalAlignment=Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().background(p.glass).drawBehind{drawLine(p.line,Offset.Zero,Offset(size.width,0f),1.dp.toPx())}.height(IntrinsicSize.Min).heightIn(min=70.dp).testTag("spine-navigation"),verticalAlignment=Alignment.CenterVertically) {
             val labels=listOf("Читать","Печь","Закваска","Полка")
             val icons=listOf(Icons.Outlined.MenuBook,Icons.Outlined.LocalFireDepartment,Icons.Outlined.Science,Icons.Outlined.CollectionsBookmark)
             labels.forEachIndexed { i,label ->
@@ -96,7 +98,7 @@ import com.polinalinen.madre.ui.components.bookAction
     val sessions by viewModel.sessions.collectAsState()
     val remaining by viewModel.remainingFor(sessionId).collectAsState()
     val session=sessions.find{it.id==sessionId}
-    Box(Modifier.fillMaxSize().background(LocalPaper.current.bg).safeDrawingPadding()) {
+    Box(Modifier.fillMaxSize().paperBackground().safeDrawingPadding()) {
         if(session==null)Column(Modifier.padding(22.dp)){BookText("Выпечка закрыта",32);PaperButton("К книге",onBack)}
         else BakingPaper(session,remaining,{viewModel.togglePause(sessionId)},{viewModel.advanceStep(sessionId);if(viewModel.session(sessionId)?.isCompleted==true)onComplete()},onDetails,onBack)
     }

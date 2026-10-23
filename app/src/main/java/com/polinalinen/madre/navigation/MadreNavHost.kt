@@ -1,5 +1,6 @@
 package com.polinalinen.madre.navigation
 
+import com.polinalinen.madre.ui.kit.*
 import android.content.Context
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.unit.dp
@@ -38,9 +39,9 @@ import com.polinalinen.madre.ui.screens.ShelfScreen
 import com.polinalinen.madre.ui.screens.StarterDiaryScreen
 import com.polinalinen.madre.shelf.FamilyShelf
 import com.polinalinen.madre.viewmodel.ShelfViewModel
-import com.polinalinen.madre.ui.theme.CalmModeSetting
-import com.polinalinen.madre.ui.theme.LocalCalmMode
-import com.polinalinen.madre.ui.theme.SharedPreferencesFlagStore
+import com.polinalinen.madre.ui.kit.CalmModeSetting
+import com.polinalinen.madre.ui.kit.LocalCalmMode
+import com.polinalinen.madre.ui.kit.SharedPreferencesFlagStore
 import com.polinalinen.madre.viewmodel.BakingViewModel
 import com.polinalinen.madre.viewmodel.FeedingSaveState
 import com.polinalinen.madre.viewmodel.FamilyBookViewModel
@@ -213,7 +214,7 @@ fun MadreNavHost(
                     onDiary = { navController.navigate(MadreDestinations.STARTER_DETAIL) },
                     onSettings = { navController.navigate(MadreDestinations.SETTINGS) },
                     shelf = { ShelfScreen(myName, bakeRecords, { navController.navigate(MadreDestinations.SETTINGS_SHELF) },
-                        { owner -> navController.navigate(MadreDestinations.bookStats(owner)) }, familyBookState.account, shelfViewModel,razvorot=true) },
+                        { owner -> navController.navigate(MadreDestinations.bookStats(owner)) }, familyBookState.account, shelfViewModel) },
                 )
             }
             composable(MadreDestinations.RECIPE_DETAIL) { backStackEntry ->
@@ -369,7 +370,6 @@ fun MadreNavHost(
                     onOpenBook = { ownerId -> navController.navigate(MadreDestinations.bookStats(ownerId)) },
                     account = familyBookState.account,
                     shelfViewModel = shelfViewModel,
-                    razvorot = true,
                 ) }
 
                 SpineBar(3) { section -> if(section!=3) {navController.previousBackStackEntry?.savedStateHandle?.set("home_section",section);navController.popBackStack()} }

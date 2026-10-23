@@ -1,3 +1,15 @@
+# Мадре — Единый стиль / UI kit, текущий этап PR61
+## Активный этап, 23.10.2026 (приоритетнее исторического журнала ниже)
+- Канон STYLE-SYSTEM.md §1–4 + SPEC §5/10; NAV-SIMPLIFY прочитан только как граница следующего этапа. Текущая поставка минимум QA7.0.5(41), прежняя QA7.0.4(40) уже доставлена и принята по F.
+- Один writer в той же ветке. Реальный ui/kit владеет темой, всеми полями/контролами/шторками/окнами, статическими Literata/Manrope, четырьмя палитрами, зерном/insets. CalmMode и ключи чтения сохранены. Вне kit только PaperType/LocalPaper и читательские primitives Text/Icon.
+- Не меняются backend, Room/данные, рецепты, таймеры/уведомления, разрешения, согласия, фото-поток и семейные настройки. CoverPage, ChapterCatalog, BakingTimerScreen, калькулятор и «Бросить» получают только совместимость общих токенов — без отдельной перекомпоновки до NAV.
+- Готово: compile + критичные JVM + StyleBoundary + ровно20 настоящих412×915 PNG; reading-sheet явно dawn/day/evening/night. Собственный PaperSwitch: тонкий трек, terracotta, без M3 thumb. Curl-night для визуального просмотра narrow rim/AO×1.6, без новых pixel-probes или GLES blocker.
+- Legacy330→0, new0: удалить лишь мигрированные записи baseline, разрешить только точный path+package ui/kit. Папочных legacy/NAV исключений нет. Мёртвый production HomeScreen удалён, живые Home/TocLine/HomeCopy сохранены; прежняя вёрстка используется только test-only LegacyHomeFixture для сохранённых interaction-контрактов. Мёртвая ветка ShelfScreen=false удалена после проверки обоих production callers.
+- После exact-head Android quality success: QA manifest com.polinalinen.madre.qa/версия/code/hash, архивmadre-apk+INDEX/latest, штатный send Диме166739700 с provider receipt; пути PNG/APK контроллеру9d5e для единственного parent review. Не ждать styleOK, optional instrumented/manual не блокируют APK. Следом NAV отдельной версией; controller продолжает без ожидания человека.
+- Merge/tag/release/RuStore/production/устройства/Алиса/PAYG запрещены. Нет8ч STOP; чекпоинты30–60мин, каждые8ч APK-путь и продолжение. Только реальный внешний блокер или та же ошибка3прохода без прогресса.
+- Проверенный исходный bundle: /root/.hermes/work/madre-razvorot-artifacts-61/ui-kit-bcbe770-source.bundle; headbcbe7703665fe19f917bfde4835587c56399d238; SHA256f5771b76fa14c43a84f7f1591ec6aa2b19fd4edb7b1d60cf74f4a286ca9bd3cf. Откат выборочно из bundle/исходного commit, не reset--hard.
+
+## Исторический журнал предыдущих этапов (не новые гейты)
 # Мадре 7.0.1 — Разворот
 ## Приоритетная политика PR61 от Димы, 23.10.2026 17:08–17:15
 - Уточнение NAV-SIMPLIFY17:27: после этого trim → общий kit → NAV отдельной версией → оставшиеся13SCREENS. Канон следующего NAV: concept-F-v3/NAV-SIMPLIFY.md. На kit не шлифовать удаляемые CoverPage/ChapterCatalog/BakingTimerScreen, именно «Бросить» ConfirmDialog и отдельный калькулятор; до NAV функции сохранять. Потолок8ч отменён: каждые8ч checkpoint+путь APK, не STOP; этот narrow oneshot всё равно возвращает результат контроллеру сразу после доставки.

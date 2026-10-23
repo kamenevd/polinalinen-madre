@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.screens
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -36,12 +36,9 @@ import com.polinalinen.madre.model.RecipeScaler
 import com.polinalinen.madre.model.StepType
 import com.polinalinen.madre.notifications.BakingProgress
 import com.polinalinen.madre.ui.components.BackLabel
-import com.polinalinen.madre.ui.components.BookButton
-import com.polinalinen.madre.ui.components.BookButtonVariant
 import com.polinalinen.madre.ui.components.ConfirmDialog
 import com.polinalinen.madre.ui.components.PageLabel
 import com.polinalinen.madre.ui.components.TextAction
-import com.polinalinen.madre.ui.theme.AppColors
 import com.polinalinen.madre.viewmodel.BakingViewModel
 
 /**
@@ -57,7 +54,7 @@ fun BakingTimerScreen(
     onComplete: () -> Unit,
     viewModel: BakingViewModel = viewModel(),
 ) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     val sessions by viewModel.sessions.collectAsState()
     val remainingMap by viewModel.remainingSeconds.collectAsState()
     val s = sessions.find { it.id == sessionId }
@@ -88,11 +85,11 @@ fun BakingTimerScreen(
         ?.title
         ?.takeIf { it.isNotBlank() && !s.isLastStep }
 
-    Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
+    PaperSurface(color = colors.bg, modifier = Modifier.fillMaxSize()) {
         Column(
             Modifier
                 .fillMaxSize()
-                .statusBarsPadding()
+
                 .navigationBarsPadding(),
         ) {
             Column(
@@ -111,8 +108,7 @@ fun BakingTimerScreen(
                 Text(
                     "готовится ×${s.scaleFactor.toInt().coerceAtLeast(1)} ${portionWord(s.scaleFactor.toInt())}" +
                         if (otherActive > 0) " · ещё готовим: $otherActive" else "",
-                    color = colors.crust,
-                    fontFamily = FontFamily.Serif,
+                    color = colors.acc,style = PaperType.body,
                     fontStyle = FontStyle.Italic,
                     fontSize = 11.5.sp,
                     modifier = Modifier.padding(horizontal = 22.dp),
@@ -120,8 +116,7 @@ fun BakingTimerScreen(
 
                 Text(
                     step.title,
-                    color = colors.espresso,
-                    fontFamily = FontFamily.Serif,
+                    color = colors.ink,style = PaperType.body,
                     fontStyle = FontStyle.Italic,
                     fontSize = 20.sp,
                     modifier = Modifier.padding(horizontal = 22.dp),
@@ -129,9 +124,8 @@ fun BakingTimerScreen(
 
                 Text(
                     BakingTimerCopy.timerText(remaining),
-                    color = if (urgent) colors.terracotta else colors.espresso,
-                    fontFamily = FontFamily.Serif,
-                    fontWeight = FontWeight.Bold,
+                    color = if (urgent) colors.rib else colors.ink,style = PaperType.body,
+                    fontWeight = FontWeight.Medium,
                     // На нуле здесь стоят слова, а не цифры, и кегль у них свой.
                     fontSize = BakingTimerCopy.timerSizeSp(remaining).sp,
                     letterSpacing = (-3).sp,
@@ -149,8 +143,7 @@ fun BakingTimerScreen(
                 )
                 Text(
                     BakingTimerCopy.moodLine(isWait, s.isPaused, remaining),
-                    color = colors.cocoa,
-                    fontFamily = FontFamily.Serif,
+                    color = colors.ink2,style = PaperType.body,
                     fontStyle = FontStyle.Italic,
                     fontSize = 13.sp,
                     textAlign = TextAlign.Center,
@@ -163,8 +156,7 @@ fun BakingTimerScreen(
                 // Чуть больше воздуха до кнопок (bottom 28 вместо 14).
                 Text(
                     RecipeScaler.scaledStepText(step.description, s.scaleFactor, quantityBindings),
-                    color = colors.espresso,
-                    fontFamily = FontFamily.Serif,
+                    color = colors.ink,style = PaperType.body,
                     fontSize = 15.sp,
                     lineHeight = 22.sp,
                     modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 14.dp, bottom = 28.dp),
@@ -181,7 +173,7 @@ fun BakingTimerScreen(
                             .fillMaxWidth()
                             .drawBehind {
                                 drawRoundRect(
-                                    colors.terracotta,
+                                    colors.rib,
                                     style = Stroke(1.dp.toPx()),
                                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx()),
                                 )
@@ -190,8 +182,7 @@ fun BakingTimerScreen(
                     ) {
                         Text(
                             "скоро понадобится мягкое масло — достаньте его согреться",
-                            color = colors.espresso,
-                            fontFamily = FontFamily.Serif,
+                            color = colors.ink,style = PaperType.body,
                             fontSize = 13.sp,
                         )
                     }
@@ -206,18 +197,17 @@ fun BakingTimerScreen(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.Bottom,
                 ) {
-                    BookButton(
+                    PaperButton(
                         label = if (s.isPaused) "Продолжить" else "Пауза",
                         onClick = { viewModel.togglePause(s.id) },
-                        variant = BookButtonVariant.SECONDARY,
+                        variant = PaperButtonVariant.SECONDARY,
                         modifier = Modifier.weight(1f),
                     )
                     Column(Modifier.weight(1f)) {
                         if (nextStepTitle != null) {
                             Text(
                                 nextStepTitle,
-                                color = colors.crust,
-                                fontFamily = FontFamily.Serif,
+                                color = colors.acc,style = PaperType.body,
                                 fontStyle = FontStyle.Italic,
                                 fontSize = 12.sp,
                                 textAlign = TextAlign.Center,
@@ -227,7 +217,7 @@ fun BakingTimerScreen(
                                     .padding(bottom = 6.dp),
                             )
                         }
-                        BookButton(
+                        PaperButton(
                             label = if (s.isLastStep) "Готово" else "Дальше →",
                             onClick = {
                                 viewModel.advanceStep(s.id)
@@ -277,30 +267,28 @@ fun BakingTimerScreen(
  */
 @Composable
 private fun ClosedBakingPage(onBack: () -> Unit) {
-    val colors = AppColors.current
-    Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
+    val colors = LocalPaper.current
+    PaperSurface(color = colors.bg, modifier = Modifier.fillMaxSize()) {
         Column(
-            Modifier.statusBarsPadding().fillMaxSize().padding(horizontal = 22.dp),
+            Modifier.fillMaxSize().padding(horizontal = 22.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
                 "эта выпечка уже закрыта",
-                color = colors.espresso,
-                fontFamily = FontFamily.Serif,
+                color = colors.ink,style = PaperType.body,
                 fontSize = 20.sp,
                 textAlign = TextAlign.Center,
             )
             Text(
                 "страница таймера живёт, пока идёт выпечка — эта своё отходила",
-                color = colors.cocoa,
-                fontFamily = FontFamily.Serif,
+                color = colors.ink2,style = PaperType.body,
                 fontStyle = FontStyle.Italic,
                 fontSize = 13.sp,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 8.dp, bottom = 24.dp),
             )
-            BookButton(label = "На первую полосу", onClick = onBack)
+            PaperButton(label = "На первую полосу", onClick = onBack)
         }
     }
 }

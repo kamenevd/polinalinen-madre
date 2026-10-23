@@ -1,12 +1,14 @@
 package com.polinalinen.madre.ui.razvorot
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
-import androidx.compose.material3.*
+import androidx.compose.material3.Text
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
@@ -49,7 +51,7 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
         val bindings=remember(session.recipe){RecipeScaler.scalableBindings(session.recipe)}
         BookText(RecipeScaler.scaledStepText(session.currentStep.description,session.scaleFactor,bindings),16,Modifier.padding(top=24.dp),color=p.ink2,lineHeight=25.sp)
         val temperatures=Regex("(\\d{2,3})\\s*[°º]\\s*[cсCС]?").findAll(session.currentStep.description).map{it.groupValues[1]+"°"}.distinct().toList()
-        if(temperatures.isNotEmpty())Row(Modifier.padding(top=12.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)) {temperatures.forEach{Text(it,Modifier.background(p.bg2,RoundedCornerShape(16.dp)).padding(horizontal=12.dp,vertical=8.dp),fontFamily=Manrope,fontWeight=FontWeight.SemiBold,color=p.ink2)}}
+        if(temperatures.isNotEmpty())Row(Modifier.padding(top=12.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)) {temperatures.forEach{Text(it,Modifier.background(p.bg2,RoundedCornerShape(16.dp)).padding(horizontal=12.dp,vertical=8.dp),style = PaperType.caption,fontWeight=FontWeight.SemiBold,color=p.ink2)}}
         session.recipe.timeline.getOrNull(session.currentStepIndex+1)?.let { SmallLabel("ДАЛЬШЕ · ${it.title} · ${it.durationMinutes} МИН",Modifier.padding(top=16.dp)) }
         Row(Modifier.fillMaxWidth().padding(top=24.dp),horizontalArrangement=Arrangement.spacedBy(10.dp)) {
             PaperButton(if(session.isPaused)"Продолжить" else "Пауза",onPause,Modifier.weight(1f))
@@ -65,8 +67,8 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
     val progress=timerProgress(session.currentStep.durationMinutes*60L,remaining)
     DisposableEffect(view){val old=view.keepScreenOn;view.keepScreenOn=true;onDispose{view.keepScreenOn=old}}
     BackHandler(onBack=onClose)
-    Box(Modifier.fillMaxSize().background(Color(0xFF0A0807)).clickable(onClickLabel="Свернуть таймер",onClick=onClose).safeDrawingPadding()) {
-        Canvas(Modifier.fillMaxSize()) {drawRect(Brush.radialGradient(listOf(Color(0x66552A12),Color.Transparent),Offset(size.width*.5f,size.height),size.height*.7f))}
+    Box(Modifier.fillMaxSize().background(Illustration.OvenDark).clickable(onClickLabel="Свернуть таймер",onClick=onClose).safeDrawingPadding()) {
+        Canvas(Modifier.fillMaxSize()) {drawRect(Brush.radialGradient(listOf(Illustration.OvenGlow,Color.Transparent),Offset(size.width*.5f,size.height),size.height*.7f))}
         Column(Modifier.align(Alignment.CenterStart).padding(26.dp)) {
             SmallLabel("${session.currentStep.title.uppercase()} · ШАГ ${session.currentStepIndex+1} ИЗ ${session.recipe.timeline.size}",color=NightPaper.acc)
             TimerNumber(if(remaining>=3600)"${remaining/3600}ч" else "%02d".format(remaining/60),progress,150.sp,(-8).sp,NightPaper.ink)
@@ -88,7 +90,7 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
         val level=starterCycleLevel(hours,profile.peakHours,profile.cycleHours)
         StarterJar(phase!=GrowthPhase.EMPTY,level)
         SmallLabel("УРОВЕНЬ ПО ЦИКЛУ КОРМЛЕНИЯ · НЕ ИЗМЕРЕНИЕ")
-        val phaseColor=if(phase==GrowthPhase.PEAK)if(LocalAtmosphere.current==Atmosphere.NIGHT)Color(0xFFA2C084) else Color(0xFF5F7D45) else p.acc
+        val phaseColor=if(phase==GrowthPhase.PEAK)p.sage else p.acc
         Box(Modifier.padding(top=10.dp).background(phaseColor.copy(alpha=.12f),RoundedCornerShape(18.dp)).padding(horizontal=14.dp,vertical=6.dp)) {
             BookText(when(phase){GrowthPhase.EMPTY->"Пока без кормлений";GrowthPhase.LAG->"Набирается сил";GrowthPhase.GROWING->"Растёт";GrowthPhase.PEAK->"На пике по времени";GrowthPhase.DECLINING->"Пик позади";GrowthPhase.HUNGRY->"Пора покормить"},18,color=phaseColor)
         }
@@ -108,16 +110,16 @@ internal fun starterCycleLevel(hours:Float?,peak:Float,cycle:Float):Float {
         stateDescription="Уровень по циклу: ${(level*100).roundToInt()}%"
     }.padding(horizontal=38.dp,vertical=16.dp)) {
         val w=size.width;val h=size.height
-        drawOval(Color(0xFFB59B78),Offset(w*.06f,0f),Size(w*.88f,20.dp.toPx()))
-        drawRoundRect(Brush.verticalGradient(listOf(Color(0xFFB59B78),Color(0xFF806044))),Offset(w*.06f,8.dp.toPx()),Size(w*.88f,18.dp.toPx()),CornerRadius(5.dp.toPx()))
-        drawOval(Color(0xFFCEBA9C),Offset(w*.06f,0f),Size(w*.88f,16.dp.toPx()))
+        drawOval(Illustration.JarLid,Offset(w*.06f,0f),Size(w*.88f,20.dp.toPx()))
+        drawRoundRect(Brush.verticalGradient(listOf(Illustration.JarLid,Illustration.JarLidShadow)),Offset(w*.06f,8.dp.toPx()),Size(w*.88f,18.dp.toPx()),CornerRadius(5.dp.toPx()))
+        drawOval(Illustration.JarLidTop,Offset(w*.06f,0f),Size(w*.88f,16.dp.toPx()))
         drawRoundRect(p.ink2.copy(alpha=.3f),Offset(w*.1f,28.dp.toPx()),Size(w*.8f,h-28.dp.toPx()),CornerRadius(22.dp.toPx()),style=Stroke(2.dp.toPx()))
         if(filled){
             val top=h*(.94f-.72f*level.coerceIn(0f,1f))
             val dough=Path().apply{moveTo(w*.13f,top);for(i in 0..30){val x=w*.13f+w*.74f*i/30;lineTo(x,top+sin(i*.7f)*5.dp.toPx())};lineTo(w*.87f,h*.94f);quadraticTo(w*.5f,h*1.02f,w*.13f,h*.94f);close()}
-            drawPath(dough,Brush.verticalGradient(listOf(Color(0xFFE4CFAD),Color(0xFFB49468))))
+            drawPath(dough,Brush.verticalGradient(listOf(Illustration.JarDough,Illustration.JarDoughShadow)))
             drawLine(p.acc.copy(alpha=.6f),Offset(w*.08f,top),Offset(w*.92f,top),1.dp.toPx(),pathEffect=PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(),4.dp.toPx())))
-            repeat(36){i->val x=w*(.18f+(i*37%67)/100f);val y=top+(h*.94f-top)*(.1f+(i*19%80)/100f);drawCircle(Color(0xFFF8ECD7).copy(alpha=.65f),(2+i%4).dp.toPx(),Offset(x,y),style=Stroke(1.dp.toPx()))}
+            repeat(36){i->val x=w*(.18f+(i*37%67)/100f);val y=top+(h*.94f-top)*(.1f+(i*19%80)/100f);drawCircle(Illustration.JarBubble.copy(alpha=.65f),(2+i%4).dp.toPx(),Offset(x,y),style=Stroke(1.dp.toPx()))}
         }
         drawRoundRect(Color.White.copy(alpha=.3f),Offset(w*.16f,h*.17f),Size(5.dp.toPx(),h*.65f),CornerRadius(3.dp.toPx()))
     }

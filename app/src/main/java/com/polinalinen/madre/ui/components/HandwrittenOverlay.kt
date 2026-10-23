@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.components
 
+import com.polinalinen.madre.ui.kit.*
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -15,11 +16,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Redo
-import androidx.compose.material.icons.filled.Undo
+import androidx.compose.material.icons.outlined.Redo
+import androidx.compose.material.icons.outlined.Undo
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -43,7 +42,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.polinalinen.madre.ui.theme.AppColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -169,7 +167,7 @@ fun HandwrittenEditSurface(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     val context = androidx.compose.ui.platform.LocalContext.current
 
     // Cycle 16: rememberSaveable, а не remember. Рецепт переехал на LazyColumn,
@@ -204,27 +202,26 @@ fun HandwrittenEditSurface(
         ) {
             Text(
                 if (editing) "готово — вписать в книгу" else "редактировать от руки",
-                color = if (editing) colors.terracotta else colors.crust,
-                fontFamily = FontFamily.SansSerif,
+                color = if (editing) colors.rib else colors.acc,style = PaperType.caption,
                 fontSize = 10.sp,
                 letterSpacing = 2.sp,
                 modifier = Modifier
                     .weight(1f)
-                    .clickable {
+                    .then(bookAction("Рисование от руки") {
                         if (editing) currentStroke = emptyList()
                         editing = !editing
-                    },
+                    }),
             )
             if (editing) {
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     InkHistoryButton(
-                        icon = Icons.Filled.Undo,
+                        icon = Icons.Outlined.Undo,
                         description = "Убрать последний штрих",
                         enabled = history.canUndo,
                         onClick = { history = history.undo() },
                     )
                     InkHistoryButton(
-                        icon = Icons.Filled.Redo,
+                        icon = Icons.Outlined.Redo,
                         description = "Вернуть убранный штрих",
                         enabled = history.canRedo,
                         onClick = { history = history.redo() },
@@ -248,7 +245,7 @@ fun HandwrittenEditSurface(
 
             // Векторные штрихи: и сохранённые, и тот, что палец ведёт прямо сейчас.
             Canvas(Modifier.matchParentSize()) {
-                val ink = colors.espresso.copy(alpha = HandwrittenEdit.INK_ALPHA)
+                val ink = colors.ink.copy(alpha = HandwrittenEdit.INK_ALPHA)
                 val width = HandwrittenEdit.STROKE_WIDTH_DP.dp.toPx()
                 (history.strokes + listOf(currentStroke)).forEach { stroke ->
                     if (stroke.isEmpty()) return@forEach
@@ -299,14 +296,10 @@ private fun InkHistoryButton(
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
-    val colors = AppColors.current
-    IconButton(
+    val colors = LocalPaper.current
+    PaperIconButton(
         onClick = onClick,
         enabled = enabled,
-        colors = IconButtonDefaults.iconButtonColors(
-            contentColor = colors.espresso,
-            disabledContentColor = colors.flour,
-        ),
     ) {
         Icon(icon, contentDescription = description, modifier = Modifier.size(20.dp))
     }

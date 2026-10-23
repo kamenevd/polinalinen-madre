@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.razvorot
 
+import com.polinalinen.madre.ui.kit.*
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -22,6 +23,12 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.polinalinen.madre.data.repository.RecipeRepository
 import com.polinalinen.madre.model.*
 import com.polinalinen.madre.shelf.*
+import com.polinalinen.madre.ui.screens.*
+import com.polinalinen.madre.account.FamilyBookState
+import com.polinalinen.madre.viewmodel.FeedingSaveState
+import com.polinalinen.madre.data.db.entities.FeedingEntity
+import com.polinalinen.madre.data.db.entities.StorageLocation
+import com.polinalinen.madre.sourdough.profileForInterval
 import com.polinalinen.madre.sourdough.GrowthPhase
 import kotlinx.coroutines.runBlocking
 
@@ -52,10 +59,18 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
     val night=scene.endsWith("night")
     val recipe=recipes.firstOrNull()?:return
     val density=LocalDensity.current
-    CompositionLocalProvider(LocalPaperDebug provides debug,com.polinalinen.madre.ui.theme.LocalCalmMode provides false,LocalDensity provides Density(density.density,if(scene=="shelf-large")1.3f else density.fontScale)) {
+    CompositionLocalProvider(LocalPaperDebug provides debug,com.polinalinen.madre.ui.kit.LocalCalmMode provides false,LocalDensity provides Density(density.density,if(scene=="shelf-large")1.3f else density.fontScale)) {
         RazvorotTheme(preferences,force=forceAtmosphere ?: if(night)Atmosphere.NIGHT else Atmosphere.DAWN) {
             Box(Modifier.fillMaxSize().background(LocalPaper.current.bg).safeDrawingPadding().testTag("scene-$scene").semantics{stateDescription="${debug.renderer}:${debug.renderedFrames}:${debug.cachedPages}:${debug.reason}"}) {
                 when {
+                    scene=="kit" -> KitShowcase()
+                    scene=="settings" -> SettingsContent("Пекарь", {}, {}, {}, "Мадре", {}, 12, 42, 24, {}, true, {}, true, {}, "Демонстрационная семья", FamilyBookState.SignedOut, {}, {})
+                    scene=="feeding" || scene=="feeding-error" -> FeedingFormScreen({ _, _, _, _, _, _ -> }, {}, if (scene.endsWith("error")) FeedingSaveState.Error("Не удалось записать кормление. Попробуйте ещё раз.") else FeedingSaveState.Idle, 50)
+                    scene=="gallery-empty" -> PhotoGalleryScreen(emptyList(), {})
+                    scene=="diary" -> StarterDiaryScreen(42, GrowthPhase.GROWING, profileForInterval(24),
+                        emptyList(), listOf(FeedingEntity(id=1, sourdoughConfigId=1, timestampMillis=1792731600000L,
+                            flourGrams=100, waterGrams=50, retainedStarterGrams=50, finalHydrationPercent=50,
+                            storageLocation=StorageLocation.KITCHEN)), {}, {}, {}, starterName="Мадре", currentYear=2026, nowMillis=1792735200000L)
                     scene=="font-compat" -> FontCompatibilityPage()
                     scene=="catalog" -> Column {Box(Modifier.weight(1f)){ChapterCatalog(recipes,{},{},{})};SpineBar(0){}}
                     scene.startsWith("reader-title") -> TitleLeaf(if(scene.contains("last"))recipes.last() else recipe,if(scene.contains("last"))recipes.lastIndex else 0,recipes.size)
@@ -158,9 +173,9 @@ internal fun debugCurlFold(w:Float,h:Float,scene:String):PaperFold {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp)) {
         BookText("Бумага",36)
         SmallLabel("${debug.renderer} · ${debug.renderedFrames} КАДРОВ · FPS UI %.1f · ПЕРЕВОРОТ %.0f МС".format(debug.fps,debug.duration))
-        Text("Показать сетку и оси");Switch(debug.grid,{debug.grid=it})
+        Text("Показать сетку и оси");PaperSwitch(debug.grid,{debug.grid=it})
         @Composable fun parameter(label:String,value:Float,range:ClosedFloatingPointRange<Float>,change:(Float)->Unit) {
-            Text("$label · %.1f".format(value));Slider(value,{change(it);revision++},valueRange=range)
+            Text("$label · %.1f".format(value));PaperSlider(value,{change(it);revision++},valueRange=range)
         }
         key(revision) {
             parameter("Радиус максимум",Curl.R_MAX,60f..100f){Curl.R_MAX=it}

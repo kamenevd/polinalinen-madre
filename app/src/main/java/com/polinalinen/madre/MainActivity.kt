@@ -1,5 +1,6 @@
 package com.polinalinen.madre
 
+import com.polinalinen.madre.ui.kit.*
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
@@ -12,7 +13,6 @@ import android.content.Context
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 import com.polinalinen.madre.navigation.MadreNavHost
-import com.polinalinen.madre.ui.theme.MadreTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
@@ -55,12 +55,10 @@ class MainActivity : ComponentActivity() {
         askForNotificationsOnce()
 
         setContent {
-            MadreTheme {
-                MadreNavHost(
-                    pendingSessionId = pendingSessionId,
-                    pendingFeeding = pendingFeeding,
-                )
-            }
+            MadreNavHost(
+                pendingSessionId = pendingSessionId,
+                pendingFeeding = pendingFeeding,
+            )
         }
     }
 

@@ -1,10 +1,11 @@
 package com.polinalinen.madre.ui.screens
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.polinalinen.madre.shelf.ShelfMember
-import com.polinalinen.madre.ui.theme.MadreTheme
+import com.polinalinen.madre.ui.kit.RazvorotTheme as MadreTheme
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith

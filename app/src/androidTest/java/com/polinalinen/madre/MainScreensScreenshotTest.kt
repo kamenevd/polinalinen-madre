@@ -1,5 +1,6 @@
 package com.polinalinen.madre
 
+import com.polinalinen.madre.ui.kit.*
 import android.graphics.Bitmap
 import android.os.ParcelFileDescriptor
 import android.os.Handler
@@ -15,13 +16,13 @@ import androidx.test.services.storage.TestStorage
 import com.google.common.truth.Truth.assertThat
 import com.polinalinen.madre.ui.razvorot.RazvorotSceneActivity
 import com.polinalinen.madre.ui.razvorot.RazvorotScenes
-import com.polinalinen.madre.ui.razvorot.Atmosphere
+import com.polinalinen.madre.ui.kit.Atmosphere
 import com.polinalinen.madre.ui.razvorot.debugCurlFold
 import com.polinalinen.madre.ui.razvorot.point
-import com.polinalinen.madre.ui.razvorot.DawnPaper
-import com.polinalinen.madre.ui.razvorot.DayPaper
-import com.polinalinen.madre.ui.razvorot.DuskPaper
-import com.polinalinen.madre.ui.razvorot.NightPaper
+import com.polinalinen.madre.ui.kit.DawnPaper
+import com.polinalinen.madre.ui.kit.DayPaper
+import com.polinalinen.madre.ui.kit.DuskPaper
+import com.polinalinen.madre.ui.kit.NightPaper
 import com.polinalinen.madre.ui.razvorot.PaperLight
 import com.polinalinen.madre.ui.razvorot.captureName
 import java.io.ByteArrayOutputStream

@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.photo
 
+import com.polinalinen.madre.ui.kit.*
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
@@ -15,7 +16,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -40,16 +40,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.polinalinen.madre.ui.components.BackLabel
-import com.polinalinen.madre.ui.components.BookButton
-import com.polinalinen.madre.ui.components.BookButtonVariant
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.PageLabel
 import com.polinalinen.madre.ui.components.TapCycle
 import com.polinalinen.madre.ui.components.TapCycleRow
-import com.polinalinen.madre.ui.theme.AppColors
 import com.polinalinen.madre.utils.PhotoStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -79,16 +75,16 @@ fun PhotoDesignerDialog(
     onCancel: () -> Unit,
     onSaved: (String) -> Unit,
 ) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
     val palette = remember(colors) {
         PhotoDecorRenderer.Palette(
-            paper = colors.paper.toArgb(),
-            cream = colors.cream.toArgb(),
-            ink = colors.espresso.toArgb(),
-            accent = colors.cocoa.toArgb(),
+            paper = colors.bg.toArgb(),
+            cream = colors.card.toArgb(),
+            ink = colors.ink.toArgb(),
+            accent = colors.ink2.toArgb(),
         )
     }
 
@@ -135,14 +131,14 @@ fun PhotoDesignerDialog(
         }
     }
 
-    Dialog(
+    PaperWindow(
         onDismissRequest = onCancel,
         properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false),
     ) {
-        Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
+        PaperSurface(color = colors.bg, modifier = Modifier.fillMaxSize()) {
             Column(
                 Modifier
-                    .statusBarsPadding()
+
                     .navigationBarsPadding()
                     .verticalScroll(rememberScrollState())
                     .padding(bottom = 20.dp)
@@ -158,16 +154,14 @@ fun PhotoDesignerDialog(
 
                 Text(
                     "как ляжет карточка",
-                    color = colors.espresso,
-                    fontFamily = FontFamily.Serif,
-                    fontWeight = FontWeight.Bold,
+                    color = colors.ink,style = PaperType.body,
+                    fontWeight = FontWeight.Medium,
                     fontSize = 26.sp,
                     modifier = Modifier.padding(horizontal = 22.dp),
                 )
                 Text(
                     "рамка, тёплый свет и один оттиск — всё рисуется здесь же, на столе",
-                    color = colors.cocoa,
-                    fontFamily = FontFamily.Serif,
+                    color = colors.ink2,style = PaperType.body,
                     fontStyle = FontStyle.Italic,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(horizontal = 22.dp, vertical = 4.dp),
@@ -190,16 +184,14 @@ fun PhotoDesignerDialog(
                         )
                         unreadable -> Text(
                             "этот кадр не читается — попробуйте другой",
-                            color = colors.terracotta,
-                            fontFamily = FontFamily.Serif,
+                            color = colors.rib,style = PaperType.body,
                             fontStyle = FontStyle.Italic,
                             fontSize = 13.sp,
                             textAlign = TextAlign.Center,
                         )
                         else -> Text(
                             "проявляется…",
-                            color = colors.cocoa,
-                            fontFamily = FontFamily.Serif,
+                            color = colors.ink2,style = PaperType.body,
                             fontStyle = FontStyle.Italic,
                             fontSize = 13.sp,
                         )
@@ -240,8 +232,7 @@ fun PhotoDesignerDialog(
                 Text(
                     if (decor.stamp == null) "оттиск не обязателен — в круге есть «без оттиска»"
                     else "оттиск выбран — угол можно сменить следующей строкой",
-                    color = colors.cocoa,
-                    fontFamily = FontFamily.Serif,
+                    color = colors.ink2,style = PaperType.body,
                     fontStyle = FontStyle.Italic,
                     fontSize = 11.sp,
                     modifier = Modifier.padding(horizontal = 22.dp),
@@ -263,19 +254,19 @@ fun PhotoDesignerDialog(
                 }
 
                 Spacer(Modifier.height(18.dp))
-                BookButton(
+                PaperButton(
                     label = if (saving) "вклеиваем…" else "Готово",
                     enabled = source != null && !saving,
                     onClick = { finish(decor) },
                     modifier = Modifier.padding(horizontal = 22.dp),
                     repeatable = true,
                 )
-                BookButton(
+                PaperButton(
                     label = "Без оформления",
                     enabled = !saving,
                     onClick = { finish(null) },
                     modifier = Modifier.padding(horizontal = 22.dp, vertical = 10.dp),
-                    variant = BookButtonVariant.SECONDARY,
+                    variant = PaperButtonVariant.SECONDARY,
                     repeatable = true,
                 )
             }

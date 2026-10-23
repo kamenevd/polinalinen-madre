@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.components
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
@@ -9,9 +10,9 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.unit.dp
-import com.polinalinen.madre.ui.theme.Cocoa
-import com.polinalinen.madre.ui.theme.Espresso
-import com.polinalinen.madre.ui.theme.Flour
+import com.polinalinen.madre.ui.kit.Illustration.CrumbInk as Cocoa
+import com.polinalinen.madre.ui.kit.Illustration.PageInk as Espresso
+import com.polinalinen.madre.ui.kit.Illustration.CrumbFlour as Flour
 import kotlin.random.Random
 
 /**

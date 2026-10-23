@@ -1,10 +1,12 @@
 package com.polinalinen.madre.ui.razvorot
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.*
+import androidx.compose.material3.Text
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
@@ -40,7 +42,7 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
         val density = androidx.compose.ui.platform.LocalDensity.current
         val width = with(density) { (maxWidth-52.dp).roundToPx() }.coerceAtLeast(1)
         val height = with(density) { (maxHeight-160.dp).roundToPx() }.coerceAtLeast(200)
-        val style = TextStyle(fontFamily=Literature,fontSize=preferences.textSize.sp,lineHeight=(preferences.textSize*25f/16f).sp)
+        val style = PaperType.body.copy(fontSize=preferences.textSize.sp,lineHeight=(preferences.textSize*25f/16f).sp)
         val leaves = remember(recipes,width,height,preferences.textSize,preferences.portions,density.fontScale) {
             buildList {
                 recipes.forEachIndexed { ci,r ->
@@ -129,10 +131,10 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
                         val active=activeSessions.firstOrNull{it.recipe.id==recipe.id}
                         PaperButton(active?.let{"Печь · шаг ${it.currentStepIndex+1}"}?:"Печь · ×${preferences.portions.toInt()}",{if(active!=null)onContinueBake(active.id)else onBake(recipe)},Modifier.weight(1f),primary=true)
                     }
-                    TextButton({onCalculator(recipe)},Modifier.fillMaxWidth().heightIn(min=48.dp)) {Text("Расчёт и заметки",fontSize=12.sp)}
+                    PaperTextButton({onCalculator(recipe)},Modifier.fillMaxWidth().heightIn(min=48.dp)) {Text("Расчёт и заметки",fontSize=12.sp)}
                 }
             }
-        } else Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) { CircularProgressIndicator() }
+        } else Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) { PaperProgress() }
         if(settings)ReadingSettings(preferences){settings=false}
     }
 }
@@ -142,7 +144,7 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
         Box(Modifier.fillMaxWidth().fillMaxHeight(.46f)) {
             Image(painterResource(recipePhoto(recipe.id)),recipe.name,Modifier.fillMaxSize().drawWithContent { drawContent();drawRect(Brush.verticalGradient(listOf(androidx.compose.ui.graphics.Color.Transparent,p.bg),startY=size.height*.65f)) },contentScale=ContentScale.Crop)
             Ribbon(Modifier.align(Alignment.TopEnd).padding(end=48.dp))
-            Text("%02d".format(chapter+1),Modifier.align(Alignment.BottomEnd).offset(y=22.dp).padding(end=14.dp),fontFamily=Literature,fontWeight=FontWeight.ExtraLight,fontSize=150.sp,letterSpacing=(-6).sp,color=p.ink,style=TextStyle(drawStyle=Stroke(width=1.3f)))
+            Text("%02d".format(chapter+1),Modifier.align(Alignment.BottomEnd).offset(y=22.dp).padding(end=14.dp),style = PaperType.body.merge(TextStyle(drawStyle=Stroke(width=1.3f))),fontWeight=FontWeight.ExtraLight,fontSize=150.sp,letterSpacing=(-6).sp,color=p.ink)
         }
         Column(Modifier.padding(horizontal=26.dp)) {
             SmallLabel("ГЛАВА %02d ИЗ %02d · %s".format(chapter+1,count,recipe.totalTime()))
@@ -170,7 +172,7 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
         Column(Modifier.weight(1f)) {
             if(step!=null)SmallLabel(if(actual!=null && recipe!=null)stepOverline(recipe,step-1) else heading.substringAfterLast(" · "))
             BookText(actual?.title ?: if(step!=null)heading.substringAfter(" · ").substringBeforeLast(" · ") else heading,18,Modifier.padding(bottom=6.dp),italic=actual?.type==com.polinalinen.madre.model.StepType.WAIT,weight=FontWeight.Medium)
-            Text(text,fontFamily=Literature,fontWeight=FontWeight.Normal,fontSize=preferences.textSize.sp,lineHeight=(preferences.textSize*25f/16f).sp,color=LocalPaper.current.ink2)
+            Text(text,style = PaperType.body,fontWeight=FontWeight.Normal,fontSize=preferences.textSize.sp,lineHeight=(preferences.textSize*25f/16f).sp,color=LocalPaper.current.ink2)
         }
     }
 }

@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.screens
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -16,7 +17,7 @@ import com.polinalinen.madre.data.db.entities.StorageLocation
 import com.polinalinen.madre.notifications.FeedingSchedule
 import com.polinalinen.madre.sourdough.GrowthPhase
 import com.polinalinen.madre.sourdough.profileForInterval
-import com.polinalinen.madre.ui.theme.MadreTheme
+import com.polinalinen.madre.ui.kit.RazvorotTheme as MadreTheme
 import java.util.Calendar
 import org.junit.Rule
 import org.junit.Test

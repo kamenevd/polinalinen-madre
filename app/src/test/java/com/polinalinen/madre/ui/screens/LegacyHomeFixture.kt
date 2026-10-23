@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.screens
 
+import com.polinalinen.madre.ui.kit.*
 import android.content.Context
 import android.Manifest
 import android.content.pm.PackageManager
@@ -20,7 +21,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -58,7 +58,6 @@ import com.polinalinen.madre.sourdough.StarterName
 import com.polinalinen.madre.sourdough.StarterVoice
 import com.polinalinen.madre.notifications.FeedingSchedule
 import com.polinalinen.madre.ui.components.BookBreath
-import com.polinalinen.madre.ui.components.BookButton
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.HeavyRule
 import com.polinalinen.madre.ui.components.PageLabel
@@ -69,7 +68,6 @@ import com.polinalinen.madre.ui.components.TextAction
 import com.polinalinen.madre.ui.components.bookAction
 import com.polinalinen.madre.ui.components.breathingPage
 import com.polinalinen.madre.ui.components.dampPaper
-import com.polinalinen.madre.ui.theme.AppColors
 import com.polinalinen.madre.viewmodel.BakingViewModel
 import com.polinalinen.madre.viewmodel.WeatherViewModel
 import java.text.SimpleDateFormat
@@ -81,38 +79,12 @@ import java.util.Locale
  * Ярлыки для тестов: первая полоса длинная, и до строки оглавления надо
  * ещё доехать — без ярлыка её в композиции просто нет.
  */
-object TocLine {
-    /** A11y и тесты: «Хлебушек домашний, рецепт 1». */
-    fun contentDescription(name: String, index: Int): String =
-        "$name, рецепт $index"
-
-    /**
-     * Однострочное оглавление для тестов и логов.
-     * Визуальные точки на экране рисует [TocLeaders]; здесь — фиксированные
-     * лидеры, чтобы assert не зависел от ширины.
-     */
-    fun format(name: String, index: Int, leaderWidth: Int = 24): String {
-        val dots = ".".repeat(leaderWidth.coerceAtLeast(3))
-        return "$name$dots$index"
-    }
-}
-
-object Home {
-    const val LIST_TAG = "home-list"
-
-    fun chapterRowTag(recipeId: String): String = "home-chapter-$recipeId"
-}
-
-internal object HomeCopy {
-    const val BAKERY = "Домашняя пекарня"
-}
-
 /**
  * Главная — «Первая полоса» (DESIGN-V4.md, экран 1).
  * Masthead → голос закваски → талон «В ПЕЧИ» + ляссе → оглавление.
  */
 @Composable
-fun HomeScreen(
+fun LegacyHomeFixture(
     madreHeadline: String? = null,
     starterName: String = StarterName.DEFAULT,
     phase: GrowthPhase,
@@ -131,7 +103,7 @@ fun HomeScreen(
     viewModel: BakingViewModel = viewModel(),
     weatherViewModel: WeatherViewModel = viewModel(),
 ) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     var scheduleNowMillis by remember(nowMillis, nowProvider) {
         mutableStateOf(nowMillis ?: nowProvider())
     }
@@ -198,7 +170,7 @@ fun HomeScreen(
     val season = SeasonalEdition.seasonForMonth(Calendar.getInstance().get(Calendar.MONTH) + 1)
     val seasonalRecipeId = SeasonalEdition.recipeIdFor(season)
 
-    Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
+    PaperSurface(color = colors.bg, modifier = Modifier.fillMaxSize()) {
         // «Дыхание книги» (Cycle 6, BookBreath): первая полоса дышит целиком —
         // вместе с ляссе — но вдвое тише дневника (scale 1.000→1.002).
         Box(
@@ -246,7 +218,7 @@ fun HomeScreen(
                 item {
                     PageLabel(
                         "Оглавление",
-                        color = colors.espresso,
+                        color = colors.ink,
                         modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 16.dp, bottom = 4.dp),
                     )
                 }
@@ -312,7 +284,7 @@ private fun Masthead(
     onOpenSettings: () -> Unit,
     onOpenShelf: () -> Unit,
 ) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     val date = SimpleDateFormat("EEEE · d MMMM", Locale("ru")).format(Date())
     Column(
         Modifier.fillMaxWidth().padding(top = 22.dp),
@@ -321,8 +293,7 @@ private fun Masthead(
         PageLabel(HomeCopy.BAKERY)
         Text(
             "МАДРЕ",
-            color = colors.espresso,
-            fontFamily = FontFamily.Serif,
+            color = colors.ink,style = PaperType.body,
             fontWeight = FontWeight.Bold,
             fontSize = 44.sp,
             letterSpacing = 1.sp,
@@ -336,8 +307,7 @@ private fun Masthead(
             Text(
                 // «Сезонная глава» (Cycle 3) — ярлык рядом с датой выпуска.
                 "${date.uppercase()} · ${SeasonalEdition.labelFor(season).uppercase()}",
-                color = colors.cocoa,
-                fontFamily = FontFamily.SansSerif,
+                color = colors.ink2,style = PaperType.caption,
                 fontSize = 10.sp,
                 letterSpacing = 2.sp,
                 modifier = Modifier.padding(horizontal = 10.dp),
@@ -357,7 +327,7 @@ private fun Masthead(
 
 @Composable
 private fun MadreLine(headline: String, starterName: String, onOpenStarter: () -> Unit) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     Column(
         Modifier
             .fillMaxWidth()
@@ -367,8 +337,7 @@ private fun MadreLine(headline: String, starterName: String, onOpenStarter: () -
         PageLabel(StarterName.homeLabel(starterName))
         Text(
             "«$headline»",
-            color = colors.espresso,
-            fontFamily = FontFamily.Serif,
+            color = colors.ink,style = PaperType.body,
             fontStyle = FontStyle.Italic,
             fontSize = 18.sp,
             modifier = Modifier.padding(top = 2.dp),
@@ -396,7 +365,7 @@ private fun FeedingScheduleStatus(
     nowMillis: Long,
     onOpenFeeding: () -> Unit,
 ) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     val state = FeedingSchedule.calculate(lastFeedingMillis, intervalHours, nowMillis)
     Column(Modifier.padding(horizontal = 22.dp, vertical = 8.dp)) {
         val status = when (state) {
@@ -408,17 +377,17 @@ private fun FeedingScheduleStatus(
             is FeedingSchedule.State.InvalidInterval,
             FeedingSchedule.State.NeverFed -> FeedingSchedule.nextFeedingStatus(state)
         }
-        Text(status, color = colors.espresso, fontFamily = FontFamily.Serif, fontSize = 16.sp)
+        Text(status, color = colors.ink,style = PaperType.body, fontSize = 16.sp)
         Text(
             "Последнее: ${lastFeedingMillis?.let { SimpleDateFormat("d MMM, HH:mm", Locale("ru")).format(Date(it)) } ?: "не записано"}",
-            color = colors.cocoa, fontFamily = FontFamily.SansSerif, fontSize = 12.sp,
+            color = colors.ink2,style = PaperType.caption, fontSize = 12.sp,
         )
         Text(
             "Гидратация закваски: ${latestHydrationPercent?.let { "$it%" } ?: "не указана"}",
-            color = colors.cocoa, fontFamily = FontFamily.SansSerif, fontSize = 12.sp,
+            color = colors.ink2,style = PaperType.caption, fontSize = 12.sp,
         )
         if (state is FeedingSchedule.State.Due || state is FeedingSchedule.State.NeverFed) {
-            BookButton(
+            PaperButton(
                 label = FeedingCall.label(starterName), onClick = onOpenFeeding,
                 modifier = Modifier.padding(top = 8.dp),
             )
@@ -434,12 +403,11 @@ private fun FeedingScheduleStatus(
  */
 @Composable
 private fun WeatherMargin(note: WeatherNote?, showInvite: Boolean, onInvite: () -> Unit) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     when {
         note != null -> Text(
             note.text,
-            color = colors.cocoa,
-            fontFamily = FontFamily.Cursive,
+            color = colors.ink2,style = PaperType.note,
             fontSize = 15.sp,
             lineHeight = 21.sp,
             modifier = Modifier
@@ -465,34 +433,32 @@ private fun ActiveBakingTicket(
     portions: Int,
     isPaused: Boolean,
 ) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     Column {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Row(verticalAlignment = Alignment.Bottom) {
-                Text(recipeName, color = colors.espresso, fontFamily = FontFamily.Serif, fontSize = 17.sp)
+                Text(recipeName, color = colors.ink,style = PaperType.body, fontSize = 17.sp)
                 Text(
                     "  ×$portions ${familyWord(portions)}",
-                    color = colors.crust,
-                    fontFamily = FontFamily.Serif,
+                    color = colors.acc,style = PaperType.body,
                     fontStyle = FontStyle.Italic,
                     fontSize = 14.sp,
                 )
             }
-            Stamp("Готовим", colors.terracotta)
+            Stamp("Готовим", colors.rib)
         }
         Text(
             "шаг ${stepIndex + 1} из $stepCount" + if (isPaused) " · пауза" else "",
-            color = colors.cocoa,
-            fontFamily = FontFamily.SansSerif,
+            color = colors.ink2,style = PaperType.caption,
             fontSize = 11.sp,
             modifier = Modifier.padding(top = 4.dp),
         )
         Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
             repeat(stepCount) { i ->
                 val tone = when {
-                    i < stepIndex -> colors.espresso
-                    i == stepIndex -> colors.crust
-                    else -> colors.flour
+                    i < stepIndex -> colors.ink
+                    i == stepIndex -> colors.acc
+                    else -> colors.line
                 }
                 Box(Modifier.weight(1f).height(3.dp)) {
                     androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) { drawRect(tone) }
@@ -516,7 +482,7 @@ private fun ChapterRow(
     isSeasonal: Boolean = false,
     @Suppress("UNUSED_PARAMETER") bakeCount: Int = 0,
 ) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     // Книжное оглавление: номер у правого края ряда, лидеры — на всю ширину
     // между именем и номером. Имя/номер на paper-фоне перекрывают точки
     // (классический приём вёрстки TOC) — так на любом экране точки доходят
@@ -545,45 +511,42 @@ private fun ChapterRow(
                         .fillMaxWidth()
                         .padding(bottom = 5.dp)
                         .align(Alignment.BottomCenter),
-                    color = colors.cocoa.copy(alpha = 0.45f),
+                    color = colors.ink2.copy(alpha = 0.45f),
                 )
                 Text(
                     recipe.name,
-                    color = colors.espresso,
-                    fontFamily = FontFamily.Serif,
+                    color = colors.ink,style = PaperType.body,
                     fontSize = 17.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .background(colors.paper)
+                        .background(colors.bg)
                         .padding(end = 6.dp),
                 )
             }
             Text(
                 index.toString(),
-                color = colors.espresso,
-                fontFamily = FontFamily.Serif,
+                color = colors.ink,style = PaperType.body,
                 fontWeight = FontWeight.Medium,
                 fontSize = 17.sp,
                 textAlign = TextAlign.End,
                 modifier = Modifier
                     .padding(start = 2.dp)
-                    .background(colors.paper)
+                    .background(colors.bg)
                     .defaultMinSize(minWidth = 16.dp),
             )
         }
         if (isSeasonal) {
             Text(
                 "глава сезона",
-                color = colors.crust,
-                fontFamily = FontFamily.Serif,
+                color = colors.acc,style = PaperType.body,
                 fontStyle = FontStyle.Italic,
                 fontSize = 10.sp,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(end = 10.dp, top = 2.dp)
-                    .background(colors.paper),
+                    .background(colors.bg),
             )
         }
         HairRule(Modifier.align(Alignment.BottomCenter).padding(horizontal = 22.dp))
@@ -619,13 +582,12 @@ private fun TocLeaders(modifier: Modifier = Modifier, color: Color) {
 
 @Composable
 private fun Colophon() {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     Column(Modifier.fillMaxWidth().padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         HeavyRule()
         Text(
             "— тираж: одна семья · печатается с любовью —",
-            color = colors.cocoa,
-            fontFamily = FontFamily.Serif,
+            color = colors.ink2,style = PaperType.body,
             fontStyle = FontStyle.Italic,
             fontSize = 11.sp,
             modifier = Modifier.padding(top = 10.dp),

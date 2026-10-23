@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.screens
 
+import com.polinalinen.madre.ui.kit.*
 import android.content.Intent
 import android.provider.Settings
 import androidx.compose.foundation.layout.Box
@@ -14,12 +15,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import android.content.Context
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.DisposableEffect
@@ -54,8 +52,6 @@ import com.polinalinen.madre.account.PasswordReset
 import com.polinalinen.madre.account.PasswordResetNotice
 import com.polinalinen.madre.ui.components.BackLabel
 import com.polinalinen.madre.ui.components.bookAction
-import com.polinalinen.madre.ui.components.BookButton
-import com.polinalinen.madre.ui.components.BookButtonVariant
 import com.polinalinen.madre.ui.components.Bookplate
 import com.polinalinen.madre.ui.components.MinTouchTarget
 import com.polinalinen.madre.sync.SyncStatus
@@ -65,8 +61,7 @@ import com.polinalinen.madre.ui.components.PageLabel
 import com.polinalinen.madre.ui.components.TapCycle
 import com.polinalinen.madre.ui.components.TapCycleRow
 import com.polinalinen.madre.ui.components.TextAction
-import com.polinalinen.madre.ui.theme.AppColors
-import com.polinalinen.madre.ui.theme.CalmModeSetting
+import com.polinalinen.madre.ui.kit.CalmModeSetting
 import com.polinalinen.madre.viewmodel.FamilySettingsViewModel
 import com.polinalinen.madre.viewmodel.FamilyBookViewModel
 import kotlinx.coroutines.Dispatchers
@@ -116,7 +111,7 @@ fun SettingsScreen(
     familySettingsViewModel: FamilySettingsViewModel = viewModel(),
     familyBookViewModel: FamilyBookViewModel = viewModel(),
 ) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     val familyName by familySettingsViewModel.familyName.collectAsState()
     val familyBookState by familyBookViewModel.state.collectAsState()
     LaunchedEffect(Unit) { familyBookViewModel.restore() }
@@ -124,27 +119,36 @@ fun SettingsScreen(
     // полю для того же имени тут делать нечего.
     val inFamily = familyBookState.account?.hasFamily == true
 
-    Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
+    SettingsContent(myName, onMyNameChange, onBack, onOpenShelfSettings, starterName,
+        onStarterNameChange, bakeCount, feedingCount, intervalHours, onIntervalHoursChange,
+        remindersEnabled, onRemindersEnabledChange, calmMode, onCalmModeChange,
+        familyName, familyBookState, familySettingsViewModel::setFamilyName, familyBookViewModel::signOut)
+}
+
+/** Same production layout; fixtures can supply state without touching accounts/network. */
+@Composable internal fun SettingsContent(
+    myName: String, onMyNameChange: (String) -> Unit, onBack: () -> Unit,
+    onOpenShelfSettings: () -> Unit, starterName: String, onStarterNameChange: (String) -> Unit,
+    bakeCount: Int, feedingCount: Int, intervalHours: Int, onIntervalHoursChange: (Int) -> Unit,
+    remindersEnabled: Boolean, onRemindersEnabledChange: (Boolean) -> Unit,
+    calmMode: Boolean, onCalmModeChange: (Boolean) -> Unit,
+    familyName: String?, familyBookState: FamilyBookState,
+    onSetFamilyName: (String) -> Unit, onSignOut: () -> Unit,
+) {
+    val colors = LocalPaper.current
+    val inFamily = familyBookState.account?.hasFamily == true
+    PaperSurface(color = colors.bg, modifier = Modifier.fillMaxSize()) {
         Column(
             Modifier
-                .statusBarsPadding()
+
                 .verticalScroll(rememberScrollState())
                 .padding(bottom = 32.dp)
         ) {
-            BackLabel("Первая полоса", onClick = onBack, modifier = Modifier.padding(horizontal = 22.dp))
+            PaperHeader("Настройки", onBack = onBack, overline = "Книга", modifier = Modifier.padding(horizontal = 22.dp))
 
             Text(
-                "Настройки",
-                color = colors.espresso,
-                fontFamily = FontFamily.Serif,
-                fontWeight = FontWeight.Bold,
-                fontSize = 26.sp,
-                modifier = Modifier.padding(horizontal = 22.dp),
-            )
-            Text(
                 "выходные данные книги",
-                color = colors.cocoa,
-                fontFamily = FontFamily.Serif,
+                color = colors.ink2,style = PaperType.body,
                 fontStyle = FontStyle.Italic,
                 fontSize = 13.sp,
                 modifier = Modifier.padding(horizontal = 22.dp, vertical = 4.dp),
@@ -168,7 +172,7 @@ fun SettingsScreen(
                     Bookplate(
                         label = "Как подписана книга",
                         familyName = familyName,
-                        onSetName = familySettingsViewModel::setFamilyName,
+                        onSetName = onSetFamilyName,
                         modifier = Modifier.padding(horizontal = 22.dp, vertical = 18.dp),
                     )
                 }
@@ -210,7 +214,7 @@ fun SettingsScreen(
                     HairRule(Modifier.padding(horizontal = 22.dp, vertical = 12.dp))
                     TextAction(
                         "Выйти · книга на телефоне останется",
-                        onClick = familyBookViewModel::signOut,
+                        onClick = onSignOut,
                         modifier = Modifier.padding(horizontal = 14.dp),
                     )
                 }
@@ -272,17 +276,8 @@ private fun SettingsSection(
     first: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-    val colors = AppColors.current
-    if (!first) {
-        Spacer(Modifier.height(26.dp))
-        HeavyRule(Modifier.padding(horizontal = 22.dp))
-    }
-    PageLabel(
-        title,
-        color = colors.espresso,
-        modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 18.dp, bottom = 4.dp),
-    )
-    content()
+    Spacer(Modifier.height(if (first) 12.dp else 28.dp))
+    PaperSection(title) { content() }
 }
 
 /** Cycle 28: ритм кормления снова крутится по кругу одной строкой. */
@@ -297,8 +292,7 @@ private fun FeedingRhythmRow(intervalHours: Int, onChange: (Int) -> Unit) {
     )
     Text(
         "Руководство Levito Madre: при хранении на средней полке холодильника 4–6°C — каждые 3–5 дней. Это ориентир, не замена вашему ритму.",
-        color = AppColors.current.cocoa,
-        fontFamily = FontFamily.Serif,
+        color = LocalPaper.current.ink2,style = PaperType.body,
         fontSize = 12.sp,
         modifier = Modifier.padding(horizontal = 22.dp, vertical = 4.dp),
     )
@@ -317,7 +311,7 @@ private fun FeedingRhythmRow(intervalHours: Int, onChange: (Int) -> Unit) {
  */
 @Composable
 private fun RemindersRow(remindersEnabled: Boolean, onRemindersEnabledChange: (Boolean) -> Unit) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var allowed by remember { mutableStateOf(MadreNotifier(context).canPost()) }
@@ -334,7 +328,7 @@ private fun RemindersRow(remindersEnabled: Boolean, onRemindersEnabledChange: (B
         TapCycleRow(
             label = "Напоминания",
             value = if (remindersEnabled) "вкл" else "выкл",
-            valueColor = if (remindersEnabled) colors.sage else colors.cocoa,
+            valueColor = if (remindersEnabled) colors.sage else colors.ink2,
             onClick = {
                 onRemindersEnabledChange(
                     TapCycle.next(
@@ -350,16 +344,16 @@ private fun RemindersRow(remindersEnabled: Boolean, onRemindersEnabledChange: (B
         SettingsRow(
             label = "Напоминания",
             value = "не разрешены телефоном",
-            valueColor = colors.terracotta,
+            valueColor = colors.rib,
             onClick = null,
         )
         SettingsCaption(
             "книга не разбудит вас, когда закончится расстойка, не напомнит про закваску " +
                 "и не покажет ход выпечки в шторке. Таймер на экране при этом работает как прежде."
         )
-        BookButton(
+        PaperButton(
             label = "Разрешить уведомления",
-            variant = BookButtonVariant.SECONDARY,
+            variant = PaperButtonVariant.SECONDARY,
             modifier = Modifier.padding(horizontal = 22.dp, vertical = 4.dp),
             onClick = {
                 val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
@@ -403,7 +397,7 @@ private fun CalmModeRow(calmMode: Boolean, onCalmModeChange: (Boolean) -> Unit) 
  */
 @Composable
 internal fun SyncStatusLine(modifier: Modifier = Modifier) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     val context = LocalContext.current
     var line by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
@@ -416,8 +410,7 @@ internal fun SyncStatusLine(modifier: Modifier = Modifier) {
 
     Text(
         text,
-        color = colors.cocoa,
-        fontFamily = FontFamily.Serif,
+        color = colors.ink2,style = PaperType.body,
         fontStyle = FontStyle.Italic,
         fontSize = 12.sp,
         modifier = modifier,
@@ -435,7 +428,7 @@ internal fun FamilyBookSection(
     passwordResetNotice: PasswordResetNotice = PasswordResetNotice.Idle,
     onRequestPasswordReset: (String) -> Unit = {},
 ) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     // rememberSaveable, а не remember: пересоздание Activity не должно стирать
     // набранные почту, пароль, подпись, название и код.
     var email by rememberSaveable { mutableStateOf("") }
@@ -459,8 +452,7 @@ internal fun FamilyBookSection(
         Text(
             "ваша книга остаётся на этом телефоне и открывается без аккаунта и сети. " +
                 "Полка — способ делиться выпечками с семьёй, а не условие работы.",
-            color = colors.cocoa,
-            fontFamily = FontFamily.Serif,
+            color = colors.ink2,style = PaperType.body,
             fontStyle = FontStyle.Italic,
             fontSize = 11.5.sp,
             modifier = Modifier.padding(bottom = 10.dp),
@@ -468,18 +460,17 @@ internal fun FamilyBookSection(
         if (failed != null) {
             Text(
                 failed.failure.message,
-                color = colors.terracotta,
-                fontFamily = FontFamily.Serif,
+                color = colors.rib,style = PaperType.body,
                 fontSize = 13.sp,
                 modifier = Modifier.padding(bottom = 8.dp),
             )
         }
         when {
-            loading -> Text("проверяем полку", color = colors.cocoa, fontFamily = FontFamily.Serif, fontStyle = FontStyle.Italic)
+            loading -> Text("проверяем полку", color = colors.ink2,style = PaperType.body, fontStyle = FontStyle.Italic)
             account == null && !showForm -> {
-                BookButton(
+                PaperButton(
                     label = "Подключить полку…",
-                    variant = BookButtonVariant.SECONDARY,
+                    variant = PaperButtonVariant.SECONDARY,
                     onClick = { showForm = true },
                 )
             }
@@ -494,16 +485,14 @@ internal fun FamilyBookSection(
                 when (val notice = passwordResetNotice) {
                     PasswordResetNotice.Sent -> Text(
                         PasswordReset.SENT_LINE,
-                        color = colors.cocoa,
-                        fontFamily = FontFamily.Serif,
+                        color = colors.ink2,style = PaperType.body,
                         fontStyle = FontStyle.Italic,
                         fontSize = 13.sp,
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
                     is PasswordResetNotice.Failed -> Text(
                         notice.message,
-                        color = colors.terracotta,
-                        fontFamily = FontFamily.Serif,
+                        color = colors.rib,style = PaperType.body,
                         fontSize = 13.sp,
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
@@ -511,33 +500,33 @@ internal fun FamilyBookSection(
                 }
                 FamilyBookField("Как подписать вас", displayName) { displayName = it }
                 Spacer(Modifier.height(8.dp))
-                BookButton(
+                PaperButton(
                     label = "Войти",
                     enabled = email.isNotBlank() && password.isNotBlank(),
                     onClick = { onSignIn(email, password) },
                 )
                 Spacer(Modifier.height(8.dp))
-                BookButton(
+                PaperButton(
                     label = "Зарегистрироваться",
-                    variant = BookButtonVariant.SECONDARY,
+                    variant = PaperButtonVariant.SECONDARY,
                     enabled = email.isNotBlank() && password.isNotBlank() && displayName.isNotBlank(),
                     onClick = { onRegister(email, password, displayName) },
                 )
                 TextAction("Не сейчас", onClick = { showForm = false })
             }
             !account.hasFamily -> {
-                Text("вы вошли как ${account.displayName.ifBlank { account.email }}", color = colors.espresso, fontFamily = FontFamily.Serif)
+                Text("вы вошли как ${account.displayName.ifBlank { account.email }}", color = colors.ink,style = PaperType.body)
                 FamilyBookField("Название полки", familyName) { familyName = it }
-                BookButton(
+                PaperButton(
                     label = "Завести полку",
                     enabled = familyName.isNotBlank(),
                     onClick = { onCreateFamily(familyName) },
                 )
                 Spacer(Modifier.height(12.dp))
                 FamilyBookField("Код приглашения", inviteCode) { inviteCode = it }
-                BookButton(
+                PaperButton(
                     label = "Вступить по коду",
-                    variant = BookButtonVariant.SECONDARY,
+                    variant = PaperButtonVariant.SECONDARY,
                     enabled = inviteCode.isNotBlank(),
                     onClick = { onJoinFamily(inviteCode) },
                 )
@@ -553,30 +542,19 @@ internal fun FamilyBookField(
     masked: Boolean = false,
     onValueChange: (String) -> Unit,
 ) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        label = { Text(label) },
-        singleLine = true,
+    PaperField(value = value, onValueChange = onValueChange, label = label,
         visualTransformation = if (masked) PasswordVisualTransformation() else VisualTransformation.None,
-        keyboardOptions = if (masked) {
-            KeyboardOptions(keyboardType = KeyboardType.Password)
-        } else {
-            KeyboardOptions.Default
-        },
-        textStyle = TextStyle(fontFamily = FontFamily.Serif, fontSize = 15.sp),
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-    )
+        keyboardOptions = if (masked) KeyboardOptions(keyboardType = KeyboardType.Password) else KeyboardOptions.Default,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp))
 }
 
 /** Пояснение под строкой настроек — тем же голосом, что подписи в колофоне. */
 @Composable
 private fun SettingsCaption(text: String) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     Text(
         text,
-        color = colors.cocoa,
-        fontFamily = FontFamily.Serif,
+        color = colors.ink2,style = PaperType.body,
         fontStyle = FontStyle.Italic,
         fontSize = 11.5.sp,
         modifier = Modifier.padding(start = 22.dp, end = 22.dp, bottom = 12.dp),
@@ -585,14 +563,13 @@ private fun SettingsCaption(text: String) {
 
 @Composable
 private fun SettingsField(label: String, caption: String, field: @Composable () -> Unit) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp)) {
-        PageLabel(label, color = colors.espresso)
+        PageLabel(label, color = colors.ink)
         Box(Modifier.padding(top = 8.dp)) { field() }
         Text(
             caption,
-            color = colors.cocoa,
-            fontFamily = FontFamily.Serif,
+            color = colors.ink2,style = PaperType.body,
             fontStyle = FontStyle.Italic,
             fontSize = 11.sp,
             modifier = Modifier.padding(top = 4.dp),
@@ -630,73 +607,11 @@ internal fun StarterNameField(persisted: String, onChange: (String) -> Unit) {
 
 @Composable
 private fun NameField(value: String, onChange: (String) -> Unit, placeholder: String) {
-    val colors = AppColors.current
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .drawBehind {
-                drawLine(
-                    color = colors.flour,
-                    start = androidx.compose.ui.geometry.Offset(0f, size.height),
-                    end = androidx.compose.ui.geometry.Offset(size.width, size.height),
-                    strokeWidth = 1.5.dp.toPx(),
-                )
-            }
-            .padding(bottom = 8.dp)
-    ) {
-        if (value.isEmpty()) {
-            Text(
-                placeholder,
-                color = colors.flour,
-                fontFamily = FontFamily.Serif,
-                fontStyle = FontStyle.Italic,
-                fontSize = 19.sp,
-            )
-        }
-        BasicTextField(
-            value = value,
-            onValueChange = onChange,
-            singleLine = true,
-            textStyle = TextStyle(
-                color = colors.espresso,
-                fontFamily = FontFamily.Serif,
-                fontSize = 19.sp,
-            ),
-            cursorBrush = androidx.compose.ui.graphics.SolidColor(colors.crust),
-            modifier = Modifier.fillMaxWidth(),
-        )
-    }
+    PaperField(value, onChange, placeholder = placeholder, modifier = Modifier.fillMaxWidth())
 }
 
 @Composable
 private fun SettingsRow(label: String, value: String, onClick: (() -> Unit)?, valueColor: androidx.compose.ui.graphics.Color? = null) {
-    val colors = AppColors.current
-    Row(
-        Modifier
-            .fillMaxWidth()
-            // Cycle 19, hard rule №9: строка настройки — это bookAction, а не
-            // голый clickable. Роль кнопки, подпись для TalkBack и мишень не
-            // меньше 48dp приходят вместе, одним модификатором, вместе с
-            // защитой от двойного тапа.
-            .defaultMinSize(minHeight = MinTouchTarget)
-            .then(
-                if (onClick != null) {
-                    bookAction(label = "$label: $value", onClick = onClick)
-                } else {
-                    Modifier
-                }
-            )
-            .padding(horizontal = 22.dp, vertical = 14.dp),
-        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(label, color = colors.espresso, fontFamily = FontFamily.Serif, fontSize = 15.sp)
-        Text(
-            value,
-            color = valueColor ?: colors.cocoa,
-            fontFamily = FontFamily.Serif,
-            fontStyle = FontStyle.Italic,
-            fontSize = 14.sp,
-        )
-    }
+    PaperListRow(label, Modifier.padding(horizontal = 22.dp), value = value,
+        valueColor = valueColor ?: LocalPaper.current.acc, onClick = onClick)
 }

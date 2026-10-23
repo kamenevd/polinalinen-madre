@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.components
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
@@ -19,10 +20,10 @@ import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.unit.dp
-import com.polinalinen.madre.ui.theme.AmberDeep
-import com.polinalinen.madre.ui.theme.Cocoa
-import com.polinalinen.madre.ui.theme.Crust
-import com.polinalinen.madre.ui.theme.Flour
+import com.polinalinen.madre.ui.kit.Illustration.CrumbDark as AmberDeep
+import com.polinalinen.madre.ui.kit.Illustration.CrumbInk as Cocoa
+import com.polinalinen.madre.ui.kit.Illustration.CrumbCrust as Crust
+import com.polinalinen.madre.ui.kit.Illustration.CrumbFlour as Flour
 import kotlin.math.abs
 import kotlin.random.Random
 import kotlinx.coroutines.launch

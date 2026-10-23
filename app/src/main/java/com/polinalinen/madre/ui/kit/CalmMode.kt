@@ -1,4 +1,4 @@
-package com.polinalinen.madre.ui.theme
+package com.polinalinen.madre.ui.kit
 
 import android.content.SharedPreferences
 import androidx.compose.runtime.staticCompositionLocalOf

@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.screens
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,7 +15,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -47,7 +47,6 @@ import com.polinalinen.madre.sourdough.SourdoughProfile
 import com.polinalinen.madre.sourdough.StarterName
 import com.polinalinen.madre.ui.components.AgedPhoto
 import com.polinalinen.madre.ui.components.BackLabel
-import com.polinalinen.madre.ui.components.BookButton
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.InkBlot
 import com.polinalinen.madre.ui.components.InkBlotSpot
@@ -55,7 +54,6 @@ import com.polinalinen.madre.ui.components.PageLabel
 import com.polinalinen.madre.ui.components.bookAction
 import com.polinalinen.madre.ui.components.breathingPage
 import com.polinalinen.madre.ui.components.lightPage
-import com.polinalinen.madre.ui.theme.AppColors
 
 data class DiaryEntry(
     val timeLabel: String,
@@ -92,7 +90,7 @@ fun StarterDiaryScreen(
     nowMillis: Long? = null,
     nowProvider: () -> Long = System::currentTimeMillis,
 ) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     // «Клякса» — DESIGN-V4.md Cycle 3, фича InkBlot. Событие для seed — самое
     // свежее кормление (id), т.к. отдельного id у DiaryEntry/фазы нет.
     val inkEventId = history.firstOrNull()?.id ?: 0L
@@ -105,41 +103,24 @@ fun StarterDiaryScreen(
     val nextFeedingStatus = history.firstOrNull()
         ?.let { FeedingSchedule.nextFeedingStatus(FeedingSchedule.calculate(it.timestampMillis, intervalHours, scheduleNowMillis)) }
 
-    Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
+    PaperSurface(color = colors.bg, modifier = Modifier.fillMaxSize()) {
         // «Страница на просвет» (Cycle 4, LightPage): наклон телефона ловит
         // свет — блик по бумаге и водяной знак живой культуры. Висит на
         // «листе», не на скроллящемся списке. Без датчика — молчит.
-        Box(Modifier.fillMaxSize().lightPage(watermark = "MADRE · ЖИВАЯ КУЛЬТУРА · ДЕНЬ $dayNumber")) {
+        Box(Modifier.fillMaxSize()) {
         LazyColumn(
             Modifier
-                .statusBarsPadding()
-                .breathingPage(phase), // страница дышит — механика #5
+                , // страница дышит — механика #5
             contentPadding = PaddingValues(bottom = 24.dp),
         ) {
             item {
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    BackLabel("Первая полоса", onClick = onBack)
-                    PageLabel("Глава VII · день $dayNumber")
-                }
-
-                Text(
-                    // Cycle 14: имя закваски — то, которым её назвали в колофоне.
-                    StarterName.diaryTitle(starterName),
-                    color = colors.espresso,
-                    fontFamily = FontFamily.Serif,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 28.sp,
-                    modifier = Modifier.padding(horizontal = 22.dp),
-                )
+                PaperHeader(StarterName.diaryTitle(starterName), onBack,
+                    overline = "Глава VII · день $dayNumber", modifier = Modifier.padding(horizontal = 22.dp))
 
                 if (nextFeedingStatus != null) {
                     Text(
                         nextFeedingStatus,
-                        color = colors.espresso,
-                        fontFamily = FontFamily.Serif,
+                        color = colors.ink,style = PaperType.body,
                         fontSize = 15.sp,
                         modifier = Modifier.padding(horizontal = 22.dp, vertical = 6.dp),
                     )
@@ -156,7 +137,7 @@ fun StarterDiaryScreen(
                 Column(
                     Modifier
                         .drawBehind {
-                            drawRect(colors.flour, size = androidx.compose.ui.geometry.Size(2.dp.toPx(), size.height))
+                            drawRect(colors.line, size = androidx.compose.ui.geometry.Size(2.dp.toPx(), size.height))
                         }
                         .padding(start = 14.dp)
                 ) {
@@ -168,17 +149,15 @@ fun StarterDiaryScreen(
                     Row(Modifier.padding(vertical = 5.dp), verticalAlignment = Alignment.Top) {
                         Text(
                             "${entry.timeLabel} —",
-                            color = if (entry.isHighlight) colors.sage else colors.cocoa,
-                            fontFamily = FontFamily.SansSerif,
+                            color = if (entry.isHighlight) colors.sage else colors.ink2,style = PaperType.caption,
                             fontSize = 11.sp,
                             letterSpacing = 1.sp,
                             modifier = Modifier.width(56.dp),
                         )
                         Text(
                             entry.text,
-                            color = hand.ink,
-                            fontFamily = FontFamily.Cursive,
-                            fontWeight = if (entry.isHighlight) FontWeight.Bold else hand.fontWeight,
+                            color = hand.ink,style = PaperType.note,
+                            fontWeight = if (entry.isHighlight) FontWeight.Medium else hand.fontWeight,
                             fontSize = 16.sp,
                             lineHeight = 24.sp,
                             modifier = Modifier.rotate(hand.rotationDeg),
@@ -190,7 +169,7 @@ fun StarterDiaryScreen(
                 if (cancelledBakeCount > 0) {
                     InkBlotSpot(
                         seed = InkBlot.seedFor(inkEventId, cancelledBakeCount),
-                        color = colors.espresso,
+                        color = colors.ink,
                         modifier = Modifier.align(Alignment.TopEnd).size(40.dp),
                     )
                 }
@@ -199,7 +178,7 @@ fun StarterDiaryScreen(
                     InkBlotSpot(
                         seed = InkBlot.seedFor(inkEventId, HUNGRY_BLOT_OFFSET),
                         blurred = true,
-                        color = colors.cocoa,
+                        color = colors.ink2,
                         modifier = Modifier.align(Alignment.BottomStart).size(56.dp),
                     )
                 }
@@ -211,25 +190,25 @@ fun StarterDiaryScreen(
                 Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 14.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                BookButton(label = "Покормить", onClick = onFeed, modifier = Modifier.weight(1f))
-                BookButton(
+                PaperButton(label = "Покормить", onClick = onFeed, modifier = Modifier.weight(1f))
+                PaperButton(
                     label = "Фото",
                     onClick = onOpenGallery,
-                    variant = com.polinalinen.madre.ui.components.BookButtonVariant.SECONDARY,
+                    variant = com.polinalinen.madre.ui.components.PaperButtonVariant.SECONDARY,
                     modifier = Modifier.weight(1f),
                 )
             }
-            PageLabel("Советы из руководства", Modifier.padding(horizontal = 22.dp, vertical = 8.dp), color = colors.espresso)
+            PageLabel("Советы из руководства", Modifier.padding(horizontal = 22.dp, vertical = 8.dp), color = colors.ink)
             Text(
                 "В буклете Levito Madre указано соотношение базового кормления 2:1:2 (закваска:вода:мука) и стартовая гидратация 50%. " +
                     "Мадре и закваску кормят белой пшеничной мукой высшего сорта с содержанием белка >10 г на 100 г. " +
                     "Хранение в холодильнике при 4–6°C обычно даёт интервал кормления 3–5 дней. " +
                     "Пик чаще всего бывает около 3–5 часов, но фактически зависит от температуры, муки, печи и вашего ритма. " +
                     "Стартовые значения формы 50/100/50 — это редактируемые удобные массы, а не формула.",
-                color = colors.cocoa, fontFamily = FontFamily.Serif, fontSize = 13.sp, lineHeight = 19.sp,
+                color = colors.ink2,style = PaperType.body, fontSize = 13.sp, lineHeight = 19.sp,
                 modifier = Modifier.padding(horizontal = 22.dp, vertical = 6.dp),
             )
-            PageLabel("Формуляр кормлений", Modifier.padding(start = 22.dp, top = 10.dp), color = colors.espresso)
+            PageLabel("Формуляр кормлений", Modifier.padding(start = 22.dp, top = 10.dp), color = colors.ink)
             }
 
             // Шапка липнет к верху: пролистывая историю на год назад, человек
@@ -252,11 +231,11 @@ private const val FORMULARY_HEADER_DESCRIPTION =
 
 @Composable
 private fun FormularyHeader() {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     Column(
         Modifier
             .fillMaxWidth()
-            .drawBehind { drawRect(colors.paper) }
+            .drawBehind { drawRect(colors.bg) }
             .semantics {
                 heading()
                 contentDescription = FORMULARY_HEADER_DESCRIPTION
@@ -266,8 +245,7 @@ private fun FormularyHeader() {
             COLUMN_TITLES.forEachIndexed { index, title ->
                 Text(
                     title,
-                    color = colors.cocoa,
-                    fontFamily = FontFamily.SansSerif,
+                    color = colors.ink2,style = PaperType.caption,
                     fontSize = 10.sp,
                     letterSpacing = 0.5.sp,
                     maxLines = 1,
@@ -289,7 +267,7 @@ private fun FormularyHeader() {
  */
 @Composable
 private fun FormularyRow(feeding: FeedingEntity, currentYear: Int) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     var expanded by rememberSaveable(feeding.id) { mutableStateOf(false) }
 
     val hydration = feeding.finalHydrationPercent ?: feeding.hydrationPercent
@@ -326,8 +304,8 @@ private fun FormularyRow(feeding: FeedingEntity, currentYear: Int) {
             cells.forEachIndexed { index, cell ->
                 Text(
                     cell,
-                    color = if (index == 0) colors.cocoa else colors.espresso,
-                    fontFamily = if (index == 0) FontFamily.SansSerif else FontFamily.Serif,
+                    color = if (index == 0) colors.ink2 else colors.ink,
+                    style = if (index == 0) PaperType.caption else PaperType.body,
                     fontSize = if (index == 0) 11.sp else 13.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Clip,
@@ -353,15 +331,14 @@ private fun FormularyRow(feeding: FeedingEntity, currentYear: Int) {
                     ),
                 contentAlignment = Alignment.CenterStart,
             ) {
-                PageLabel(if (expanded) "свернуть" else "подробнее", color = colors.crust)
+                PageLabel(if (expanded) "свернуть" else "подробнее", color = colors.acc)
             }
             if (expanded) {
                 Column(Modifier.padding(start = 22.dp, end = 22.dp, bottom = 8.dp)) {
                     detail?.let {
                         Text(
                             it,
-                            color = colors.cocoa,
-                            fontFamily = FontFamily.Serif,
+                            color = colors.ink2,style = PaperType.body,
                             fontSize = 13.sp,
                             lineHeight = 19.sp,
                         )
@@ -369,8 +346,7 @@ private fun FormularyRow(feeding: FeedingEntity, currentYear: Int) {
                     feeding.notes?.let {
                         Text(
                             "Заметка: $it",
-                            color = colors.espresso,
-                            fontFamily = FontFamily.Cursive,
+                            color = colors.ink,style = PaperType.note,
                             fontSize = 15.sp,
                             modifier = Modifier.padding(top = 4.dp),
                         )

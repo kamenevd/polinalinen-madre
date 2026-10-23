@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.screens
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
@@ -15,7 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -41,8 +41,6 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.polinalinen.madre.R
 import com.polinalinen.madre.ui.components.AgedPhoto
-import com.polinalinen.madre.ui.components.BookButton
-import com.polinalinen.madre.ui.components.BookButtonVariant
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.TextAction
 import com.polinalinen.madre.ui.components.TracingPaper
@@ -51,7 +49,6 @@ import com.polinalinen.madre.ui.components.drawPhotoHolders
 import com.polinalinen.madre.ui.photo.rememberPhotoAttachment
 import com.polinalinen.madre.shelf.ShelfShareDecision
 import com.polinalinen.madre.shelf.ShelfSharePolicy
-import com.polinalinen.madre.ui.theme.AppColors
 import com.polinalinen.madre.utils.PhotoStore
 import com.polinalinen.madre.viewmodel.BakingViewModel
 
@@ -72,7 +69,7 @@ fun BakingCompleteScreen(
     onHome: () -> Unit,
     viewModel: BakingViewModel = viewModel(),
 ) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
 
     val sessions by viewModel.sessions.collectAsState()
     val session = sessionId?.let { id -> sessions.find { it.id == id } }
@@ -124,11 +121,11 @@ fun BakingCompleteScreen(
     val totalBakes = bakeCounts.values.sum()
     val milestoneNote = TracingPaper.noteFor(totalBakes)
 
-    Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
+    PaperSurface(color = colors.bg, modifier = Modifier.fillMaxSize()) {
         Box(Modifier.fillMaxSize()) {
         Column(
             Modifier
-                .statusBarsPadding()
+
                 .verticalScroll(rememberScrollState())
                 .fillMaxSize()
                 .padding(horizontal = 22.dp, vertical = 16.dp),
@@ -140,9 +137,8 @@ fun BakingCompleteScreen(
 
             Text(
                 session?.recipe?.name ?: "испечено",
-                color = colors.espresso,
-                fontFamily = FontFamily.Serif,
-                fontWeight = FontWeight.Bold,
+                color = colors.ink,style = PaperType.body,
+                fontWeight = FontWeight.Medium,
                 fontSize = 26.sp,
                 textAlign = TextAlign.Center,
             )
@@ -150,8 +146,7 @@ fun BakingCompleteScreen(
                 val portions = session.scaleFactor.toInt().coerceAtLeast(1)
                 Text(
                     "×$portions ${familyWord(portions)}",
-                    color = colors.crust,
-                    fontFamily = FontFamily.Serif,
+                    color = colors.acc,style = PaperType.body,
                     fontStyle = FontStyle.Italic,
                     fontSize = 14.sp,
                     modifier = Modifier.padding(top = 2.dp),
@@ -162,8 +157,7 @@ fun BakingCompleteScreen(
             if (milestoneNote != null) {
                 Text(
                     milestoneNote,
-                    color = colors.cocoa,
-                    fontFamily = FontFamily.Cursive,
+                    color = colors.ink2,style = PaperType.note,
                     fontSize = 18.sp,
                     lineHeight = 26.sp,
                     textAlign = TextAlign.Center,
@@ -201,8 +195,7 @@ fun BakingCompleteScreen(
                     )
                     Text(
                         "·",
-                        color = colors.cocoa,
-                        fontFamily = FontFamily.Serif,
+                        color = colors.ink2,style = PaperType.body,
                         fontSize = 12.sp,
                         modifier = Modifier.padding(horizontal = 6.dp),
                     )
@@ -221,8 +214,7 @@ fun BakingCompleteScreen(
 
             Text(
                 "формуляр книги пополнен — испечено с любовью",
-                color = colors.cocoa,
-                fontFamily = FontFamily.Serif,
+                color = colors.ink2,style = PaperType.body,
                 fontStyle = FontStyle.Italic,
                 fontSize = 12.sp,
                 textAlign = TextAlign.Center,
@@ -230,9 +222,9 @@ fun BakingCompleteScreen(
             )
 
             if (sharingAvailable && session != null) {
-                BookButton(
+                PaperButton(
                     label = ShelfSharePolicy.labelOf(shelfDecision),
-                    variant = BookButtonVariant.SECONDARY,
+                    variant = PaperButtonVariant.SECONDARY,
                     enabled = !busy,
                     repeatable = true,
                     onClick = { shelfDecision = ShelfSharePolicy.next(shelfDecision) },
@@ -243,16 +235,16 @@ fun BakingCompleteScreen(
             Spacer(Modifier.weight(1f))
             Spacer(Modifier.height(24.dp))
 
-            BookButton(
+            PaperButton(
                 label = "На главную",
                 enabled = !busy,
                 onClick = {
-                    val id = sessionId ?: return@BookButton onHome()
+                    val id = sessionId ?: return@PaperButton onHome()
                     val needsPhoto = ShelfSharePolicy.wantsPhoto(shelfDecision)
                     if (needsPhoto && photoPath == null) {
                         pendingFinish = true
                         openPhotoSource()
-                        return@BookButton
+                        return@PaperButton
                     }
                     viewModel.finish(id, shelfDecision, onHome)
                 },
@@ -273,20 +265,19 @@ private fun WaxSeal(dateLabel: String?, modifier: Modifier = Modifier) {
     WaxSealStamp(
         title = "ИСПЕЧЕНО",
         caption = dateLabel.orEmpty(),
-        color = AppColors.current.sage,
+        color = LocalPaper.current.sage,
         modifier = modifier,
     )
 }
 
 @Composable
 private fun CompletedStat(value: String, label: String) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, color = colors.espresso, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+        Text(value, color = colors.ink,style = PaperType.body, fontWeight = FontWeight.Medium, fontSize = 20.sp)
         Text(
             label.uppercase(),
-            color = colors.cocoa,
-            fontFamily = FontFamily.SansSerif,
+            color = colors.ink2,style = PaperType.caption,
             fontSize = 9.sp,
             letterSpacing = 1.5.sp,
         )
@@ -296,12 +287,12 @@ private fun CompletedStat(value: String, label: String) {
 /** Пустой слот фотокарточки: пунктирная рамка + уголки-держатели, тап открывает модалку «Камера / Галерея». */
 @Composable
 private fun PastedPhotoPrompt(enabled: Boolean, onPick: () -> Unit) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     Column(
         Modifier
             .fillMaxWidth()
             .rotate(-1f)
-            .drawBehind { drawRect(colors.cream) }
+            .drawBehind { drawRect(colors.card) }
             .padding(10.dp)
             .then(
                 com.polinalinen.madre.ui.components.bookAction(
@@ -312,10 +303,10 @@ private fun PastedPhotoPrompt(enabled: Boolean, onPick: () -> Unit) {
             )
             .drawBehind {
                 drawRoundRect(
-                    color = colors.flour,
+                    color = colors.line,
                     style = Stroke(width = 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 5f))),
                 )
-                drawPhotoHolders(colors.cocoa.copy(alpha = 0.55f), 14.dp.toPx())
+                drawPhotoHolders(colors.ink2.copy(alpha = 0.55f), 14.dp.toPx())
             }
             .padding(vertical = 18.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -327,8 +318,7 @@ private fun PastedPhotoPrompt(enabled: Boolean, onPick: () -> Unit) {
         )
         Text(
             "вклеить фотокарточку",
-            color = colors.cocoa,
-            fontFamily = FontFamily.Serif,
+            color = colors.ink2,style = PaperType.body,
             fontStyle = FontStyle.Italic,
             fontSize = 12.sp,
             modifier = Modifier.padding(top = 6.dp),

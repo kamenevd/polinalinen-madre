@@ -1,4 +1,4 @@
-package com.polinalinen.madre.ui.razvorot
+package com.polinalinen.madre.ui.kit
 
 import android.content.Context
 import androidx.compose.material3.*
@@ -18,19 +18,30 @@ val Literature = FontFamily(
     Font(R.font.literata_200,FontWeight.ExtraLight),Font(R.font.literata_300,FontWeight.Light),
     Font(R.font.literata_400,FontWeight.Normal),Font(R.font.literata_500,FontWeight.Medium),
     Font(R.font.literata_italic_300,FontWeight.Light,FontStyle.Italic),Font(R.font.literata_italic_400,FontWeight.Normal,FontStyle.Italic),Font(R.font.literata_italic_500,FontWeight.Medium,FontStyle.Italic))
-val Manrope = FontFamily(Font(R.font.manrope_400,FontWeight.Normal),Font(R.font.manrope_600,FontWeight.SemiBold),Font(R.font.manrope_700,FontWeight.Bold))
+val Manrope = FontFamily(Font(R.font.manrope_200,FontWeight.ExtraLight),Font(R.font.manrope_400,FontWeight.Normal),Font(R.font.manrope_500,FontWeight.Medium),Font(R.font.manrope_600,FontWeight.SemiBold),Font(R.font.manrope_700,FontWeight.Bold),Font(R.font.manrope_800,FontWeight.ExtraBold))
 internal val StaticTimerFonts=FontFamily(Font(R.font.manrope_200,FontWeight.ExtraLight),Font(R.font.manrope_400,FontWeight.Normal),Font(R.font.manrope_500,FontWeight.Medium),Font(R.font.manrope_600,FontWeight.SemiBold),Font(R.font.manrope_700,FontWeight.Bold),Font(R.font.manrope_800,FontWeight.ExtraBold))
-data class PaperColors(val bg:Color,val bg2:Color,val card:Color,val ink:Color,val ink2:Color,val mut:Color,val line:Color,val acc:Color,val ribbon:Color)
-val DawnPaper=PaperColors(Color(0xFFF4F1EC),Color(0xFFEAE5DD),Color.White,Color(0xFF16130F),Color(0xFF4F4943),Color(0xFF8F8880),Color(0xFFE1DBD2),Color(0xFFD2602A),Color(0xFFB83A2E))
-val DayPaper=PaperColors(Color(0xFFF8F3EA),Color(0xFFEFE7DA),Color.White,Color(0xFF16130F),Color(0xFF4F4943),Color(0xFF8F8880),Color(0xFFE6DCCD),Color(0xFFD2602A),Color(0xFFB83A2E))
-val DuskPaper=PaperColors(Color(0xFFF1E2CC),Color(0xFFE7D3B6),Color(0xFFFBF1E2),Color(0xFF2A1C10),Color(0xFF5F4630),Color(0xFF9A7F64),Color(0xFFDCC6A6),Color(0xFFC24E1C),Color(0xFFB83A2E))
-val NightPaper=PaperColors(Color(0xFF0D0B0A),Color(0xFF1A1512),Color(0xFF191411),Color(0xFFF2E9DE),Color(0xFFC0B3A5),Color(0xFF7F7469),Color(0xFF2A231F),Color(0xFFF08A4B),Color(0xFFD0503F))
+data class PaperColors(
+    val bg: Color, val bg2: Color, val card: Color,
+    val ink: Color, val ink2: Color, val mut: Color, val line: Color,
+    val acc: Color, val ribbon: Color, val acc2: Color,
+    val sage: Color, val sage2: Color, val glassAlpha: Float = .72f,
+    val scrimAlpha: Float = .4f,
+) {
+    val rib get() = ribbon
+    val error get() = ribbon
+    val glass get() = bg.copy(alpha = glassAlpha)
+    val scrim get() = Color.Black.copy(alpha = scrimAlpha)
+}
+val DawnPaper = PaperColors(Color(0xFFF4F1EC), Color(0xFFEAE5DD), Color.White, Color(0xFF16130F), Color(0xFF4F4943), Color(0xFF8F8880), Color(0xFFE1DBD2), Color(0xFFD2602A), Color(0xFFB83A2E), Color(0xFFF7DECD), Color(0xFF5F7D45), Color(0xFFE1EBD6))
+val DayPaper = PaperColors(Color(0xFFF8F3EA), Color(0xFFEFE7DA), Color.White, Color(0xFF16130F), Color(0xFF4F4943), Color(0xFF8F8880), Color(0xFFE6DCCD), Color(0xFFD2602A), Color(0xFFB83A2E), Color(0xFFF7DECD), Color(0xFF5F7D45), Color(0xFFE1EBD6))
+val DuskPaper = PaperColors(Color(0xFFF1E2CC), Color(0xFFE7D3B6), Color(0xFFFBF1E2), Color(0xFF2A1C10), Color(0xFF5F4630), Color(0xFF9A7F64), Color(0xFFDCC6A6), Color(0xFFC24E1C), Color(0xFFB83A2E), Color(0xFFF0CDB0), Color(0xFF5F7D45), Color(0xFFE1EBD6), .75f)
+val NightPaper = PaperColors(Color(0xFF0D0B0A), Color(0xFF1A1512), Color(0xFF191411), Color(0xFFF2E9DE), Color(0xFFC0B3A5), Color(0xFF7F7469), Color(0xFF2A231F), Color(0xFFF08A4B), Color(0xFFD0503F), Color(0xFF3B2516), Color(0xFFA2C084), Color(0xFF232D1C), .70f, .55f)
 internal fun paperAt(atmosphere:Atmosphere)=when(atmosphere){Atmosphere.DAY->DayPaper;Atmosphere.DUSK->DuskPaper;Atmosphere.NIGHT->NightPaper;else->DawnPaper}
 /** Every Material role is intentional: no dynamic/default violet enters chips or sliders. */
 internal fun paperScheme(p:PaperColors)=lightColorScheme(
-    primary=p.acc,onPrimary=p.card,primaryContainer=p.bg2,onPrimaryContainer=p.ink,inversePrimary=p.acc,
-    secondary=p.acc,onSecondary=p.card,secondaryContainer=p.bg2,onSecondaryContainer=p.ink,
-    tertiary=p.acc,onTertiary=p.card,tertiaryContainer=p.bg2,onTertiaryContainer=p.ink,
+    primary=p.acc,onPrimary=Color.White,primaryContainer=p.bg2,onPrimaryContainer=p.ink,inversePrimary=p.acc,
+    secondary=p.acc,onSecondary=p.card,secondaryContainer=p.acc2,onSecondaryContainer=p.ink,
+    tertiary=p.sage,onTertiary=p.bg,tertiaryContainer=p.sage2,onTertiaryContainer=p.ink,
     background=p.bg,onBackground=p.ink,surface=p.bg,onSurface=p.ink,surfaceVariant=p.bg2,onSurfaceVariant=p.mut,
     surfaceTint=p.acc,inverseSurface=p.ink,inverseOnSurface=p.bg,
     error=p.ribbon,onError=p.card,errorContainer=p.bg2,onErrorContainer=p.ribbon,
@@ -40,22 +51,14 @@ internal fun paperScheme(p:PaperColors)=lightColorScheme(
     primaryFixed=p.bg2,primaryFixedDim=p.bg2,onPrimaryFixed=p.ink,onPrimaryFixedVariant=p.ink2,
     secondaryFixed=p.bg2,secondaryFixedDim=p.bg2,onSecondaryFixed=p.ink,onSecondaryFixedVariant=p.ink2,
     tertiaryFixed=p.bg2,tertiaryFixedDim=p.bg2,onTertiaryFixed=p.ink,onTertiaryFixedVariant=p.ink2)
-private val PaperTypography=Typography(
-    displayLarge=TextStyle(fontFamily=Literature,fontWeight=FontWeight.ExtraLight,fontSize=57.sp),
-    displayMedium=TextStyle(fontFamily=Literature,fontWeight=FontWeight.Medium,fontSize=45.sp),
-    displaySmall=TextStyle(fontFamily=Literature,fontWeight=FontWeight.Medium,fontSize=36.sp),
-    headlineLarge=TextStyle(fontFamily=Literature,fontWeight=FontWeight.Medium,fontSize=32.sp),
-    headlineMedium=TextStyle(fontFamily=Literature,fontWeight=FontWeight.Medium,fontSize=28.sp),
-    headlineSmall=TextStyle(fontFamily=Literature,fontWeight=FontWeight.Medium,fontSize=26.sp),
-    titleLarge=TextStyle(fontFamily=Literature,fontWeight=FontWeight.Medium,fontSize=22.sp),
-    titleMedium=TextStyle(fontFamily=Literature,fontWeight=FontWeight.Medium,fontSize=18.sp),
-    titleSmall=TextStyle(fontFamily=Manrope,fontWeight=FontWeight.SemiBold,fontSize=14.sp),
-    bodyLarge=TextStyle(fontFamily=Literature,fontSize=16.sp,lineHeight=25.sp),
-    bodyMedium=TextStyle(fontFamily=Literature,fontSize=14.sp,lineHeight=22.sp),
-    bodySmall=TextStyle(fontFamily=Manrope,fontSize=12.sp,lineHeight=18.sp),
-    labelLarge=TextStyle(fontFamily=Manrope,fontWeight=FontWeight.SemiBold,fontSize=14.sp),
-    labelMedium=TextStyle(fontFamily=Manrope,fontWeight=FontWeight.Bold,fontSize=11.sp,letterSpacing=1.6.sp),
-    labelSmall=TextStyle(fontFamily=Manrope,fontWeight=FontWeight.Bold,fontSize=10.sp,letterSpacing=1.8.sp))
+private val PaperTypography = Typography(
+    displayLarge = PaperType.display, displayMedium = PaperType.display,
+    displaySmall = PaperType.h1, headlineLarge = PaperType.h1,
+    headlineMedium = PaperType.h1, headlineSmall = PaperType.h2,
+    titleLarge = PaperType.h2, titleMedium = PaperType.title, titleSmall = PaperType.ui,
+    bodyLarge = PaperType.body, bodyMedium = PaperType.body, bodySmall = PaperType.note,
+    labelLarge = PaperType.ui, labelMedium = PaperType.overline, labelSmall = PaperType.caption,
+)
 val LocalPaper = staticCompositionLocalOf { DawnPaper }
 val LocalAtmosphere = staticCompositionLocalOf { Atmosphere.DAWN }
 class ReadingPreferences(context: Context, namespace:String="razvorot_reading") {

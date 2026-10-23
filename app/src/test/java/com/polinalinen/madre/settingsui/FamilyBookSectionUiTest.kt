@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.screens
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasSetTextAction
@@ -10,7 +11,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.polinalinen.madre.account.FamilyBookState
-import com.polinalinen.madre.ui.theme.MadreTheme
+import com.polinalinen.madre.ui.kit.RazvorotTheme as MadreTheme
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith

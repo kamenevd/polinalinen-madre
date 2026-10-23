@@ -58,4 +58,32 @@ class StyleBoundaryFixturesTest(unittest.TestCase):
                 p.parent.mkdir(parents=True,exist_ok=True);p.write_text('Dialog()')
             self.assertEqual(5,len(boundary.scan(root)))
 
+
+    def test_only_exact_kit_owner_path_and_package_are_lawful(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            kit = root / boundary.KIT
+            kit.mkdir(parents=True)
+            source = "package com.polinalinen.madre.ui.kit\nimport androidx.compose.material3.Button\nColor(0xFF000000)"
+            (kit / 'Paper.kt').write_text(source)
+            self.assertEqual([], boundary.scan(root))
+            for folder, package in (
+                (kit.parent / 'kit-legacy', 'com.polinalinen.madre.ui.kit'),
+                (kit / 'legacy', 'com.polinalinen.madre.ui.kit'),
+                (kit, 'com.polinalinen.madre.ui.screens'),
+            ):
+                p = folder / 'Example.kt'
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_text(source.replace('package com.polinalinen.madre.ui.kit', 'package ' + package))
+                self.assertEqual(2, len(boundary.scan(root)))
+                p.unlink()
+
+    def test_foundation_fields_and_custom_font_assignment_also_require_kit(self):
+        for source, rule in (
+            ('BasicTextField(value=x)', 'bare-field'),
+            ('Text(text, fontFamily = MyFamily)', 'font-assignment'),
+            ('Icon(Icons.Default.Settings)', 'filled-icon'),
+        ):
+            self.assertIn(rule, {v['rule'] for v in boundary.scan_text('fixture.kt', source)})
+
 if __name__=='__main__':unittest.main()

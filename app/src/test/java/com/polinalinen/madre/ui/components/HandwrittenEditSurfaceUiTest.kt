@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.components
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -13,7 +14,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.polinalinen.madre.ui.theme.MadreTheme
+import com.polinalinen.madre.ui.kit.RazvorotTheme as MadreTheme
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test

@@ -61,6 +61,12 @@ Sealed-class навигации из v3 **нет** и не должно появ
 
 ---
 
+## Актуальный UI-контракт F (PR61, 23.10.2026)
+
+Старые ограничения v4 ниже (светлая тема/углы4dp/системные шрифты/AppColors) отменены STYLE-SYSTEM F. `ui/kit` — единственный владелец PaperTokens/LocalPaper/PaperType, статических Literata/Manrope, 4 тем и M3/Foundation-контролов/диалогов. `RazvorotTheme` оборачивает все назначения в NavHost; `CalmMode` перенесён в kit без изменения ключа/default. Старого `ui/theme` больше нет. `SettingsContent` — stateless production layout для локальных screenshot-fixtures, не отдельный макет. Home UI, вызывавшийся только старыми тестами, вынесен в test-only `LegacyHomeFixture`; живые Home/TocLine/HomeCopy остались в `HomeContract`. Мёртвая ветка ShelfScreen(false) удалена; репозитории/данные/маршруты не менялись.
+
+PR: compile/testDebugUnitTest/StyleBoundary +20 PNG412×915; reading-sheet отдельно dawn/day/evening/night. Линт не блокирует, полный instrumented/GLES — manual/nightly/RC, skipped на PR не является passed. Стилевой baseline330→0, новых0; исключение только точного ui/kit path+package. NAV — следующий этап, а не часть этой миграции.
+
 ## Архитектура
 
 ```

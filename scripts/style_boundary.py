@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """PR61 transitional style boundary: exact existing debt, no new violations.
 
-No directory allowlist. Baseline regeneration is an explicit reviewed
-operation; --check never updates it. Kit ownership is a future migration.
+Only the exact application ui/kit path with its matching package owns style.
+Every other main source is scanned; --check never updates the legacy baseline.
 """
 from __future__ import annotations
 import argparse
@@ -14,7 +14,11 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[1]
 MAIN = Path('app/src/main')
 BASELINE = Path('scripts/style-boundary-baseline.json')
+KIT = MAIN / 'java/com/polinalinen/madre/ui/kit'
 RULES = (
+    ('bare-field', r'\bBasicTextField\s*\('),
+    ('font-assignment', r'\bfontFamily\s*='),
+    ('filled-icon', r'\bIcons\.(?:Default|Filled)\.'),
     ('material3-import', r'(?m)^\s*import\s+androidx\.compose\.material3\.(?!Text(?:\s|;|$)|Icon(?:\s|;|$)|MaterialTheme(?:\s|;|$)|LocalContentColor(?:\s|;|$))(?:\*|[A-Za-z_][A-Za-z_0-9]*)'),
     ('material-theme-constructor', r'\bMaterialTheme\s*\('),
     ('color-hex', r'\bColor\s*\(\s*0[xX][0-9a-fA-F_]+'),
@@ -71,7 +75,11 @@ def scan(root: Path) -> list[dict]:
     found=[]
     for p in sorted((root/MAIN).rglob('*')):
         if p.suffix not in ('.kt','.java'):continue
-        found.extend(scan_text(p.relative_to(root).as_posix(),p.read_text()))
+        relative = p.relative_to(root)
+        text = p.read_text()
+        if relative.parent == KIT and re.search(r'(?m)^package com\.polinalinen\.madre\.ui\.kit\s*;?\s*$', code_only(text)):
+            continue
+        found.extend(scan_text(relative.as_posix(), text))
     return found
 
 
@@ -85,7 +93,7 @@ def check(root: Path) -> dict:
     allowed={identity(x) for x in baseline['violations']}
     actual=scan(root);new=[x for x in actual if identity(x) not in allowed]
     if new:raise AssertionError('NEW style boundary violations:\n'+json.dumps(new,ensure_ascii=False,indent=2))
-    return {'status':'PASS','scope':'all main Kotlin/Java, no directory exceptions','existing_legacy':len(actual),'baseline':baseline['count'],'new':0,'zero_legacy':not actual,'tracking':baseline['tracking']}
+    return {'status':'PASS','scope':'all main Kotlin/Java except exact ui/kit owner path+package','existing_legacy':len(actual),'baseline':baseline['count'],'new':0,'zero_legacy':not actual,'tracking':baseline['tracking']}
 
 
 def main():

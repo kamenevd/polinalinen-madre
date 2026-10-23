@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.screens
 
+import com.polinalinen.madre.ui.kit.*
 import android.app.Application
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
@@ -14,7 +15,7 @@ import androidx.work.WorkManager
 import com.google.common.truth.Truth.assertThat
 import com.polinalinen.madre.MadreApplication
 import com.polinalinen.madre.shelf.ShelfShareDecision
-import com.polinalinen.madre.ui.theme.MadreTheme
+import com.polinalinen.madre.ui.kit.RazvorotTheme as MadreTheme
 import com.polinalinen.madre.viewmodel.BakingViewModel
 import com.polinalinen.madre.viewmodel.fakes.FakeBakeHistory
 import com.polinalinen.madre.viewmodel.fakes.FakeBakeSessionLedger

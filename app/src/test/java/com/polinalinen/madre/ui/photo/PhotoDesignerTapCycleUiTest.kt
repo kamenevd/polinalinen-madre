@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.photo
 
+import com.polinalinen.madre.ui.kit.*
 import android.content.Context
 import android.graphics.Bitmap
 import androidx.compose.ui.test.assertIsDisplayed
@@ -9,7 +10,7 @@ import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.polinalinen.madre.MadreApplication
-import com.polinalinen.madre.ui.theme.MadreTheme
+import com.polinalinen.madre.ui.kit.RazvorotTheme as MadreTheme
 import com.polinalinen.madre.utils.PhotoStore
 import java.io.File
 import java.io.FileOutputStream

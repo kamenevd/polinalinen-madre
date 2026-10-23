@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.visual
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
@@ -7,7 +8,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.polinalinen.madre.MadreApplication
 import com.polinalinen.madre.ui.screens.SettingsScreen
-import com.polinalinen.madre.ui.theme.MadreTheme
+import com.polinalinen.madre.ui.kit.RazvorotTheme as MadreTheme
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith

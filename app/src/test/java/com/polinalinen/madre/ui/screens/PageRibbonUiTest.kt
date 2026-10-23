@@ -1,8 +1,8 @@
 package com.polinalinen.madre.ui.screens
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.hasClickAction
@@ -10,8 +10,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.polinalinen.madre.sourdough.GrowthPhase
-import com.polinalinen.madre.ui.theme.AppColors
-import com.polinalinen.madre.ui.theme.MadreTheme
+import com.polinalinen.madre.ui.kit.RazvorotTheme as MadreTheme
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -44,7 +43,7 @@ class PageRibbonUiTest {
     private fun showRibbon(hasActiveBake: Boolean, phase: GrowthPhase) {
         rule.setContent {
             MadreTheme {
-                Surface(color = AppColors.current.paper, modifier = Modifier.fillMaxSize()) {
+                PaperSurface(color = LocalPaper.current.bg, modifier = Modifier.fillMaxSize()) {
                     Box(Modifier.fillMaxSize()) {
                         PageRibbon(hasActiveBake = hasActiveBake, phase = phase, totalBakes = 3)
                     }

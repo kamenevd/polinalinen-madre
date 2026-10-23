@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.razvorot
 
+import com.polinalinen.madre.ui.kit.*
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color

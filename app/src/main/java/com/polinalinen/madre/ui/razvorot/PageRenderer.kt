@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.razvorot
 
+import com.polinalinen.madre.ui.kit.*
 import android.content.Context
 import android.graphics.*
 import android.text.Layout
@@ -13,11 +14,11 @@ import com.polinalinen.madre.model.RecipeScaler
 
 /** Native page texture renderer. Draws live recipe strings, not an exported UI image. */
 internal class PageRenderer(private val context: Context) {
-    private val roman = ResourcesCompat.getFont(context,R.font.literata_400) ?: Typeface.SERIF
-    private val light = ResourcesCompat.getFont(context,R.font.literata_200) ?: Typeface.SERIF
-    private val medium = ResourcesCompat.getFont(context,R.font.literata_500) ?: Typeface.SERIF
-    private val italic = ResourcesCompat.getFont(context,R.font.literata_italic_500) ?: Typeface.create(Typeface.SERIF,Typeface.ITALIC)
-    private val ui = ResourcesCompat.getFont(context,R.font.manrope_700) ?: Typeface.SANS_SERIF
+    private val roman = PaperFonts.roman(context)
+    private val light = PaperFonts.light(context)
+    private val medium = PaperFonts.medium(context)
+    private val italic = PaperFonts.italic(context)
+    private val ui = PaperFonts.ui(context)
     fun text(recipe: Recipe, chapter: Int, width: Int, height: Int, colors: PaperColors, fontSize: Float = 16f, scale: Double = 1.0, startStep: Int = 1, viewportWidth:Float=360f): Bitmap {
         val bitmap=Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888)
         val canvas=Canvas(bitmap);val density=width/viewportWidth;canvas.scale(density,density)

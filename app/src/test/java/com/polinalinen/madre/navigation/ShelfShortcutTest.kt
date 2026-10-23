@@ -1,5 +1,6 @@
 package com.polinalinen.madre.navigation
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -13,7 +14,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
 import com.polinalinen.madre.MadreApplication
 import com.polinalinen.madre.shelf.FamilyShelf
-import com.polinalinen.madre.ui.theme.MadreTheme
+import com.polinalinen.madre.ui.kit.RazvorotTheme as MadreTheme
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Before
 import org.junit.Rule

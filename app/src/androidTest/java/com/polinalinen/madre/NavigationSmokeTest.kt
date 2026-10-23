@@ -1,5 +1,6 @@
 package com.polinalinen.madre
 
+import com.polinalinen.madre.ui.kit.*
 import android.Manifest
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasTestTag

@@ -1,16 +1,16 @@
 package com.polinalinen.madre.ui.visual
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performScrollTo
-import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.polinalinen.madre.MadreApplication
 import com.polinalinen.madre.ui.screens.FeedingFormScreen
-import com.polinalinen.madre.ui.theme.MadreTheme
+import com.polinalinen.madre.ui.kit.RazvorotTheme as MadreTheme
 import com.polinalinen.madre.viewmodel.FeedingSaveState
 import com.github.takahirom.roborazzi.captureRoboImage
 import org.junit.Rule
@@ -30,7 +30,7 @@ class FeedingFormGoldenTest {
     private fun render(state: FeedingSaveState) {
         rule.setContent {
             MadreTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
+                PaperSurface(modifier = Modifier.fillMaxSize()) {
                     FeedingFormScreen(
                         onSave = { _, _, _, _, _, _ -> },
                         onBack = {},

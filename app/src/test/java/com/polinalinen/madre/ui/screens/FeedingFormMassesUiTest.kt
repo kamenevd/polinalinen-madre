@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.screens
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasContentDescription
@@ -17,7 +18,7 @@ import com.google.common.truth.Truth.assertThat
 import com.polinalinen.madre.MadreApplication
 import com.polinalinen.madre.data.db.entities.StorageLocation
 import com.polinalinen.madre.viewmodel.FeedingSaveState
-import com.polinalinen.madre.ui.theme.MadreTheme
+import com.polinalinen.madre.ui.kit.RazvorotTheme as MadreTheme
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith

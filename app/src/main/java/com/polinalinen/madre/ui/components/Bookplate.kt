@@ -1,10 +1,10 @@
 package com.polinalinen.madre.ui.components
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -25,7 +25,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.polinalinen.madre.ui.theme.AppColors
 
 /**
  * Название семьи — очищаем от лишних пробелов и не даём разрастись до
@@ -61,14 +60,14 @@ fun Bookplate(
      */
     label: String = "Экслибрис",
 ) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-        PageLabel(label, color = colors.cocoa)
+        PageLabel(label, color = colors.ink2)
         Column(
             Modifier
                 .padding(top = 10.dp)
                 .fillMaxWidth()
-                .drawBehind { drawBookplateFrame(colors.espresso, colors.caramel) }
+                .drawBehind { drawBookplateFrame(colors.ink, colors.acc) }
                 .padding(22.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -77,17 +76,15 @@ fun Bookplate(
             } else {
                 Text(
                     "эта книга принадлежит семье".uppercase(),
-                    color = colors.cocoa,
-                    fontFamily = FontFamily.SansSerif,
+                    color = colors.ink2,style = PaperType.caption,
                     fontSize = 9.sp,
                     letterSpacing = 2.sp,
                     textAlign = TextAlign.Center,
                 )
                 Text(
                     familyName,
-                    color = colors.espresso,
-                    fontFamily = FontFamily.Cursive,
-                    fontWeight = FontWeight.Bold,
+                    color = colors.ink,style = PaperType.note,
+                    fontWeight = FontWeight.Medium,
                     fontSize = 26.sp,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(top = 8.dp),
@@ -99,65 +96,27 @@ fun Bookplate(
 
 @Composable
 private fun BookplateNameInput(onSetName: (String) -> Unit) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     var draft by remember { mutableStateOf("") }
 
     Text(
         "впишите имя семьи — навсегда останется здесь",
-        color = colors.cocoa,
-        fontFamily = FontFamily.Serif,
+        color = colors.ink2,style = PaperType.body,
         fontStyle = FontStyle.Italic,
         fontSize = 12.sp,
         textAlign = TextAlign.Center,
     )
-    Column(
-        Modifier
-            .padding(top = 10.dp)
-            .fillMaxWidth()
-            .drawBehind {
-                drawLine(
-                    color = colors.flour,
-                    start = Offset(0f, size.height),
-                    end = Offset(size.width, size.height),
-                    strokeWidth = 1.dp.toPx(),
-                )
-            }
-            .padding(bottom = 6.dp)
-    ) {
-        if (draft.isEmpty()) {
-            Text(
-                "семья Ивановых",
-                color = colors.flour,
-                fontFamily = FontFamily.Cursive,
-                fontSize = 22.sp,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-        BasicTextField(
-            value = draft,
-            onValueChange = { draft = BookplateName.sanitize(it) },
-            singleLine = true,
-            textStyle = TextStyle(
-                color = colors.espresso,
-                fontFamily = FontFamily.Cursive,
-                fontSize = 22.sp,
-                textAlign = TextAlign.Center,
-            ),
-            cursorBrush = SolidColor(colors.crust),
-            modifier = Modifier.fillMaxWidth(),
-        )
-    }
+    PaperField(draft, { draft = BookplateName.sanitize(it) }, placeholder = "семья Ивановых",
+        modifier = Modifier.fillMaxWidth().padding(top = 10.dp))
     if (draft.isNotBlank()) {
         Text(
             "вписать навсегда",
-            color = colors.crust,
-            fontFamily = FontFamily.SansSerif,
+            color = colors.acc,style = PaperType.caption,
             fontSize = 10.sp,
             letterSpacing = 2.sp,
             modifier = Modifier
                 .padding(top = 10.dp)
-                .clickable { onSetName(draft) },
+                .then(bookAction("Вписать имя семьи") { onSetName(draft) }),
         )
     }
 }

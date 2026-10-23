@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.screens
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.StateRestorationTester
@@ -16,7 +17,7 @@ import com.polinalinen.madre.data.db.entities.BakeRecordEntity
 import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.ui.components.ChapterPhotoViewer
 import com.polinalinen.madre.ui.components.YearHeatmapTags
-import com.polinalinen.madre.ui.theme.MadreTheme
+import com.polinalinen.madre.ui.kit.RazvorotTheme as MadreTheme
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder

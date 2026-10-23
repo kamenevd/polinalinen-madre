@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.razvorot
 
+import com.polinalinen.madre.ui.kit.*
 import android.content.Context
 import android.os.PowerManager
 import android.provider.Settings
@@ -23,7 +24,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.viewinterop.AndroidView
-import com.polinalinen.madre.ui.theme.LocalCalmMode
+import com.polinalinen.madre.ui.kit.LocalCalmMode
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CancellationException

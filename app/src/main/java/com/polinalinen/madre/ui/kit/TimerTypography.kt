@@ -1,5 +1,6 @@
-package com.polinalinen.madre.ui.razvorot
+package com.polinalinen.madre.ui.kit
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember

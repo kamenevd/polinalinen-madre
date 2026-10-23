@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.razvorot
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -46,7 +47,7 @@ internal fun bookWord(n:Int)=when {
         // Fit the natural single line, down to the designer's11sp minimum.
         // At the minimum, a genuinely long name uses ellipsis, never wrapping.
         while(font>11f) {
-            val natural=measurer.measure(name,TextStyle(fontFamily=Literature,fontSize=font.sp,lineHeight=(font*23f/18f).sp),maxLines=1,softWrap=false)
+            val natural=measurer.measure(name,PaperType.body.copy(fontSize=font.sp,lineHeight=(font*23f/18f).sp),maxLines=1,softWrap=false)
             if(natural.multiParagraph.width<=along && natural.size.height<=across)break
             font-=.5f
         }
@@ -57,7 +58,7 @@ internal fun bookWord(n:Int)=when {
             layout(constraints.maxWidth,constraints.maxHeight) {
                 title.placeWithLayer((constraints.maxWidth-title.width)/2,(constraints.maxHeight-title.height)/2) { rotationZ=90f }
             }
-        },color=Color(0xFFF4EADC),fontFamily=Literature,fontSize=font.sp,lineHeight=(font*23f/18f).sp,textAlign=TextAlign.Center,maxLines=1,softWrap=false,overflow=TextOverflow.Ellipsis)
+        },color=Illustration.CoverLettering,style = PaperType.body,fontSize=font.sp,lineHeight=(font*23f/18f).sp,textAlign=TextAlign.Center,maxLines=1,softWrap=false,overflow=TextOverflow.Ellipsis)
     }
     }
 }
@@ -75,7 +76,7 @@ internal fun bookWord(n:Int)=when {
             familyName?.takeIf{it.isNotBlank()}?.let{SmallLabel(it,Modifier.padding(top=8.dp))}
             Row(Modifier.fillMaxWidth().height(230.dp).horizontalScroll(rememberScrollState()).padding(top=22.dp),verticalAlignment=Alignment.Bottom,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                 spines.forEachIndexed { i,member ->
-                    val colors=listOf(Color(0xFF7C3B22),Color(0xFF4F6140),Color(0xFF33424D),Color(0xFF8E6A3A))
+                    val colors=listOf(Illustration.SpineInks[0],Illustration.SpineInks[1],Illustration.SpineInks[2],Illustration.SpineInks[3])
                     Box(Modifier.width(56.dp).height((180+i%3*14).dp).background(colors[i%colors.size]).then(bookAction("Открыть книгу: ${member.displayName}"){onOpenBook(member.userId)}).testTag("shelf-spine-${member.userId}"),contentAlignment=Alignment.Center) {
                         SpineTitle(member.displayName,hasRibbon=member.isMe)
                         if(member.isMe)Ribbon(Modifier.align(Alignment.TopCenter).testTag("shelf-own-ribbon"))
@@ -83,8 +84,8 @@ internal fun bookWord(n:Int)=when {
                 }
                 Box(Modifier.width(48.dp).height(150.dp).background(p.bg2).testTag(FamilyShelf.UNCUT_SPINE_TAG))
             }
-            Box(Modifier.fillMaxWidth().height(10.dp).background(Color(0xFF8B6A4E)))
-            Text(FamilyShelf.CAPTION,Modifier.padding(top=12.dp).testTag("shelf-caption"),fontFamily=Manrope,fontSize=11.sp,lineHeight=17.sp,color=p.ink2)
+            Box(Modifier.fillMaxWidth().height(10.dp).background(Illustration.ShelfWood))
+            Text(FamilyShelf.CAPTION,Modifier.padding(top=12.dp).testTag("shelf-caption"),style = PaperType.caption,fontSize=11.sp,lineHeight=17.sp,color=p.ink2)
             Spacer(Modifier.height(18.dp))
             val photos=records.filter{!it.photoPath.isNullOrBlank()}.take(3)
             if(photos.isNotEmpty())Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {

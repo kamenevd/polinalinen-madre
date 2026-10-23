@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.components
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,12 +13,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.Image
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,7 +34,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.polinalinen.madre.R
-import com.polinalinen.madre.ui.theme.AppColors
 import kotlinx.coroutines.launch
 
 /**
@@ -50,7 +46,6 @@ import kotlinx.coroutines.launch
  * сторона вынесла launchers наружу (gallery + camera), чтобы Composable
  * не зависел от контрактов активности.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PhotoSourceChooser(
     visible: Boolean,
@@ -59,37 +54,24 @@ fun PhotoSourceChooser(
     onPickCamera: () -> Unit,
 ) {
     if (!visible) return
-    val colors = AppColors.current
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val scope = rememberCoroutineScope()
-
+    val colors = LocalPaper.current
     fun choose(action: () -> Unit) {
-        scope.launch {
-            sheetState.hide()
-            action()
-            onDismiss()
-        }
+        action()
+        onDismiss()
     }
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = colors.paper,
-    ) {
+    PaperSheet(onDismissRequest = onDismiss) {
         Column(
             Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 10.dp),
         ) {
             Text(
                 "откуда вклеить фотокарточку?",
-                color = colors.espresso,
-                fontFamily = FontFamily.Serif,
-                fontWeight = FontWeight.SemiBold,
+                color = colors.ink,style = PaperType.body,
+                fontWeight = FontWeight.Medium,
                 fontSize = 18.sp,
             )
             Text(
                 "только что снятое или уже из галереи — оба пути вклеиваются одинаково",
-                color = colors.cocoa,
-                fontFamily = FontFamily.Serif,
+                color = colors.ink2,style = PaperType.body,
                 fontStyle = FontStyle.Italic,
                 fontSize = 12.sp,
                 modifier = Modifier.padding(top = 4.dp),
@@ -117,18 +99,17 @@ fun PhotoSourceChooser(
                 )
             }
             Spacer(Modifier.height(14.dp))
-            Surface(
-                color = colors.parchment,
+            PaperSurface(
+                color = colors.bg2,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { choose(onDismiss) }
+                    .then(bookAction("Отмена") { choose(onDismiss) })
                     .padding(vertical = 12.dp),
                 shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
             ) {
                 Text(
                     "отмена".uppercase(),
-                    color = colors.cocoa,
-                    fontFamily = FontFamily.SansSerif,
+                    color = colors.ink2,style = PaperType.caption,
                     fontSize = 11.sp,
                     letterSpacing = 2.sp,
                     modifier = Modifier.fillMaxWidth(),
@@ -149,15 +130,15 @@ private fun SourceCard(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     Column(
         modifier
             .rotate(rotation)
-            .clickable { onClick() }
+            .then(bookAction(label, onClick = onClick))
             .drawBehind {
-                drawRect(colors.cream)
+                drawRect(colors.card)
                 drawRoundRect(
-                    color = colors.espresso,
+                    color = colors.ink,
                     cornerRadius = CornerRadius(8.dp.toPx()),
                     style = Stroke(width = 1.5.dp.toPx()),
                 )
@@ -173,15 +154,13 @@ private fun SourceCard(
         Spacer(Modifier.height(10.dp))
         Text(
             label,
-            color = colors.espresso,
-            fontFamily = FontFamily.Serif,
-            fontWeight = FontWeight.SemiBold,
+            color = colors.ink,style = PaperType.body,
+            fontWeight = FontWeight.Medium,
             fontSize = 16.sp,
         )
         Text(
             hint,
-            color = colors.cocoa,
-            fontFamily = FontFamily.Serif,
+            color = colors.ink2,style = PaperType.body,
             fontStyle = FontStyle.Italic,
             fontSize = 11.sp,
             modifier = Modifier.padding(top = 2.dp),

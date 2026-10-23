@@ -26,14 +26,14 @@ import com.polinalinen.madre.ui.components.bookAction
     preferences:ReadingPreferences,onOpenRecipe:(String)->Unit,onOpenTimer:(Long)->Unit,
     onFeed:()->Unit,onDiary:()->Unit,onSettings:()->Unit,shelf:@Composable ()->Unit,
     intervalHours:Int=24,onContinueReading:(BakingSession)->Unit={},
-    onOpenShelf:(()->Unit)?=null,initialSection:Int=0,
+    onOpenShelf:(()->Unit)?=null,initialSection:Int=0,onSectionChanged:(Int)->Unit={},
 ) {
-    var section by rememberSaveable{mutableIntStateOf(0)}
+    var section by rememberSaveable{mutableIntStateOf(initialSection)}
     LaunchedEffect(initialSection){section=initialSection}
     var catalog by rememberSaveable{mutableStateOf(false)}
     var settings by remember{mutableStateOf(false)}
     val p=LocalPaper.current
-    BackHandler(enabled=catalog||section!=0){catalog=false;section=0}
+    BackHandler(enabled=catalog||section!=0){catalog=false;section=0;onSectionChanged(0)}
     Column(Modifier.fillMaxSize().background(p.bg).safeDrawingPadding()) {
         Box(Modifier.weight(1f)) {
             when(section) {
@@ -56,7 +56,7 @@ import com.polinalinen.madre.ui.components.bookAction
                         val remaining by viewModel.remainingFor(s.id).collectAsState()
                         Column(Modifier.fillMaxWidth().clickable{onOpenTimer(s.id)}.padding(vertical=20.dp)) {SmallLabel("ШАГ ${s.currentStepIndex+1} · ${s.currentStep.title}");BookText(s.recipe.name,26);BookText(timerDigits(remaining),48,color=p.acc);PaperButton("Продолжить выпечку",{onOpenTimer(s.id)},primary=true)}
                     }
-                    PaperButton("Выбрать рецепт",{section=0;catalog=true},Modifier.padding(top=24.dp),true)
+                    PaperButton("Выбрать рецепт",{section=0;onSectionChanged(0);catalog=true},Modifier.padding(top=24.dp),true)
                 }
                 2 -> StarterPaper(starterName,day,phase,lastFeedingMillis?.let{com.polinalinen.madre.sourdough.hoursSinceFeeding(it)},hydration,onFeed,onDiary,{settings=true},intervalHours)
                 3 -> Column(Modifier.fillMaxSize()) {
@@ -67,7 +67,7 @@ import com.polinalinen.madre.ui.components.bookAction
                 }
             }
         }
-        SpineBar(section){if(it==3&&onOpenShelf!=null)onOpenShelf()else section=it}
+        SpineBar(section){if(it==3&&onOpenShelf!=null)onOpenShelf()else {section=it;onSectionChanged(it)}}
     }
     if(settings)ReadingSettings(preferences){settings=false}
 }

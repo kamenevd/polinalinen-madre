@@ -204,6 +204,7 @@ fun MadreNavHost(
                     preferences = readingPreferences,
                     intervalHours = sourdoughConfig?.intervalHours ?: 24,
                     initialSection = homeSection,
+                    onSectionChanged = {section->it.savedStateHandle["home_section"]=section},
                     onOpenShelf = { navController.navigate(MadreDestinations.SHELF) },
                     onContinueReading = { session -> readingPreferences.choosePortions(session.scaleFactor.toFloat());navController.navigate(MadreDestinations.readerStep(session.recipe.id,session.currentStepIndex)) },
                     onOpenRecipe = { id -> navController.navigate(MadreDestinations.recipeDetail(id)) },

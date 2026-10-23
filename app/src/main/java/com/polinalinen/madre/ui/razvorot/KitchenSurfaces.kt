@@ -14,10 +14,7 @@ import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalView
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import kotlinx.coroutines.launch
+
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
@@ -77,22 +74,8 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
 }
 @Composable fun StarterPaper(name:String,day:Int,phase:GrowthPhase,hours:Float?,hydration:Int?,onFeed:()->Unit,onDiary:()->Unit,onSettings:()->Unit,intervalHours:Int=24) {
     val p=LocalPaper.current
-    val scroll=rememberScrollState()
-    val owner=LocalLifecycleOwner.current
-    val scope=rememberCoroutineScope()
-    var returning by rememberSaveable{mutableStateOf(false)}
-    DisposableEffect(owner,scroll) {
-        val observer=LifecycleEventObserver { _,event ->
-            if(event==Lifecycle.Event.ON_PAUSE)returning=true
-            if(event==Lifecycle.Event.ON_RESUME && returning) {
-                if(com.polinalinen.madre.BuildConfig.DEBUG)android.util.Log.i("MadreStarter","return scroll=${scroll.value}; show jar from top")
-                scope.launch{scroll.scrollTo(0)}
-                returning=false
-            }
-        }
-        owner.lifecycle.addObserver(observer)
-        onDispose{owner.lifecycle.removeObserver(observer)}
-    }
+    // Returning to this overview starts at its jar, not the old below-fold CTA.
+    val scroll=remember { ScrollState(0) }
     Column(Modifier.fillMaxSize().testTag("starter-phase-${phase.name}").verticalScroll(scroll).padding(horizontal=22.dp)) {
         BookHeader("ЗАКВАСКА · ДЕНЬ $day",onAa=onSettings)
         BookText(name,42);BookText("живая",42,italic=true,color=p.acc)

@@ -169,6 +169,7 @@ class NavigationSmokeTest {
             rule.onNodeWithTag("starter-jar").assertDoesNotExist()
             pressSystemBack()
             rule.waitUntil(TIMEOUT_MS){rule.onNodeWithTag("starter-jar").isDisplayed()}
+            rule.onNodeWithTag("nav-2").assertIsSelected()
             rule.onNodeWithTag("starter-jar").assertIsDisplayed()
         } finally {
             runBlocking {

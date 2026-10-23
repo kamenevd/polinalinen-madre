@@ -33,9 +33,9 @@ internal class PaperTexture(val front: Bitmap, paper: Int, private val night: Bo
         // Subtle deterministic fibres remain visible on an otherwise blank verso.
         val tile=Bitmap.createBitmap(16,16,Bitmap.Config.ARGB_8888)
         for(y in 0 until 16)for(x in 0 until 16) {
-            val noise=((x*13+y*29+x*y*3) and 15)-7
+            val noise=((x*13+y*29+x*y*3) and 15)*2-15
             val color=if(noise<0)0 else 255
-            tile.setPixel(x,y,Color.argb(abs(noise)/4,color,color,color))
+            tile.setPixel(x,y,Color.argb((abs(noise)/15f*PaperLight.GRAIN*255f).roundToInt(),color,color,color))
         }
         c.drawPaint(Paint().apply{shader=android.graphics.BitmapShader(tile,android.graphics.Shader.TileMode.REPEAT,android.graphics.Shader.TileMode.REPEAT)})
         tile.recycle()

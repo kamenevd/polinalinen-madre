@@ -65,6 +65,7 @@ class StyleAuditRegressionTest {
         assertThat(PaperLight.HIGHLIGHT).isEqualTo(.035f)
         assertThat(PaperLight.SHADOW).isEqualTo(.58f)
         assertThat(PaperLight.SHADOW_MAX).isEqualTo(.8f)
+        assertThat(PaperLight.GRAIN).isEqualTo(.0075f)
         assertThat(PaperLight.crease(0f,60f,false)).isWithin(.00001f).of(.76f)
         assertThat(PaperLight.crease(0f,60f,true)).isWithin(.00001f).of(.616f)
         assertThat(PaperLight.receiver(54f,60f,false)).isWithin(.00001f).of(.42f)

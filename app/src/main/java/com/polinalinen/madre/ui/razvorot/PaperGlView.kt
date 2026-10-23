@@ -204,7 +204,7 @@ gl_Position=vec4(pos.x/uS.x*2.-1.,1.-pos.y/uS.y*2.,uMode>.5?.5:-pos.z/400.,1.);}
 precision mediump float; uniform sampler2D uT; uniform vec3 uPaper;
 uniform float uR,uMode,uNight,uGrid; varying mediump vec2 vUv; varying mediump float vD,vTh;
 void main(){if(uGrid>.5){gl_FragColor=vec4(.8,.25,.1,1.);return;}
-vec3 t=texture2D(uT,vUv).rgb;float K=1.+uNight*${PaperLight.NIGHT};float grain=(fract(sin(dot(vUv,vec2(12.9898,78.233)))*43758.5)-.5)*.015;
+vec3 t=texture2D(uT,vUv).rgb;float K=1.+uNight*${PaperLight.NIGHT};float grain=(fract(sin(dot(vUv,vec2(12.9898,78.233)))*43758.5)-.5)*${PaperLight.GRAIN*2f};
 if(uMode>.5){float e=vD-uR*${PaperLight.SHADOW_START};float s=${PaperLight.SHADOW}*K*exp(-max(e,0.)/(uR*${PaperLight.SHADOW_RADIUS}+${PaperLight.SHADOW_SOFT}));
 if(e<0.)s*=smoothstep(-uR*${PaperLight.SHADOW_FADE},0.,e);gl_FragColor=vec4(t*(1.-min(s,${PaperLight.SHADOW_MAX}))+grain,1.);return;}
 float th=vTh;float crease=1.-${PaperLight.AO}*K*exp(-abs(vD)/(uR*${PaperLight.AO_RADIUS}+${PaperLight.AO_SOFT}));float sh;vec3 base;

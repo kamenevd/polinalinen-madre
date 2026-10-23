@@ -31,6 +31,7 @@ internal object PaperLight {
     const val SHADOW_FADE = 1.75f
     const val SHADOW_RADIUS = 1.1f
     const val SHADOW_SOFT = 20f
+    const val GRAIN = .0075f
     fun nightFactor(night:Boolean)=if(night)1f+NIGHT else 1f
     fun faceShade(theta:Float)=1f-FACE*(1f-cos(theta))
     fun versoShade(theta: Float) = VERSO_BASE + VERSO_RANGE * -cos(theta)

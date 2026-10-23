@@ -194,7 +194,7 @@ fun StarterDiaryScreen(
                 PaperButton(
                     label = "Фото",
                     onClick = onOpenGallery,
-                    variant = com.polinalinen.madre.ui.components.PaperButtonVariant.SECONDARY,
+                    variant = PaperButtonVariant.SECONDARY,
                     modifier = Modifier.weight(1f),
                 )
             }

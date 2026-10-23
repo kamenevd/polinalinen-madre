@@ -65,7 +65,7 @@ class BookControlsUiTest {
      * константа, сверенная сама с собой, ничего не проверяет.
      */
     @Test
-    fun `a quiet text action is set at reading size`() {
+    fun `paper text action uses approved compact interface type`() {
         rule.setContent { MadreTheme { TextAction(label = "заглянуть ещё раз", onClick = {}) } }
         val layouts = mutableListOf<TextLayoutResult>()
         rule.onNodeWithText("заглянуть ещё раз")
@@ -73,7 +73,8 @@ class BookControlsUiTest {
             .config[SemanticsActions.GetTextLayoutResult]
             .action
             ?.invoke(layouts)
-        assertThat(layouts.first().layoutInput.style.fontSize).isEqualTo(15.sp)
+        // STYLE-SYSTEM §2: this is now Manrope UI text13sp, not the retired serif15sp action.
+        assertThat(layouts.first().layoutInput.style.fontSize).isEqualTo(13.sp)
     }
 
     @Test

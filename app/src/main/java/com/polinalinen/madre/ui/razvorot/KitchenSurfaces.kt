@@ -46,7 +46,7 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
         }
         val progress=timerProgress(session.currentStep.durationMinutes*60L,remaining)
         TimerNumber(timerDigits(remaining),progress,92.sp,(-5).sp,p.ink,Modifier.fillMaxWidth().clickable(onClickLabel="Открыть большой таймер"){full=true}.padding(top=12.dp))
-        LinearProgressIndicator(progress={progress},Modifier.fillMaxWidth().padding(vertical=12.dp),color=p.acc,trackColor=p.bg2)
+        PaperProgress(progress, Modifier.fillMaxWidth().padding(vertical=12.dp))
         SmallLabel(if(remaining==0L) "ВРЕМЯ ВЫШЛО" else "ОСТАЛОСЬ ИЗ ${session.currentStep.durationMinutes} МИН")
         val bindings=remember(session.recipe){RecipeScaler.scalableBindings(session.recipe)}
         BookText(RecipeScaler.scaledStepText(session.currentStep.description,session.scaleFactor,bindings),16,Modifier.padding(top=24.dp),color=p.ink2,lineHeight=25.sp)

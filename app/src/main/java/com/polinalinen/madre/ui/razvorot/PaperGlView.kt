@@ -1,6 +1,5 @@
 package com.polinalinen.madre.ui.razvorot
 
-import com.polinalinen.madre.ui.kit.*
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.SurfaceTexture
@@ -76,7 +75,7 @@ internal class PaperGlView(context: Context, private val failure: (String) -> Un
                 eglContext = EGL14.eglCreateContext(display, config, EGL14.EGL_NO_CONTEXT, intArrayOf(EGL14.EGL_CONTEXT_CLIENT_VERSION, 2, EGL14.EGL_NONE), 0)
                 check(eglContext != EGL14.EGL_NO_CONTEXT)
                 stage="egl-window-${width}x$height"
-                window = PaperSurface(surface)
+                window = Surface(surface)
                 eglSurface = EGL14.eglCreateWindowSurface(display, config, window, intArrayOf(EGL14.EGL_NONE), 0)
                 check(eglSurface != EGL14.EGL_NO_SURFACE)
                 check(EGL14.eglMakeCurrent(display, eglSurface, eglSurface, eglContext))

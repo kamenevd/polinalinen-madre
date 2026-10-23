@@ -30,7 +30,6 @@ import com.polinalinen.madre.ui.screens.BakingTimerScreen
 import com.polinalinen.madre.ui.screens.BookStatsScreen
 import com.polinalinen.madre.ui.screens.FeedingFormScreen
 import com.polinalinen.madre.ui.screens.GalleryPhoto
-import com.polinalinen.madre.ui.screens.HomeScreen
 import com.polinalinen.madre.ui.screens.PhotoGalleryScreen
 import com.polinalinen.madre.ui.screens.RecipeDetailScreen
 import com.polinalinen.madre.ui.screens.SettingsScreen

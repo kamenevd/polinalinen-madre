@@ -133,8 +133,9 @@ fun PhotoDesignerDialog(
 
     PaperWindow(
         onDismissRequest = onCancel,
-        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false),
+        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false, decorFitsSystemWindows = false),
     ) {
+        Immersive()
         PaperSurface(color = colors.bg, modifier = Modifier.fillMaxSize()) {
             Column(
                 Modifier

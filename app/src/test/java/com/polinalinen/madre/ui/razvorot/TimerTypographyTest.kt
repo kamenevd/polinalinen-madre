@@ -2,6 +2,8 @@ package com.polinalinen.madre.ui.razvorot
 
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
+import com.polinalinen.madre.ui.kit.timerProgress
+import com.polinalinen.madre.ui.kit.timerWeight
 import com.polinalinen.madre.model.*
 
 class TimerTypographyTest {

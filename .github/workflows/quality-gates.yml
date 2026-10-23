@@ -52,7 +52,7 @@ jobs:
           packages: platform-tools
       - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
       - name: Compile, domain tests, style boundary, 20 key native frames and QA APK
-        run: ./gradlew compileDebugKotlin testDebugUnitTest assembleDebug --no-daemon --stacktrace
+        run: ./gradlew compileDebugKotlin compileReleaseKotlin testDebugUnitTest assembleDebug --no-daemon --stacktrace
       - name: Extended visual verification (manual, nightly and RC)
         if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
         run: ./gradlew testDebugUnitTest verifyRoborazziDebug -Pmadre.extendedVerification=true --no-daemon --stacktrace

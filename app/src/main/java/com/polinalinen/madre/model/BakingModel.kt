@@ -187,8 +187,16 @@ data class BakingSession(
      * тихо разморозил бы отсчёт.
      */
     val pausedAtElapsed: Long? = null,
-    val scaleFactor: Double = 1.0
+    val scaleFactor: Double? = null,
+    val bakeKey: String = java.util.UUID.randomUUID().toString(),
+    val revision: Long = 0,
+    val recipeRevision: String? = null,
+    val restoredStepValid: Boolean = true,
 ) {
+    /** UNKNOWN stays unknown through every renderer and history writer. */
+    val trustedPortions: Int?
+        get() = scaleFactor?.takeIf { it.isFinite() && it in 1.0..5.0 && it == it.toInt().toDouble() }?.toInt()
+
     companion object {
         /** Завести сессию «сейчас» — единственный путь, которым в неё попадают часы. */
         fun start(id: Long, recipe: Recipe, scaleFactor: Double = 1.0): BakingSession =
@@ -202,7 +210,7 @@ data class BakingSession(
 
         /**
          * Cycle 17 policy A: собрать сессию из active_bakes после смерти процесса.
-         * Масштаб порций в снимке не хранится — 1.0; таймер и шаг важнее.
+         * Legacy scale and recipe revision are UNKNOWN, never inferred from current assets.
          */
         fun restoreFromActive(
             sessionId: Long,
@@ -212,7 +220,10 @@ data class BakingSession(
             pausedAtWallClock: Long?,
             nowElapsed: Long,
             nowWallClock: Long,
-            scaleFactor: Double = 1.0,
+            scaleFactor: Double? = null,
+            bakeKey: String = java.util.UUID.randomUUID().toString(),
+            revision: Long = 0,
+            recipeRevision: String? = null,
         ): BakingSession {
             val pauseOffset = pausedAtWallClock?.let { (it - startedAtWallClock).coerceAtLeast(0L) }
             val seed = BakingSession(
@@ -224,6 +235,10 @@ data class BakingSession(
                 isPaused = pauseOffset != null,
                 pausedAtElapsed = pauseOffset,
                 scaleFactor = scaleFactor,
+                bakeKey = bakeKey,
+                revision = revision,
+                recipeRevision = recipeRevision,
+                restoredStepValid = stepIndex in recipe.timeline.indices,
             )
             return seed.rebasedTo(nowElapsed, nowWallClock)
         }

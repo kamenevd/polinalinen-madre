@@ -82,14 +82,23 @@ internal class PaperMotion(val direction: Int, val x0: Float, val y0: Float, var
             android.util.Log.i("MadrePaperGL", "SLIDE: ${debug.reason}")
         }
     }
-    DisposableEffect(view,density,height) {
-        val previous=if(android.os.Build.VERSION.SDK_INT>=29)view.systemGestureExclusionRects.toList() else emptyList()
-        if(android.os.Build.VERSION.SDK_INT>=29) {
-            val center=(view.height.takeIf{it>0}?: (height*density).roundToInt())/2
-            val half=(100f*density).roundToInt()
-            view.systemGestureExclusionRects=listOf(android.graphics.Rect(0,(center-half).coerceAtLeast(0),(24f*density).roundToInt(),center+half))
+    DisposableEffect(view, density) {
+        val previous = if (android.os.Build.VERSION.SDK_INT >= 29) view.systemGestureExclusionRects.toList() else emptyList()
+        fun update() {
+            if (android.os.Build.VERSION.SDK_INT >= 29) {
+                val center = view.height / 2
+                val half = minOf((100f * density).roundToInt(), view.height / 2)
+                view.systemGestureExclusionRects = listOf(android.graphics.Rect(0, (center-half).coerceAtLeast(0),
+                    (24f*density).roundToInt(), center+half))
+            }
         }
-        onDispose{if(android.os.Build.VERSION.SDK_INT>=29)view.systemGestureExclusionRects=previous}
+        val listener = android.view.View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> update() }
+        view.addOnLayoutChangeListener(listener)
+        update()
+        onDispose {
+            view.removeOnLayoutChangeListener(listener)
+            if (android.os.Build.VERSION.SDK_INT >= 29) view.systemGestureExclusionRects = previous
+        }
     }
 
     // The next two pages in BOTH directions are laid out and captured before a gesture.

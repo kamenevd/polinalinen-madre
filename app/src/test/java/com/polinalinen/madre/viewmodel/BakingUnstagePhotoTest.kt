@@ -59,7 +59,7 @@ class BakingUnstagePhotoTest {
         }
 
         val id = seedActiveSession(vm, sessionId = 1L, recipe = sampleRecipe(), scaleFactor = 1.0)
-        vm.advanceStep(id)
+        vm.advanceStep(id).join()
         advanceUntilIdle()
 
         vm.stageBakePhoto(id, path)

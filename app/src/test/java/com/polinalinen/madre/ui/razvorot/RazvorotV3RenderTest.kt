@@ -41,13 +41,13 @@ class RazvorotV3RenderTest {
         }
     }
     @Test fun titleMorning()=render("reader-title-dawn")
-    @Test fun text16()=render("reader-text-16", listOf(Atmosphere.DAWN))
     @Test fun readingSettings()=render("reading-sheet", listOf(Atmosphere.DAWN, Atmosphere.DAY, Atmosphere.DUSK, Atmosphere.NIGHT))
     @Test fun settings()=render("settings")
     @Test fun feeding()=render("feeding")
-    @Test fun diary()=render("diary")
+    @Test fun diary()=render("diary", listOf(Atmosphere.DAWN))
     @Test fun bake()=render("bake")
     @Test fun starterGrowing()=render("starter-growing")
     @Test fun shelf()=render("shelf")
+    @Test fun aliceUnlinked()=render("alice-sheet-unlinked")
     @Test fun curlNight()=render("curl-mid-night", listOf(Atmosphere.NIGHT))
 }

@@ -11,6 +11,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -77,6 +79,8 @@ fun MadreNavHost(
     val shelfViewModel: ShelfViewModel = viewModel()
     val familyBookViewModel: FamilyBookViewModel = viewModel()
     val app = context.applicationContext as MadreApplication
+    val navigationScope = rememberCoroutineScope()
+    var aliceSheet by remember { mutableStateOf(false) }
 
     val enterFeedingForm = {
         sourdoughViewModel.clearSaveState()
@@ -206,14 +210,14 @@ fun MadreNavHost(
                     initialSection = homeSection,
                     onSectionChanged = {section->it.savedStateHandle["home_section"]=section},
                     onOpenShelf = { navController.navigate(MadreDestinations.SHELF) },
-                    onContinueReading = { session -> readingPreferences.choosePortions(session.scaleFactor.toFloat());navController.navigate(MadreDestinations.readerStep(session.recipe.id,session.currentStepIndex)) },
+                    onContinueReading = { session -> session.trustedPortions?.let { readingPreferences.choosePortions(it.toFloat()) };navController.navigate(MadreDestinations.readerStep(session.recipe.id,session.currentStepIndex)) },
                     onOpenRecipe = { id -> navController.navigate(MadreDestinations.recipeDetail(id)) },
                     onOpenTimer = { id -> navController.navigate(MadreDestinations.bakingTimer(id.toString())) },
                     onFeed = enterFeedingForm,
                     onDiary = { navController.navigate(MadreDestinations.STARTER_DETAIL) },
                     onSettings = { navController.navigate(MadreDestinations.SETTINGS) },
                     shelf = { ShelfScreen(myName, bakeRecords, { navController.navigate(MadreDestinations.SETTINGS_SHELF) },
-                        { owner -> navController.navigate(MadreDestinations.bookStats(owner)) }, familyBookState.account, shelfViewModel) },
+                        { owner -> navController.navigate(MadreDestinations.bookStats(owner)) }, familyBookState.account, shelfViewModel, onOpenAlice = { navController.navigate(MadreDestinations.ALICE) }) },
                 )
             }
             composable(MadreDestinations.RECIPE_DETAIL) { backStackEntry ->
@@ -222,7 +226,7 @@ fun MadreNavHost(
                 if(readingPreferences.mode==ReadingMode.SCROLL || androidx.compose.ui.platform.LocalDensity.current.fontScale>1.3f) RecipeDetailScreen(recipeId,{navController.popBackStack()},{id->navController.navigate(MadreDestinations.bakingTimer(id.toString()))},bakingViewModel)
                 else RazvorotReader(recipesForStats, recipeId, readingPreferences,
                     onBack = { navController.popBackStack() },
-                    onBake = { recipe -> val id = bakingViewModel.startBaking(recipe, readingPreferences.portions.toDouble()); navController.navigate(MadreDestinations.bakingTimer(id.toString())) },
+                    onBake = { recipe -> navigationScope.launch { bakingViewModel.startBaking(recipe, readingPreferences.portions.toDouble())?.let { id -> navController.navigate(MadreDestinations.bakingTimer(id.toString())) } } },
                     onCalculator = { recipe -> navController.navigate("recipe-calculator/${recipe.id}") },
                     activeSessions = sessions,
                     onContinueBake = { id -> navController.navigate(MadreDestinations.bakingTimer(id.toString())) },
@@ -234,7 +238,7 @@ fun MadreNavHost(
                 val sessions by bakingViewModel.sessions.collectAsState()
                 if(readingPreferences.mode==ReadingMode.SCROLL || androidx.compose.ui.platform.LocalDensity.current.fontScale>1.3f) RecipeDetailScreen(id,{navController.popBackStack()},{sessionId->navController.navigate(MadreDestinations.bakingTimer(sessionId.toString()))},bakingViewModel)
                 else RazvorotReader(recipesForStats,id,readingPreferences,{navController.popBackStack()},
-                    {recipe-> val sessionId=bakingViewModel.startBaking(recipe,readingPreferences.portions.toDouble());navController.navigate(MadreDestinations.bakingTimer(sessionId.toString()))},
+                    {recipe-> navigationScope.launch { bakingViewModel.startBaking(recipe,readingPreferences.portions.toDouble())?.let { sessionId -> navController.navigate(MadreDestinations.bakingTimer(sessionId.toString())) } }},
                     {recipe->navController.navigate("recipe-calculator/${recipe.id}")},initialStep=step,activeSessions=sessions,
                     onContinueBake={sessionId->navController.navigate(MadreDestinations.bakingTimer(sessionId.toString()))})
             }
@@ -252,6 +256,7 @@ fun MadreNavHost(
                 RazvorotTimer(
                     sessionId = sessionId,
                     onDetails = { navController.navigate("bake-actions/$sessionId") },
+                    onOpenAlice = { aliceSheet = true },
                     onBack = { navController.popBackStack(MadreDestinations.HOME, inclusive = false) },
                     onComplete = {
                         // Cycle 12: «Готово» не кладётся поверх таймера, а
@@ -269,7 +274,7 @@ fun MadreNavHost(
                 val id = entry.arguments?.getString("sessionId")?.toLongOrNull() ?: return@composable
                 BakingTimerScreen(id, { navController.popBackStack() }, {
                     navController.navigate(MadreDestinations.bakingComplete(id.toString())) { popUpTo(MadreDestinations.HOME) { inclusive = false } }
-                }, bakingViewModel)
+                }, bakingViewModel, onOpenAlice = { aliceSheet = true })
             }
             composable(MadreDestinations.BAKING_COMPLETE) { backStackEntry ->
                 val sessionId = backStackEntry.arguments?.getString("sessionId")?.toLongOrNull()
@@ -348,8 +353,12 @@ fun MadreNavHost(
                     calmMode = calmMode,
                     onCalmModeChange = setCalmMode,
                     onOpenShelfSettings = { navController.navigate(MadreDestinations.SETTINGS_SHELF) },
+                    onOpenAlice = { navController.navigate(MadreDestinations.ALICE) },
                     familyBookViewModel = familyBookViewModel,
                 )
+            }
+            composable(MadreDestinations.ALICE) {
+                com.polinalinen.madre.ui.screens.AliceScreen(bakingViewModel, app.voiceCoordinator) { navController.popBackStack() }
             }
             composable(MadreDestinations.SETTINGS_SHELF) {
                 SettingsShelfScreen(
@@ -369,6 +378,7 @@ fun MadreNavHost(
                     onOpenBook = { ownerId -> navController.navigate(MadreDestinations.bookStats(ownerId)) },
                     account = familyBookState.account,
                     shelfViewModel = shelfViewModel,
+                    onOpenAlice = { navController.navigate(MadreDestinations.ALICE) },
                 ) }
 
                 SpineBar(3) { section -> if(section!=3) {navController.previousBackStackEntry?.savedStateHandle?.set("home_section",section);navController.popBackStack()} }
@@ -396,6 +406,10 @@ fun MadreNavHost(
                 )
             }
         }
+            if (aliceSheet) AliceSheet(bakingViewModel, app.voiceCoordinator,
+                onDismiss = { aliceSheet = false }, onOpenSettings = {
+                    aliceSheet = false; navController.navigate(MadreDestinations.ALICE)
+                })
         }
     }
 }

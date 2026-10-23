@@ -53,6 +53,7 @@ fun BakingTimerScreen(
     onBack: () -> Unit,
     onComplete: () -> Unit,
     viewModel: BakingViewModel = viewModel(),
+    onOpenAlice: () -> Unit = {},
 ) {
     val colors = LocalPaper.current
     val sessions by viewModel.sessions.collectAsState()
@@ -106,7 +107,7 @@ fun BakingTimerScreen(
                     PageLabel("Шаг ${s.currentStepIndex + 1} из ${s.recipe.timeline.size}")
                 }
                 Text(
-                    "готовится ×${s.scaleFactor.toInt().coerceAtLeast(1)} ${portionWord(s.scaleFactor.toInt())}" +
+                    (s.trustedPortions?.takeIf { s.restoredStepValid }?.let { "готовится ×$it ${portionWord(it)}" } ?: "Порции не сохранены") +
                         if (otherActive > 0) " · ещё готовим: $otherActive" else "",
                     color = colors.acc,style = PaperType.body,
                     fontStyle = FontStyle.Italic,
@@ -155,13 +156,14 @@ fun BakingTimerScreen(
                 // с которым выпечку начали, и тем же, что на развороте рецепта.
                 // Чуть больше воздуха до кнопок (bottom 28 вместо 14).
                 Text(
-                    RecipeScaler.scaledStepText(step.description, s.scaleFactor, quantityBindings),
+                    s.trustedPortions.takeIf { s.restoredStepValid }?.let { RecipeScaler.scaledStepText(step.description, it.toDouble(), quantityBindings) } ?: "Порции не сохранены — подтвердите количество.",
                     color = colors.ink,style = PaperType.body,
                     fontSize = 15.sp,
                     lineHeight = 22.sp,
                     modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 14.dp, bottom = 28.dp),
                 )
 
+                if (s.trustedPortions == null) UnknownPortionsConfirmation(s.id) { viewModel.confirmPortions(s.id, it) }
                 // Масло-алерт (decision #22: за 30 мин до шага с requiresButterPrep)
                 val butterStepAhead = s.recipe.timeline
                     .drop(s.currentStepIndex + 1)
@@ -220,8 +222,7 @@ fun BakingTimerScreen(
                         PaperButton(
                             label = if (s.isLastStep) "Готово" else "Дальше →",
                             onClick = {
-                                viewModel.advanceStep(s.id)
-                                if (s.isLastStep) onComplete()
+                                viewModel.advanceStep(s.id, onComplete)
                             },
                             modifier = Modifier.fillMaxWidth(),
                         )

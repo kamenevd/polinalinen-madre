@@ -1,5 +1,7 @@
 package com.polinalinen.madre.ui.screens
 
+import kotlinx.coroutines.launch
+
 import com.polinalinen.madre.ui.kit.*
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -73,7 +75,10 @@ fun RecipeDetailScreen(
     onBack: () -> Unit,
     onStartBaking: (sessionId: Long) -> Unit,
     viewModel: BakingViewModel = viewModel(),
+    onOpenAlice: () -> Unit = {},
 ) {
+    val startScope = androidx.compose.runtime.rememberCoroutineScope()
+    val mutationError by viewModel.mutationError.collectAsState()
     val colors = LocalPaper.current
     val recipes by viewModel.recipes.collectAsState()
     val recipe = recipes.find { it.id == recipeId }
@@ -154,6 +159,7 @@ fun RecipeDetailScreen(
             // скролла: он едет вместе с контентом, а не подрезает viewport.
             contentPadding = PaddingValues(bottom = 24.dp),
         ) {
+            item(key = "mutation-error") { mutationError?.let { Text(it, color = LocalPaper.current.error, style = PaperType.note, modifier = Modifier.padding(22.dp)) } }
             item(key = "header") {
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
@@ -240,8 +246,7 @@ fun RecipeDetailScreen(
                     PaperButton(
                         label = "Начать выпечку",
                         onClick = {
-                            val sessionId = viewModel.startBaking(recipe, scaleFactor)
-                            onStartBaking(sessionId)
+                            startScope.launch { viewModel.startBaking(recipe, scaleFactor)?.let(onStartBaking) }
                         },
                         // Часы считаются от плана рецепта, а не от порций: время
                         // этапов от количества семей не зависит (RecipeScale.TIMING_NOTE).

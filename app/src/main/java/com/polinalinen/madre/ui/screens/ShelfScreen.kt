@@ -15,6 +15,7 @@ fun ShelfScreen(
     onOpenBook: (ownerId: String) -> Unit,
     account: FamilyAccount?,
     shelfViewModel: ShelfViewModel = viewModel(),
+    onOpenAlice: () -> Unit = {},
 ) {
     val members by shelfViewModel.members.collectAsState()
     val ledger by shelfViewModel.ledger.collectAsState()
@@ -25,5 +26,5 @@ fun ShelfScreen(
         shelfViewModel.refresh(account, myName, localRecords)
     }
 
-    ShelfPaper(members, ledger, familyName, localRecords, unreachable, onBack, onOpenBook)
+    ShelfPaper(members, ledger, familyName, localRecords, unreachable, onBack, onOpenBook, onOpenAlice)
 }

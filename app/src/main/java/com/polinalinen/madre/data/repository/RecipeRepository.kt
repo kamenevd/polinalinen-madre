@@ -16,6 +16,8 @@ import java.io.InputStreamReader
 class RecipeRepository(private val context: Context) {
 
     private var cache: List<Recipe>? = null
+    @Volatile var revision: String? = null
+        private set
 
     suspend fun getRecipes(): List<Recipe> = withContext(Dispatchers.IO) {
         cache ?: loadFromAssets().also { cache = it }
@@ -24,10 +26,10 @@ class RecipeRepository(private val context: Context) {
     suspend fun getRecipe(id: String): Recipe? = getRecipes().find { it.id == id }
 
     private fun loadFromAssets(): List<Recipe> {
-        context.assets.open("recipes.json").use { stream ->
-            InputStreamReader(stream, Charsets.UTF_8).use { reader ->
-                return Gson().fromJson(reader, RecipeDatabase::class.java).recipes
-            }
-        }
+        val bytes = context.assets.open("recipes.json").use { it.readBytes() }
+        val recipes = Gson().fromJson(bytes.toString(Charsets.UTF_8), RecipeDatabase::class.java).recipes
+        revision = java.security.MessageDigest.getInstance("SHA-256").digest(bytes)
+            .joinToString("") { "%02x".format(it) }
+        return recipes
     }
 }

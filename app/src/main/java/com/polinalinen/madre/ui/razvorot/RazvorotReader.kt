@@ -32,16 +32,19 @@ internal data class ReadingLeaf(val chapter: Int, val title: Boolean = false, va
 @Composable
 fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: ReadingPreferences, onBack: () -> Unit, onBake: (Recipe) -> Unit, onCalculator: (Recipe) -> Unit, initialStep: Int? = null, activeSessions: List<BakingSession> = emptyList(), onContinueBake: (Long) -> Unit = {}) {
     var settings by remember { mutableStateOf(false) }
-    var chrome by rememberSaveable { mutableStateOf(true) }
+    var chrome by rememberSaveable { mutableStateOf(false) }
     var anchor by rememberSaveable(recipeId) { mutableStateOf("$recipeId:title") }
     var seekActive by rememberSaveable(recipeId,initialStep) { mutableStateOf(initialStep != null) }
     val p = LocalPaper.current
+    Immersive(barsRevealed = chrome)
+    val stableInsets = WindowInsets.systemBarsIgnoringVisibility.union(WindowInsets.displayCutout)
+    val stablePadding = stableInsets.asPaddingValues()
     BackHandler(onBack = onBack)
-    BoxWithConstraints(Modifier.fillMaxSize().background(p.bg).safeDrawingPadding()) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(p.bg)) {
         val measurer = rememberTextMeasurer()
         val density = androidx.compose.ui.platform.LocalDensity.current
-        val width = with(density) { (maxWidth-52.dp).roundToPx() }.coerceAtLeast(1)
-        val height = with(density) { (maxHeight-160.dp).roundToPx() }.coerceAtLeast(200)
+        val width = with(density) { (maxWidth-52.dp-stablePadding.calculateLeftPadding(androidx.compose.ui.unit.LayoutDirection.Ltr)-stablePadding.calculateRightPadding(androidx.compose.ui.unit.LayoutDirection.Ltr)).roundToPx() }.coerceAtLeast(1)
+        val height = with(density) { (maxHeight-160.dp-stablePadding.calculateTopPadding()-stablePadding.calculateBottomPadding()).roundToPx() }.coerceAtLeast(200)
         val style = PaperType.body.copy(fontSize=preferences.textSize.sp,lineHeight=(preferences.textSize*25f/16f).sp)
         val leaves = remember(recipes,width,height,preferences.textSize,preferences.portions,density.fontScale) {
             buildList {
@@ -107,7 +110,7 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
                 }
             } else PaperTurn(page,leaves.size,preferences,{move(it)},Modifier.testTag("paper-turn"),onCenter={chrome=!chrome}) { index ->
                 val leaf=leaves[index];val r=recipes[leaf.chapter]
-                Column(Modifier.fillMaxSize().background(p.bg).clearAndSetSemantics { contentDescription = if(leaf.title)r.name else leaf.lines.joinToString("\n"){it.first+"\n"+it.second} }.padding(top=if(leaf.title)0.dp else 46.dp,bottom=44.dp)) {
+                Column(Modifier.fillMaxSize().background(p.bg).clearAndSetSemantics { contentDescription = if(leaf.title)r.name else leaf.lines.joinToString("\n"){it.first+"\n"+it.second} }.then(if (leaf.title) Modifier else Modifier.windowInsetsPadding(stableInsets)).padding(top=if(leaf.title)0.dp else 46.dp,bottom=44.dp)) {
                     if(leaf.title) TitleLeaf(r,leaf.chapter,recipes.size)
                     else {
                         SmallLabel("ГЛАВА %02d · %s".format(leaf.chapter+1,r.name.uppercase()),Modifier.padding(horizontal=26.dp,vertical=8.dp))
@@ -118,8 +121,8 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
                 }
             }
             if(chrome) {
-                Column(Modifier.align(Alignment.TopCenter).fillMaxWidth().background(p.bg).padding(horizontal=10.dp)) { BookHeader(recipe.name,onBack,{settings=true}) }
-                Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(p.bg).padding(horizontal=20.dp,vertical=8.dp)) {
+                Column(Modifier.align(Alignment.TopCenter).fillMaxWidth().background(p.bg).windowInsetsPadding(stableInsets.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)).padding(horizontal=10.dp)) { BookHeader(recipe.name,onBack,{settings=true}) }
+                Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(p.bg).windowInsetsPadding(stableInsets.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal)).padding(horizontal=20.dp,vertical=8.dp)) {
                     Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) { SmallLabel("${page+1} / ${leaves.size}");SmallLabel("ГЛАВА ${current.chapter+1}") }
                     Canvas(Modifier.fillMaxWidth().height(22.dp)) {
                         drawLine(p.bg2,Offset(0f,size.height/2),Offset(size.width,size.height/2),3.dp.toPx())
@@ -135,7 +138,7 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
                 }
             }
         } else Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) { PaperProgress() }
-        if(settings)ReadingSettings(preferences){settings=false}
+        if(settings)ReadingSettings(preferences){settings=false;chrome=false}
     }
 }
 @Composable internal fun TitleLeaf(recipe: Recipe, chapter: Int, count:Int) {

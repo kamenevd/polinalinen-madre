@@ -33,18 +33,31 @@ import com.polinalinen.madre.sourdough.GrowthPhase
 import kotlinx.coroutines.runBlocking
 
 /** Explicit debug-only activity: no launcher entry, no production route or voice API. */
-class RazvorotSceneActivity : ComponentActivity() {
+class RazvorotSceneActivity : ComponentActivity(), ImmersiveHost {
+    override val immersiveController = ImmersiveController()
     var scene by mutableStateOf("home-dawn")
     var atmosphere by mutableStateOf<Atmosphere?>(null)
     var captureWindow:android.view.Window?=null
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        @Suppress("DEPRECATION")
-        window.decorView.systemUiVisibility=android.view.View.SYSTEM_UI_FLAG_FULLSCREEN or android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-        scene=intent.getStringExtra("scene")?:"home-dawn"
+        immersiveController.attach(window)
+        scene=savedInstanceState?.getString("debug_scene") ?: intent.getStringExtra("scene") ?: "home-dawn"
+        atmosphere = savedInstanceState?.getString("debug_atmosphere")?.let { value -> Atmosphere.entries.firstOrNull { it.name == value } }
         val recipes=runBlocking{RecipeRepository(this@RazvorotSceneActivity).getRecipes()}
         setContent { key(scene,atmosphere) { RazvorotDebugScene(scene,recipes,atmosphere) } }
     }
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString("debug_scene", scene)
+        outState.putString("debug_atmosphere", atmosphere?.name)
+        super.onSaveInstanceState(outState)
+    }
+    override fun onResume() { super.onResume(); immersiveController.reapply(window) }
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) immersiveController.reapply(window)
+    }
+    override fun onDestroy() { immersiveController.detach(window); super.onDestroy() }
+
 }
 
 internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","reader-text-16","reader-text-22","curl-top","curl-mid","curl-bottom","curl-back","reader-chrome","reading-sheet","home-dawn","home-night","spine","bake","alice-listening","alice-reading","alice-confirm","alice-night","starter-growing","starter-peak","starter-hungry","shelf","shelf-night","shelf-large","curl-mid-night","gles2-curl-mid","bake-start","bake-end","fulltimer-start","fulltimer-end","timer-weight-start","timer-weight-end")
@@ -61,9 +74,19 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
     val density=LocalDensity.current
     CompositionLocalProvider(LocalPaperDebug provides debug,com.polinalinen.madre.ui.kit.LocalCalmMode provides false,LocalDensity provides Density(density.density,if(scene=="shelf-large")1.3f else density.fontScale)) {
         RazvorotTheme(preferences,force=forceAtmosphere ?: if(night)Atmosphere.NIGHT else Atmosphere.DAWN) {
-            Box(Modifier.fillMaxSize().background(LocalPaper.current.bg).safeDrawingPadding().testTag("scene-$scene").semantics{stateDescription="${debug.renderer}:${debug.renderedFrames}:${debug.cachedPages}:${debug.reason}"}) {
+            Immersive(enabled = (scene.startsWith("reader-") && scene != "reader-chrome") || scene.startsWith("curl-") || scene.startsWith("gles2-curl-") || scene.startsWith("fulltimer-") || scene == "bake" || scene == "reading-sheet")
+            Box(Modifier.fillMaxSize().background(LocalPaper.current.bg).testTag("scene-$scene").semantics{stateDescription="${debug.renderer}:${debug.renderedFrames}:${debug.cachedPages}:${debug.reason}"}) {
                 when {
                     scene=="kit" -> KitShowcase()
+                    scene=="photo-viewer" -> PaperPhotoViewer({}) { BookText("Фото · локальная тестовая поверхность", 18) }
+                    scene.startsWith("alice-sheet-") -> {
+                        val mode = runCatching { AliceSheetMode.valueOf(scene.removePrefix("alice-sheet-").uppercase()) }.getOrDefault(AliceSheetMode.UNLINKED)
+                        CompositionLocalProvider(LocalPaper provides NightPaper) {
+                            PaperSheet({}) { AliceSheetContent(mode, com.polinalinen.madre.voice.VoiceUiState(
+                                if (mode == AliceSheetMode.OFFLINE) com.polinalinen.madre.voice.VoiceStatus.OFFLINE else com.polinalinen.madre.voice.VoiceStatus.UNLINKED),
+                                recipeName = "Демонстрационная выпечка", stepText = recipe.timeline[0].description) }
+                        }
+                    }
                     scene=="settings" -> SettingsContent("Пекарь", {}, {}, {}, "Мадре", {}, 12, 42, 24, {}, true, {}, true, {}, "Демонстрационная семья", FamilyBookState.SignedOut, {}, {})
                     scene=="feeding" || scene=="feeding-error" -> FeedingFormScreen({ _, _, _, _, _, _ -> }, {}, if (scene.endsWith("error")) FeedingSaveState.Error("Не удалось записать кормление. Попробуйте ещё раз.") else FeedingSaveState.Idle, 50)
                     scene=="gallery-empty" -> PhotoGalleryScreen(emptyList(), {})

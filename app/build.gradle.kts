@@ -24,6 +24,7 @@ val extendedVerification = providers.gradleProperty("madre.extendedVerification"
     .map { it.toBoolean() }.getOrElse(false)
 val extendedOnlyTests = listOf(
     "com.polinalinen.madre.ui.razvorot.RazvorotExtendedRenderTest",
+    "com.polinalinen.madre.ui.razvorot.AliceSheetGoldenTest",
     "com.polinalinen.madre.ui.razvorot.PaperMaterialExtendedTest",
     "com.polinalinen.madre.ui.razvorot.StaticFontCompatibilityTest",
     "com.polinalinen.madre.ui.visual.StarterDiaryGoldenTest",

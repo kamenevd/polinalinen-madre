@@ -95,6 +95,8 @@ fun atmosphereAt(hour: Int): Atmosphere = when (hour) { in 5..10 -> Atmosphere.D
     val paper=paperAt(atmosphere)
     val scheme=paperScheme(paper)
     CompositionLocalProvider(LocalPaper provides paper,LocalAtmosphere provides atmosphere,LocalContentColor provides paper.ink) {
-        MaterialTheme(colorScheme=scheme,typography=PaperTypography,content=content)
+        ProvidePaperWindows(light = atmosphere != Atmosphere.NIGHT) {
+            MaterialTheme(colorScheme=scheme,typography=PaperTypography,content=content)
+        }
     }
 }

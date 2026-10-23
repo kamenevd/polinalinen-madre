@@ -32,12 +32,12 @@ import kotlin.math.sin
 import kotlin.math.roundToInt
 
 fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(s>=3600) "%d:%02d:%02d".format(s/3600,s/60%60,s%60) else "%02d:%02d".format(s/60,s%60) }
-@Composable fun BakingPaper(session: BakingSession, remaining:Long, onPause:()->Unit, onNext:()->Unit, onDetails:()->Unit, onBack:()->Unit) {
+@Composable fun BakingPaper(session: BakingSession, remaining:Long, onPause:()->Unit, onNext:()->Unit, onDetails:()->Unit, onBack:()->Unit, onOpenAlice:(()->Unit)?=null, onConfirmPortions:(Int)->Unit={}) {
     var full by rememberSaveable { mutableStateOf(false) }
     if(full) { FullTimer(session,remaining){full=false};return }
     val p=LocalPaper.current
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal=22.dp)) {
-        BookHeader("ПЕЧЬ СЕЙЧАС · ×${session.scaleFactor}",onBack)
+    Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBarsIgnoringVisibility.union(WindowInsets.displayCutout)).verticalScroll(rememberScrollState()).padding(horizontal=22.dp)) {
+        BookHeader(session.trustedPortions?.let { "ПЕЧЬ СЕЙЧАС · ×$it" } ?: "ПЕЧЬ · ПОРЦИИ НЕ СОХРАНЕНЫ",onBack)
         BookText(session.recipe.name,22,weight=FontWeight.Medium)
         Row(Modifier.fillMaxWidth().padding(top=26.dp),verticalAlignment=Alignment.Bottom) {
             BookText("%02d".format(session.currentStepIndex+1),100,weight=FontWeight.ExtraLight)
@@ -49,27 +49,30 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
         PaperProgress(progress, Modifier.fillMaxWidth().padding(vertical=12.dp))
         SmallLabel(if(remaining==0L) "ВРЕМЯ ВЫШЛО" else "ОСТАЛОСЬ ИЗ ${session.currentStep.durationMinutes} МИН")
         val bindings=remember(session.recipe){RecipeScaler.scalableBindings(session.recipe)}
-        BookText(RecipeScaler.scaledStepText(session.currentStep.description,session.scaleFactor,bindings),16,Modifier.padding(top=24.dp),color=p.ink2,lineHeight=25.sp)
+        BookText(session.trustedPortions?.takeIf { session.restoredStepValid }?.let { RecipeScaler.scaledStepText(session.currentStep.description,it.toDouble(),bindings) } ?: "Порции не сохранены — подтвердите количество для этой выпечки.",16,Modifier.padding(top=24.dp),color=p.ink2,lineHeight=25.sp)
+        if (session.trustedPortions == null) com.polinalinen.madre.ui.screens.UnknownPortionsConfirmation(session.id, onConfirmPortions)
         val temperatures=Regex("(\\d{2,3})\\s*[°º]\\s*[cсCС]?").findAll(session.currentStep.description).map{it.groupValues[1]+"°"}.distinct().toList()
         if(temperatures.isNotEmpty())Row(Modifier.padding(top=12.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)) {temperatures.forEach{Text(it,Modifier.background(p.bg2,RoundedCornerShape(16.dp)).padding(horizontal=12.dp,vertical=8.dp),style = PaperType.caption,fontWeight=FontWeight.SemiBold,color=p.ink2)}}
         session.recipe.timeline.getOrNull(session.currentStepIndex+1)?.let { SmallLabel("ДАЛЬШЕ · ${it.title} · ${it.durationMinutes} МИН",Modifier.padding(top=16.dp)) }
         Row(Modifier.fillMaxWidth().padding(top=24.dp),horizontalArrangement=Arrangement.spacedBy(10.dp)) {
             PaperButton(if(session.isPaused)"Продолжить" else "Пауза",onPause,Modifier.weight(1f))
-            PaperButton(if(session.isLastStep)"Испечено" else "Дальше",onNext,Modifier.weight(1f),true)
+            PaperButton(if(session.isLastStep)"Испечено" else "Дальше",onNext,Modifier.weight(1f),true, enabled = !session.isLastStep || session.trustedPortions != null)
         }
+        if (onOpenAlice != null && com.polinalinen.madre.config.FeatureFlags.ALICE) PaperTextAction("Алиса", onOpenAlice, Modifier.fillMaxWidth())
         PaperButton("Большой таймер",{full=true},Modifier.fillMaxWidth().padding(top=12.dp))
         PaperButton("Все действия · отменить выпечку",onDetails,Modifier.fillMaxWidth().padding(top=8.dp))
         Spacer(Modifier.height(16.dp))
     }
 }
 @Composable fun FullTimer(session:BakingSession,remaining:Long,onClose:()->Unit) {
+    Immersive(keepScreenOn = true)
     val view=LocalView.current
     val progress=timerProgress(session.currentStep.durationMinutes*60L,remaining)
     DisposableEffect(view){val old=view.keepScreenOn;view.keepScreenOn=true;onDispose{view.keepScreenOn=old}}
     BackHandler(onBack=onClose)
-    Box(Modifier.fillMaxSize().background(Illustration.OvenDark).clickable(onClickLabel="Свернуть таймер",onClick=onClose).safeDrawingPadding()) {
+    Box(Modifier.fillMaxSize().background(Illustration.OvenDark).clickable(onClickLabel="Свернуть таймер",onClick=onClose)) {
         Canvas(Modifier.fillMaxSize()) {drawRect(Brush.radialGradient(listOf(Illustration.OvenGlow,Color.Transparent),Offset(size.width*.5f,size.height),size.height*.7f))}
-        Column(Modifier.align(Alignment.CenterStart).padding(26.dp)) {
+        Column(Modifier.align(Alignment.CenterStart).windowInsetsPadding(WindowInsets.systemBarsIgnoringVisibility.union(WindowInsets.displayCutout)).padding(26.dp)) {
             SmallLabel("${session.currentStep.title.uppercase()} · ШАГ ${session.currentStepIndex+1} ИЗ ${session.recipe.timeline.size}",color=NightPaper.acc)
             TimerNumber(if(remaining>=3600)"${remaining/3600}ч" else "%02d".format(remaining/60),progress,150.sp,(-8).sp,NightPaper.ink)
             TimerNumber(if(remaining>=3600)"%02d:%02d".format(remaining/60%60,remaining%60) else "%02d".format(remaining%60),progress,100.sp,0.sp,NightPaper.acc)

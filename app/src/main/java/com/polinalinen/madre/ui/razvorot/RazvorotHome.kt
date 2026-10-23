@@ -41,8 +41,8 @@ import com.polinalinen.madre.ui.components.bookAction
     var settings by remember{mutableStateOf(false)}
     val p=LocalPaper.current
     BackHandler(enabled=catalog||section!=0){catalog=false;section=0;onSectionChanged(0)}
-    Column(Modifier.fillMaxSize().paperBackground().safeDrawingPadding()) {
-        Box(Modifier.weight(1f)) {
+    Column(Modifier.fillMaxSize().paperBackground()) {
+        Box(Modifier.weight(1f).safeDrawingPadding()) {
             when(section) {
                 0 -> if(catalog)ChapterCatalog(recipes,onOpenRecipe,{catalog=false},{settings=true})
                     else CoverPage(recipes,{catalog=true},onSettings,{settings=true}) {
@@ -75,7 +75,7 @@ import com.polinalinen.madre.ui.components.bookAction
 }
 @Composable internal fun SpineBar(section:Int,onSelect:(Int)->Unit) {
     val p=LocalPaper.current
-    Row(Modifier.fillMaxWidth().background(p.glass).drawBehind{drawLine(p.line,Offset.Zero,Offset(size.width,0f),1.dp.toPx())}.height(IntrinsicSize.Min).heightIn(min=70.dp).testTag("spine-navigation"),verticalAlignment=Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().background(p.glass).drawBehind{drawLine(p.line,Offset.Zero,Offset(size.width,0f),1.dp.toPx())}.navigationBarsPadding().height(IntrinsicSize.Min).heightIn(min=70.dp).testTag("spine-navigation"),verticalAlignment=Alignment.CenterVertically) {
             val labels=listOf("Читать","Печь","Закваска","Полка")
             val icons=listOf(Icons.Outlined.MenuBook,Icons.Outlined.LocalFireDepartment,Icons.Outlined.Science,Icons.Outlined.CollectionsBookmark)
             labels.forEachIndexed { i,label ->
@@ -94,12 +94,13 @@ import com.polinalinen.madre.ui.components.bookAction
             }
     }
 }
-@Composable fun RazvorotTimer(sessionId:Long,viewModel:BakingViewModel,onBack:()->Unit,onComplete:()->Unit,onDetails:()->Unit) {
+@Composable fun RazvorotTimer(sessionId:Long,viewModel:BakingViewModel,onBack:()->Unit,onComplete:()->Unit,onDetails:()->Unit,onOpenAlice:()->Unit={}) {
+    Immersive(keepScreenOn = true)
     val sessions by viewModel.sessions.collectAsState()
     val remaining by viewModel.remainingFor(sessionId).collectAsState()
     val session=sessions.find{it.id==sessionId}
-    Box(Modifier.fillMaxSize().paperBackground().safeDrawingPadding()) {
+    Box(Modifier.fillMaxSize().paperBackground()) {
         if(session==null)Column(Modifier.padding(22.dp)){BookText("Выпечка закрыта",32);PaperButton("К книге",onBack)}
-        else BakingPaper(session,remaining,{viewModel.togglePause(sessionId)},{viewModel.advanceStep(sessionId);if(viewModel.session(sessionId)?.isCompleted==true)onComplete()},onDetails,onBack)
+        else BakingPaper(session,remaining,{viewModel.togglePause(sessionId)},{viewModel.advanceStep(sessionId, onComplete)},onDetails,onBack, onOpenAlice = onOpenAlice, onConfirmPortions = { viewModel.confirmPortions(sessionId, it) })
     }
 }

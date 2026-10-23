@@ -64,7 +64,7 @@ internal fun bookWord(n:Int)=when {
 }
 
 /** The same stateless shelf is used by Room/ViewModel UI and isolated fixtures. */
-@Composable internal fun ShelfPaper(members:List<ShelfMember>,ledger:List<ShelfLedgerRow>,familyName:String?,records:List<BakeRecordEntity>,unreachable:Boolean,onSettings:()->Unit,onOpenBook:(String)->Unit) {
+@Composable internal fun ShelfPaper(members:List<ShelfMember>,ledger:List<ShelfLedgerRow>,familyName:String?,records:List<BakeRecordEntity>,unreachable:Boolean,onSettings:()->Unit,onOpenBook:(String)->Unit,onOpenAlice:()->Unit={}) {
     val p=LocalPaper.current
     val context=LocalContext.current
     val spines=members.ifEmpty{listOf(FamilyShelf.localMember("вы"))}
@@ -101,9 +101,9 @@ internal fun bookWord(n:Int)=when {
                 BookText(row.chapter,20)
             }
         }
-        if(!com.polinalinen.madre.config.FeatureFlags.ALICE)item(key="shelf-alice-footer") {
+        if(com.polinalinen.madre.config.FeatureFlags.ALICE)item(key="shelf-alice-footer") {
             Row(Modifier.fillMaxWidth().padding(vertical=22.dp).testTag("shelf-alice-footer"),verticalAlignment=Alignment.CenterVertically) {
-                BookText("Подключить Алису",18,Modifier.weight(1f));Spacer(Modifier.width(12.dp));SmallLabel("скоро")
+                PaperTextAction("Подключить Алису", onOpenAlice, Modifier.weight(1f))
             }
         }
     }

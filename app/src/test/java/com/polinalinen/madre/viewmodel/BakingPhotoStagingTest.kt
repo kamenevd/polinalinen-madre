@@ -51,7 +51,7 @@ class BakingPhotoStagingTest {
         val vm = BakingViewModel(app, history, FakeShelfSync(), FakeBakeSessionLedger())
 
         val id = seedActiveSession(vm, sessionId = 1L, recipe = sampleRecipe(), scaleFactor = 1.0)
-        vm.advanceStep(id)
+        vm.advanceStep(id).join()
         advanceUntilIdle()
 
         vm.stageBakePhoto(id, "bake_photos/staged.jpg")

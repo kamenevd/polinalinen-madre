@@ -149,9 +149,10 @@ import kotlin.random.Random
 
 /** Owns platform dialog dimming, including warm/night scrim, in exactly one place. */
 @Composable fun PaperWindow(onDismissRequest: () -> Unit,
-    properties: DialogProperties = DialogProperties(), content: @Composable () -> Unit) {
+    properties: DialogProperties = DialogProperties(decorFitsSystemWindows = false), content: @Composable () -> Unit) {
     val p = LocalPaper.current
     Dialog(onDismissRequest, properties = properties) {
+        PaperModalWindow()
         val view = androidx.compose.ui.platform.LocalView.current
         DisposableEffect(view, p.scrimAlpha) {
             (view.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window?.let { window ->
@@ -171,11 +172,13 @@ import kotlin.random.Random
         containerColor = p.card, contentColor = p.ink,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp), scrimColor = p.scrim,
         dragHandle = { Box(Modifier.padding(top = 12.dp, bottom = 16.dp).size(36.dp, 4.dp).background(p.line, RoundedCornerShape(2.dp))) },
-        content = content)
+        contentWindowInsets = { WindowInsets.navigationBars.union(WindowInsets.ime) },
+        content = { PaperModalWindow(); content() })
 }
 
 @Composable fun PaperPhotoViewer(onDismissRequest: () -> Unit, content: @Composable BoxScope.() -> Unit) {
-    PaperWindow(onDismissRequest, DialogProperties(usePlatformDefaultWidth = false)) {
+    PaperWindow(onDismissRequest, DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        Immersive()
         CompositionLocalProvider(LocalPaper provides NightPaper, LocalContentColor provides NightPaper.ink) {
             Box(Modifier.fillMaxSize().background(Illustration.PhotoBackdrop), content = content)
         }

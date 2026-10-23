@@ -110,6 +110,7 @@ fun SettingsScreen(
     onCalmModeChange: (Boolean) -> Unit = {},
     familySettingsViewModel: FamilySettingsViewModel = viewModel(),
     familyBookViewModel: FamilyBookViewModel = viewModel(),
+    onOpenAlice: () -> Unit = {},
 ) {
     val colors = LocalPaper.current
     val familyName by familySettingsViewModel.familyName.collectAsState()
@@ -122,7 +123,7 @@ fun SettingsScreen(
     SettingsContent(myName, onMyNameChange, onBack, onOpenShelfSettings, starterName,
         onStarterNameChange, bakeCount, feedingCount, intervalHours, onIntervalHoursChange,
         remindersEnabled, onRemindersEnabledChange, calmMode, onCalmModeChange,
-        familyName, familyBookState, familySettingsViewModel::setFamilyName, familyBookViewModel::signOut)
+        familyName, familyBookState, familySettingsViewModel::setFamilyName, familyBookViewModel::signOut, onOpenAlice)
 }
 
 /** Same production layout; fixtures can supply state without touching accounts/network. */
@@ -133,7 +134,7 @@ fun SettingsScreen(
     remindersEnabled: Boolean, onRemindersEnabledChange: (Boolean) -> Unit,
     calmMode: Boolean, onCalmModeChange: (Boolean) -> Unit,
     familyName: String?, familyBookState: FamilyBookState,
-    onSetFamilyName: (String) -> Unit, onSignOut: () -> Unit,
+    onSetFamilyName: (String) -> Unit, onSignOut: () -> Unit, onOpenAlice: () -> Unit = {},
 ) {
     val colors = LocalPaper.current
     val inFamily = familyBookState.account?.hasFamily == true
@@ -234,6 +235,7 @@ fun SettingsScreen(
 
             // ————— 5. О книге —————
             SettingsSection(Sections.ABOUT) {
+                SettingsRow(label = "Алиса на кухне", value = "›", onClick = onOpenAlice)
                 SettingsRow(
                     label = "В журнале",
                     value = "$bakeCount выпечек · $feedingCount кормлений",

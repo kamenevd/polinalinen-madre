@@ -61,6 +61,12 @@ Sealed-class навигации из v3 **нет** и не должно появ
 
 ---
 
+## Android voice и окна (PR61, дополнение Димы18:32)
+
+FeatureFlags.ALICE=true в общемmain, Android-ядро перенесено с PR58@564fbb9 без его backend/workflow. Единственный writer состояния выпечки — BakingViewModel; startBaking suspend/nullable, переход durable-before-publish, receipt+состояние фиксируются атомарно с проверкой lease/expiry/generation. Room10→11 сохраняет старые записи и оставляет неизвестные порции null до явного подтверждения; назад на старую схему без восстановления данных не переходить. VoiceMigrationTest использует синтетическуюlegacy schema10 и настоящую валидациюRoom11 в blocking JVMCI. Phone API/OAuth не развёрнуты; UI не выдаёт ALICE=true за живую связь, не опрашивает HTTP бесконечно после отказа. Продакшен-деплой требует отдельного согласия.
+
+ImmersiveController вui/kit владеет Activity и Modal Window, scope-запросами и восстановлением системных баров. MainActivity и RazvorotSceneActivity используют один код, старыхdebugSYSTEM_UI_FLAG нет. Фон до краёв; контент/хром используют safe/cutout и стабильные ignoring-visibility insets. FullscreenInstrumentedTest и полнаяAlice24кадра толькоmanual/RC; physicalHuawei не подтверждён JVM/PNG.
+
 ## Актуальный UI-контракт F (PR61, 23.10.2026)
 
 Старые ограничения v4 ниже (светлая тема/углы4dp/системные шрифты/AppColors) отменены STYLE-SYSTEM F. `ui/kit` — единственный владелец PaperTokens/LocalPaper/PaperType, статических Literata/Manrope, 4 тем и M3/Foundation-контролов/диалогов. `RazvorotTheme` оборачивает все назначения в NavHost; `CalmMode` перенесён в kit без изменения ключа/default. Старого `ui/theme` больше нет. `SettingsContent` — stateless production layout для локальных screenshot-fixtures, не отдельный макет. Home UI, вызывавшийся только старыми тестами, вынесен в test-only `LegacyHomeFixture`; живые Home/TocLine/HomeCopy остались в `HomeContract`. Мёртвая ветка ShelfScreen(false) удалена; репозитории/данные/маршруты не менялись.
@@ -142,8 +148,8 @@ shelf              shelf/{ownerId}
 
 ## Данные
 
-Room **версия 10**, 8 объявленных сущностей, 9 миграций
-(`MIGRATION_1_2` … `MIGRATION_9_10`). Список миграций — один, в
+Room **версия 11**, 9 объявленных сущностей, 10 миграций
+(`MIGRATION_1_2` … `MIGRATION_10_11`). Список миграций — один, в
 `MadreDatabase.Companion.MIGRATIONS`; его же берёт
 `androidTest/data/db/MigrationTest.kt`. Миграция, написанная но не
 зарегистрированная, роняет тест, а не «проходит» на своей копии списка.

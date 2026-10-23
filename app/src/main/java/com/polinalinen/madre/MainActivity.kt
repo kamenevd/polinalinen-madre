@@ -23,7 +23,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
  * singleTop, поэтому тап по уведомлению при живой книге приходит не в
  * onCreate, а в onNewIntent; обрабатываются оба входа.
  */
-class MainActivity : ComponentActivity() {
+class MainActivity : ComponentActivity(), ImmersiveHost {
+    override val immersiveController = ImmersiveController()
 
     /**
      * Выпечка, которую попросили открыть. MutableStateFlow, а не разовый
@@ -50,7 +51,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        enableEdgeToEdge(
+            statusBarStyle = androidx.activity.SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT) { false },
+            navigationBarStyle = androidx.activity.SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT) { false },
+        )
+        immersiveController.attach(window)
         readIntent(intent)
         askForNotificationsOnce()
 
@@ -61,6 +66,13 @@ class MainActivity : ComponentActivity() {
             )
         }
     }
+
+    override fun onResume() { super.onResume(); immersiveController.reapply(window) }
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) immersiveController.reapply(window)
+    }
+    override fun onDestroy() { immersiveController.detach(window); super.onDestroy() }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)

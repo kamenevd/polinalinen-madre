@@ -209,7 +209,7 @@ fun LegacyHomeFixture(
                                 recipeName = s.recipe.name,
                                 stepIndex = s.currentStepIndex,
                                 stepCount = s.recipe.timeline.size,
-                                portions = s.scaleFactor.toInt().coerceAtLeast(1),
+                                portions = s.trustedPortions.takeIf { s.restoredStepValid },
                                 isPaused = s.isPaused,
                             )
                         }
@@ -430,7 +430,7 @@ private fun ActiveBakingTicket(
     recipeName: String,
     stepIndex: Int,
     stepCount: Int,
-    portions: Int,
+    portions: Int?,
     isPaused: Boolean,
 ) {
     val colors = LocalPaper.current
@@ -439,7 +439,7 @@ private fun ActiveBakingTicket(
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(recipeName, color = colors.ink,style = PaperType.body, fontSize = 17.sp)
                 Text(
-                    "  ×$portions ${familyWord(portions)}",
+                    if (portions == null) "  порции не сохранены" else "  ×$portions ${familyWord(portions)}",
                     color = colors.acc,style = PaperType.body,
                     fontStyle = FontStyle.Italic,
                     fontSize = 14.sp,

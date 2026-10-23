@@ -179,7 +179,8 @@ class BookNavigationUiTest {
         rule.waitForIdle()
         rule.onNodeWithContentDescription("Действия выпечки").performClick()
         rule.onNodeWithText("Бросить выпечку").assertExists()
-        rule.activityRule.scenario.onActivity{it.onBackPressedDispatcher.onBackPressed()}
+        // A sheet owns another Window. Dispatch real Back to the focused window, not beneath it to Activity.
+        androidx.test.espresso.Espresso.pressBack()
         rule.waitForIdle()
         rule.onNodeWithText("Бросить выпечку").assertDoesNotExist()
         assertEquals(bakeRoute,nav.currentDestination?.route)

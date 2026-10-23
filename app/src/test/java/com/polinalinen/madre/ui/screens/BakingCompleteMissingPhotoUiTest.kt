@@ -5,6 +5,9 @@ import android.app.Application
 import androidx.activity.ComponentActivity
 import androidx.compose.material3.Text
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.LocalSaveableStateRegistry
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -60,11 +63,12 @@ class BakingCompleteMissingPhotoUiTest {
             )
         }
         val ledger = FakeBakeSessionLedger().apply { put(sessionId = 12L, recordId = 99L) }
-        val vm = BakingViewModel(app, history, FakeShelfSync(), ledger)
+        val sync=FakeShelfSync()
+        val vm = BakingViewModel(app, history, sync, ledger)
 
         assertThat(vm.session(12L)).isNull()
 
-        var exited = false
+        var exited by mutableStateOf(false)
         rule.setContent {
             CompositionLocalProvider(LocalSaveableStateRegistry provides null) {
                 MadreTheme {
@@ -88,6 +92,9 @@ class BakingCompleteMissingPhotoUiTest {
         rule.waitUntil(5_000){exited}
         assertThat(exited).isTrue()
         assertThat(history.recordCalls).isEmpty()
+        assertThat(sync.calls).isEmpty()
         rule.onNodeWithText("ушли с экрана").assertExists()
+        rule.runOnIdle { androidx.lifecycle.ViewModelStore().apply { put("bake",vm);clear() } }
+        rule.waitForIdle()
     }
 }

@@ -31,7 +31,7 @@ internal object PaperLight {
     const val HIGHLIGHT_WIDTH = .06f
     // A projected spatial rim, NOT the existing angular gaussian highlight.
     const val RIM_DP = 1.5f
-    const val RIM_LIGHT = .025f
+    const val RIM_LIGHT = .08f
     const val SHADOW = .58f
     const val SHADOW_MAX = .8f
     const val SHADOW_START = .9f
@@ -51,7 +51,7 @@ internal object PaperLight {
     fun crease(d:Float,r:Float,night:Boolean)=1f-AO*nightFactor(night)*exp(-abs(d)/(AO_RADIUS*r+AO_SOFT))
     fun highlight(theta:Float,night:Boolean)=HIGHLIGHT*(if(night)1f-HIGHLIGHT_NIGHT else 1f)*exp(-((theta-HIGHLIGHT_ANGLE)/HIGHLIGHT_WIDTH).pow(2))
     fun nightRim(d: Float, r: Float, night: Boolean, density: Float): Float {
-        if (!night || d <= 0f || d > r * kotlin.math.PI.toFloat() / 2f) return 0f
+        if (!night || d <= 0f || d > r * kotlin.math.PI.toFloat()) return 0f
         val distanceFromSilhouette = r * (1f - sin(d / r))
         return RIM_LIGHT * (1f - distanceFromSilhouette / (RIM_DP * density)).coerceIn(0f, 1f)
     }

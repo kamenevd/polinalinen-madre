@@ -52,14 +52,15 @@ internal class PaperTexture(val front: Bitmap, private val paper: Int, private v
             val crease=PaperLight.crease(d,fold.radius,night)
             val grain=PaperLight.grain(sx.toInt(),sy.toInt())*255f
             val i=y*w+x;val tex=source[i]
+            val rim = PaperLight.nightRim(d, fold.radius, night, density * fold.width / w) * 255f
             if(theta<=PI/2) {
                 val light=if(d<=0f)1f else PaperLight.faceShade(theta)+PaperLight.highlight(theta,night)
-                val rim = PaperLight.nightRim(d, fold.radius, night, density * fold.width / w) * 255f
+
                 face[i]=rgb(Color.red(tex).toFloat(),Color.green(tex).toFloat(),Color.blue(tex).toFloat(),light*crease,grain + rim)
             } else {
                 val light=PaperLight.versoShade(theta)*crease
                 fun print(base:Float,value:Int)=base*(1f-PaperLight.PRINT)+value*PaperLight.PRINT
-                back[i]=rgb(print(pr,Color.red(tex)),print(pg,Color.green(tex)),print(pb,Color.blue(tex)),light,grain)
+                back[i]=rgb(print(pr,Color.red(tex)),print(pg,Color.green(tex)),print(pb,Color.blue(tex)),light,grain + rim)
             }
             if(lower!=null && receiver!=null) {
                 val c=lower[i];val light=PaperLight.receiver(d,fold.radius,night)

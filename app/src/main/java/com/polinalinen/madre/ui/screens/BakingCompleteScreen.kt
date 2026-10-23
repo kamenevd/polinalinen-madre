@@ -233,14 +233,7 @@ fun BakingCompleteScreen(
             )
 
             if (sharingAvailable && (session != null || completion != null)) {
-                FlowRow(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
-                    PaperChip("С фото",shelfDecision==ShelfShareDecision.PUT_WITH_PHOTO,
-                        {decisionTouched=true;shelfDecision=ShelfShareDecision.PUT_WITH_PHOTO},enabled=!busy && photoPath!=null)
-                    PaperChip("Без фото",shelfDecision==ShelfShareDecision.PUT_WITHOUT_PHOTO,
-                        {decisionTouched=true;shelfDecision=ShelfShareDecision.PUT_WITHOUT_PHOTO},enabled=!busy)
-                    PaperChip("Только мне",shelfDecision==ShelfShareDecision.KEEP,
-                        {decisionTouched=true;shelfDecision=ShelfShareDecision.KEEP},enabled=!busy)
-                }
+                BakeFinaleShareChoices(shelfDecision,photoPath!=null,busy) { decisionTouched=true;shelfDecision=it }
             }
 
             Spacer(Modifier.weight(1f))
@@ -269,6 +262,18 @@ fun BakingCompleteScreen(
  * (DESIGN-V4.md §«Графический язык»/Штампы) вынесена в WaxSealStamp
  * (ui/components/BookComponents.kt, Cycle 2).
  */
+@Composable internal fun BakeFinaleShareChoices(decision: ShelfShareDecision, photoAvailable: Boolean,
+    busy: Boolean, onDecision: (ShelfShareDecision) -> Unit) {
+    FlowRow(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+        PaperChip("С фото",decision==ShelfShareDecision.PUT_WITH_PHOTO,
+            {onDecision(ShelfShareDecision.PUT_WITH_PHOTO)},enabled=!busy && photoAvailable)
+        PaperChip("Без фото",decision==ShelfShareDecision.PUT_WITHOUT_PHOTO,
+            {onDecision(ShelfShareDecision.PUT_WITHOUT_PHOTO)},enabled=!busy)
+        PaperChip("Только мне",decision==ShelfShareDecision.KEEP,
+            {onDecision(ShelfShareDecision.KEEP)},enabled=!busy)
+    }
+}
+
 @Composable
 private fun WaxSeal(dateLabel: String?, modifier: Modifier = Modifier) {
     WaxSealStamp(

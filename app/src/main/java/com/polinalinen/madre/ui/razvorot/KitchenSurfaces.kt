@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.*
 import com.polinalinen.madre.model.BakingSession
 import com.polinalinen.madre.model.RecipeScaler
+import com.polinalinen.madre.model.StepType
 import com.polinalinen.madre.ui.components.bookAction
 import com.polinalinen.madre.sourdough.GrowthPhase
 import kotlin.math.sin
@@ -39,7 +40,7 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
         Row(Modifier.fillMaxWidth().padding(top=26.dp),verticalAlignment=Alignment.Bottom) {
             BookText("%02d".format(session.currentStepIndex+1),100,weight=FontWeight.ExtraLight)
             BookText("/${session.recipe.timeline.size}",28,Modifier.padding(bottom=12.dp),color=p.mut)
-            Spacer(Modifier.weight(1f));Column(horizontalAlignment=Alignment.End) {SmallLabel("ШАГ");BookText(session.currentStep.title,20,italic=true)}
+            Spacer(Modifier.weight(1f));Column(horizontalAlignment=Alignment.End) {SmallLabel("ШАГ");BookText(session.currentStep.title,20,italic=session.currentStep.type==StepType.WAIT,weight=FontWeight.Medium)}
         }
         val progress=timerProgress(session.currentStep.durationMinutes*60L,remaining)
         TimerNumber(timerDigits(remaining),progress,92.sp,(-5).sp,p.ink,Modifier.fillMaxWidth().clickable(onClickLabel="Открыть большой таймер"){full=true}.padding(top=12.dp))

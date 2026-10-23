@@ -134,7 +134,7 @@ internal val BookRibbonHeight=44.dp
                     if(index>=0) { val r=recipes[index]
                         Column(Modifier.offset(x=(offset*18).dp,y=(offset*4).dp).rotate(offset*7f-3f).width(232.dp).height(332.dp).shadow(12.dp,RoundedCornerShape(17.dp)).background(LocalPaper.current.card,RoundedCornerShape(17.dp)).clip(RoundedCornerShape(17.dp)).then(bookAction("Открыть главу: ${r.name}"){onOpen(r.id)}).then(if(offset==0)Modifier.testTag(Home.chapterRowTag(r.id)) else Modifier)) {
                             Box { Image(painterResource(recipePhoto(r.id)),r.name,Modifier.fillMaxWidth().height(202.dp),contentScale=ContentScale.Crop); Ribbon(Modifier.padding(start=16.dp)); BookText("%02d".format(index+1),48,Modifier.align(Alignment.TopEnd).padding(12.dp),color=Color.White,weight=FontWeight.ExtraLight) }
-                            BookText(r.name,22,Modifier.padding(14.dp,12.dp,14.dp,4.dp));SmallLabel("${r.totalTime()} · ${r.timeline.size} шагов",Modifier.padding(horizontal=14.dp))
+                            BookText(r.name,22,Modifier.padding(14.dp,12.dp,14.dp,4.dp),weight=FontWeight.Medium);SmallLabel("${r.totalTime()} · ${r.timeline.size} шагов",Modifier.padding(horizontal=14.dp))
                         }
                     }
                 }

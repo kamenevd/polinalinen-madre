@@ -2,12 +2,14 @@ package com.polinalinen.madre.ui.razvorot
 
 import android.content.Context
 import androidx.compose.material3.ColorScheme
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontStyle
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
@@ -75,6 +77,32 @@ class StyleAuditRegressionTest {
             assertThat(PaperLight.faceShade(t)+PaperLight.highlight(t,false)).isAtMost(1f)
             assertThat(PaperLight.crease(i.toFloat(),60f,true)).isEqualTo(PaperLight.crease(-i.toFloat(),60f,true))
         }
+    }
+    @Test fun fanChapterHeadingUsesRealMediumWeight() {
+        val recipe=Recipe("audit","Глава для проверки","","",emptyMap(),listOf(TimelineStep(StepType.ACTION,"Замес","",5)))
+        val prefs=ReadingPreferences(ApplicationProvider.getApplicationContext<Context>(),"audit-fan-weight")
+        rule.setContent {RazvorotTheme(prefs,Atmosphere.DAWN){ChapterCatalog(listOf(recipe,recipe.copy(id="second",name="Вторая"),recipe.copy(id="third",name="Третья")),{},{},{})}}
+        val results=mutableListOf<TextLayoutResult>()
+        rule.onNodeWithText(recipe.name,useUnmergedTree=true).performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult){it(results)}
+        assertThat(results.single().layoutInput.style.fontWeight).isEqualTo(FontWeight.Medium)
+    }
+    @Test fun bakingStepHeadingUsesMediumAndOnlyWaitingStepsAreItalic() {
+        val type=mutableStateOf(StepType.ACTION)
+        val prefs=ReadingPreferences(ApplicationProvider.getApplicationContext<Context>(),"audit-bake-heading")
+        rule.setContent {
+            val recipe=Recipe("audit","Аудит","","",emptyMap(),listOf(TimelineStep(type.value,"Заголовок шага","Описание",5)))
+            RazvorotTheme(prefs,Atmosphere.DAWN){BakingPaper(BakingSession(7,recipe,0,0L,0L),120L,{},{},{},{})}
+        }
+        fun heading():TextLayoutResult {
+            val results=mutableListOf<TextLayoutResult>()
+            rule.onNodeWithText("Заголовок шага",useUnmergedTree=true).performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult){it(results)}
+            return results.single()
+        }
+        assertThat(heading().layoutInput.style.fontWeight).isEqualTo(FontWeight.Medium)
+        assertThat(heading().layoutInput.style.fontStyle).isEqualTo(FontStyle.Normal)
+        rule.runOnIdle{type.value=StepType.WAIT}
+        assertThat(heading().layoutInput.style.fontWeight).isEqualTo(FontWeight.Medium)
+        assertThat(heading().layoutInput.style.fontStyle).isEqualTo(FontStyle.Italic)
     }
     @Test fun readingMetadataUsesActualTimelineAndPreservesHoursAndRemainders() {
         val recipe=Recipe("audit","Аудит","","",emptyMap(),listOf(TimelineStep(StepType.ACTION,"Замес","",5),TimelineStep(StepType.WAIT,"Ночь","",600),TimelineStep(StepType.ACTION,"Дальше","",10)))

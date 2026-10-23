@@ -94,15 +94,26 @@ class BookNavigationUiTest {
         val requested=MutableStateFlow<Long?>(fixture.id)
         lateinit var nav:NavHostController
         val restoration=StateRestorationTester(rule)
+        fun awaitActualBake() {
+            rule.waitForIdle()
+            try {
+                rule.waitUntil(10_000) {
+                    // Fetch semantics first: a short-circuited route check never synchronizes the host looper.
+                    val ready=rule.onAllNodesWithText("Дальше").fetchSemanticsNodes().isNotEmpty()
+                    ready && nav.currentDestination?.route==MadreDestinations.BAKE
+                }
+            } catch(failure:Throwable) {
+                println("Synthetic navigation fixture: route=${nav.currentDestination?.route}, pending=${requested.value}, rows=${runBlocking{app.activeBakeRepository.all()}.map{it.sessionId to it.recipeId}}")
+                throw failure
+            }
+        }
         restoration.setContent {nav=rememberNavController();MadreNavHost(nav,pendingSessionId=requested)}
-        rule.waitUntil(10_000){nav.currentDestination?.route==MadreDestinations.BAKE &&
-            rule.onAllNodesWithText("Дальше").fetchSemanticsNodes().isNotEmpty()}
+        awaitActualBake()
         assertEquals(fixture.id.toString(),nav.currentBackStackEntry?.arguments?.getString("sessionId"))
         assertNull(requested.value)
         rule.runOnIdle{rule.activity.viewModelStore.clear()}
         restoration.emulateSavedInstanceStateRestore()
-        rule.waitUntil(10_000){nav.currentDestination?.route==MadreDestinations.BAKE &&
-            rule.onAllNodesWithText("Дальше").fetchSemanticsNodes().isNotEmpty()}
+        awaitActualBake()
         assertEquals(fixture.id.toString(),nav.currentBackStackEntry?.arguments?.getString("sessionId"))
         assertEquals(fixture.bakeKey,runBlocking{app.activeBakeRepository.all()}.single{it.sessionId==fixture.id}.bakeKey)
         rule.runOnIdle{assertTrue(nav.popBackStack())}

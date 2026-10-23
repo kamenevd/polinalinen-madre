@@ -90,6 +90,7 @@ internal class PaperGlView(context: Context, private val failure: (String) -> Un
                 GLES20.glEnable(GLES20.GL_DEPTH_TEST); GLES20.glDepthFunc(GLES20.GL_LEQUAL)
                 stage="texture-prefetch"
                 pendingTextures.forEach{texture(it)}
+                android.util.Log.i("MadrePaperGL","ready ${surfaceWidth}x$surfaceHeight stamp=$canStamp paper=${frame!=null}")
                 post{ready()}
                 safeDraw()
             }.onFailure { reportFailure(it) }
@@ -99,7 +100,9 @@ internal class PaperGlView(context: Context, private val failure: (String) -> Un
     override fun onSurfaceTextureUpdated(surface: SurfaceTexture) {
         // SurfaceTexture's timestamp identifies the consumed buffer. A newer
         // transparent clear must never acknowledge an older skipped paper swap.
-        if(presentation.consumed(surface.timestamp))presented()
+        val paper=presentation.consumed(surface.timestamp)
+        if(com.polinalinen.madre.BuildConfig.DEBUG)android.util.Log.d("MadrePaperGL","consumed timestamp=${surface.timestamp} paper=$paper")
+        if(paper)presented()
     }
     override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
         handler.post { releaseGl(); surface.release(); worker.quitSafely() }
@@ -171,6 +174,9 @@ internal class PaperGlView(context: Context, private val failure: (String) -> Un
         // Timestamp verification is diagnostic only, not a new GLES requirement:
         // unsupported drivers still render, but do not claim verified frame counts.
         check(EGL14.eglSwapBuffers(display, eglSurface))
+        // A one-shot static scene has no animation to invalidate the owner.
+        // Schedule the real TextureView draw that consumes its queued buffer.
+        postInvalidateOnAnimation()
     }
     companion object {
         private const val VS = """

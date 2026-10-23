@@ -14,6 +14,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -41,15 +42,21 @@ internal fun bookWord(n:Int)=when {
         val along=with(density){maxHeight.roundToPx()}
         val across=with(density){maxWidth.roundToPx()}
         var font=18f
-        // Keep the user's scale; shrink only if measured natural line height
-        // physically exceeds the spine. Never clip a line to maxHeight before rotation.
-        while(font>12f && measurer.measure(name,TextStyle(fontFamily=Literature,fontSize=font.sp,lineHeight=(font*23f/18f).sp),maxLines=1,softWrap=false,overflow=TextOverflow.Ellipsis,constraints=Constraints(maxWidth=along)).size.height>across)font-=.5f
+        // Fit the natural single line, down to the designer's11sp minimum.
+        // At the minimum, a genuinely long name uses ellipsis, never wrapping.
+        while(font>11f) {
+            val natural=measurer.measure(name,TextStyle(fontFamily=Literature,fontSize=font.sp,lineHeight=(font*23f/18f).sp),maxLines=1,softWrap=false)
+            if(natural.multiParagraph.width<=along && natural.size.height<=across)break
+            font-=.5f
+        }
         Text(name,Modifier.fillMaxSize().layout { measurable,constraints ->
-            val title=measurable.measure(Constraints(maxWidth=constraints.maxHeight))
+            // Reserve the whole longitudinal axis. Intrinsic fractional widths
+            // otherwise round down (138.x→138) and produce real width overflow.
+            val title=measurable.measure(Constraints(minWidth=constraints.maxHeight,maxWidth=constraints.maxHeight))
             layout(constraints.maxWidth,constraints.maxHeight) {
                 title.placeWithLayer((constraints.maxWidth-title.width)/2,(constraints.maxHeight-title.height)/2) { rotationZ=90f }
             }
-        },color=Color(0xFFF4EADC),fontFamily=Literature,fontSize=font.sp,lineHeight=(font*23f/18f).sp,maxLines=1,softWrap=false,overflow=TextOverflow.Ellipsis)
+        },color=Color(0xFFF4EADC),fontFamily=Literature,fontSize=font.sp,lineHeight=(font*23f/18f).sp,textAlign=TextAlign.Center,maxLines=1,softWrap=false,overflow=TextOverflow.Ellipsis)
     }
 }
 

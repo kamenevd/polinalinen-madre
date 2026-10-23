@@ -31,12 +31,16 @@ class MainScreensScreenshotTest {
         rule.runOnIdle{rule.activity.scene=scene}
         rule.waitUntil(15_000){rule.onAllNodesWithTag("scene-$scene").fetchSemanticsNodes().isNotEmpty()}
         rule.waitForIdle()
+        if(scene=="reading-sheet") {
+            rule.onNodeWithText("Как читать").assertIsDisplayed()
+            checkNotNull(rule.activity.captureWindow){"Settings dialog has no attested Window"}
+        }
         if(scene.startsWith("gles2-")) {
-            rule.waitUntil(15_000) {
+            try { rule.waitUntil(15_000) {
                 val state=rule.onNodeWithTag("scene-$scene").fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription).orEmpty()
                 check(!state.startsWith("SLIDE:")){"Native GL fixture failed: $state"}
                 state.startsWith("GLES2:") && (state.split(':').getOrNull(1)?.toIntOrNull()?:0)>0
-            }
+            } } catch(error:ComposeTimeoutException) { throw AssertionError("Static GL presentation: ${rule.onNodeWithTag("scene-$scene").fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription)}\n${rule.onRoot().printToString()}",error) }
         }
         if(scene.startsWith("starter-")) {
             val phase=scene.substringAfter('-').uppercase()
@@ -57,8 +61,10 @@ class MainScreensScreenshotTest {
         // actual current Window buffer, not a stale SurfaceFlinger screenshot.
         val committed=CountDownLatch(1)
         lateinit var bitmap:Bitmap
+        lateinit var window:android.view.Window
         rule.runOnIdle {
-            val view=rule.activity.window.decorView
+            window=rule.activity.captureWindow?:rule.activity.window
+            val view=window.decorView
             check(view.isHardwareAccelerated)
             bitmap=Bitmap.createBitmap(view.width,view.height,Bitmap.Config.ARGB_8888)
             view.viewTreeObserver.registerFrameCommitCallback { committed.countDown() }
@@ -67,7 +73,7 @@ class MainScreensScreenshotTest {
         check(committed.await(5,TimeUnit.SECONDS)){"No native frame committed for ${rule.activity.scene}"}
         val copied=CountDownLatch(1);var result=-1
         rule.runOnIdle {
-            PixelCopy.request(rule.activity.window,bitmap,{status->result=status;copied.countDown()},Handler(Looper.getMainLooper()))
+            PixelCopy.request(window,bitmap,{status->result=status;copied.countDown()},Handler(Looper.getMainLooper()))
         }
         check(copied.await(5,TimeUnit.SECONDS)){"PixelCopy callback missing: $name"}
         check(result==PixelCopy.SUCCESS){"PixelCopy $name failed: $result"}
@@ -103,6 +109,7 @@ class MainScreensScreenshotTest {
         val hashes=mutableMapOf<String,String>()
         RazvorotScenes.forEach {scene->select(scene);hashes[scene]=capture(scene)}
         assertThat(listOf("starter-growing","starter-peak","starter-hungry").map{hashes[it]}.distinct()).hasSize(3)
+        assertThat(hashes["reading-sheet"]).isNotEqualTo(hashes["reader-text-16"])
     }
     @Test fun gles2RendersActualNativePaperFrame() {
         val automation=InstrumentationRegistry.getInstrumentation().uiAutomation

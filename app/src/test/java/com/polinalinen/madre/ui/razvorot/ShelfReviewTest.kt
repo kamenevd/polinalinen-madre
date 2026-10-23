@@ -47,7 +47,9 @@ class ShelfReviewTest {
                 RazvorotTheme(prefs,theme) { Box(Modifier.size(56.dp,180.dp)){SpineTitle(name)} }
             }
         }
-        for(t in listOf(Atmosphere.DAWN,Atmosphere.NIGHT))for(s in listOf(1f,1.3f,2f))for(n in listOf("Пекарь","Семья","Александра Константиновна")) {
+        // The long case must remain too long even at the new11sp fit minimum.
+        // All original strict one-line/short-name overflow assertions remain.
+        for(t in listOf(Atmosphere.DAWN,Atmosphere.NIGHT))for(s in listOf(1f,1.3f,2f))for(n in listOf("Пекарь","Семья","Александра Константиновна Каменева")) {
             rule.runOnIdle{name=n;scale=s;theme=t}
             val layouts=mutableListOf<TextLayoutResult>()
             rule.onNodeWithText(n).performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult){it(layouts)}

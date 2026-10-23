@@ -14,6 +14,10 @@ import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalView
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
@@ -39,9 +43,8 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
             BookText("/${session.recipe.timeline.size}",28,Modifier.padding(bottom=12.dp),color=p.secondary)
             Spacer(Modifier.weight(1f));Column(horizontalAlignment=Alignment.End) {SmallLabel("ШАГ");BookText(session.currentStep.title,20,italic=true)}
         }
-        val duration=(session.currentStep.durationMinutes*60L).coerceAtLeast(1)
-        val progress=(1f-remaining.toFloat()/duration).coerceIn(0f,1f)
-        Text(timerDigits(remaining),Modifier.fillMaxWidth().clickable(onClickLabel="Открыть большой таймер"){full=true}.padding(top=12.dp),fontFamily=Manrope,fontWeight=FontWeight((200+progress*500).toInt()),fontSize=72.sp,letterSpacing=(-3).sp,color=p.ink,maxLines=1)
+        val progress=timerProgress(session.currentStep.durationMinutes*60L,remaining)
+        TimerNumber(timerDigits(remaining),progress,72.sp,(-3).sp,p.ink,Modifier.fillMaxWidth().clickable(onClickLabel="Открыть большой таймер"){full=true}.padding(top=12.dp))
         LinearProgressIndicator(progress={progress},Modifier.fillMaxWidth().padding(vertical=12.dp),color=p.acc,trackColor=p.bg2)
         SmallLabel(if(remaining==0L) "ВРЕМЯ ВЫШЛО" else "ОСТАЛОСЬ ИЗ ${session.currentStep.durationMinutes} МИН")
         val bindings=remember(session.recipe){RecipeScaler.scalableBindings(session.recipe)}
@@ -58,14 +61,15 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
 }
 @Composable fun FullTimer(session:BakingSession,remaining:Long,onClose:()->Unit) {
     val view=LocalView.current
+    val progress=timerProgress(session.currentStep.durationMinutes*60L,remaining)
     DisposableEffect(view){val old=view.keepScreenOn;view.keepScreenOn=true;onDispose{view.keepScreenOn=old}}
     BackHandler(onBack=onClose)
     Box(Modifier.fillMaxSize().background(Color(0xFF0A0807)).clickable(onClickLabel="Свернуть таймер",onClick=onClose).safeDrawingPadding()) {
         Canvas(Modifier.fillMaxSize()) {drawRect(Brush.radialGradient(listOf(Color(0x66552A12),Color.Transparent),Offset(size.width*.5f,size.height),size.height*.7f))}
         Column(Modifier.align(Alignment.CenterStart).padding(26.dp)) {
             SmallLabel("${session.currentStep.title.uppercase()} · ШАГ ${session.currentStepIndex+1} ИЗ ${session.recipe.timeline.size}",color=NightPaper.acc)
-            Text(if(remaining>=3600)"${remaining/3600}ч" else "%02d".format(remaining/60),fontFamily=Manrope,fontWeight=FontWeight.ExtraLight,fontSize=150.sp,letterSpacing=(-8).sp,color=NightPaper.ink)
-            Text(if(remaining>=3600)"%02d:%02d".format(remaining/60%60,remaining%60) else "%02d".format(remaining%60),fontFamily=Manrope,fontWeight=FontWeight.Light,fontSize=100.sp,color=NightPaper.acc)
+            TimerNumber(if(remaining>=3600)"${remaining/3600}ч" else "%02d".format(remaining/60),progress,150.sp,(-8).sp,NightPaper.ink)
+            TimerNumber(if(remaining>=3600)"%02d:%02d".format(remaining/60%60,remaining%60) else "%02d".format(remaining%60),progress,100.sp,0.sp,NightPaper.acc)
             BookText(if(session.isPaused)"Пауза" else if(remaining==0L)"Время вышло" else session.recipe.name,24,Modifier.padding(top=20.dp),italic=true,color=NightPaper.ink)
             SmallLabel("ЭКРАН НЕ ГАСНЕТ · КОСНИТЕСЬ, ЧТОБЫ СВЕРНУТЬ",Modifier.padding(top=24.dp),color=NightPaper.secondary)
         }
@@ -73,7 +77,23 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
 }
 @Composable fun StarterPaper(name:String,day:Int,phase:GrowthPhase,hours:Float?,hydration:Int?,onFeed:()->Unit,onDiary:()->Unit,onSettings:()->Unit,intervalHours:Int=24) {
     val p=LocalPaper.current
-    Column(Modifier.fillMaxSize().testTag("starter-phase-${phase.name}").verticalScroll(rememberScrollState()).padding(horizontal=22.dp)) {
+    val scroll=rememberScrollState()
+    val owner=LocalLifecycleOwner.current
+    val scope=rememberCoroutineScope()
+    var returning by rememberSaveable{mutableStateOf(false)}
+    DisposableEffect(owner,scroll) {
+        val observer=LifecycleEventObserver { _,event ->
+            if(event==Lifecycle.Event.ON_PAUSE)returning=true
+            if(event==Lifecycle.Event.ON_RESUME && returning) {
+                if(com.polinalinen.madre.BuildConfig.DEBUG)android.util.Log.i("MadreStarter","return scroll=${scroll.value}; show jar from top")
+                scope.launch{scroll.scrollTo(0)}
+                returning=false
+            }
+        }
+        owner.lifecycle.addObserver(observer)
+        onDispose{owner.lifecycle.removeObserver(observer)}
+    }
+    Column(Modifier.fillMaxSize().testTag("starter-phase-${phase.name}").verticalScroll(scroll).padding(horizontal=22.dp)) {
         BookHeader("ЗАКВАСКА · ДЕНЬ $day",onAa=onSettings)
         BookText(name,42);BookText("живая",42,italic=true,color=p.acc)
         SmallLabel("ЛЕВИТО МАДРЕ · ГИДРАТАЦИЯ ${hydration?.let{"$it%"}?:"—"}",Modifier.padding(top=8.dp))

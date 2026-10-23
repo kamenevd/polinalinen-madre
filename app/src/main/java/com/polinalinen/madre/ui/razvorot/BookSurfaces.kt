@@ -21,6 +21,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.ui.text.font.*
 import androidx.compose.ui.unit.*
 import com.polinalinen.madre.R
@@ -134,9 +136,12 @@ fun Recipe.totalTime(): String { val m = timeline.sumOf { it.durationMinutes }; 
     }
 }
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable fun ReadingSettings(preferences: ReadingPreferences, onClose: () -> Unit) {
+@Composable fun ReadingSettings(preferences: ReadingPreferences, onWindow:((android.view.Window?)->Unit)?=null, onClose: () -> Unit) {
     val context=androidx.compose.ui.platform.LocalContext.current
     ModalBottomSheet(onDismissRequest=onClose,containerColor=LocalPaper.current.card) {
+        val view=LocalView.current
+        val window=(view.parent as? DialogWindowProvider)?.window
+        DisposableEffect(window){onWindow?.invoke(window);onDispose{onWindow?.invoke(null)}}
         Column(Modifier.padding(horizontal=22.dp).verticalScroll(rememberScrollState())) {
             BookText("Как читать",28)
             SmallLabel("АТМОСФЕРА",Modifier.padding(top=16.dp))

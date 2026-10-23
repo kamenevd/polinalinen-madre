@@ -58,4 +58,29 @@ class RazvorotV3RenderTest {
     @Test fun shelfNight()=render("shelf-night")
     @Test fun shelfLargeType()=render("shelf-large")
     @Test fun curlNight()=render("curl-mid-night")
+    @Test fun bakeStart()=render("bake-start")
+    @Test fun bakeEnd()=render("bake-end")
+    @Test fun fullTimerStart()=render("fulltimer-start")
+    @Test fun fullTimerEnd()=render("fulltimer-end")
+    @Test fun variableAxisReallyThickensTheSameDigits() {
+        val context=ApplicationProvider.getApplicationContext<Context>()
+        val bytes=context.resources.openRawResource(com.polinalinen.madre.R.font.manrope).use{it.readBytes()}
+        val buffer=java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.BIG_ENDIAN)
+        fun u16(p:Int)=buffer.getShort(p).toInt() and 65535
+        val table=(0 until u16(4)).first {String(bytes,12+it*16,4,Charsets.US_ASCII)=="fvar"}
+        val fvar=buffer.getInt(12+table*16+8)
+        val axes=fvar+u16(fvar+4);val axisSize=u16(fvar+10)
+        val weight=(0 until u16(fvar+8)).first{String(bytes,axes+it*axisSize,4,Charsets.US_ASCII)=="wght"}
+        assertThat(buffer.getInt(axes+weight*axisSize+4)/65536f).isEqualTo(200f)
+        assertThat(buffer.getInt(axes+weight*axisSize+12)/65536f).isEqualTo(800f)
+        render("timer-weight-start");render("timer-weight-end")
+        val module=if(File("app/src/main/AndroidManifest.xml").isFile)File("app") else File(".")
+        fun ink(scene:String):Int {
+            val bitmap=android.graphics.BitmapFactory.decodeFile(File(module,"build/outputs/roborazzi/f-v3/$scene.png").absolutePath)
+            var count=0
+            for(y in 0 until bitmap.height)for(x in 0 until bitmap.width) {val c=bitmap.getPixel(x,y);if(android.graphics.Color.red(c)<100&&android.graphics.Color.green(c)<100&&android.graphics.Color.blue(c)<100)count++}
+            bitmap.recycle();return count
+        }
+        assertThat(ink("timer-weight-end")).isGreaterThan(ink("timer-weight-start"))
+    }
 }

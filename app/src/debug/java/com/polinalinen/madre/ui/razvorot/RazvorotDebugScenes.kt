@@ -16,6 +16,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.viewinterop.AndroidView
 import com.polinalinen.madre.data.repository.RecipeRepository
@@ -27,6 +28,7 @@ import kotlinx.coroutines.runBlocking
 /** Explicit debug-only activity: no launcher entry, no production route or voice API. */
 class RazvorotSceneActivity : ComponentActivity() {
     var scene by mutableStateOf("home-dawn")
+    var captureWindow:android.view.Window?=null
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         scene=intent.getStringExtra("scene")?:"home-dawn"
@@ -35,7 +37,7 @@ class RazvorotSceneActivity : ComponentActivity() {
     }
 }
 
-internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","reader-text-16","reader-text-22","curl-top","curl-mid","curl-bottom","curl-back","reader-chrome","reading-sheet","home-dawn","home-night","spine","bake","alice-listening","alice-reading","alice-confirm","alice-night","starter-growing","starter-peak","starter-hungry","shelf","shelf-night","shelf-large","curl-mid-night","gles2-curl-mid")
+internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","reader-text-16","reader-text-22","curl-top","curl-mid","curl-bottom","curl-back","reader-chrome","reading-sheet","home-dawn","home-night","spine","bake","alice-listening","alice-reading","alice-confirm","alice-night","starter-growing","starter-peak","starter-hungry","shelf","shelf-night","shelf-large","curl-mid-night","gles2-curl-mid","bake-start","bake-end","fulltimer-start","fulltimer-end","timer-weight-start","timer-weight-end")
 
 @Composable internal fun RazvorotDebugScene(scene:String,recipes:List<Recipe>) {
     val context=LocalContext.current
@@ -55,7 +57,7 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
                     scene.startsWith("reader-text") -> DebugTextPage(recipe,preferences)
                     scene.startsWith("curl-") || scene.startsWith("gles2-curl-") -> DebugCurl(recipe,scene)
                     scene=="reader-chrome" -> RazvorotReader(recipes,recipe.id,preferences,{},{},{})
-                    scene=="reading-sheet" -> { DebugTextPage(recipe,preferences);ReadingSettings(preferences){} }
+                    scene=="reading-sheet" -> { DebugTextPage(recipe,preferences);ReadingSettings(preferences,onWindow={(context as? RazvorotSceneActivity)?.captureWindow=it}){} }
                     scene.startsWith("home-") -> Column {
                         var catalog by remember{mutableStateOf(false)}
                         Box(Modifier.weight(1f)) { if(catalog)ChapterCatalog(recipes,{},{catalog=false},{}) else CoverPage(recipes,{catalog=true},{},{}) }
@@ -63,6 +65,9 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
                     }
                     scene=="spine" -> Box(Modifier.fillMaxSize(),contentAlignment=Alignment.BottomCenter){SpineBar(2){}}
                     scene=="bake" -> BakingPaper(BakingSession(7,recipe,9,0L,0L,scaleFactor=2.0),1661L,{},{},{},{})
+                    scene=="bake-start" || scene=="bake-end" -> BakingPaper(BakingSession(7,recipe,9,0L,0L,scaleFactor=2.0),if(scene.endsWith("start"))recipe.timeline[9].durationMinutes*60L else 0L,{},{},{},{})
+                    scene.startsWith("fulltimer-") -> FullTimer(BakingSession(7,recipe,9,0L,0L,scaleFactor=2.0),if(scene.endsWith("start"))recipe.timeline[9].durationMinutes*60L else 0L){}
+                    scene.startsWith("timer-weight-") -> Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) {TimerNumber("27:41",if(scene.endsWith("start"))0f else 1f,72.sp,(-3).sp,LocalPaper.current.ink)}
                     scene.startsWith("alice-") -> {
                         BakingPaper(BakingSession(7,recipe,9,0L,0L,scaleFactor=2.0),1661L,{},{},{},{})
                         DebugAliceSheet(scene,recipe)

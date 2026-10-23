@@ -13,6 +13,7 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -167,6 +168,7 @@ class NavigationSmokeTest {
             rule.onNodeWithText("Новая запись").assertIsDisplayed()
             rule.onNodeWithTag("starter-jar").assertDoesNotExist()
             pressSystemBack()
+            rule.waitUntil(TIMEOUT_MS){rule.onNodeWithTag("starter-jar").isDisplayed()}
             rule.onNodeWithTag("starter-jar").assertIsDisplayed()
         } finally {
             runBlocking {

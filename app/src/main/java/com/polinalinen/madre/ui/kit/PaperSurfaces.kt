@@ -63,10 +63,11 @@ import kotlin.random.Random
 
 @Composable fun PaperScaffold(modifier: Modifier = Modifier,
     header: @Composable () -> Unit = {}, bottom: @Composable () -> Unit = {},
+    contentPadding: PaddingValues = PaddingValues(horizontal = 22.dp, vertical = 16.dp),
     content: LazyListScope.() -> Unit) {
-    Column(modifier.fillMaxSize().paperBackground().safeDrawingPadding()) {
+    Column(modifier.fillMaxSize().paperBackground().safeDrawingPadding().imePadding()) {
         header()
-        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 22.dp, vertical = 16.dp), content = content)
+        LazyColumn(Modifier.weight(1f), contentPadding = contentPadding, content = content)
         bottom()
     }
 }

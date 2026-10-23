@@ -13,6 +13,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.Image
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CameraAlt
+import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -85,7 +88,6 @@ fun PhotoSourceChooser(
                     label = "Камера",
                     hint = "сделать снимок сейчас",
                     drawable = R.drawable.ic_camera,
-                    rotation = -1.2f,
                     modifier = Modifier.weight(1f),
                     onClick = { choose(onPickCamera) },
                 )
@@ -93,7 +95,6 @@ fun PhotoSourceChooser(
                     label = "Галерея",
                     hint = "выбрать из фото",
                     drawable = R.drawable.ic_gallery,
-                    rotation = 0.9f,
                     modifier = Modifier.weight(1f),
                     onClick = { choose(onPickGallery) },
                 )
@@ -105,7 +106,7 @@ fun PhotoSourceChooser(
                     .fillMaxWidth()
                     .then(bookAction("Отмена") { choose(onDismiss) })
                     .padding(vertical = 12.dp),
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(25.dp),
             ) {
                 Text(
                     "отмена".uppercase(),
@@ -126,31 +127,13 @@ private fun SourceCard(
     label: String,
     hint: String,
     drawable: Int,
-    rotation: Float,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     val colors = LocalPaper.current
-    Column(
-        modifier
-            .rotate(rotation)
-            .then(bookAction(label, onClick = onClick))
-            .drawBehind {
-                drawRect(colors.card)
-                drawRoundRect(
-                    color = colors.ink,
-                    cornerRadius = CornerRadius(8.dp.toPx()),
-                    style = Stroke(width = 1.5.dp.toPx()),
-                )
-            }
-            .padding(vertical = 22.dp, horizontal = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Image(
-            painter = painterResource(drawable),
-            contentDescription = label,
-            modifier = Modifier.size(40.dp),
-        )
+    PaperCard(modifier.then(bookAction(label, onClick = onClick))) {
+        Icon(if (drawable == R.drawable.ic_camera) Icons.Outlined.CameraAlt else Icons.Outlined.Image,
+            contentDescription = label, modifier = Modifier.size(40.dp), tint = colors.ink)
         Spacer(Modifier.height(10.dp))
         Text(
             label,

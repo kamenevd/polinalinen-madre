@@ -121,11 +121,11 @@ fun FeedingFormScreen(
         key = 0L,
     ) { path -> photoPath = path }
 
-    PaperSurface(color = colors.bg, modifier = Modifier.fillMaxSize()) {
+    PaperScaffold(contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) {
+        item {
         Column(
             Modifier
 
-                .verticalScroll(rememberScrollState())
                 .padding(bottom = 32.dp)
         ) {
             BackHandler(enabled = isSaving) {}
@@ -297,6 +297,7 @@ fun FeedingFormScreen(
                 )
             }
         }
+        }
     }
 }
 
@@ -318,16 +319,7 @@ private fun GramCard(
     val colors = LocalPaper.current
     var typing by rememberSaveable { mutableStateOf(false) }
 
-    Column(
-        Modifier
-            .padding(horizontal = 22.dp, vertical = 8.dp)
-            .fillMaxWidth()
-            .drawBehind {
-                drawRoundRect(colors.card, cornerRadius = CornerRadius(20.dp.toPx()))
-
-            }
-            .padding(horizontal = 14.dp, vertical = 10.dp)
-    ) {
+    PaperCard(Modifier.padding(horizontal = 22.dp, vertical = 8.dp)) {
         PageLabel(label, color = colors.ink2)
         if (typing) {
             GramNumberField(

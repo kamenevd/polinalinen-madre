@@ -137,11 +137,11 @@ fun SettingsScreen(
 ) {
     val colors = LocalPaper.current
     val inFamily = familyBookState.account?.hasFamily == true
-    PaperSurface(color = colors.bg, modifier = Modifier.fillMaxSize()) {
+    PaperScaffold(contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) {
+        item {
         Column(
             Modifier
 
-                .verticalScroll(rememberScrollState())
                 .padding(bottom = 32.dp)
         ) {
             PaperHeader("Настройки", onBack = onBack, overline = "Книга", modifier = Modifier.padding(horizontal = 22.dp))
@@ -246,6 +246,7 @@ fun SettingsScreen(
                     onClick = null,
                 )
             }
+        }
         }
     }
 }

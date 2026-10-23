@@ -44,6 +44,7 @@ import com.polinalinen.madre.viewmodel.FeedingSaveState
 import com.polinalinen.madre.viewmodel.FamilyBookViewModel
 import com.polinalinen.madre.viewmodel.SourdoughViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import com.polinalinen.madre.ui.razvorot.*
 
 internal fun authoritativeFeedingFromHistory(history: List<FeedingEntity>): FeedingEntity? = history.firstOrNull()
 
@@ -68,6 +69,7 @@ fun MadreNavHost(
     pendingFeeding: MutableStateFlow<Boolean>? = null,
 ) {
     val context = LocalContext.current
+    val readingPreferences = rememberReadingPreferences()
     val bakingViewModel: BakingViewModel = viewModel()
     val sourdoughViewModel: SourdoughViewModel = viewModel()
     val shelfViewModel: ShelfViewModel = viewModel()
@@ -187,24 +189,33 @@ fun MadreNavHost(
     } ?: 1
 
     CompositionLocalProvider(LocalCalmMode provides calmMode) {
+        RazvorotTheme(readingPreferences) {
         NavHost(navController = navController, startDestination = MadreDestinations.HOME) {
             composable(MadreDestinations.HOME) {
-                HomeScreen(
-                    starterName = starterName,
-                    phase = phase,
-                    lastFeedingMillis = authoritativeLastFeedingMillis,
-                    intervalHours = sourdoughConfig?.intervalHours ?: 24,
-                    latestHydrationPercent = shownHydration,
+                val sessions by bakingViewModel.sessions.collectAsState()
+                RazvorotHome(
+                    recipes = recipesForStats, sessions = sessions, viewModel = bakingViewModel,
+                    starterName = starterName, day = dayNumber, phase = phase,
+                    lastFeedingMillis = authoritativeLastFeedingMillis, hydration = shownHydration,
+                    preferences = readingPreferences,
                     onOpenRecipe = { id -> navController.navigate(MadreDestinations.recipeDetail(id)) },
-                    onOpenStarter = { navController.navigate(MadreDestinations.STARTER_DETAIL) },
-                    onOpenTimer = { sessionId -> navController.navigate(MadreDestinations.bakingTimer(sessionId.toString())) },
-                    onOpenFeeding = enterFeedingForm,
-                    onOpenSettings = { navController.navigate(MadreDestinations.SETTINGS) },
-                    onOpenShelf = { navController.navigate(MadreDestinations.SHELF) },
-                    viewModel = bakingViewModel,
+                    onOpenTimer = { id -> navController.navigate(MadreDestinations.bakingTimer(id.toString())) },
+                    onFeed = enterFeedingForm,
+                    onDiary = { navController.navigate(MadreDestinations.STARTER_DETAIL) },
+                    onSettings = { navController.navigate(MadreDestinations.SETTINGS) },
+                    shelf = { ShelfScreen(myName, bakeRecords, { navController.navigate(MadreDestinations.SETTINGS_SHELF) },
+                        { owner -> navController.navigate(MadreDestinations.bookStats(owner)) }, familyBookState.account, shelfViewModel) },
                 )
             }
             composable(MadreDestinations.RECIPE_DETAIL) { backStackEntry ->
+                val recipeId = backStackEntry.arguments?.getString("recipeId").orEmpty()
+                RazvorotReader(recipesForStats, recipeId, readingPreferences,
+                    onBack = { navController.popBackStack() },
+                    onBake = { recipe -> val id = bakingViewModel.startBaking(recipe, 1.0); navController.navigate(MadreDestinations.bakingTimer(id.toString())) },
+                    onCalculator = { recipe -> navController.navigate("recipe-calculator/${recipe.id}") },
+                )
+            }
+            composable("recipe-calculator/{recipeId}") { backStackEntry ->
                 val recipeId = backStackEntry.arguments?.getString("recipeId").orEmpty()
                 RecipeDetailScreen(
                     recipeId = recipeId,
@@ -215,8 +226,9 @@ fun MadreNavHost(
             }
             composable(MadreDestinations.BAKING_TIMER) { backStackEntry ->
                 val sessionId = backStackEntry.arguments?.getString("sessionId")?.toLongOrNull() ?: return@composable
-                BakingTimerScreen(
+                RazvorotTimer(
                     sessionId = sessionId,
+                    onDetails = { navController.navigate("bake-actions/$sessionId") },
                     onBack = { navController.popBackStack(MadreDestinations.HOME, inclusive = false) },
                     onComplete = {
                         // Cycle 12: «Готово» не кладётся поверх таймера, а
@@ -229,6 +241,12 @@ fun MadreNavHost(
                     },
                     viewModel = bakingViewModel,
                 )
+            }
+            composable("bake-actions/{sessionId}") { entry ->
+                val id = entry.arguments?.getString("sessionId")?.toLongOrNull() ?: return@composable
+                BakingTimerScreen(id, { navController.popBackStack() }, {
+                    navController.navigate(MadreDestinations.bakingComplete(id.toString())) { popUpTo(MadreDestinations.HOME) { inclusive = false } }
+                }, bakingViewModel)
             }
             composable(MadreDestinations.BAKING_COMPLETE) { backStackEntry ->
                 val sessionId = backStackEntry.arguments?.getString("sessionId")?.toLongOrNull()
@@ -350,6 +368,7 @@ fun MadreNavHost(
                     onBack = { navController.popBackStack() },
                 )
             }
+        }
         }
     }
 }

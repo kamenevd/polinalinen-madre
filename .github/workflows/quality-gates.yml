@@ -40,6 +40,8 @@ jobs:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
       - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+        with:
+          packages: platform-tools
       - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
       - name: Unit tests, lint, visual golden and debug build
         run: ./gradlew testDebugUnitTest lintDebug verifyRoborazziDebug assembleDebug --no-daemon --stacktrace
@@ -73,6 +75,8 @@ jobs:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
       - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+        with:
+          packages: platform-tools
       - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
       - name: Enable KVM
         run: |
@@ -88,7 +92,10 @@ jobs:
           arch: x86_64
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
+          script: |
+            ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
+            mkdir -p screenshots
+            adb pull /sdcard/googletest/test_outputfiles/screenshots screenshots/ || true
       - name: Upload instrumentation reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -98,4 +105,14 @@ jobs:
             app/build/reports/androidTests/
             app/build/outputs/androidTest-results/
           if-no-files-found: warn
+          retention-days: 14
+      - name: Upload Razvorot screenshots
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: madre-screenshots
+          path: |
+            screenshots/
+            app/build/outputs/connected_android_test_additional_output/
+          if-no-files-found: error
           retention-days: 14

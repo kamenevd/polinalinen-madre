@@ -45,6 +45,12 @@ class WorkflowVersionContractTests(unittest.TestCase):
         """
         manifest = json.loads(self.read("workflow/CYCLE.yaml"))
         code, name = parse_gradle_version(self.read("app/build.gradle.kts"))
+        # CYCLE 28 is a historical release ledger, not the F delivery state.
+        # New deliveries have their own fail-closed SemVer/changelog gate.
+        if (ROOT / "CHANGELOG.json").exists():
+            from scripts.version_contract import validate
+            validate(ROOT)
+            return
         target = manifest["cycle"]["version"]
         stage = manifest["cycle"]["stage"]
         release_status = manifest.get("gates", {}).get("release", {}).get("status", "pending")

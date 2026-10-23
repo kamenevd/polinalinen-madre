@@ -32,8 +32,8 @@ android {
         minSdk = 26
         targetSdk = 35
         // versionCode is monotonic over the latest published release; release_cycle.py enforces it.
-        versionCode = 36
-        versionName = "6.6.5"
+        versionCode = 37
+        versionName = "7.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -55,6 +55,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = ".qa"
+            resValue("string", "app_name", "Мадре QA")
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -113,6 +117,11 @@ kotlin {
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
+
+val verifyDeliveryVersion = tasks.register<Exec>("verifyDeliveryVersion") {
+    commandLine("python3", rootProject.file("scripts/version_contract.py"))
+}
+tasks.matching { it.name == "preBuild" }.configureEach { dependsOn(verifyDeliveryVersion) }
 
 val verifyReleaseSigning = tasks.register<Exec>("verifyReleaseSigning") {
     commandLine("python3", rootProject.file("scripts/check_release_signing.py"))
@@ -204,6 +213,8 @@ dependencies {
     androidTestImplementation("androidx.test:runner:1.5.2")
     androidTestImplementation("androidx.test:rules:1.5.0")
     androidTestImplementation("androidx.test:core:1.5.0")
+    androidTestImplementation("androidx.test.services:storage:1.4.2")
+    androidTestUtil("androidx.test.services:test-services:1.4.2")
     // Cycle 15: миграции Room проверяются на настоящей SQLite, а не на глаз.
     // История схем лежит в app/schemas — MigrationTestHelper поднимает БД
     // нужной версии оттуда.

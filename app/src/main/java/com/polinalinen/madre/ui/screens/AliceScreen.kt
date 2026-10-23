@@ -54,7 +54,7 @@ internal fun AlicePage(state: VoiceUiState, sessions: List<BakingSession>, onBac
             Text(when (state.status) {
                 VoiceStatus.UNLINKED -> "Не подключено"
                 VoiceStatus.LOADING -> "Проверяем подключение…"
-                VoiceStatus.WAITING_LINK -> "Выпечка выбрана · закончи подключение навыка"
+                VoiceStatus.WAITING_LINK -> "Не подключено · выпечка выбрана, закончи привязку навыка"
                 VoiceStatus.CONNECTED -> "Телефон на связи · выпечка доступна Алисе"
                 VoiceStatus.OFFLINE -> "Телефон не подтвердил связь"
                 VoiceStatus.REVOKE_PENDING -> "На телефоне отключено · ждём отзыв доступа"

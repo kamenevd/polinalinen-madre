@@ -134,7 +134,10 @@ class VoiceCoordinatorTest {
         val c = VoiceCoordinator(VoiceIdentityStore(prefs, cipher), api, Any())
         c.attach(controller); c.select(bake.bakeKey)
         val poll = launch { c.runForeground() }
-        withTimeout(5_000) { polled.await() }; delay(50); poll.cancelAndJoin()
+        withTimeout(5_000) { polled.await() }; delay(50)
+        // Successful phone API poll is NOT OAuth: linked=false stays unlinked.
+        assertEquals(VoiceStatus.WAITING_LINK, c.state.value.status)
+        poll.cancelAndJoin()
         assertEquals(0, controller.applied); assertEquals(0, acked)
     }
     @Test fun negativeServerSelectionDoesNotPersistConsent() = runBlocking {

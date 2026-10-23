@@ -58,8 +58,8 @@ android {
         minSdk = 26
         targetSdk = 35
         // versionCode is monotonic over the latest published release; release_cycle.py enforces it.
-        versionCode = 46
-        versionName = "7.0.10"
+        versionCode = 47
+        versionName = "7.0.11"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -212,6 +212,10 @@ dependencies {
 
     // Serialization (recipes.json)
     implementation("com.google.code.gson:gson:2.10.1")
+
+    // Phase A metadata only; login bearer tokens never enter DataStore.
+    // Stable version verified against official AndroidX release notes.
+    implementation("androidx.datastore:datastore-preferences:1.2.1")
 
     // Room Database. 2.8.x — первая линейка, чей процессор умеет KSP2;
     // 2.6.1 на Kotlin 2.4 просто не запускается.

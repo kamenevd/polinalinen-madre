@@ -13,14 +13,14 @@ import com.polinalinen.madre.ui.kit.*
 import kotlinx.coroutines.delay
 
 @Composable fun BookBakeSessionChips(sessions: List<BakingSession>, selected: Long, onSelect: (Long) -> Unit) {
-    if(sessions.size<2)return
+    if(sessions.isEmpty() || sessions.size==1 && sessions.single().id==selected)return
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
         sessions.forEach { session -> key(session.id) {
             var remaining by remember(session.id,session.revision) { mutableLongStateOf(session.remainingSeconds(BakingClock.elapsed())) }
             LaunchedEffect(session.id,session.revision) {
                 while(true){remaining=session.remainingSeconds(BakingClock.elapsed());delay(1000)}
             }
-            PaperChip("${session.recipe.name} · ${timerDigits(remaining)}",session.id==selected,{onSelect(session.id)})
+            PaperChip("${session.recipe.name} · ${if(session.isCompleted)"Испечено" else timerDigits(remaining)}",session.id==selected,{onSelect(session.id)})
         } }
     }
 }

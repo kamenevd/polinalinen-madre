@@ -98,6 +98,12 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
                         RazvorotReader(recipes,recipe.id,preferences,{},{},{},initialPage=1,scaleFactor=2.0,onOpenAlice={})
                         BookPortionsSheet(recipe,2.0,{},{})
                     }
+                    scene=="bake-finale" -> {
+                        // Stateless native fixture: one synthetic completed record, no Room write/auth/permissions.
+                        BakeFinalePage(BakeFinalePageState(recipe.name,1,2,RecipeScale.totalMinutes(recipe,2),
+                            recipe.timeline.size,1792731600000L,recipes.map{it.id==recipe.id},1),{},{},
+                            photo={BakeFinalePhoto(null,emptyList(),com.polinalinen.madre.ui.photo.PhotoAttachmentActions({},{},{},{}),true,{})})
+                    }
                     scene=="kit" -> KitShowcase()
                     scene=="photo-viewer" -> PaperPhotoViewer({}) { BookText("Фото · локальная тестовая поверхность", 18) }
                     scene.startsWith("alice-sheet-") -> {

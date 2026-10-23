@@ -12,7 +12,8 @@ import androidx.compose.runtime.saveable.LocalSaveableStateRegistry
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
+
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.work.Configuration
@@ -75,7 +76,7 @@ class BakingCompleteMissingPhotoUiTest {
                     if (exited) {
                         Text("ушли с экрана")
                     } else {
-                        BakingCompleteScreen(
+                        BakingFinale(
                             sessionId = 12L,
                             onHome = { exited = true },
                             viewModel = vm,
@@ -86,7 +87,7 @@ class BakingCompleteMissingPhotoUiTest {
         }
         rule.waitForIdle()
 
-        rule.onNodeWithText("На главную").performScrollTo().performClick()
+        rule.onNodeWithText("На главную").assertIsDisplayed().performClick()
         rule.waitForIdle()
 
         rule.waitUntil(5_000){exited}

@@ -9,6 +9,9 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontSynthesis
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import com.polinalinen.madre.R
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 
@@ -17,6 +20,9 @@ object PaperType {
     private val literary = TextStyle(fontFamily = Literature, fontWeight = FontWeight.Normal, fontSynthesis = FontSynthesis.None)
     private val interfaceType = TextStyle(fontFamily = Manrope, fontWeight = FontWeight.Normal, fontSynthesis = FontSynthesis.None)
     val display = literary.copy(fontSize = 40.sp, lineHeight = 42.sp, letterSpacing = (-.8).sp)
+    // Genuine static 700/opsz72 from the already bundled OFL Literata, scoped to the finale only.
+    val finale = literary.copy(fontFamily=FontFamily(Font(R.font.literata_finale_700,FontWeight.Bold)),
+        fontSize=92.sp,lineHeight=78.sp,letterSpacing=(-4).sp,fontWeight=FontWeight.Bold)
     val h1 = literary.copy(fontSize = 30.sp, lineHeight = 34.sp, fontWeight = FontWeight.Medium)
     val h2 = literary.copy(fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.Medium)
     val title = literary.copy(fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.Medium)

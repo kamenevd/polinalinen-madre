@@ -207,7 +207,7 @@ class BookNavigationUiTest {
         rule.onNodeWithText("Вписать в книгу").performScrollTo().performClick()
         rule.waitForIdle()
         assertEquals(bakeRoute,nav.currentDestination?.route)
-        rule.onNodeWithText("Вписать в книгу").performScrollTo().performClick()
+        rule.onNodeWithText("Вписать в книгу").assertIsDisplayed().performClick()
         rule.waitUntil(10_000){
             rule.onAllNodesWithText("Что испечь",substring=true).fetchSemanticsNodes()
             nav.currentDestination?.route==MadreDestinations.HOME && ledger.recordIdFor(fixture.id)==null

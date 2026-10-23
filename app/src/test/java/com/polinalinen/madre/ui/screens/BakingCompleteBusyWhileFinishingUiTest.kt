@@ -74,7 +74,7 @@ class BakingCompleteBusyWhileFinishingUiTest {
         rule.setContent {
             CompositionLocalProvider(LocalSaveableStateRegistry provides null) {
                 MadreTheme {
-                    BakingCompleteScreen(
+                    BakingFinale(
                         sessionId = sessionId,
                         onHome = { exits += 1 },
                         viewModel = vm,

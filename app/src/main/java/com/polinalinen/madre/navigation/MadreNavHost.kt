@@ -411,8 +411,12 @@ fun MadreNavHost(
                 }
                 val session=sessions.firstOrNull{it.id==sessionId}
                 if(!prepared)Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){PaperProgress()}
-                else if(session?.isCompleted==true || completions.containsKey(sessionId))BakingCompleteScreen(sessionId,
-                    onHome={showHome(1);navigationScope.launch{navSnackbar.showSnackbar("Вписано в книгу")}},viewModel=bakingViewModel,onBack={showHome(1)})
+                else if(session?.isCompleted==true || completions.containsKey(sessionId))BakingFinale(sessionId,
+                    onHome={showHome(1);navigationScope.launch{navSnackbar.showSnackbar("Вписано в книгу")}},viewModel=bakingViewModel,
+                    onBack={showHome(1)},recentPhotos=galleryPhotos,familyName=familyBookState.account?.familyName,
+                    onSwitchSession={id->navController.navigate(MadreDestinations.bake(id.toString())) {
+                        popUpTo(MadreDestinations.BAKE){inclusive=true}
+                    }})
                 else RazvorotTimer(
                     sessionId = sessionId,
 

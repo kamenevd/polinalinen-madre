@@ -52,7 +52,18 @@ fun rememberPhotoAttachment(
     key: Long,
     onCancelled: () -> Unit = {},
     onAttached: (String) -> Unit,
-): () -> Unit {
+): () -> Unit = rememberPhotoAttachmentActions(kind,key,onCancelled,onAttached).choose
+
+/** All entry buttons share the same pending-camera/save/cancel road. No picker opens on composition. */
+class PhotoAttachmentActions(val choose:()->Unit,val camera:()->Unit,val gallery:()->Unit,val recent:(String)->Unit)
+
+@Composable
+fun rememberPhotoAttachmentActions(
+    kind: PhotoStore.PhotoKind,
+    key: Long,
+    onCancelled: () -> Unit = {},
+    onAttached: (String) -> Unit,
+): PhotoAttachmentActions {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val attached by rememberUpdatedState(onAttached)
@@ -115,6 +126,10 @@ fun rememberPhotoAttachment(
     val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) launchCamera() else cameraDenied = true
     }
+    fun takePhoto() {
+        val granted=ContextCompat.checkSelfPermission(context,Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED
+        if(granted)launchCamera() else cameraPermission.launch(Manifest.permission.CAMERA)
+    }
 
     if (cameraDenied) {
         // Обновление APK с тем же signing key runtime-разрешения НЕ сбрасывает.
@@ -155,11 +170,7 @@ fun rememberPhotoAttachment(
         onPickGallery = {
             galleryPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
         },
-        onPickCamera = {
-            val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
-                PackageManager.PERMISSION_GRANTED
-            if (granted) launchCamera() else cameraPermission.launch(Manifest.permission.CAMERA)
-        },
+        onPickCamera = { takePhoto() },
     )
 
     staged?.let { file ->
@@ -181,8 +192,21 @@ fun rememberPhotoAttachment(
         )
     }
 
-    return {
-        road = road.begin()
-        chooserVisible = true
-    }
+    return PhotoAttachmentActions(
+        choose={road=road.begin();chooserVisible=true},
+        camera={road=road.begin();takePhoto()},
+        gallery={road=road.begin();galleryPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))},
+        recent={path->
+            road=road.begin()
+            scope.launch {
+                // Copy an owned historical photo into staging. Editing/cancelling must never delete its original.
+                stagedPath=withContext(Dispatchers.IO) {
+                    val original=PhotoStore.resolve(context,path)
+                    val owned=runCatching{original.canonicalFile.toPath().startsWith(context.filesDir.canonicalFile.toPath())}.getOrDefault(false)
+                    if(owned && original.isFile)PhotoStore.stage(context,Uri.fromFile(original),kind)?.absolutePath else null
+                }
+                if(stagedPath==null)reportCancelOnce()
+            }
+        },
+    )
 }

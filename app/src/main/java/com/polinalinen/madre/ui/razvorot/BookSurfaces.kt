@@ -84,8 +84,8 @@ fun Recipe.totalTime(): String { val m = timeline.sumOf { it.durationMinutes }; 
 @Composable fun CoverPage(recipes: List<Recipe>, onOpen: () -> Unit, onSettings: () -> Unit, onAa: () -> Unit, continuation: @Composable () -> Unit = {}) {
     val p = LocalPaper.current
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp)) {
-        BookHeader("${atmosphereAt(java.time.LocalTime.now().hour).label} · атмосфера по часам", onAa = onAa)
-        BookText(when(atmosphereAt(java.time.LocalTime.now().hour)) { Atmosphere.DAWN -> "Доброе утро,"; Atmosphere.DAY -> "Добрый день,"; Atmosphere.DUSK -> "Добрый вечер,"; else -> "Доброй ночи," }, 40)
+        BookHeader("${LocalAtmosphere.current.label} · атмосфера по часам", onAa = onAa)
+        BookText(when(LocalAtmosphere.current) { Atmosphere.DAWN -> "Доброе утро,"; Atmosphere.DAY -> "Добрый день,"; Atmosphere.DUSK -> "Добрый вечер,"; else -> "Доброй ночи," }, 40)
         BookText("пекарь", 44, italic = true, color = p.acc)
         BookCover(onOpen)
         SmallLabel("ПОТЯНИТЕ ОБЛОЖКУ ВЛЕВО — КНИГА ОТКРОЕТСЯ", Modifier.align(Alignment.CenterHorizontally))

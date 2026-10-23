@@ -1,6 +1,8 @@
 package com.polinalinen.madre.navigation
 
 import android.content.Context
+import androidx.compose.foundation.layout.*
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -193,12 +195,15 @@ fun MadreNavHost(
         NavHost(navController = navController, startDestination = MadreDestinations.HOME) {
             composable(MadreDestinations.HOME) {
                 val sessions by bakingViewModel.sessions.collectAsState()
+                val homeSection by it.savedStateHandle.getStateFlow("home_section",0).collectAsState()
                 RazvorotHome(
                     recipes = recipesForStats, sessions = sessions, viewModel = bakingViewModel,
                     starterName = starterName, day = dayNumber, phase = phase,
                     lastFeedingMillis = authoritativeLastFeedingMillis, hydration = shownHydration,
                     preferences = readingPreferences,
                     intervalHours = sourdoughConfig?.intervalHours ?: 24,
+                    initialSection = homeSection,
+                    onOpenShelf = { navController.navigate(MadreDestinations.SHELF) },
                     onContinueReading = { session -> navController.navigate(MadreDestinations.readerStep(session.recipe.id,session.currentStepIndex)) },
                     onOpenRecipe = { id -> navController.navigate(MadreDestinations.recipeDetail(id)) },
                     onOpenTimer = { id -> navController.navigate(MadreDestinations.bakingTimer(id.toString())) },
@@ -206,7 +211,7 @@ fun MadreNavHost(
                     onDiary = { navController.navigate(MadreDestinations.STARTER_DETAIL) },
                     onSettings = { navController.navigate(MadreDestinations.SETTINGS) },
                     shelf = { ShelfScreen(myName, bakeRecords, { navController.navigate(MadreDestinations.SETTINGS_SHELF) },
-                        { owner -> navController.navigate(MadreDestinations.bookStats(owner)) }, familyBookState.account, shelfViewModel) },
+                        { owner -> navController.navigate(MadreDestinations.bookStats(owner)) }, familyBookState.account, shelfViewModel,razvorot=true) },
                 )
             }
             composable(MadreDestinations.RECIPE_DETAIL) { backStackEntry ->
@@ -353,14 +358,19 @@ fun MadreNavHost(
                 )
             }
             composable(MadreDestinations.SHELF) {
-                ShelfScreen(
+                Column(androidx.compose.ui.Modifier.fillMaxSize()) {
+                Box(androidx.compose.ui.Modifier.weight(1f)) { ShelfScreen(
                     myName = myName,
                     localRecords = bakeRecords,
                     onBack = { navController.popBackStack() },
                     onOpenBook = { ownerId -> navController.navigate(MadreDestinations.bookStats(ownerId)) },
                     account = familyBookState.account,
                     shelfViewModel = shelfViewModel,
-                )
+                    razvorot = true,
+                ) }
+                Row(androidx.compose.ui.Modifier.fillMaxWidth().padding(22.dp)) { BookText("Подключить Алису",18,androidx.compose.ui.Modifier.weight(1f));SmallLabel("скоро") }
+                SpineBar(3) { section -> if(section!=3) {navController.previousBackStackEntry?.savedStateHandle?.set("home_section",section);navController.popBackStack()} }
+                }
             }
             composable(MadreDestinations.BOOK_STATS) { backStackEntry ->
                 val ownerId = backStackEntry.arguments?.getString("ownerId").orEmpty()

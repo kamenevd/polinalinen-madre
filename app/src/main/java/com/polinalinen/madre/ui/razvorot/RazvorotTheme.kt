@@ -18,8 +18,9 @@ data class PaperColors(val bg: Color, val bg2: Color, val ink: Color, val second
 val DawnPaper = PaperColors(Color(0xFFF4F1EC), Color(0xFFEAE5DD), Color(0xFF16130F), Color(0xFF625B54), Color(0xFFD2602A), Color(0xFFB83A2E), Color.White)
 val NightPaper = PaperColors(Color(0xFF0D0B0A), Color(0xFF1A1512), Color(0xFFF2E9DE), Color(0xFFC0B3A5), Color(0xFFF08A4B), Color(0xFFD0503F), Color(0xFF191411))
 val LocalPaper = staticCompositionLocalOf { DawnPaper }
-class ReadingPreferences(context: Context) {
-    private val prefs = context.getSharedPreferences("razvorot_reading", Context.MODE_PRIVATE)
+val LocalAtmosphere = staticCompositionLocalOf { Atmosphere.DAWN }
+class ReadingPreferences(context: Context, namespace:String="razvorot_reading") {
+    private val prefs = context.getSharedPreferences(namespace, Context.MODE_PRIVATE)
     var atmosphere by mutableStateOf(Atmosphere.entries.firstOrNull { it.name == prefs.getString("atmosphere", "AUTO") } ?: Atmosphere.AUTO)
         private set
     var mode by mutableStateOf(ReadingMode.entries.firstOrNull { it.name == prefs.getString("mode", "BOOK") } ?: ReadingMode.BOOK)
@@ -55,7 +56,7 @@ fun atmosphereAt(hour: Int): Atmosphere = when (hour) { in 5..10 -> Atmosphere.D
         else -> DawnPaper
     }
     val scheme = if (atmosphere == Atmosphere.NIGHT) darkColorScheme() else lightColorScheme()
-    CompositionLocalProvider(LocalPaper provides paper) {
+    CompositionLocalProvider(LocalPaper provides paper,LocalAtmosphere provides atmosphere) {
         MaterialTheme(colorScheme = scheme.copy(primary = paper.acc, onPrimary = Color.White, background = paper.bg, onBackground = paper.ink, surface = paper.bg, onSurface = paper.ink, surfaceVariant = paper.bg2, onSurfaceVariant = paper.secondary), content = content)
     }
 }

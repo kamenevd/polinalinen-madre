@@ -57,6 +57,7 @@ fun ShelfScreen(
     onOpenBook: (ownerId: String) -> Unit,
     account: FamilyAccount?,
     shelfViewModel: ShelfViewModel = viewModel(),
+    razvorot: Boolean = false,
 ) {
     val colors = AppColors.current
     val members by shelfViewModel.members.collectAsState()
@@ -66,6 +67,11 @@ fun ShelfScreen(
 
     LaunchedEffect(account?.familyId, account?.familyName, myName, localRecords) {
         shelfViewModel.refresh(account, myName, localRecords)
+    }
+
+    if(razvorot) {
+        com.polinalinen.madre.ui.razvorot.ShelfPaper(members,ledger,familyName,localRecords,unreachable,onBack,onOpenBook)
+        return
     }
 
     Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {

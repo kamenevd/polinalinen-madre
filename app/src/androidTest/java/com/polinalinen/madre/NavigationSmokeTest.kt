@@ -7,6 +7,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -63,6 +64,10 @@ class NavigationSmokeTest {
      * прочитаны, тапать не по чему.
      */
     private fun awaitTableOfContents() {
+        rule.waitUntil(TIMEOUT_MS){rule.onAllNodesWithTag("book-cover").fetchSemanticsNodes().isNotEmpty()}
+        rule.onNodeWithTag("book-cover").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithContentDescription("Вся книга").performClick()
         rule.waitUntil(TIMEOUT_MS) {
             rule.onAllNodesWithTag(Home.LIST_TAG).fetchSemanticsNodes().isNotEmpty() &&
                 recipes.isNotEmpty() &&
@@ -98,12 +103,13 @@ class NavigationSmokeTest {
         // Разворот главы — по заголовку «РЕЦЕПТ № 01», а не по названию:
         // название видно и в оглавлении, и по нему не отличить, ушли мы
         // куда-нибудь или остались стоять.
-        rule.onNodeWithText(chapterLabel(1)).assertIsDisplayed()
+        rule.onNodeWithTag("paper-turn").assertIsDisplayed()
+        rule.onNodeWithContentDescription(first.name).assertIsDisplayed()
         rule.onNodeWithText(first.name).assertIsDisplayed()
 
         pressSystemBack()
         rule.onNodeWithTag(Home.LIST_TAG).assertIsDisplayed()
-        rule.onNodeWithText(chapterLabel(1)).assertDoesNotExist()
+        rule.onNodeWithTag("paper-turn").assertDoesNotExist()
     }
 
     /**
@@ -117,7 +123,8 @@ class NavigationSmokeTest {
 
         recipes.forEachIndexed { index, recipe ->
             openChapter(recipe)
-            rule.onNodeWithText(chapterLabel(index + 1)).assertIsDisplayed()
+            rule.onNodeWithTag("paper-turn").assertIsDisplayed()
+            rule.onNodeWithContentDescription(recipe.name).assertIsDisplayed()
             pressSystemBack()
             rule.onNodeWithTag(Home.LIST_TAG).assertIsDisplayed()
         }

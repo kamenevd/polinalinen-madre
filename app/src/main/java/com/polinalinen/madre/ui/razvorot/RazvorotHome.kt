@@ -15,6 +15,7 @@ import com.polinalinen.madre.model.BakingSession
 import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.sourdough.GrowthPhase
 import com.polinalinen.madre.viewmodel.BakingViewModel
+import com.polinalinen.madre.ui.components.bookAction
 
 /** The approved F shell; all data and mutations belong to existing repositories. */
 @Composable fun RazvorotHome(
@@ -23,8 +24,10 @@ import com.polinalinen.madre.viewmodel.BakingViewModel
     preferences:ReadingPreferences,onOpenRecipe:(String)->Unit,onOpenTimer:(Long)->Unit,
     onFeed:()->Unit,onDiary:()->Unit,onSettings:()->Unit,shelf:@Composable ()->Unit,
     intervalHours:Int=24,onContinueReading:(BakingSession)->Unit={},
+    onOpenShelf:(()->Unit)?=null,initialSection:Int=0,
 ) {
     var section by rememberSaveable{mutableIntStateOf(0)}
+    LaunchedEffect(initialSection){section=initialSection}
     var catalog by rememberSaveable{mutableStateOf(false)}
     var settings by remember{mutableStateOf(false)}
     val p=LocalPaper.current
@@ -62,18 +65,22 @@ import com.polinalinen.madre.viewmodel.BakingViewModel
                 }
             }
         }
-        Row(Modifier.fillMaxWidth().background(p.bg).height(70.dp).testTag("spine-navigation"),verticalAlignment=Alignment.CenterVertically) {
+        SpineBar(section){if(it==3&&onOpenShelf!=null)onOpenShelf()else section=it}
+    }
+    if(settings)ReadingSettings(preferences){settings=false}
+}
+@Composable internal fun SpineBar(section:Int,onSelect:(Int)->Unit) {
+    val p=LocalPaper.current
+    Row(Modifier.fillMaxWidth().background(p.bg).height(70.dp).testTag("spine-navigation"),verticalAlignment=Alignment.CenterVertically) {
             val labels=listOf("Читать","Печь","Закваска","Полка")
             val icons=listOf(Icons.Outlined.MenuBook,Icons.Outlined.LocalFireDepartment,Icons.Outlined.Science,Icons.Outlined.CollectionsBookmark)
             labels.forEachIndexed { i,label ->
-                Box(Modifier.weight(1f).fillMaxHeight().clickable(onClickLabel=label){section=i}.testTag("nav-$i"),contentAlignment=Alignment.Center) {
+                Box(Modifier.weight(1f).fillMaxHeight().then(bookAction(label){onSelect(i)}).testTag("nav-$i"),contentAlignment=Alignment.Center) {
                     if(i==section)Ribbon(Modifier.align(Alignment.TopCenter).height(14.dp).width(22.dp))
                     Column(horizontalAlignment=Alignment.CenterHorizontally,modifier=Modifier.padding(top=8.dp)){Icon(icons[i],null,tint=if(i==section)p.ink else p.secondary);SmallLabel(label,color=if(i==section)p.ink else p.secondary)}
                 }
             }
-        }
     }
-    if(settings)ReadingSettings(preferences){settings=false}
 }
 @Composable fun RazvorotTimer(sessionId:Long,viewModel:BakingViewModel,onBack:()->Unit,onComplete:()->Unit,onDetails:()->Unit) {
     val sessions by viewModel.sessions.collectAsState()

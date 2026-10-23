@@ -2,6 +2,7 @@ package com.polinalinen.madre.ui.kit
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -21,6 +22,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.polinalinen.madre.account.yandex.VerifiedYandexProfile
@@ -54,7 +57,8 @@ fun YandexIdButton(
             if (gate.accept(System.currentTimeMillis())) onClick()
         }, contentAlignment = Alignment.Center) {
         Box(Modifier.fillMaxWidth().height(artworkHeight)
-            .clip(RoundedCornerShape(artworkHeight / 2)).background(background),
+            .clip(RoundedCornerShape(artworkHeight / 2)).background(background)
+            .then(if(dark)Modifier.border((artworkHeight.value/56f).dp,Color(0xFF000000),RoundedCornerShape(artworkHeight/2)) else Modifier),
             contentAlignment = Alignment.Center) {
             Image(painterResource(if (dark) R.drawable.yandex_id_button_white else R.drawable.yandex_id_button_black),
                 contentDescription = null, contentScale = ContentScale.Fit,
@@ -67,14 +71,20 @@ fun YandexIdButton(
 @Composable fun YandexAccountPortrait(profile: VerifiedYandexProfile, size: Dp = 56.dp) {
     val p = LocalPaper.current
     val label = profile.displayName.ifBlank { profile.login }
-    Box(Modifier.size(size).clip(CircleShape).background(p.acc2)
+    val monogram=String(Character.toChars(label.codePointAt(0))).uppercase()
+    val iconTextSize=(size.value*.42f/LocalDensity.current.fontScale).sp
+    Box(Modifier.size(size)
         .semantics { contentDescription = "Аккаунт Яндекса, $label" }, contentAlignment = Alignment.Center) {
-        Text(label.firstOrNull()?.uppercase().orEmpty(), color = p.acc, style = PaperType.h2)
-        profile.avatarUrl?.let { url ->
-            AsyncImage(model = ImageRequest.Builder(LocalContext.current).data(url)
-                .memoryCacheKey(profile.avatarCacheKey).diskCacheKey(profile.avatarCacheKey)
-                .crossfade(false).build(), contentDescription = null,
-                contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        Box(Modifier.fillMaxSize().clip(CircleShape).background(p.acc2),contentAlignment=Alignment.Center) {
+            Text(monogram, color = p.acc, style = PaperType.h2.copy(fontSize=iconTextSize,lineHeight=iconTextSize))
+            profile.avatarUrl?.let { url ->
+                AsyncImage(model = ImageRequest.Builder(LocalContext.current).data(url)
+                    .memoryCacheKey(profile.avatarCacheKey).diskCacheKey(profile.avatarCacheKey)
+                    .crossfade(false).build(), contentDescription = null,
+                    contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            }
         }
+        Image(painterResource(R.drawable.yandex_id_badge),contentDescription=null,
+            modifier=Modifier.align(Alignment.BottomEnd).offset(2.dp,2.dp).size(if(size>=48.dp)18.dp else 12.dp))
     }
 }

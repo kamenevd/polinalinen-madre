@@ -1,7 +1,7 @@
 {
   "source": "https://yandex.ru/dev/id/doc/ru/codes/buttons-design",
   "purpose": "Official brand asset, not prototype logo; no token/client secret",
-  "conversion": "SVG rects to equivalent vector paths; original glyph/logo pathData and fills retained, no tint",
+  "conversion": "Original glyph/logo pathData and fills retained, no tint. Background/visible outline moved to the single container to support officially allowed unlimited width; source visible outline thickness retained (1px at 56px), no nested button frame.",
   "variants": [
     {
       "variant": "black",
@@ -20,6 +20,12 @@
         56
       ],
       "drawable": "yandex_id_button_white.xml"
+    },
+    {
+      "variant": "round profile badge",
+      "official_svg_sha256": "53387d1d5f694b6c5e099c85e14e20722f70390386846fe2d6dac7ceb20a42e8",
+      "viewport": [44,44],
+      "drawable": "yandex_id_badge.xml"
     }
   ]
 }

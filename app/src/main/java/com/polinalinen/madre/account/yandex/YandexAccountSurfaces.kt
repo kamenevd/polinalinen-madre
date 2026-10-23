@@ -46,7 +46,7 @@ private const val PRIVACY="Мадре получит только имя, пор
             else -> {
                 if(state is YandexAccountState.Error)Text(accountErrorCopy(state.kind),style=PaperType.note,color=LocalPaper.current.rib)
                 YandexIdButton({onSignIn(false)},size=size)
-                PaperNote(PRIVACY)
+                Text(PRIVACY,style=PaperType.note,color=LocalPaper.current.ink2)
             }
         }
     }
@@ -110,7 +110,7 @@ private const val PRIVACY="Мадре получит только имя, пор
 @Composable fun YandexOfferContent(state:YandexAccountState,pendingUnbind:Boolean,onSignIn:(Boolean)->Unit,
     onSkip:()->Unit,onRetryUnbind:()->Unit) {
     BackHandler { onSkip() }
-    PaperScaffold(header={PaperHeader("Яндекс ID",onBack=onSkip)},bottom={
+    PaperScaffold(header={PaperHeader("Яндекс ID",onBack=onSkip,modifier=Modifier.padding(horizontal=22.dp))},bottom={
         Column(Modifier.padding(horizontal=22.dp,vertical=16.dp)) {
             PaperButton("Продолжить без входа",onSkip,variant=PaperButtonVariant.SECONDARY)
         }

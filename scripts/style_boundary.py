@@ -28,7 +28,7 @@ RULES = (
     ('system-font', r'\b(?:FontFamily\.(?:Default|Serif|SansSerif|Monospace|Cursive)|Typeface\.(?:DEFAULT|DEFAULT_BOLD|SERIF|SANS_SERIF|MONOSPACE))\b'),
     ('toast', r'(?m)^\s*import\s+android\.widget\.Toast\b|\bToast\s*\.\s*makeText\s*\('),
     ('raw-dialog', r'(?m)^\s*import\s+androidx\.compose\.ui\.window\.Dialog(?:\s|;|$)|\b(?:AlertDialog|BasicAlertDialog|Dialog)\s*\('),
-    ('yandex-brand-asset', r'\bR\.drawable\.yandex_id_button_(?:black|white)\b'),
+    ('yandex-brand-asset', r'\bR\.drawable\.yandex_id_(?:button_(?:black|white)|badge)\b'),
     ('material3-qualified-control', r'\bandroidx\.compose\.material3\.(?:Button|TextButton|OutlinedButton|FilledTonalButton|Switch|Slider|FilterChip|InputChip|TextField|OutlinedTextField|ModalBottomSheet|AlertDialog|Scaffold)\s*\('),
 )
 

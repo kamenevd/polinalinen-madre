@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Official round Yandex icon from https://yandex.ru/dev/id/doc/ru/codes/buttons-design ; original glyph path, no recoloring. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="44dp" android:height="44dp" android:viewportWidth="44" android:viewportHeight="44">
+    <path android:fillColor="#FFFC3F1D" android:pathData="M22,0 A22,22 0,1 1,22,44 A22,22 0,1 1,22,0 Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M25.2438 12.3208H23.0173C19.2005 12.3208 17.292 14.2292 17.292 17.0919C17.292 20.2726 18.5643 21.863 21.427 23.7714L23.6535 25.3618L17.292 35.222H12.2029L18.2463 26.316C14.7475 23.7714 12.839 21.5449 12.839 17.41C12.839 12.3208 16.3378 8.82202 23.0173 8.82202H29.6969V35.222H25.2438V12.3208Z" />
+</vector>

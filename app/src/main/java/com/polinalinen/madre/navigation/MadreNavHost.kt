@@ -41,7 +41,7 @@ import com.polinalinen.madre.sourdough.hoursSinceFeeding
 import com.polinalinen.madre.sourdough.StarterName
 import com.polinalinen.madre.sourdough.profileForInterval
 import com.polinalinen.madre.data.db.entities.FeedingEntity
-import com.polinalinen.madre.ui.screens.BakingCompleteScreen
+import com.polinalinen.madre.ui.screens.BakingFinale
 import com.polinalinen.madre.ui.screens.BookStatsScreen
 import com.polinalinen.madre.ui.screens.FeedingFormScreen
 import com.polinalinen.madre.ui.screens.GalleryPhoto

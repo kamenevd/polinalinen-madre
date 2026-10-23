@@ -177,9 +177,9 @@ import kotlin.random.Random
 }
 
 @Composable fun PaperPhotoViewer(onDismissRequest: () -> Unit, content: @Composable BoxScope.() -> Unit) {
-    PaperWindow(onDismissRequest, DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        Immersive()
-        CompositionLocalProvider(LocalPaper provides NightPaper, LocalContentColor provides NightPaper.ink) {
+    CompositionLocalProvider(LocalPaper provides NightPaper, LocalContentColor provides NightPaper.ink) {
+        PaperWindow(onDismissRequest, DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+            Immersive()
             Box(Modifier.fillMaxSize().background(Illustration.PhotoBackdrop), content = content)
         }
     }

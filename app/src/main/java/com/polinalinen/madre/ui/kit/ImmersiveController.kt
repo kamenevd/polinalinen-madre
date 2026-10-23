@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.runtime.*
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.window.DialogWindowProvider
@@ -24,13 +25,19 @@ interface ImmersiveHost { val immersiveController: ImmersiveController }
 class ImmersiveController {
     private val requests = linkedMapOf<Any, Boolean>()
     private val windows = WeakHashMap<Window, Int>()
+    private val tones = linkedMapOf<Any, Boolean>()
+    private var themeLight = true
     var lightPaper: Boolean = true
         private set
     val wanted: Boolean get() = requests.values.any { it }
 
     fun request(key: Any, enabled: Boolean) { requests[key] = enabled; reapplyAll() }
     fun release(key: Any) { requests.remove(key); reapplyAll() }
-    fun setPaperLight(light: Boolean) {
+    fun setPaperLight(light: Boolean) { themeLight = light; applyTone() }
+    fun requestTone(key: Any, light: Boolean) { tones[key] = light; applyTone() }
+    fun releaseTone(key: Any) { tones.remove(key); applyTone() }
+    private fun applyTone() {
+        val light = tones.values.lastOrNull() ?: themeLight
         if (lightPaper != light) { lightPaper = light; reapplyAll() }
     }
     fun attach(window: Window) {
@@ -121,10 +128,12 @@ fun Context.findActivity(): Activity? {
     val controller = LocalImmersive.current
     val view = LocalView.current
     val activity = LocalContext.current.findActivity()
+    val light = LocalPaper.current.bg.luminance() > .5f
+    val toneKey = remember { Any() }
     val window = (view.parent as? DialogWindowProvider)?.window
         ?: (view.rootView.parent as? DialogWindowProvider)?.window
-    DisposableEffect(controller, window, view) {
-        window?.let { controller?.attach(it) }
+    DisposableEffect(controller, window, view, light) {
+        window?.let { controller?.attach(it); controller?.requestTone(toneKey, light) }
         val observer = view.viewTreeObserver
         val listener = android.view.ViewTreeObserver.OnWindowFocusChangeListener { focused ->
             if (focused) window?.let { controller?.reapply(it) }
@@ -132,7 +141,7 @@ fun Context.findActivity(): Activity? {
         observer.addOnWindowFocusChangeListener(listener)
         onDispose {
             if (observer.isAlive) observer.removeOnWindowFocusChangeListener(listener)
-            window?.let { controller?.detach(it) }
+            window?.let { controller?.detach(it); controller?.releaseTone(toneKey) }
             activity?.window?.let { controller?.reapply(it) }
         }
     }

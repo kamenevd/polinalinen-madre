@@ -1,6 +1,7 @@
 package com.polinalinen.madre
 
 import com.polinalinen.madre.ui.kit.*
+import androidx.compose.ui.graphics.toArgb
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
@@ -55,6 +56,11 @@ class MainActivity : ComponentActivity(), ImmersiveHost {
             statusBarStyle = androidx.activity.SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT) { false },
             navigationBarStyle = androidx.activity.SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT) { false },
         )
+        val initial = ReadingPreferences(this).atmosphere.let {
+            if (it == Atmosphere.AUTO) atmosphereAt(java.time.LocalTime.now().hour) else it
+        }
+        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(paperAt(initial).bg.toArgb()))
+        immersiveController.setPaperLight(initial != Atmosphere.NIGHT)
         immersiveController.attach(window)
         readIntent(intent)
         askForNotificationsOnce()

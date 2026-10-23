@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package com.polinalinen.madre.ui.razvorot
 
 import com.polinalinen.madre.ui.kit.*
@@ -58,7 +60,7 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
             PaperButton(if(session.isPaused)"Продолжить" else "Пауза",onPause,Modifier.weight(1f))
             PaperButton(if(session.isLastStep)"Испечено" else "Дальше",onNext,Modifier.weight(1f),true, enabled = !session.isLastStep || session.trustedPortions != null)
         }
-        if (onOpenAlice != null && com.polinalinen.madre.config.FeatureFlags.ALICE) PaperTextAction("Алиса", onOpenAlice, Modifier.fillMaxWidth())
+        if (onOpenAlice != null && com.polinalinen.madre.config.FeatureFlags.ALICE) PaperAliceButton(onOpenAlice, Modifier.fillMaxWidth())
         PaperButton("Большой таймер",{full=true},Modifier.fillMaxWidth().padding(top=12.dp))
         PaperButton("Все действия · отменить выпечку",onDetails,Modifier.fillMaxWidth().padding(top=8.dp))
         Spacer(Modifier.height(16.dp))

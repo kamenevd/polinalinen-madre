@@ -60,6 +60,7 @@ internal fun AlicePage(state: VoiceUiState, sessions: List<BakingSession>, onBac
                 VoiceStatus.REVOKE_PENDING -> "На телефоне отключено · ждём отзыв доступа"
                 VoiceStatus.ERROR -> "Подключение не подтверждено"
             }, color = colors.ink,style = PaperType.body, fontSize = 18.sp)
+            if (state.status == VoiceStatus.OFFLINE || state.status == VoiceStatus.ERROR) SmallLabel("НЕТ СВЯЗИ", color = colors.mut)
             state.message?.let { Text(it, color = colors.rib,style = PaperType.body) }
             if (selected != null) {
                 Text("${selected.recipe.name} · выпечка №${selected.id}\n${selected.currentStep.title}", color = colors.ink,style = PaperType.body)

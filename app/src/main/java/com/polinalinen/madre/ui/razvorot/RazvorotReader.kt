@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package com.polinalinen.madre.ui.razvorot
 
 import com.polinalinen.madre.ui.kit.*

@@ -21,4 +21,14 @@ class ImmersiveControllerTest {
         controller.request(Any(), true); assertTrue(controller.wanted)
         controller.setPaperLight(true); assertTrue(controller.wanted); assertTrue(controller.lightPaper)
     }
+    @Test fun darkModalToneSurvivesThemeRecompositionAndRestoresOnDismiss() {
+        val controller = ImmersiveController()
+        val photo = Any(); val nested = Any()
+        controller.setPaperLight(true)
+        controller.requestTone(photo, false); assertFalse(controller.lightPaper)
+        controller.setPaperLight(true); assertFalse(controller.lightPaper)
+        controller.requestTone(nested, true); assertTrue(controller.lightPaper)
+        controller.releaseTone(nested); assertFalse(controller.lightPaper)
+        controller.releaseTone(photo); assertTrue(controller.lightPaper)
+    }
 }

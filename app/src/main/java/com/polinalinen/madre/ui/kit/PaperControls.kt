@@ -15,6 +15,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.LocalFireDepartment
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -219,5 +221,14 @@ enum class PaperButtonVariant { PRIMARY, ACCENT, SECONDARY, TEXT }
     TextButton(onClick, modifier.heightIn(min = 48.dp), enabled = enabled,
         colors = ButtonDefaults.textButtonColors(contentColor = LocalPaper.current.acc)) {
         ProvideTextStyle(PaperType.ui) { content() }
+    }
+}
+
+/** Neutral kitchen flame, not a borrowed branded Alice asset. */
+@Composable fun PaperAliceButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    PaperTextButton(onClick, modifier) {
+        Icon(Icons.Outlined.LocalFireDepartment, contentDescription = null, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(8.dp))
+        Text("Алиса", style = PaperType.ui)
     }
 }

@@ -19,6 +19,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.*
 import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.model.RecipeScaler
@@ -39,7 +40,7 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
         val density = androidx.compose.ui.platform.LocalDensity.current
         val width = with(density) { (maxWidth-52.dp).roundToPx() }.coerceAtLeast(1)
         val height = with(density) { (maxHeight-160.dp).roundToPx() }.coerceAtLeast(200)
-        val style = TextStyle(fontFamily=Literature,fontSize=preferences.textSize.sp,lineHeight=(preferences.textSize*1.5f).sp)
+        val style = TextStyle(fontFamily=Literature,fontSize=preferences.textSize.sp,lineHeight=(preferences.textSize*25f/16f).sp)
         val leaves = remember(recipes,width,height,preferences.textSize,preferences.portions,density.fontScale) {
             buildList {
                 recipes.forEachIndexed { ci,r ->
@@ -99,7 +100,7 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
                     recipes.forEachIndexed { ci,r ->
                         item(key="${r.id}:title") { TitleLeaf(r,ci,recipes.size) }
                         r.ingredients.forEach { (section,items) -> item { LeafBlock(section,items.joinToString("\n") { it.displayText() },preferences) } }
-                        r.timeline.forEachIndexed { i,step -> item { LeafBlock("%02d · %s · %d мин".format(i+1,step.title,step.durationMinutes),step.description,preferences) } }
+                        r.timeline.forEachIndexed { i,step -> item { LeafBlock("%02d · %s · %d мин".format(i+1,step.title,step.durationMinutes),step.description,preferences,r) } }
                     }
                 }
             } else PaperTurn(page,leaves.size,preferences,{move(it)},Modifier.testTag("paper-turn"),onCenter={chrome=!chrome}) { index ->
@@ -108,10 +109,10 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
                     if(leaf.title) TitleLeaf(r,leaf.chapter,recipes.size)
                     else {
                         SmallLabel("ГЛАВА %02d · %s".format(leaf.chapter+1,r.name.uppercase()),Modifier.padding(horizontal=26.dp,vertical=8.dp))
-                        leaf.lines.forEach { (heading,text) -> LeafBlock(heading,text,preferences) }
+                        leaf.lines.forEach { (heading,text) -> LeafBlock(heading,text,preferences,r) }
                     }
                     Spacer(Modifier.weight(1f))
-                    SmallLabel("${index+1}                       ${leaves.take(index+1).count{it.chapter==leaf.chapter}} / ${leaves.count{it.chapter==leaf.chapter}}",Modifier.align(Alignment.CenterHorizontally))
+                    PageFooter(index+1,leaves.take(index+1).count{it.chapter==leaf.chapter},leaves.count{it.chapter==leaf.chapter})
                 }
             }
             if(chrome) {
@@ -121,7 +122,7 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
                     Canvas(Modifier.fillMaxWidth().height(22.dp)) {
                         drawLine(p.bg2,Offset(0f,size.height/2),Offset(size.width,size.height/2),3.dp.toPx())
                         drawLine(p.ribbon,Offset(0f,size.height/2),Offset(size.width*(page+1)/leaves.size,size.height/2),3.dp.toPx())
-                        leaves.forEachIndexed { i,leaf -> if(leaf.title) {val x=size.width*i/leaves.size;drawLine(p.secondary,Offset(x,3.dp.toPx()),Offset(x,size.height-3.dp.toPx()),1.dp.toPx())} }
+                        leaves.forEachIndexed { i,leaf -> if(leaf.title) {val x=size.width*i/leaves.size;drawLine(p.mut,Offset(x,3.dp.toPx()),Offset(x,size.height-3.dp.toPx()),1.dp.toPx())} }
                     }
                     Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                         PaperButton("Оглавление",onBack,Modifier.weight(1f))
@@ -141,26 +142,35 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
         Box(Modifier.fillMaxWidth().fillMaxHeight(.46f)) {
             Image(painterResource(recipePhoto(recipe.id)),recipe.name,Modifier.fillMaxSize().drawWithContent { drawContent();drawRect(Brush.verticalGradient(listOf(androidx.compose.ui.graphics.Color.Transparent,p.bg),startY=size.height*.65f)) },contentScale=ContentScale.Crop)
             Ribbon(Modifier.align(Alignment.TopEnd).padding(end=48.dp))
-            Text("%02d".format(chapter+1),Modifier.align(Alignment.BottomEnd).offset(y=22.dp).padding(end=14.dp),fontFamily=Literature,fontSize=150.sp,letterSpacing=(-6).sp,color=p.ink,style=TextStyle(drawStyle=Stroke(width=1.3f)))
+            Text("%02d".format(chapter+1),Modifier.align(Alignment.BottomEnd).offset(y=22.dp).padding(end=14.dp),fontFamily=Literature,fontWeight=FontWeight.ExtraLight,fontSize=150.sp,letterSpacing=(-6).sp,color=p.ink,style=TextStyle(drawStyle=Stroke(width=1.3f)))
         }
         Column(Modifier.padding(horizontal=26.dp)) {
             SmallLabel("ГЛАВА %02d ИЗ %02d · %s".format(chapter+1,count,recipe.totalTime()))
-            BookText(recipe.name,36,Modifier.testTag("reader-title"))
-            BookText(recipe.description,17,Modifier.padding(top=12.dp),italic=true,color=p.secondary)
+            BookText(recipe.name,36,Modifier.testTag("reader-title"),weight=FontWeight.Medium,lineHeight=38.sp)
+            BookText(recipe.description,17,Modifier.padding(top=12.dp),italic=true,color=p.ink2)
             Row(Modifier.fillMaxWidth().padding(top=18.dp),horizontalArrangement=Arrangement.SpaceBetween) {
-                BookText(recipe.totalTime(),22);BookText("${recipe.timeline.size} шагов",22)
+                Column {BookText(recipe.totalTime(),22);SmallLabel("время")}
+                Column {BookText("${recipe.timeline.size}",22);SmallLabel("шагов")}
+                Column {BookText(difficultyLabel(recipe.difficulty),22);SmallLabel("сложность")}
             }
         }
     }
 }
-@Composable internal fun LeafBlock(heading:String,text:String,preferences:ReadingPreferences) {
+@Composable internal fun PageFooter(number:Int,chapterPage:Int,chapterPages:Int) {
+    Box(Modifier.fillMaxWidth().padding(horizontal=26.dp).heightIn(min=24.dp)) {
+        SmallLabel("$number",Modifier.align(Alignment.Center).testTag("page-number"))
+        SmallLabel("$chapterPage / $chapterPages",Modifier.align(Alignment.CenterEnd).testTag("chapter-page-count"))
+    }
+}
+@Composable internal fun LeafBlock(heading:String,text:String,preferences:ReadingPreferences,recipe:Recipe?=null) {
     val step=heading.substringBefore(" · ").toIntOrNull()
+    val actual=step?.let{recipe?.timeline?.getOrNull(it-1)}
     Row(Modifier.padding(horizontal=26.dp,vertical=10.dp)) {
-        if(step!=null)BookText("%02d".format(step),38,Modifier.width(54.dp),color=LocalPaper.current.secondary)
+        if(step!=null)BookText("%02d".format(step),38,Modifier.width(54.dp),color=LocalPaper.current.mut,weight=FontWeight.ExtraLight)
         Column(Modifier.weight(1f)) {
-            if(step!=null)SmallLabel(heading.substringAfterLast(" · ").uppercase())
-            BookText(if(step!=null)heading.substringAfter(" · ").substringBeforeLast(" · ") else heading,18,Modifier.padding(bottom=6.dp))
-            Text(text,fontFamily=Literature,fontSize=preferences.textSize.sp,lineHeight=(preferences.textSize*1.55f).sp,color=LocalPaper.current.secondary)
+            if(step!=null)SmallLabel(if(actual!=null && recipe!=null)stepOverline(recipe,step-1) else heading.substringAfterLast(" · "))
+            BookText(actual?.title ?: if(step!=null)heading.substringAfter(" · ").substringBeforeLast(" · ") else heading,18,Modifier.padding(bottom=6.dp),italic=actual?.type==com.polinalinen.madre.model.StepType.WAIT,weight=FontWeight.Medium)
+            Text(text,fontFamily=Literature,fontWeight=FontWeight.Normal,fontSize=preferences.textSize.sp,lineHeight=(preferences.textSize*25f/16f).sp,color=LocalPaper.current.ink2)
         }
     }
 }

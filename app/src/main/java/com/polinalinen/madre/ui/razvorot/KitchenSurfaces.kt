@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.*
 import com.polinalinen.madre.model.BakingSession
 import com.polinalinen.madre.model.RecipeScaler
+import com.polinalinen.madre.ui.components.bookAction
 import com.polinalinen.madre.sourdough.GrowthPhase
 import kotlin.math.sin
 import kotlin.math.roundToInt
@@ -36,8 +37,8 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
         BookHeader("ПЕЧЬ СЕЙЧАС · ×${session.scaleFactor}",onBack)
         BookText(session.recipe.name,31)
         Row(Modifier.fillMaxWidth().padding(top=26.dp),verticalAlignment=Alignment.Bottom) {
-            BookText("%02d".format(session.currentStepIndex+1),100)
-            BookText("/${session.recipe.timeline.size}",28,Modifier.padding(bottom=12.dp),color=p.secondary)
+            BookText("%02d".format(session.currentStepIndex+1),100,weight=FontWeight.ExtraLight)
+            BookText("/${session.recipe.timeline.size}",28,Modifier.padding(bottom=12.dp),color=p.mut)
             Spacer(Modifier.weight(1f));Column(horizontalAlignment=Alignment.End) {SmallLabel("ШАГ");BookText(session.currentStep.title,20,italic=true)}
         }
         val progress=timerProgress(session.currentStep.durationMinutes*60L,remaining)
@@ -46,13 +47,15 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
         SmallLabel(if(remaining==0L) "ВРЕМЯ ВЫШЛО" else "ОСТАЛОСЬ ИЗ ${session.currentStep.durationMinutes} МИН")
         val bindings=remember(session.recipe){RecipeScaler.scalableBindings(session.recipe)}
         BookText(RecipeScaler.scaledStepText(session.currentStep.description,session.scaleFactor,bindings),21,Modifier.padding(top=24.dp))
+        val temperatures=Regex("(\\d{2,3})\\s*[°º]\\s*[cсCС]?").findAll(session.currentStep.description).map{it.groupValues[1]+"°"}.distinct().toList()
+        if(temperatures.isNotEmpty())Row(Modifier.padding(top=12.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)) {temperatures.forEach{Text(it,Modifier.background(p.bg2,RoundedCornerShape(16.dp)).padding(horizontal=12.dp,vertical=8.dp),fontFamily=Manrope,fontWeight=FontWeight.SemiBold,color=p.ink2)}}
         session.recipe.timeline.getOrNull(session.currentStepIndex+1)?.let { SmallLabel("ДАЛЬШЕ · ${it.title} · ${it.durationMinutes} МИН",Modifier.padding(top=16.dp)) }
         Row(Modifier.fillMaxWidth().padding(top=24.dp),horizontalArrangement=Arrangement.spacedBy(10.dp)) {
             PaperButton(if(session.isPaused)"Продолжить" else "Пауза",onPause,Modifier.weight(1f))
             PaperButton(if(session.isLastStep)"Испечено" else "Дальше",onNext,Modifier.weight(1f),true)
         }
-        TextButton({full=true},Modifier.fillMaxWidth().heightIn(min=48.dp)){Text("Большой таймер")}
-        TextButton(onDetails,Modifier.fillMaxWidth().heightIn(min=48.dp)){Text("Все действия · отменить выпечку")}
+        PaperButton("Большой таймер",{full=true},Modifier.fillMaxWidth().padding(top=12.dp))
+        PaperButton("Все действия · отменить выпечку",onDetails,Modifier.fillMaxWidth().padding(top=8.dp))
         Spacer(Modifier.height(16.dp))
     }
 }
@@ -68,7 +71,7 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
             TimerNumber(if(remaining>=3600)"${remaining/3600}ч" else "%02d".format(remaining/60),progress,150.sp,(-8).sp,NightPaper.ink)
             TimerNumber(if(remaining>=3600)"%02d:%02d".format(remaining/60%60,remaining%60) else "%02d".format(remaining%60),progress,100.sp,0.sp,NightPaper.acc)
             BookText(if(session.isPaused)"Пауза" else if(remaining==0L)"Время вышло" else session.recipe.name,24,Modifier.padding(top=20.dp),italic=true,color=NightPaper.ink)
-            SmallLabel("ЭКРАН НЕ ГАСНЕТ · КОСНИТЕСЬ, ЧТОБЫ СВЕРНУТЬ",Modifier.padding(top=24.dp),color=NightPaper.secondary)
+            SmallLabel("ЭКРАН НЕ ГАСНЕТ · КОСНИТЕСЬ, ЧТОБЫ СВЕРНУТЬ",Modifier.padding(top=24.dp),color=NightPaper.ink2)
         }
     }
 }
@@ -84,7 +87,10 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
         val level=starterCycleLevel(hours,profile.peakHours,profile.cycleHours)
         StarterJar(phase!=GrowthPhase.EMPTY,level)
         SmallLabel("УРОВЕНЬ ПО ЦИКЛУ КОРМЛЕНИЯ · НЕ ИЗМЕРЕНИЕ")
-        BookText(when(phase){GrowthPhase.EMPTY->"Пока без кормлений";GrowthPhase.LAG->"Набирается сил";GrowthPhase.GROWING->"Растёт";GrowthPhase.PEAK->"На пике по времени";GrowthPhase.DECLINING->"Пик позади";GrowthPhase.HUNGRY->"Пора покормить"},18,color=p.acc)
+        val phaseColor=if(phase==GrowthPhase.PEAK)if(LocalAtmosphere.current==Atmosphere.NIGHT)Color(0xFFA2C084) else Color(0xFF5F7D45) else p.acc
+        Box(Modifier.padding(top=10.dp).background(phaseColor.copy(alpha=.12f),RoundedCornerShape(18.dp)).padding(horizontal=14.dp,vertical=6.dp)) {
+            BookText(when(phase){GrowthPhase.EMPTY->"Пока без кормлений";GrowthPhase.LAG->"Набирается сил";GrowthPhase.GROWING->"Растёт";GrowthPhase.PEAK->"На пике по времени";GrowthPhase.DECLINING->"Пик позади";GrowthPhase.HUNGRY->"Пора покормить"},18,color=phaseColor)
+        }
         BookText(when(phase){GrowthPhase.EMPTY->"Первое кормление — начало дневника.";GrowthPhase.LAG->"Набираюсь сил после кормления.";GrowthPhase.GROWING->"Время расти. Скоро можно печь.";GrowthPhase.PEAK->"По времени кормления — пора проверить закваску.";else->"Пора проверить, не нужно ли кормление."},22,Modifier.padding(top=14.dp),italic=true)
         SmallLabel(hours?.let{"ПОСЛЕ КОРМЛЕНИЯ · %.1f Ч".format(it)}?:"КОРМЛЕНИЙ ПОКА НЕТ",Modifier.padding(top=20.dp))
         Row(Modifier.fillMaxWidth().padding(vertical=20.dp),horizontalArrangement=Arrangement.spacedBy(12.dp)) {PaperButton("Покормить",onFeed,Modifier.weight(1f),true);PaperButton("Дневник",onDiary,Modifier.weight(1f))}
@@ -101,12 +107,15 @@ internal fun starterCycleLevel(hours:Float?,peak:Float,cycle:Float):Float {
         stateDescription="Уровень по циклу: ${(level*100).roundToInt()}%"
     }.padding(horizontal=38.dp,vertical=16.dp)) {
         val w=size.width;val h=size.height
-        drawRoundRect(Color(0xFF806044),Offset(w*.08f,0f),Size(w*.84f,24.dp.toPx()),CornerRadius(8.dp.toPx()))
-        drawRoundRect(p.secondary.copy(alpha=.3f),Offset(w*.1f,28.dp.toPx()),Size(w*.8f,h-28.dp.toPx()),CornerRadius(22.dp.toPx()),style=Stroke(2.dp.toPx()))
+        drawOval(Color(0xFFB59B78),Offset(w*.06f,0f),Size(w*.88f,20.dp.toPx()))
+        drawRoundRect(Brush.verticalGradient(listOf(Color(0xFFB59B78),Color(0xFF806044))),Offset(w*.06f,8.dp.toPx()),Size(w*.88f,18.dp.toPx()),CornerRadius(5.dp.toPx()))
+        drawOval(Color(0xFFCEBA9C),Offset(w*.06f,0f),Size(w*.88f,16.dp.toPx()))
+        drawRoundRect(p.ink2.copy(alpha=.3f),Offset(w*.1f,28.dp.toPx()),Size(w*.8f,h-28.dp.toPx()),CornerRadius(22.dp.toPx()),style=Stroke(2.dp.toPx()))
         if(filled){
             val top=h*(.94f-.72f*level.coerceIn(0f,1f))
             val dough=Path().apply{moveTo(w*.13f,top);for(i in 0..30){val x=w*.13f+w*.74f*i/30;lineTo(x,top+sin(i*.7f)*5.dp.toPx())};lineTo(w*.87f,h*.94f);quadraticTo(w*.5f,h*1.02f,w*.13f,h*.94f);close()}
             drawPath(dough,Brush.verticalGradient(listOf(Color(0xFFE4CFAD),Color(0xFFB49468))))
+            drawLine(p.acc.copy(alpha=.6f),Offset(w*.08f,top),Offset(w*.92f,top),1.dp.toPx(),pathEffect=PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(),4.dp.toPx())))
             repeat(36){i->val x=w*(.18f+(i*37%67)/100f);val y=top+(h*.94f-top)*(.1f+(i*19%80)/100f);drawCircle(Color(0xFFF8ECD7).copy(alpha=.65f),(2+i%4).dp.toPx(),Offset(x,y),style=Stroke(1.dp.toPx()))}
         }
         drawRoundRect(Color.White.copy(alpha=.3f),Offset(w*.16f,h*.17f),Size(5.dp.toPx(),h*.65f),CornerRadius(3.dp.toPx()))

@@ -22,7 +22,7 @@ object FamilyShelf {
     const val OWN_ID = "me"
 
     const val CAPTION =
-        "ваша — с красным ляссе ниже доски. пустой корешок справа не нажимается: задел на будущее."
+        "Ваша книга — с красным ляссе ниже доски. Пустой корешок справа не нажимается: задел на будущее."
 
     const val UNCUT_SPINE_TAG = "shelf-uncut-spine"
     const val LIST_TAG = "shelf-list"

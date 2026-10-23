@@ -1,0 +1,179 @@
+{
+  "generator": "fontTools4.67.0 varLib.instancer; all axes pinned",
+  "fonts": [
+    {
+      "file": "literata_200.ttf",
+      "source": "literata.ttf",
+      "source_sha256": "46b3bdf4b0ad3fa1581e3f89a4df4b46d8d81435304668221c069c3f28fdec21",
+      "weight": 200,
+      "italic": false,
+      "axes_pinned": {
+        "opsz": 12.0,
+        "wght": 200
+      },
+      "sha256": "caa34d8626d7149d92b37403932c24675a9ce1c41c397c9447bf0913375f168e",
+      "cyrillic": true,
+      "license": "SIL OFL1.1",
+      "glyph_sha256": "ed4850af718e58b6d8a8911f08cd9e986ea318be7333de685f5f8a1cc044eae9"
+    },
+    {
+      "file": "literata_300.ttf",
+      "source": "literata.ttf",
+      "source_sha256": "46b3bdf4b0ad3fa1581e3f89a4df4b46d8d81435304668221c069c3f28fdec21",
+      "weight": 300,
+      "italic": false,
+      "axes_pinned": {
+        "opsz": 12.0,
+        "wght": 300
+      },
+      "sha256": "b21a99c96dc899e59308587137d3d775b966f0d1589af72fa4c7735105e540d2",
+      "cyrillic": true,
+      "license": "SIL OFL1.1",
+      "glyph_sha256": "720f638e7b2088cedbce75f10e61dc32dfb95bd04f2ebe9befdb791573fc83cd"
+    },
+    {
+      "file": "literata_400.ttf",
+      "source": "literata.ttf",
+      "source_sha256": "46b3bdf4b0ad3fa1581e3f89a4df4b46d8d81435304668221c069c3f28fdec21",
+      "weight": 400,
+      "italic": false,
+      "axes_pinned": {
+        "opsz": 12.0,
+        "wght": 400
+      },
+      "sha256": "db3d46ef5d1dda71bac03d86063aecd55bfe9bb86f57694dea1410d427643d25",
+      "cyrillic": true,
+      "license": "SIL OFL1.1",
+      "glyph_sha256": "3c5a3ea0fcbd75851e3dbad76644b4f351879ec07afdd9b73740362c0d2b6ed3"
+    },
+    {
+      "file": "literata_500.ttf",
+      "source": "literata.ttf",
+      "source_sha256": "46b3bdf4b0ad3fa1581e3f89a4df4b46d8d81435304668221c069c3f28fdec21",
+      "weight": 500,
+      "italic": false,
+      "axes_pinned": {
+        "opsz": 12.0,
+        "wght": 500
+      },
+      "sha256": "473a7cb66e7f25e84ba396e86b00a1ab375de644e2759d77fd302af88696d1e2",
+      "cyrillic": true,
+      "license": "SIL OFL1.1",
+      "glyph_sha256": "d601d35acdf5748bf49b80e17cb3123732080a4edad9b318753ac0ad6f72a39d"
+    },
+    {
+      "file": "literata_italic_400.ttf",
+      "source": "literata_italic.ttf",
+      "source_sha256": "0c8f2303de854a12f05f5d3e4523391006dad85e683469b7266a19cc48b99c1b",
+      "weight": 400,
+      "italic": true,
+      "axes_pinned": {
+        "opsz": 12.0,
+        "wght": 400
+      },
+      "sha256": "ed583dc32e1f9073429b6266c3e6a2f9f02d2f9183fe2aff28bdb32e6f8ba3e3",
+      "cyrillic": true,
+      "license": "SIL OFL1.1",
+      "glyph_sha256": "44154d9e03148599a0ea8cee6eb104ae5ebc7551d0e8bdb0bc2fdfaa4d326526"
+    },
+    {
+      "file": "literata_italic_500.ttf",
+      "source": "literata_italic.ttf",
+      "source_sha256": "0c8f2303de854a12f05f5d3e4523391006dad85e683469b7266a19cc48b99c1b",
+      "weight": 500,
+      "italic": true,
+      "axes_pinned": {
+        "opsz": 12.0,
+        "wght": 500
+      },
+      "sha256": "77de54fde1d3ef2ee7713ae6632279bb68a1634a01ce79f2b64d1a5e61d210f3",
+      "cyrillic": true,
+      "license": "SIL OFL1.1",
+      "glyph_sha256": "b70fc1a06888400d0a156f21c85c879166fca46b80b38d198dbccc0cda088e21"
+    },
+    {
+      "file": "manrope_200.ttf",
+      "source": "manrope.ttf",
+      "source_sha256": "2fe1455597cfd1628d19ecf8fc4f3b1c2afdd24f5e7ed252de3d3f9ca9c70ecc",
+      "weight": 200,
+      "italic": false,
+      "axes_pinned": {
+        "wght": 200
+      },
+      "sha256": "f1a896daab83617896951841c4a745ed900083d7305120ef287bc9d0f405c757",
+      "cyrillic": true,
+      "license": "SIL OFL1.1",
+      "glyph_sha256": "8ceb35804c980848f7c195a5f3417de4ec2f497f497c83e484ab9e19ecbb2d48"
+    },
+    {
+      "file": "manrope_400.ttf",
+      "source": "manrope.ttf",
+      "source_sha256": "2fe1455597cfd1628d19ecf8fc4f3b1c2afdd24f5e7ed252de3d3f9ca9c70ecc",
+      "weight": 400,
+      "italic": false,
+      "axes_pinned": {
+        "wght": 400
+      },
+      "sha256": "39aab357363b7072c6c3d59c9847faf2daee5517062d0212cf939bb4bf2fe8ab",
+      "cyrillic": true,
+      "license": "SIL OFL1.1",
+      "glyph_sha256": "168fe46e41f03c7e5bb92489d9cad218252229ef7c536cac85ac9e55873046d3"
+    },
+    {
+      "file": "manrope_500.ttf",
+      "source": "manrope.ttf",
+      "source_sha256": "2fe1455597cfd1628d19ecf8fc4f3b1c2afdd24f5e7ed252de3d3f9ca9c70ecc",
+      "weight": 500,
+      "italic": false,
+      "axes_pinned": {
+        "wght": 500
+      },
+      "sha256": "05dd6e023cd7b272f738a071208531470c31dbbd2f6ff9a03076903f6132ad2d",
+      "cyrillic": true,
+      "license": "SIL OFL1.1",
+      "glyph_sha256": "a30103581555b8a47ca9185654f4cf624b079fe6bb58c08f32f2da42715a3798"
+    },
+    {
+      "file": "manrope_600.ttf",
+      "source": "manrope.ttf",
+      "source_sha256": "2fe1455597cfd1628d19ecf8fc4f3b1c2afdd24f5e7ed252de3d3f9ca9c70ecc",
+      "weight": 600,
+      "italic": false,
+      "axes_pinned": {
+        "wght": 600
+      },
+      "sha256": "4ca377ca1dda34e0f93f7349b63ff7c2d9ea675ca7ba48630f3eb4abc3034f60",
+      "cyrillic": true,
+      "license": "SIL OFL1.1",
+      "glyph_sha256": "1c9ba89fa85517f2ecb34879fc090f5c604a84d583a0ca543640ea37fea97735"
+    },
+    {
+      "file": "manrope_700.ttf",
+      "source": "manrope.ttf",
+      "source_sha256": "2fe1455597cfd1628d19ecf8fc4f3b1c2afdd24f5e7ed252de3d3f9ca9c70ecc",
+      "weight": 700,
+      "italic": false,
+      "axes_pinned": {
+        "wght": 700
+      },
+      "sha256": "dab25e0d39fde72ceed103769e41037bc424e6f6ef4415e629790a4fa9af1218",
+      "cyrillic": true,
+      "license": "SIL OFL1.1",
+      "glyph_sha256": "6cae1a4470b3d944054ba012061768e9a988a1492a263e26ca558aff3e58bdaa"
+    },
+    {
+      "file": "manrope_800.ttf",
+      "source": "manrope.ttf",
+      "source_sha256": "2fe1455597cfd1628d19ecf8fc4f3b1c2afdd24f5e7ed252de3d3f9ca9c70ecc",
+      "weight": 800,
+      "italic": false,
+      "axes_pinned": {
+        "wght": 800
+      },
+      "sha256": "001bae848e1ee6c625e096cb9102f5d0491cedc8beec36d6c321ad96b4311dce",
+      "cyrillic": true,
+      "license": "SIL OFL1.1",
+      "glyph_sha256": "6fcba620945494dfdc7d5a63f65872a6030bb95d01ef0465cc08ec332ea38d21"
+    }
+  ]
+}

@@ -35,10 +35,11 @@ internal fun bookWord(n:Int)=when {
 }
 
 /** Measure along the spine BEFORE rotation, never wrap a word into letter stacks. */
-@Composable internal fun SpineTitle(name:String) {
+@Composable internal fun SpineTitle(name:String,hasRibbon:Boolean=false) {
     val density=LocalDensity.current
     val measurer=rememberTextMeasurer()
-    BoxWithConstraints(Modifier.fillMaxSize().padding(vertical=12.dp)) {
+    Box(Modifier.fillMaxSize().padding(top=if(hasRibbon)BookRibbonHeight+8.dp else 12.dp,bottom=12.dp)) {
+    BoxWithConstraints(Modifier.fillMaxSize().testTag(if(hasRibbon)"shelf-own-title-area" else "shelf-title-area")) {
         val along=with(density){maxHeight.roundToPx()}
         val across=with(density){maxWidth.roundToPx()}
         var font=18f
@@ -58,6 +59,7 @@ internal fun bookWord(n:Int)=when {
             }
         },color=Color(0xFFF4EADC),fontFamily=Literature,fontSize=font.sp,lineHeight=(font*23f/18f).sp,textAlign=TextAlign.Center,maxLines=1,softWrap=false,overflow=TextOverflow.Ellipsis)
     }
+    }
 }
 
 /** The same stateless shelf is used by Room/ViewModel UI and isolated fixtures. */
@@ -66,7 +68,7 @@ internal fun bookWord(n:Int)=when {
     val context=LocalContext.current
     val spines=members.ifEmpty{listOf(FamilyShelf.localMember("вы"))}
     LazyColumn(Modifier.fillMaxSize().background(p.bg).testTag(FamilyShelf.LIST_TAG),contentPadding=PaddingValues(horizontal=22.dp,vertical=8.dp)) {
-        item {
+        item(key="shelf-overview") { Column {
             BookHeader("ПОЛКА СЕМЬИ",onAa=onSettings)
             BookText("${ledger.size} ${bakeWord(ledger.size)},",40)
             BookText("${spines.size} ${bookWord(spines.size)}",40,italic=true,color=p.acc)
@@ -75,27 +77,32 @@ internal fun bookWord(n:Int)=when {
                 spines.forEachIndexed { i,member ->
                     val colors=listOf(Color(0xFF7C3B22),Color(0xFF4F6140),Color(0xFF33424D),Color(0xFF8E6A3A))
                     Box(Modifier.width(56.dp).height((180+i%3*14).dp).background(colors[i%colors.size]).then(bookAction("Открыть книгу: ${member.displayName}"){onOpenBook(member.userId)}).testTag("shelf-spine-${member.userId}"),contentAlignment=Alignment.Center) {
-                        SpineTitle(member.displayName)
-                        if(member.isMe)Ribbon(Modifier.align(Alignment.TopCenter))
+                        SpineTitle(member.displayName,hasRibbon=member.isMe)
+                        if(member.isMe)Ribbon(Modifier.align(Alignment.TopCenter).testTag("shelf-own-ribbon"))
                     }
                 }
                 Box(Modifier.width(48.dp).height(150.dp).background(p.bg2).testTag(FamilyShelf.UNCUT_SPINE_TAG))
             }
             Box(Modifier.fillMaxWidth().height(10.dp).background(Color(0xFF8B6A4E)))
-            SmallLabel(FamilyShelf.CAPTION,Modifier.padding(top=12.dp))
+            Text(FamilyShelf.CAPTION,Modifier.padding(top=12.dp).testTag("shelf-caption"),fontFamily=Manrope,fontSize=11.sp,lineHeight=17.sp,color=p.ink2)
             Spacer(Modifier.height(18.dp))
             val photos=records.filter{!it.photoPath.isNullOrBlank()}.take(3)
             if(photos.isNotEmpty())Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                 photos.forEach{record->AsyncImage(model=record.photoPath?.let{if(it.startsWith("https://"))it else PhotoStore.resolve(context,it)},contentDescription=record.recipeName,modifier=Modifier.weight(1f).height(160.dp),contentScale=ContentScale.Crop)}
             }
             if(unreachable)SmallLabel("Полка сейчас не отвечает. Своя книга доступна на телефоне.",Modifier.padding(vertical=12.dp))
-            BookText("Журнал",26,Modifier.padding(top=18.dp,bottom=8.dp))
-            if(ledger.isEmpty())BookText("Пока ни одной выпечки на полке",17,italic=true)
-        }
+        } }
+        item(key="shelf-journal-title") {BookText("Журнал",26,Modifier.padding(top=18.dp,bottom=8.dp).testTag("shelf-journal-title"))}
+        if(ledger.isEmpty())item {BookText("Пока ни одной выпечки на полке",17,italic=true)}
         items(ledger,key={"${it.userId}-${it.bakedAtMillis}-${it.chapter}"}){row->
-            Column(Modifier.padding(vertical=10.dp)) {
+            Column(Modifier.padding(vertical=10.dp).testTag("shelf-ledger-${row.bakedAtMillis}-${row.userId}")) {
                 SmallLabel("${row.whenLabel} · ${row.who}")
                 BookText(row.chapter,20)
+            }
+        }
+        if(!com.polinalinen.madre.config.FeatureFlags.ALICE)item(key="shelf-alice-footer") {
+            Row(Modifier.fillMaxWidth().padding(vertical=22.dp).testTag("shelf-alice-footer"),verticalAlignment=Alignment.CenterVertically) {
+                BookText("Подключить Алису",18,Modifier.weight(1f));Spacer(Modifier.width(12.dp));SmallLabel("скоро")
             }
         }
     }

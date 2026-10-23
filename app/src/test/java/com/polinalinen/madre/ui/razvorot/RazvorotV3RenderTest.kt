@@ -19,7 +19,7 @@ import com.google.common.truth.Truth.assertThat
 @OptIn(ExperimentalRoborazziApi::class)
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk=[35],qualifiers="ru-w360dp-h780dp-xhdpi",application=MadreApplication::class)
+@Config(sdk=[35],qualifiers="ru-w412dp-h915dp-mdpi",application=MadreApplication::class)
 class RazvorotV3RenderTest {
     private fun render(scene:String) {
         val context=ApplicationProvider.getApplicationContext<Context>()
@@ -32,6 +32,10 @@ class RazvorotV3RenderTest {
         }
         assertThat(output.isFile).isTrue()
         assertThat(output.length()).isGreaterThan(1000L)
+        val bitmap=android.graphics.BitmapFactory.decodeFile(output.path)
+        assertThat(bitmap.width).isEqualTo(412)
+        assertThat(bitmap.height).isEqualTo(915)
+        bitmap.recycle()
     }
     @Test fun titleMorning()=render("reader-title-dawn")
     @Test fun titleNight()=render("reader-title-night")
@@ -45,6 +49,8 @@ class RazvorotV3RenderTest {
     @Test fun readingSettings()=render("reading-sheet")
     @Test fun homeMorning()=render("home-dawn")
     @Test fun homeNight()=render("home-night")
+    @Test fun catalog()=render("catalog")
+    @Test fun staticFontsCyrillic()=render("font-compat")
     @Test fun spine()=render("spine")
     @Test fun bake()=render("bake")
     @Test fun aliceListeningDebug()=render("alice-listening")

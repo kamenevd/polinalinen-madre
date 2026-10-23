@@ -45,6 +45,8 @@ jobs:
       - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
       - name: Unit tests, lint, visual golden and debug build
         run: ./gradlew testDebugUnitTest lintDebug verifyRoborazziDebug assembleDebug --no-daemon --stacktrace
+      - name: Native412 comparison from immutable60985a8 app sources
+        run: python3 scripts/capture_style_baseline.py
       - name: Upload Android reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

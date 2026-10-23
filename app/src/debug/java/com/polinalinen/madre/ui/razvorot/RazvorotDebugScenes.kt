@@ -53,6 +53,8 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
         RazvorotTheme(preferences,force=if(night)Atmosphere.NIGHT else Atmosphere.DAWN) {
             Box(Modifier.fillMaxSize().background(LocalPaper.current.bg).safeDrawingPadding().testTag("scene-$scene").semantics{stateDescription="${debug.renderer}:${debug.renderedFrames}:${debug.cachedPages}:${debug.reason}"}) {
                 when {
+                    scene=="font-compat" -> FontCompatibilityPage()
+                    scene=="catalog" -> Column {Box(Modifier.weight(1f)){ChapterCatalog(recipes,{},{},{})};SpineBar(0){}}
                     scene.startsWith("reader-title") -> TitleLeaf(if(scene.contains("last"))recipes.last() else recipe,if(scene.contains("last"))recipes.lastIndex else 0,recipes.size)
                     scene.startsWith("reader-text") -> DebugTextPage(recipe,preferences)
                     scene.startsWith("curl-") || scene.startsWith("gles2-curl-") -> DebugCurl(recipe,scene)
@@ -79,7 +81,7 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
                     }
                     scene.startsWith("shelf") -> Column {
                         Box(Modifier.weight(1f)){ShelfPaper(listOf(ShelfMember("fixture-me",if(scene=="shelf-large")"Александра Константиновна" else "Пекарь",true),ShelfMember("fixture-family","Семья",false)),listOf(ShelfLedgerRow(1L,"Пекарь",recipe.name,"fixture-me","23 октября")),"Демонстрационная полка",emptyList(),false,{},{})}
-                        Row(Modifier.fillMaxWidth().padding(22.dp)){BookText("Подключить Алису",18,Modifier.weight(1f));SmallLabel("скоро")}
+
                         SpineBar(3){}
                     }
                     scene=="paper" -> PaperDebugControls(preferences,recipes,debug)
@@ -92,8 +94,10 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
     Column(Modifier.fillMaxSize().padding(top=22.dp)) {
         SmallLabel("ГЛАВА 01 · ${recipe.name.uppercase()}",Modifier.padding(start=26.dp,end=26.dp,bottom=22.dp))
         recipe.timeline.drop(1).take(if(preferences.textSize>20f)2 else 4).forEachIndexed { i,step ->
-            LeafBlock("%02d · %s · %d мин".format(i+2,step.title,step.durationMinutes),RecipeScaler.scaledStepText(step.description,1.0,RecipeScaler.scalableBindings(recipe)),preferences)
+            LeafBlock("%02d · %s · %d мин".format(i+2,step.title,step.durationMinutes),RecipeScaler.scaledStepText(step.description,1.0,RecipeScaler.scalableBindings(recipe)),preferences,recipe)
         }
+        Spacer(Modifier.weight(1f))
+        PageFooter(3,3,5) // explicit fixture position; runtime uses actual leaves
     }
 }
 @Composable private fun DebugCurl(recipe:Recipe,scene:String) {
@@ -103,8 +107,9 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
         // Fold coordinates are actual viewport dp, like PaperTurn, not a stretched
         // 360x740 fixture. Textures use the same <=2x resolution cap as runtime.
         val w=maxWidth.value;val h=maxHeight.value
-        val front=remember(recipe,paper,w,h){PageRenderer(context).text(recipe,0,(w*2).toInt(),(h*2).toInt(),paper,viewportWidth=w)}
-        val under=remember(recipe,paper,w,h){PageRenderer(context).text(recipe,0,(w*2).toInt(),(h*2).toInt(),paper,startStep=5,viewportWidth=w)}
+        val textureDensity=LocalDensity.current.density.coerceAtMost(2f)
+        val front=remember(recipe,paper,w,h,textureDensity){PageRenderer(context).text(recipe,0,(w*textureDensity).toInt(),(h*textureDensity).toInt(),paper,viewportWidth=w)}
+        val under=remember(recipe,paper,w,h,textureDensity){PageRenderer(context).text(recipe,0,(w*textureDensity).toInt(),(h*textureDensity).toInt(),paper,startStep=5,viewportWidth=w)}
         val texture=remember(front){PaperTexture(front,paper.bg.toArgb(),night)}
         DisposableEffect(texture){onDispose{texture.close();front.recycle();under.recycle()}}
         val grip=when(scene){"curl-top"->h*.027f;"curl-bottom"->h*.973f;else->h*.5f}
@@ -126,13 +131,13 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
     val colors=NightPaper
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha=.55f))) {
         Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(colors.bg,androidx.compose.foundation.shape.RoundedCornerShape(topStart=28.dp,topEnd=28.dp)).padding(22.dp)) {
-            SmallLabel("ИЗОЛИРОВАННАЯ DEBUG-СЦЕНА · БЕЗ СВЯЗИ",color=colors.secondary)
+            SmallLabel("ИЗОЛИРОВАННАЯ DEBUG-СЦЕНА · БЕЗ СВЯЗИ",color=colors.ink2)
             Spacer(Modifier.height(100.dp))
             BookText(when(scene){"alice-listening"->"Алиса слушает";"alice-confirm","alice-night"->"Ответьте «да» или «нет»";else->"Алиса читает"},24,color=colors.acc)
             BookText(if(scene=="alice-confirm"||scene=="alice-night")"Поставить выпечку на паузу?" else "Повтори шаг",28,Modifier.padding(vertical=18.dp),color=colors.ink)
             BookText(RecipeScaler.scaledStepText(recipe.timeline[9].description,2.0,RecipeScaler.scalableBindings(recipe)),18,color=colors.ink)
             if(scene=="alice-confirm"||scene=="alice-night")Row(Modifier.padding(vertical=18.dp),horizontalArrangement=Arrangement.spacedBy(10.dp)){PaperButton("Да",{},Modifier.weight(1f),true);PaperButton("Нет",{},Modifier.weight(1f))}
-            SmallLabel("Фото, дневник и полка — только на телефоне",Modifier.padding(top=18.dp),colors.secondary)
+            SmallLabel("Фото, дневник и полка — только на телефоне",Modifier.padding(top=18.dp),colors.ink2)
         }
     }
 }

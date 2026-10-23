@@ -13,6 +13,11 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.drawscope.Stroke
 import com.polinalinen.madre.model.BakingSession
 import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.sourdough.GrowthPhase
@@ -59,12 +64,7 @@ import com.polinalinen.madre.ui.components.bookAction
                     PaperButton("Выбрать рецепт",{section=0;onSectionChanged(0);catalog=true},Modifier.padding(top=24.dp),true)
                 }
                 2 -> StarterPaper(starterName,day,phase,lastFeedingMillis?.let{com.polinalinen.madre.sourdough.hoursSinceFeeding(it)},hydration,onFeed,onDiary,{settings=true},intervalHours)
-                3 -> Column(Modifier.fillMaxSize()) {
-                    Box(Modifier.weight(1f)){shelf()}
-                    if(!com.polinalinen.madre.config.FeatureFlags.ALICE)Row(Modifier.fillMaxWidth().heightIn(min=56.dp).padding(horizontal=22.dp),verticalAlignment=Alignment.CenterVertically) {
-                        BookText("Подключить Алису",18,Modifier.weight(1f));SmallLabel("скоро")
-                    }
-                }
+                3 -> shelf()
             }
         }
         SpineBar(section){if(it==3&&onOpenShelf!=null)onOpenShelf()else {section=it;onSectionChanged(it)}}
@@ -73,13 +73,21 @@ import com.polinalinen.madre.ui.components.bookAction
 }
 @Composable internal fun SpineBar(section:Int,onSelect:(Int)->Unit) {
     val p=LocalPaper.current
-    Row(Modifier.fillMaxWidth().background(p.bg).height(70.dp).testTag("spine-navigation"),verticalAlignment=Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().background(p.bg.copy(alpha=.92f)).drawBehind{drawLine(p.line,Offset.Zero,Offset(size.width,0f),1.dp.toPx())}.height(IntrinsicSize.Min).heightIn(min=70.dp).testTag("spine-navigation"),verticalAlignment=Alignment.CenterVertically) {
             val labels=listOf("Читать","Печь","Закваска","Полка")
             val icons=listOf(Icons.Outlined.MenuBook,Icons.Outlined.LocalFireDepartment,Icons.Outlined.Science,Icons.Outlined.CollectionsBookmark)
             labels.forEachIndexed { i,label ->
                 Box(Modifier.weight(1f).fillMaxHeight().then(bookAction(label){onSelect(i)}).testTag("nav-$i").semantics{selected=i==section},contentAlignment=Alignment.Center) {
                     if(i==section)Ribbon(Modifier.align(Alignment.TopCenter).height(14.dp).width(22.dp))
-                    Column(horizontalAlignment=Alignment.CenterHorizontally,modifier=Modifier.padding(top=8.dp)){Icon(icons[i],null,tint=if(i==section)p.ink else p.secondary);SmallLabel(label,color=if(i==section)p.ink else p.secondary)}
+                    Column(horizontalAlignment=Alignment.CenterHorizontally,modifier=Modifier.padding(top=18.dp,bottom=8.dp)){
+                        val tint=if(i==section)p.ink else p.ink2
+                        if(i==2)Canvas(Modifier.size(24.dp)) {
+                            drawRoundRect(tint,Offset(4.dp.toPx(),6.dp.toPx()),Size(16.dp.toPx(),16.dp.toPx()),CornerRadius(4.dp.toPx()),style=Stroke(1.8.dp.toPx()))
+                            drawRoundRect(tint,Offset(3.dp.toPx(),2.dp.toPx()),Size(18.dp.toPx(),4.dp.toPx()),CornerRadius(1.dp.toPx()))
+                            drawLine(tint,Offset(5.dp.toPx(),15.dp.toPx()),Offset(19.dp.toPx(),15.dp.toPx()),1.2.dp.toPx())
+                        } else Icon(icons[i],null,tint=tint)
+                        SmallLabel(label,color=tint)
+                    }
                 }
             }
     }

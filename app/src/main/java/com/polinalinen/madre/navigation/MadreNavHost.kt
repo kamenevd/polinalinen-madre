@@ -371,7 +371,7 @@ fun MadreNavHost(
                     shelfViewModel = shelfViewModel,
                     razvorot = true,
                 ) }
-                Row(androidx.compose.ui.Modifier.fillMaxWidth().padding(22.dp)) { BookText("Подключить Алису",18,androidx.compose.ui.Modifier.weight(1f));SmallLabel("скоро") }
+
                 SpineBar(3) { section -> if(section!=3) {navController.previousBackStackEntry?.savedStateHandle?.set("home_section",section);navController.popBackStack()} }
                 }
             }

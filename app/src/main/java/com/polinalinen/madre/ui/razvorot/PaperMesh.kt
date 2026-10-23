@@ -26,7 +26,7 @@ internal fun PaperFold.point(x: Float, y: Float): CurlPoint {
 internal class PaperTexture(val front: Bitmap, paper: Int, private val night: Boolean = false) {
     private val verso = Bitmap.createBitmap(front.width, front.height, Bitmap.Config.ARGB_8888).apply {
         val gray = (Color.red(paper) + Color.green(paper) + Color.blue(paper)) / 3f
-        fun channel(v: Int) = (v * (1f-PaperLight.DESATURATION) + gray * PaperLight.DESATURATION).toInt().coerceIn(0, 255)
+        fun channel(v: Int) = ((v * (1f-PaperLight.DESATURATION) + gray * PaperLight.DESATURATION)*(PaperLight.VERSO_TINT+if(night)PaperLight.VERSO_NIGHT else 0f)).toInt().coerceIn(0, 255)
         val c = Canvas(this)
         c.drawColor(Color.rgb(channel(Color.red(paper)), channel(Color.green(paper)), channel(Color.blue(paper))))
         c.drawBitmap(front, 0f, 0f, Paint(Paint.FILTER_BITMAP_FLAG).apply { alpha = (255f*PaperLight.PRINT).roundToInt() })
@@ -45,7 +45,7 @@ internal class PaperTexture(val front: Bitmap, paper: Int, private val night: Bo
         val vertices = FloatArray(n * 2); val flat = FloatArray(n * 2)
         val face = IntArray(n); val back = IntArray(n); val shadow = IntArray(n)
         val scaleX = front.width / fold.width; val scaleY = front.height / fold.height
-        val k = if (night) 1.6f else 1f
+
         fun rgb(v: Float, visible: Boolean = true): Int {
             val c = (255f * v.coerceIn(0f, 1f)).toInt()
             return Color.argb(if (visible) 255 else 0, c, c, c)
@@ -56,15 +56,11 @@ internal class PaperTexture(val front: Bitmap, paper: Int, private val night: Bo
             val v = fold.point(x, y)
             vertices[2 * i] = v.x * scaleX; vertices[2 * i + 1] = v.y * scaleY
             flat[2 * i] = x * scaleX; flat[2 * i + 1] = y * scaleY
-            val crease = 1f - .24f * k * exp(-abs(v.d) / (.45f * fold.radius + 6f))
-            val spec = .035f * (if (night) .4f else 1f) * exp(-((v.theta - 1.12f) / .06f).pow(2))
-            face[i] = rgb((1f - .40f * (1f - cos(v.theta)) + spec) * crease, v.theta <= PI / 2)
+            val crease = PaperLight.crease(v.d,fold.radius,night)
+            val spec = PaperLight.highlight(v.theta,night)
+            face[i] = rgb((PaperLight.faceShade(v.theta) + spec) * crease, v.theta <= PI / 2)
             back[i] = rgb(PaperLight.versoShade(v.theta) * crease, v.theta > PI / 2)
-            val e = v.d - .9f * fold.radius
-            val t = ((e + 1.75f * fold.radius) / (1.75f * fold.radius)).coerceIn(0f, 1f)
-            val smooth = t * t * (3f - 2f * t)
-            val s = PaperLight.SHADOW * k * exp(-max(e, 0f) / (1.1f * fold.radius + 20f)) * if (e < 0f) smooth else 1f
-            shadow[i] = rgb(1f - min(s, PaperLight.SHADOW_MAX))
+            shadow[i] = rgb(PaperLight.receiver(v.d,fold.radius,night))
         }
         val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
         if (under != null) canvas.drawBitmapMesh(under, nx, ny, flat, 0, shadow, 0, paint)

@@ -13,12 +13,14 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.text.AnnotatedString
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
+import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.polinalinen.madre.MadreApplication
 import com.polinalinen.madre.data.repository.RecipeRepository
 import com.polinalinen.madre.model.RecipeScaler
 import com.polinalinen.madre.model.BakingSession
+import com.polinalinen.madre.viewmodel.BakingViewModel
 import com.polinalinen.madre.data.repository.activeSnapshot
 import kotlinx.coroutines.flow.MutableStateFlow
 import com.polinalinen.madre.ui.kit.*
@@ -94,6 +96,17 @@ class BookNavigationUiTest {
         val requested=MutableStateFlow<Long?>(fixture.id)
         lateinit var nav:NavHostController
         val restoration=StateRestorationTester(rule)
+        fun bindRealController():BakingViewModel {
+            lateinit var controller:BakingViewModel
+            rule.activityRule.scenario.onActivity { activity ->
+                assertSame(app,activity.application)
+                // Keep the actual fixture Application, not a cached AndroidViewModelFactory singleton.
+                controller=ViewModelProvider(activity,ViewModelProvider.AndroidViewModelFactory(app))[BakingViewModel::class.java]
+            }
+            assertSame(app,controller.getApplication<MadreApplication>())
+            return controller
+        }
+        var controller=bindRealController()
         fun awaitActualBake() {
             rule.waitForIdle()
             try {
@@ -103,7 +116,7 @@ class BookNavigationUiTest {
                     ready && nav.currentDestination?.route==MadreDestinations.BAKE
                 }
             } catch(failure:Throwable) {
-                println("Synthetic navigation fixture: route=${nav.currentDestination?.route}, pending=${requested.value}, rows=${runBlocking{app.activeBakeRepository.all()}.map{it.sessionId to it.recipeId}}")
+                println("Synthetic navigation fixture: route=${nav.currentDestination?.route}, pending=${requested.value}, controllerReady=${controller.restoreReady.value}, controllerSessions=${controller.sessions.value.map{it.id}}, rows=${runBlocking{app.activeBakeRepository.all()}.map{it.sessionId to it.recipeId}}")
                 throw failure
             }
         }
@@ -111,7 +124,10 @@ class BookNavigationUiTest {
         awaitActualBake()
         assertEquals(fixture.id.toString(),nav.currentBackStackEntry?.arguments?.getString("sessionId"))
         assertNull(requested.value)
+        val firstController=controller
         rule.runOnIdle{rule.activity.viewModelStore.clear()}
+        controller=bindRealController()
+        assertNotSame(firstController,controller)
         restoration.emulateSavedInstanceStateRestore()
         awaitActualBake()
         assertEquals(fixture.id.toString(),nav.currentBackStackEntry?.arguments?.getString("sessionId"))

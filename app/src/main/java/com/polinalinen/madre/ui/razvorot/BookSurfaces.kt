@@ -147,7 +147,7 @@ fun Recipe.totalTime(): String { val m = timeline.sumOf { it.durationMinutes }; 
             Slider(preferences.portions,preferences::choosePortions,valueRange=1f..5f,steps=3,modifier=Modifier.testTag("reader-portions"))
             SmallLabel("ПЕРЕЛИСТЫВАНИЕ")
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(6.dp)) { ReadingMode.entries.forEach { v -> FilterChip(preferences.mode==v,{preferences.chooseMode(v)},label={Text(v.label)},modifier=Modifier.weight(1f)) } }
-            Row(Modifier.fillMaxWidth().heightIn(min=58.dp),verticalAlignment=Alignment.CenterVertically) { Text("Меньше движения",Modifier.weight(1f));Switch(preferences.reducedMotion,preferences::setReduced) }
+            Row(Modifier.fillMaxWidth().heightIn(min=58.dp),verticalAlignment=Alignment.CenterVertically) { Text("Меньше движения",Modifier.weight(1f));Switch(preferences.reducedMotion||com.polinalinen.madre.ui.theme.LocalCalmMode.current,preferences::setReduced) }
             Row(Modifier.fillMaxWidth().heightIn(min=58.dp),verticalAlignment=Alignment.CenterVertically) { Text("Тактильные отклики",Modifier.weight(1f));Switch(preferences.haptics,preferences::chooseHaptics) }
             SmallLabel("На слабом устройстве и при выключенной системной анимации — плоский сдвиг.")
             if(BuildConfig.DEBUG)TextButton({context.startActivity(android.content.Intent().setClassName(context.packageName,"com.polinalinen.madre.ui.razvorot.RazvorotSceneActivity").putExtra("scene","paper"))},Modifier.fillMaxWidth().heightIn(min=48.dp)){Text("Бумага")}

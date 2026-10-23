@@ -43,7 +43,7 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
     val debug=remember{PaperDebugState()}
     val night=scene.endsWith("night")
     val recipe=recipes.firstOrNull()?:return
-    CompositionLocalProvider(LocalPaperDebug provides debug) {
+    CompositionLocalProvider(LocalPaperDebug provides debug,com.polinalinen.madre.ui.theme.LocalCalmMode provides false) {
         RazvorotTheme(preferences,force=if(night)Atmosphere.NIGHT else Atmosphere.DAWN) {
             Box(Modifier.fillMaxSize().background(LocalPaper.current.bg).safeDrawingPadding().testTag("scene-$scene").semantics{stateDescription="${debug.renderer}:${debug.renderedFrames}"}) {
                 when {

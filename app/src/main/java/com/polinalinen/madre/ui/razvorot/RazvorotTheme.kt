@@ -21,6 +21,7 @@ val LocalPaper = staticCompositionLocalOf { DawnPaper }
 val LocalAtmosphere = staticCompositionLocalOf { Atmosphere.DAWN }
 class ReadingPreferences(context: Context, namespace:String="razvorot_reading") {
     private val prefs = context.getSharedPreferences(namespace, Context.MODE_PRIVATE)
+    var onReducedMotionChanged:((Boolean)->Unit)?=null
     var atmosphere by mutableStateOf(Atmosphere.entries.firstOrNull { it.name == prefs.getString("atmosphere", "AUTO") } ?: Atmosphere.AUTO)
         private set
     var mode by mutableStateOf(ReadingMode.entries.firstOrNull { it.name == prefs.getString("mode", "BOOK") } ?: ReadingMode.BOOK)
@@ -38,7 +39,7 @@ class ReadingPreferences(context: Context, namespace:String="razvorot_reading") 
     fun setSize(v: Float) { textSize = v.coerceIn(14f, 22f); prefs.edit().putFloat("textSize", textSize).apply() }
     fun choosePortions(v: Float) { portions = v.coerceIn(1f, 5f); prefs.edit().putFloat("portions", portions).apply() }
     fun chooseHaptics(v: Boolean) { haptics = v; prefs.edit().putBoolean("haptics", v).apply() }
-    fun setReduced(v: Boolean) { reducedMotion = v; prefs.edit().putBoolean("reducedMotion", v).apply() }
+    fun setReduced(v: Boolean) { reducedMotion = v; prefs.edit().putBoolean("reducedMotion", v).apply();onReducedMotionChanged?.invoke(v) }
 }
 @Composable fun rememberReadingPreferences(): ReadingPreferences {
     val context = LocalContext.current

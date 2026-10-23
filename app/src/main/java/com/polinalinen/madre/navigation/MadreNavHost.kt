@@ -129,6 +129,7 @@ fun MadreNavHost(
         calmModeSetting.setCalm(calm)
         calmMode = calm
     }
+    readingPreferences.onReducedMotionChanged=setCalmMode
 
     // Реальная история выпечек — питает Формуляр книги / хитмэп на Полке.
     val bakeRecords by app.bakeHistoryRepository.observeAll().collectAsState(initial = emptyList())

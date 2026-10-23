@@ -86,4 +86,17 @@ class StyleBoundaryFixturesTest(unittest.TestCase):
         ):
             self.assertIn(rule, {v['rule'] for v in boundary.scan_text('fixture.kt', source)})
 
+    def test_yandex_brand_artwork_has_one_exact_owner_even_inside_kit(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);owner=root/boundary.YANDEX_BRAND_OWNER
+            owner.parent.mkdir(parents=True)
+            source='package com.polinalinen.madre.ui.kit\nval art=R.drawable.yandex_id_button_black\n'
+            owner.write_text(source)
+            self.assertEqual([],boundary.scan(root))
+            sibling=owner.with_name('AnotherButton.kt');sibling.write_text(source)
+            self.assertEqual(['yandex-brand-asset'],[v['rule'] for v in boundary.scan(root)])
+            sibling.unlink()
+            owner.write_text(source.replace('ui.kit','ui.screens'))
+            self.assertEqual(['yandex-brand-asset'],[v['rule'] for v in boundary.scan(root)])
+
 if __name__=='__main__':unittest.main()

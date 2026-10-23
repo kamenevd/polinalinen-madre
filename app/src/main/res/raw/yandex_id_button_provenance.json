@@ -1,0 +1,25 @@
+{
+  "source": "https://yandex.ru/dev/id/doc/ru/codes/buttons-design",
+  "purpose": "Official brand asset, not prototype logo; no token/client secret",
+  "conversion": "SVG rects to equivalent vector paths; original glyph/logo pathData and fills retained, no tint",
+  "variants": [
+    {
+      "variant": "black",
+      "official_svg_sha256": "8441a13ce01b78a95230e14e4aee9342ae28a89a53d370c334f0851597751fb7",
+      "viewport": [
+        260,
+        56
+      ],
+      "drawable": "yandex_id_button_black.xml"
+    },
+    {
+      "variant": "white",
+      "official_svg_sha256": "216c59c8b8cfd1f19eb958ddd0efeee04ab5bbad766d99918a58104e5534a23c",
+      "viewport": [
+        260,
+        56
+      ],
+      "drawable": "yandex_id_button_white.xml"
+    }
+  ]
+}

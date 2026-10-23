@@ -15,6 +15,8 @@ ROOT = Path(__file__).resolve().parents[1]
 MAIN = Path('app/src/main')
 BASELINE = Path('scripts/style-boundary-baseline.json')
 KIT = MAIN / 'java/com/polinalinen/madre/ui/kit'
+# Бренд Яндекса: sole owner of official black/white login artwork, not a blanket waiver.
+YANDEX_BRAND_OWNER = KIT / 'YandexIdButton.kt'
 RULES = (
     ('bare-field', r'\bBasicTextField\s*\('),
     ('font-assignment', r'\bfontFamily\s*='),
@@ -26,6 +28,7 @@ RULES = (
     ('system-font', r'\b(?:FontFamily\.(?:Default|Serif|SansSerif|Monospace|Cursive)|Typeface\.(?:DEFAULT|DEFAULT_BOLD|SERIF|SANS_SERIF|MONOSPACE))\b'),
     ('toast', r'(?m)^\s*import\s+android\.widget\.Toast\b|\bToast\s*\.\s*makeText\s*\('),
     ('raw-dialog', r'(?m)^\s*import\s+androidx\.compose\.ui\.window\.Dialog(?:\s|;|$)|\b(?:AlertDialog|BasicAlertDialog|Dialog)\s*\('),
+    ('yandex-brand-asset', r'\bR\.drawable\.yandex_id_button_(?:black|white)\b'),
     ('material3-qualified-control', r'\bandroidx\.compose\.material3\.(?:Button|TextButton|OutlinedButton|FilledTonalButton|Switch|Slider|FilterChip|InputChip|TextField|OutlinedTextField|ModalBottomSheet|AlertDialog|Scaffold)\s*\('),
 )
 
@@ -78,6 +81,8 @@ def scan(root: Path) -> list[dict]:
         relative = p.relative_to(root)
         text = p.read_text()
         if relative.parent == KIT and re.search(r'(?m)^package com\.polinalinen\.madre\.ui\.kit\s*;?\s*$', code_only(text)):
+            if relative != YANDEX_BRAND_OWNER:
+                found.extend(v for v in scan_text(relative.as_posix(), text) if v['rule'] == 'yandex-brand-asset')
             continue
         found.extend(scan_text(relative.as_posix(), text))
     return found

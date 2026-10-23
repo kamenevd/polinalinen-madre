@@ -4,7 +4,11 @@ import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/** Real full-main scanner; exact PR61 legacy debt is transitional, not zero legacy. */
+/**
+ * Real full-main scanner. Бренд Яндекса has exactly one path+package exception:
+ * ui/kit/YandexIdButton.kt owns the official un-tinted button artwork.
+ * Every other style rule and the zero legacy baseline remain enforced.
+ */
 class StyleBoundaryTest {
     @Test fun noNewStylePrimitivesInMain() {
         val root = generateSequence(File(".").absoluteFile) { it.parentFile }

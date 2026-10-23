@@ -49,7 +49,12 @@ internal fun aliceSheetMode(state: VoiceUiState): AliceSheetMode = when {
             onRemaining = { answer = "Осталось: ${timerDigits(remaining)}"; localRead = true },
             onNext = { answer = selected?.let { it.recipe.timeline.getOrNull(it.currentStepIndex + 1)?.description ?: "Последний шаг · завершение на телефоне" }; localRead = true },
             paused = selected?.isPaused == true, onPause = { selected?.let { viewModel.togglePause(it.id) } },
-            onApprove = { scope.launch { coordinator.approvePair() } }, onReject = coordinator::dismissPairPreview)
+            onApprove = { scope.launch { coordinator.approvePair() } }, onReject = coordinator::dismissPairPreview,
+            accountStep = if(com.polinalinen.madre.account.yandex.LocalYandexAccountUi.current!=null) ({
+                CompositionLocalProvider(LocalAtmosphere provides Atmosphere.NIGHT) {
+                    com.polinalinen.madre.account.yandex.YandexAliceAccountStep(onOpenSettings)
+                }
+            }) else null)
     }
     }
 }
@@ -60,7 +65,8 @@ internal fun aliceSheetMode(state: VoiceUiState): AliceSheetMode = when {
     recipeName: String? = null, stepText: String? = null,
     onConnect: () -> Unit = {}, onRetry: () -> Unit = {}, onRead: () -> Unit = {},
     onRemaining: () -> Unit = {}, onNext: () -> Unit = {}, paused: Boolean = false,
-    onPause: () -> Unit = {}, onApprove: () -> Unit = {}, onReject: () -> Unit = {}) {
+    onPause: () -> Unit = {}, onApprove: () -> Unit = {}, onReject: () -> Unit = {},
+    accountStep: (@Composable () -> Unit)? = null) {
     val p = LocalPaper.current
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -77,6 +83,7 @@ internal fun aliceSheetMode(state: VoiceUiState): AliceSheetMode = when {
         state.message?.let { Text(it, color = p.error, style = PaperType.note) }
         when (mode) {
             AliceSheetMode.UNLINKED -> {
+                accountStep?.invoke()
                 Text("Выберите выпечку и явно разрешите доступ. Ничего не подключается автоматически.", color = p.ink2, style = PaperType.body)
                 PaperButton(label = "Подключить Алису", onClick = onConnect, variant = PaperButtonVariant.ACCENT)
             }

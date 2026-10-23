@@ -40,9 +40,10 @@ class RazvorotV3RenderTest {
         bitmap.recycle()
         }
     }
-    @Test fun chapterTitle()=render("chapter-title")
+    @Test fun chapterTitle()=render("chapter-title",listOf(Atmosphere.DAWN))
     @Test fun chapterIngredients()=render("chapter-ingr")
-    @Test fun tableOfContents()=render("toc")
+    @Test fun tableOfContents()=render("toc",listOf(Atmosphere.DAWN))
+    @Test fun optionalYandexOffer()=render("yandex-offer")
     @Test fun oven()=render("oven",listOf(Atmosphere.DAWN))
     @Test fun bakeFinale()=render("bake-finale")
     @Test fun startLater()=render("start-later",listOf(Atmosphere.DAWN))

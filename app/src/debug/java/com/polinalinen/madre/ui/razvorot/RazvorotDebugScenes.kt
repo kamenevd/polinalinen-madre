@@ -77,6 +77,11 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
             Immersive(enabled = (scene.startsWith("reader-") && scene != "reader-chrome") || scene.startsWith("curl-") || scene.startsWith("gles2-curl-") || scene.startsWith("fulltimer-") || scene == "bake" || scene == "reading-sheet")
             Box(Modifier.fillMaxSize().background(LocalPaper.current.bg).testTag("scene-$scene").semantics{stateDescription="${debug.renderer}:${debug.renderedFrames}:${debug.cachedPages}:${debug.reason}"}) {
                 when {
+                    scene=="yandex-offer" -> {
+                        // Exact production offer, synthetic SignedOut state; no SDK launch or backend.
+                        com.polinalinen.madre.account.yandex.YandexOfferContent(
+                            com.polinalinen.madre.account.yandex.YandexAccountState.SignedOut,false,{},{},{})
+                    }
                     scene=="toc" || scene=="catalog" -> Column {
                         Box(Modifier.weight(1f).safeDrawingPadding()) { BookTocContent(recipes,emptyList(),
                             com.polinalinen.madre.navigation.BookBookmark(recipe.id,1),{_,_->},{},onAa={}) }

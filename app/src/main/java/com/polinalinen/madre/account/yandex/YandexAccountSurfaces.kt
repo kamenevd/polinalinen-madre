@@ -133,3 +133,32 @@ private fun accountErrorCopy(kind:YandexAccountError)=when(kind) {
     YandexAccountError.FOREIGN_CLIENT->"Яндекс ID не подтвердил вход для Мадре. Повторите попытку."
     YandexAccountError.STORAGE->"Не удалось сохранить настройки входа. Не закрывайте приложение и повторите попытку."
 }
+
+/** Login is optional and never substitutes for the existing explicit bake/voice consent. */
+@Composable fun YandexAliceAccountStep(onOpenSettings:()->Unit) {
+    val owner=LocalYandexAccountUi.current ?: return
+    val state by owner.model.state.collectAsState()
+    val pending by owner.model.pendingUnbind.collectAsState()
+    PaperNote(if(state is YandexAccountState.SignedIn)"Шаг 1 · вход в Яндекс ID подтверждён"
+        else "Шаг 1 · войдите с Яндекс ID, чтобы Алиса могла узнать ваш аккаунт")
+    YandexAccountPanel(state,pending,owner.signIn,onOpenSettings,owner.model::retryPendingUnbind)
+    PaperNote("Вход в аккаунт не означает, что навык уже связан. Подтверждение на телефоне остаётся доступным.")
+}
+
+/** Works without account/voice linking. It does not send a command or invent a Station name. */
+@Composable fun StationTimerSheet(remainingSeconds:Long,onDismiss:()->Unit) {
+    val phrase=StationTimerPrompt.phrase(remainingSeconds)
+    val clipboard=androidx.compose.ui.platform.LocalClipboardManager.current
+    var copied by remember(phrase){mutableStateOf(false)}
+    PaperSheet(onDismiss) {
+        Column(Modifier.fillMaxWidth().padding(horizontal=22.dp,vertical=18.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
+            Text("Таймер на Станции",style=PaperType.h2,color=LocalPaper.current.ink)
+            Text(phrase ?: StationTimerPrompt.EXPIRED,style=PaperType.body,color=LocalPaper.current.ink)
+            PaperNote(StationTimerPrompt.EXPLANATION)
+            if(phrase!=null)PaperButton("Скопировать фразу",{
+                clipboard.setText(androidx.compose.ui.text.AnnotatedString(phrase));copied=true
+            },variant=PaperButtonVariant.SECONDARY)
+            if(copied)PaperNote("Фраза скопирована")
+        }
+    }
+}

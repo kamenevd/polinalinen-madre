@@ -38,6 +38,7 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
 @Composable fun BakingPaper(session: BakingSession, remaining:Long, onPause:()->Unit, onNext:()->Unit, onDetails:()->Unit, onBack:()->Unit, onOpenAlice:(()->Unit)?=null, onConfirmPortions:(Int)->Unit={},
     onAdjustMinutes:(Int)->Unit={},sessions:List<BakingSession> = emptyList(),onSwitchSession:(Long)->Unit={}) {
     var full by rememberSaveable { mutableStateOf(false) }
+    var stationTimer by rememberSaveable(session.id) { mutableStateOf(false) }
     if(full) { FullTimer(session,remaining){full=false};return }
     val p=LocalPaper.current
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBarsIgnoringVisibility.union(WindowInsets.displayCutout))) {
@@ -86,8 +87,10 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
             PaperButton(if(session.isLastStep)"Испечено" else "Дальше",onNext,Modifier.weight(1f),true, enabled = !session.isLastStep || session.trustedPortions != null)
         }
         if (onOpenAlice != null && com.polinalinen.madre.config.FeatureFlags.ALICE) PaperAliceButton(onOpenAlice, Modifier.fillMaxWidth())
+        if(com.polinalinen.madre.config.FeatureFlags.YANDEX_ID)PaperTextAction("Таймер на Станции",{stationTimer=true})
       }
     }
+    if(stationTimer)com.polinalinen.madre.account.yandex.StationTimerSheet(remaining){stationTimer=false}
 }
 @Composable fun FullTimer(session:BakingSession,remaining:Long,onClose:()->Unit) {
     Immersive(keepScreenOn = true)

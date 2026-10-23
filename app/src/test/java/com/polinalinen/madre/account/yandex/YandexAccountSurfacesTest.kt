@@ -2,6 +2,7 @@ package com.polinalinen.madre.account.yandex
 
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -56,5 +57,18 @@ class YandexAccountSurfacesTest {
         rule.onNodeWithContentDescription("Аккаунт Яндекса, Синтетическое имя",useUnmergedTree=true).assertExists()
         rule.onNodeWithText("Синтетическое имя").assertIsDisplayed()
         rule.onNodeWithContentDescription("Войти с Яндекс ID").assertDoesNotExist()
+    }
+
+    @Test fun stationPhraseWorksWithoutAccountAndFollowsOnlyTheLiveRemainder() {
+        val remaining=mutableLongStateOf(2401L)
+        rule.setContent{RazvorotTheme(force=Atmosphere.DAWN){StationTimerSheet(remaining.longValue){}}}
+        rule.onNodeWithText("Алиса, поставь таймер на 41 минуту").assertIsDisplayed()
+        rule.onNodeWithText(StationTimerPrompt.EXPLANATION).assertIsDisplayed()
+        rule.onNodeWithContentDescription("Войти с Яндекс ID").assertDoesNotExist()
+        rule.runOnIdle{remaining.longValue=119L}
+        rule.onNodeWithText("Алиса, поставь таймер на 2 минуты").assertIsDisplayed()
+        rule.runOnIdle{remaining.longValue=0L}
+        rule.onNodeWithText(StationTimerPrompt.EXPIRED).assertIsDisplayed()
+        rule.onNodeWithText("Скопировать фразу").assertDoesNotExist()
     }
 }

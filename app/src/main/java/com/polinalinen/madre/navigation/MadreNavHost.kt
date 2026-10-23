@@ -13,6 +13,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -59,6 +62,7 @@ import com.polinalinen.madre.viewmodel.FeedingSaveState
 import com.polinalinen.madre.viewmodel.FamilyBookViewModel
 import com.polinalinen.madre.viewmodel.SourdoughViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collect
 import com.polinalinen.madre.ui.razvorot.*
 
 internal fun authoritativeFeedingFromHistory(history: List<FeedingEntity>): FeedingEntity? = history.firstOrNull()
@@ -82,6 +86,7 @@ fun MadreNavHost(
     navController: NavHostController = rememberNavController(),
     pendingSessionId: MutableStateFlow<Long?>? = null,
     pendingFeeding: MutableStateFlow<Boolean>? = null,
+    pendingPlanned: MutableStateFlow<com.polinalinen.madre.notifications.PlannedBakeRequest?>? = null,
 ) {
     val context = LocalContext.current
     val readingPreferences = rememberReadingPreferences()
@@ -104,6 +109,10 @@ fun MadreNavHost(
     val restoreReady by bakingViewModel.restoreReady.collectAsState()
     var startupHandled by rememberSaveable { mutableStateOf(false) }
     var startRecipeId by rememberSaveable { mutableStateOf<String?>(null) }
+    var startMode by rememberSaveable { mutableStateOf(0) }
+    var editingPlanId by rememberSaveable { mutableStateOf<String?>(null) }
+    var planSaving by remember { mutableStateOf(false) }
+    var planError by remember { mutableStateOf<String?>(null) }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, bookPreferences) {
         val observer = LifecycleEventObserver { _, event ->
@@ -133,6 +142,27 @@ fun MadreNavHost(
     val app = context.applicationContext as MadreApplication
     val navigationScope = rememberCoroutineScope()
     var aliceSheet by remember { mutableStateOf(false) }
+    val planScheduler=remember(context){com.polinalinen.madre.notifications.PlannedBakeScheduler(context.applicationContext)}
+    fun openStart(id:String, mode:Int=0, planId:String?=null) {
+        startMode=mode;editingPlanId=planId;planError=null;startRecipeId=id
+    }
+    suspend fun storePlan(plan:PlannedBake,replacingId:String?=null) = withContext(NonCancellable+Dispatchers.IO) {
+        check(plan.startAtMillis>=System.currentTimeMillis()) { "Start time has passed" }
+        check(bookPreferences.putPlan(plan,replacingId)) { "Plan was not persisted" }
+        if(replacingId!=null && replacingId!=plan.id)planScheduler.cancel(replacingId)
+        planScheduler.schedule(plan).result.get()
+    }
+    suspend fun removePlan(id:String) = withContext(NonCancellable+Dispatchers.IO) {
+        check(bookPreferences.removePlan(id)) { "Plan was not removed" }
+        planScheduler.cancel(id)
+    }
+    LaunchedEffect(bookPreferences) {
+        try { withContext(NonCancellable+Dispatchers.IO){planScheduler.restoreMissing(bookPreferences.plans)} }
+        catch(e:Exception) {
+            if(e is kotlinx.coroutines.CancellationException)throw e
+            navSnackbar.showSnackbar("Планы сохранены, но не удалось восстановить напоминания. Откройте план и повторите сохранение.")
+        }
+    }
 
     val enterFeedingForm = {
         sourdoughViewModel.clearSaveState()
@@ -151,10 +181,10 @@ fun MadreNavHost(
             if(!restoreReady)return@LaunchedEffect
             val id = requested ?: return@LaunchedEffect
             startupHandled=true
-            pendingSessionId.value = null
             showHome(1)
-            if(bakingViewModel.prepareBakeDestination(id))navController.navigate(MadreDestinations.bake(id.toString()))
+            if(bakingViewModel.prepareBakeDestination(id))navController.navigate(MadreDestinations.bake(id.toString())){launchSingleTop=true}
             else navSnackbar.showSnackbar("Выпечка уже закрыта")
+            if(pendingSessionId.value==id)pendingSessionId.value=null
         }
     }
 
@@ -171,10 +201,48 @@ fun MadreNavHost(
         }
     }
 
+    LaunchedEffect(pendingPlanned,restoreReady) {
+        if(pendingPlanned==null || !restoreReady)return@LaunchedEffect
+        pendingPlanned.collect { request ->
+            if(request==null)return@collect
+            startupHandled=true
+            val plan=bookPreferences.plans.firstOrNull{it.id==request.id}
+            val recipe=plan?.let{p->bakingViewModel.recipes.value.firstOrNull{it.id==p.recipeId}}
+            try {
+                if(plan==null && request.action==com.polinalinen.madre.notifications.PlannedBakeAction.START) {
+                    bakingViewModel.sessionForPlan(request.id)?.let{session->
+                        showHome(1);navController.navigate(MadreDestinations.bake(session.id.toString())){launchSingleTop=true}
+                    }
+                } else if(plan!=null && recipe!=null) {
+                    aliceSheet=false;startRecipeId=null;showHome(1)
+                    when(request.action) {
+                        com.polinalinen.madre.notifications.PlannedBakeAction.OPEN->openStart(recipe.id,1,plan.id)
+                        com.polinalinen.madre.notifications.PlannedBakeAction.START->{
+                            val sid=bakingViewModel.startPlannedBake(recipe,plan.portions.toDouble(),plan.id)
+                            if(sid!=null) {
+                                removePlan(plan.id)
+                                navController.navigate(MadreDestinations.bake(sid.toString())){launchSingleTop=true}
+                            } else navigationScope.launch{navSnackbar.showSnackbar("Не удалось начать выпечку. План сохранён.")}
+                        }
+                        com.polinalinen.madre.notifications.PlannedBakeAction.SNOOZE->{
+                            storePlan(BakePlanning.snooze(plan,System.currentTimeMillis()),plan.id)
+                            navigationScope.launch{navSnackbar.showSnackbar("Напомним через 30 минут")}
+                        }
+                    }
+                }
+            } catch(e:Exception) {
+                if(e is kotlinx.coroutines.CancellationException)throw e
+                if(plan!=null)openStart(plan.recipeId,1,plan.id)
+                planError="Не удалось выполнить действие. Проверьте план и попробуйте ещё раз."
+            }
+            if(pendingPlanned.value==request)pendingPlanned.value=null
+        }
+    }
+
     LaunchedEffect(restoreReady) {
         if(!restoreReady || startupHandled)return@LaunchedEffect
         startupHandled=true
-        if(navController.currentDestination?.route!=MadreDestinations.HOME || pendingSessionId?.value!=null || pendingFeeding?.value==true)return@LaunchedEffect
+        if(navController.currentDestination?.route!=MadreDestinations.HOME || pendingSessionId?.value!=null || pendingFeeding?.value==true || pendingPlanned?.value!=null)return@LaunchedEffect
         val now=com.polinalinen.madre.model.BakingClock.elapsed()
         bakingViewModel.sessions.value.filter { !it.isCompleted && !it.isPaused && it.restoredStepValid && it.remainingSeconds(now)==0L }
             .minByOrNull { it.stepEndsAtElapsed(now) }?.let { showHome(1);navController.navigate(MadreDestinations.bake(it.id.toString())) }
@@ -292,7 +360,8 @@ fun MadreNavHost(
                     bookPreferences = bookPreferences,
                     onOpenChapter = {id,page->navController.navigate(MadreDestinations.chapter(id,page=page))},
                     onStartRecipe = {recipe->navigationScope.launch { bakingViewModel.startBakingWithUndo(recipe,bookPreferences.portions(recipe.id).toDouble())?.let{id->navController.navigate(MadreDestinations.bake(id.toString()))} }},
-                    onConfigureRecipe = {recipe->startRecipeId=recipe.id},
+                    onConfigureRecipe = {recipe->openStart(recipe.id)},
+                    onConfigurePlan = {plan->openStart(plan.recipeId,1,plan.id)},
                     onOpenShelf = { navController.navigate(MadreDestinations.SHELF) },
                     onContinueReading = { session -> navController.navigate(MadreDestinations.chapter(session.recipe.id,step=session.currentStepIndex)) },
                     onOpenRecipe = { id -> navController.navigate(MadreDestinations.chapter(id)) },
@@ -321,6 +390,7 @@ fun MadreNavHost(
                     initialPage=backStackEntry.arguments?.getInt("page")?:-1,
                     onPageChanged={page->bookPreferences.saveBookmark(BookBookmark(recipeId,page))},
                     scaleFactor=factor,onScaleFactor=changeFactor,onOpenAlice={aliceSheet=true},
+                    onSchedule={recipe->openStart(recipe.id,1)},
                     scrollContent={ RecipeDetailScreen(recipeId,{navController.popBackStack()},{},bakingViewModel,onOpenAlice={aliceSheet=true},
                         embedded=true,scaleFactorOverride=factor,textSize=readingPreferences.textSize) },
                 )
@@ -482,10 +552,42 @@ fun MadreNavHost(
             PaperSnackbar(navSnackbar,Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(horizontal=12.dp,vertical=80.dp))
         }
             startRecipeId?.let { id->recipesForStats.firstOrNull{it.id==id}?.let { recipe->
-                BookStartSheet(recipe,bookPreferences.portions(id),onStart={portions->
-                    bookPreferences.savePortions(id,portions);startRecipeId=null
-                    navigationScope.launch{bakingViewModel.startBakingWithUndo(recipe,portions.toDouble())?.let{sid->navController.navigate(MadreDestinations.bake(sid.toString()))}}
-                },onDismiss={startRecipeId=null},onChapter={startRecipeId=null;navController.navigate(MadreDestinations.chapter(id))})
+                val editing=bookPreferences.plans.firstOrNull{it.id==editingPlanId}
+                BookStartSheet(recipe,editing?.portions?:bookPreferences.portions(id),onStart={portions->
+                    planSaving=true;planError=null
+                    navigationScope.launch {
+                        try {
+                            val sid=if(editing!=null)bakingViewModel.startPlannedBake(recipe,portions.toDouble(),editing.id)
+                                else bakingViewModel.startBakingWithUndo(recipe,portions.toDouble())
+                            if(sid!=null) {
+                                if(editing!=null)removePlan(editing.id)
+                                bookPreferences.savePortions(id,portions);startRecipeId=null
+                                navController.navigate(MadreDestinations.bake(sid.toString()))
+                            } else planError="Не удалось начать выпечку. Попробуйте ещё раз."
+                        } catch(e:Exception) {
+                            if(e is kotlinx.coroutines.CancellationException)throw e
+                            planError="Не удалось завершить действие. План сохранён."
+                        } finally {planSaving=false}
+                    }
+                },onDismiss={startRecipeId=null},onChapter={startRecipeId=null;navController.navigate(MadreDestinations.chapter(id))},
+                    initialMode=startMode,existingPlan=editing,busy=planSaving,error=planError,onPlan={portions,start->
+                        planSaving=true;planError=null
+                        navigationScope.launch {
+                            try {
+                                storePlan(PlannedBake(id,portions,start),editing?.id)
+                                bookPreferences.savePortions(id,portions);startRecipeId=null;showHome(1)
+                                navigationScope.launch { navSnackbar.showSnackbar(if(com.polinalinen.madre.notifications.MadreNotifier(context).canPostNotifications())"Запланировано · напомним за 10 минут"
+                                    else "План сохранён. Уведомления отключены в настройках Android.") }
+                            } catch(e:Exception) {
+                                if(e is kotlinx.coroutines.CancellationException)throw e
+                                planError="Не удалось сохранить план и напоминание. Попробуйте ещё раз."
+                            } finally {planSaving=false}
+                        }
+                    },onRemovePlan={planSaving=true;navigationScope.launch {
+                        try {editing?.let{removePlan(it.id)};startRecipeId=null}
+                        catch(e:Exception){if(e is kotlinx.coroutines.CancellationException)throw e;planError="Не удалось убрать план. Попробуйте ещё раз."}
+                        finally{planSaving=false}
+                    }})
             } }
             if (aliceSheet) AliceSheet(bakingViewModel, app.voiceCoordinator,
                 onDismiss = { aliceSheet = false }, onOpenSettings = {

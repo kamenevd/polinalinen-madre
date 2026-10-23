@@ -25,4 +25,7 @@ object BakePlanning {
     }
     fun reminderAt(plan: PlannedBake, nowMillis: Long): Long =
         (plan.startAtMillis - 10 * 60_000L).coerceAtLeast(nowMillis)
+    /** Snooze the reminder for 30 min, retaining the 10 min preparation window. */
+    fun snooze(plan: PlannedBake, nowMillis: Long): PlannedBake =
+        plan.copy(startAtMillis=Math.addExact(nowMillis,40 * 60_000L))
 }

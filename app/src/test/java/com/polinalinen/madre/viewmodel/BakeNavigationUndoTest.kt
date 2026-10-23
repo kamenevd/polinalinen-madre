@@ -157,4 +157,19 @@ class BakeNavigationUndoTest {
             com.polinalinen.madre.notifications.BootRestorePlanner.uniqueWorkName(id)).get()
         assertTrue(work.any{it.state==androidx.work.WorkInfo.State.ENQUEUED})
     }
+    @Test fun plannedStartIsIdempotentAcrossARealControllerRecreation()=runBlocking {
+        val recipe=app.recipeRepository.getRecipes().first()
+        val planId="${recipe.id}:${System.currentTimeMillis()}"
+        val id=vm.startPlannedBake(recipe,2.0,planId)!!
+        val first=vm.session(id)!!
+        assertEquals(id,vm.startPlannedBake(recipe,2.0,planId))
+        val oldScope=vm.viewModelScope.coroutineContext[Job]
+        androidx.lifecycle.ViewModelStore().apply{put("bake",vm);clear()}
+        withTimeout(10_000){while(oldScope?.isCompleted==false){mainDispatcher.scheduler.runCurrent();delay(1)}}
+        vm=BakingViewModel(app,history,sync,FakeBakeSessionLedger())
+        assertEquals(id,vm.startPlannedBake(recipe,2.0,planId))
+        assertEquals(first.bakeKey,vm.session(id)!!.bakeKey)
+        assertEquals(1,app.activeBakeRepository.all().count{it.bakeKey==first.bakeKey})
+        assertTrue(history.recordCalls.isEmpty());assertTrue(sync.calls.isEmpty())
+    }
 }

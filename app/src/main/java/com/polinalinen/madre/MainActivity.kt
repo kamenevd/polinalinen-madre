@@ -39,6 +39,7 @@ class MainActivity : ComponentActivity(), ImmersiveHost {
      * шторки. Ждёт NavHost тем же способом, что и [pendingSessionId].
      */
     private val pendingFeeding = MutableStateFlow(false)
+    private val pendingPlanned = MutableStateFlow<com.polinalinen.madre.notifications.PlannedBakeRequest?>(null)
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -62,13 +63,20 @@ class MainActivity : ComponentActivity(), ImmersiveHost {
         window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(paperAt(initial).bg.toArgb()))
         immersiveController.setPaperLight(initial != Atmosphere.NIGHT)
         immersiveController.attach(window)
-        readIntent(intent)
+        if(savedInstanceState==null)readIntent(intent) else {
+            pendingSessionId.value=savedInstanceState.getLong("madre.pending_session",-1).takeIf{it>=0}
+            pendingFeeding.value=savedInstanceState.getBoolean("madre.pending_feeding",false)
+            val id=savedInstanceState.getString("madre.pending_plan")
+            val action=runCatching { com.polinalinen.madre.notifications.PlannedBakeAction.valueOf(savedInstanceState.getString("madre.pending_plan_action").orEmpty()) }.getOrNull()
+            if(id!=null && action!=null)pendingPlanned.value=com.polinalinen.madre.notifications.PlannedBakeRequest(id,action)
+        }
         askForNotificationsOnce()
 
         setContent {
             MadreNavHost(
                 pendingSessionId = pendingSessionId,
                 pendingFeeding = pendingFeeding,
+                pendingPlanned = pendingPlanned,
             )
         }
     }
@@ -86,10 +94,19 @@ class MainActivity : ComponentActivity(), ImmersiveHost {
         readIntent(intent)
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putLong("madre.pending_session",pendingSessionId.value?:-1)
+        outState.putBoolean("madre.pending_feeding",pendingFeeding.value)
+        outState.putString("madre.pending_plan",pendingPlanned.value?.id)
+        outState.putString("madre.pending_plan_action",pendingPlanned.value?.action?.name)
+        super.onSaveInstanceState(outState)
+    }
+
     private fun readIntent(intent: Intent?) {
         val id = intent?.getLongExtra(EXTRA_SESSION_ID, -1L) ?: -1L
         if (id >= 0L) pendingSessionId.value = id
         if (intent?.getBooleanExtra(EXTRA_OPEN_FEEDING, false) == true) pendingFeeding.value = true
+        com.polinalinen.madre.notifications.PlannedBakeActions.read(this,intent)?.let{pendingPlanned.value=it}
     }
 
     /**
@@ -115,6 +132,7 @@ class MainActivity : ComponentActivity(), ImmersiveHost {
 
         /** Открыть форму кормления — приходит с кнопкой «Покормить» из шторки. */
         const val EXTRA_OPEN_FEEDING = "madre.open_feeding"
+        const val EXTRA_PLANNED_ID = "madre.planned_id"
 
         private const val KEY_NOTIFICATIONS_ASKED = "notifications_permission_asked"
         private const val KEY_NOTIFICATIONS_GRANTED = "notifications_permission_granted"

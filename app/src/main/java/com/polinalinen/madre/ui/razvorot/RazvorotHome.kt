@@ -38,6 +38,7 @@ import com.polinalinen.madre.ui.components.bookAction
     onOpenShelf:(()->Unit)?=null,initialSection:Int=0,onSectionChanged:(Int)->Unit={},
     bookPreferences:BookPreferences?=null,onOpenChapter:((String,Int)->Unit)?=null,
     onStartRecipe:((Recipe)->Unit)?=null,onConfigureRecipe:((Recipe)->Unit)?=null,
+    onConfigurePlan:((com.polinalinen.madre.navigation.PlannedBake)->Unit)?=null,
 ) {
     var section by rememberSaveable{mutableIntStateOf(initialSection)}
     LaunchedEffect(initialSection){section=initialSection}
@@ -58,7 +59,7 @@ import com.polinalinen.madre.ui.components.bookAction
                     BookOvenContent(recipes,visibleSessions,bookPreferences?.plans.orEmpty(),onOpenTimer,
                         {recipe->onConfigureRecipe?.invoke(recipe)?:onOpenRecipe(recipe.id)},
                         {recipe->onStartRecipe?.invoke(recipe)?:onOpenRecipe(recipe.id)},
-                        {plan->recipes.firstOrNull{it.id==plan.recipeId}?.let{onConfigureRecipe?.invoke(it)}},
+                        {plan->onConfigurePlan?.invoke(plan)?:recipes.firstOrNull{it.id==plan.recipeId}?.let{onConfigureRecipe?.invoke(it)}},
                         onSettings,onAa={settings=true},pendingFinished=completions.filterKeys{id->sessions.none{it.id==id}}.toList())
                 }
                 2 -> StarterPaper(starterName,day,phase,lastFeedingMillis?.let{com.polinalinen.madre.sourdough.hoursSinceFeeding(it)},hydration,onFeed,onDiary,{settings=true},intervalHours)

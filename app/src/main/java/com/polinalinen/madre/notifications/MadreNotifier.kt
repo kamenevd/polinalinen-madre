@@ -83,6 +83,16 @@ class MadreNotifier(private val context: Context) {
         NotificationManagerCompat.from(context).cancel(ID_FEEDING)
     }
 
+    fun postPlannedBake(plan: com.polinalinen.madre.navigation.PlannedBake, recipeName: String, nonce: String) {
+        post(CHANNEL_BAKING,"Выпечка","planned:${plan.id}",4000,"Пора ставить опару · $recipeName ×${plan.portions}",
+            "Начало ${java.text.SimpleDateFormat("d MMM, HH:mm",java.util.Locale.forLanguageTag("ru")).format(java.util.Date(plan.startAtMillis))}. Таймер начнётся только после «Начать».",
+            PlannedBakeActions.pendingIntent(context,plan,PlannedBakeAction.OPEN),
+            actions=listOf(
+                NotificationCompat.Action.Builder(0,"Начать",PlannedBakeActions.pendingIntent(context,plan,PlannedBakeAction.START,nonce)).build(),
+                NotificationCompat.Action.Builder(0,"Через 30 мин",PlannedBakeActions.pendingIntent(context,plan,PlannedBakeAction.SNOOZE,nonce)).build()))
+    }
+    fun cancelPlannedBake(id: String) { NotificationManagerCompat.from(context).cancel("planned:$id",4000) }
+
     /**
      * Снять уведомление, показанное по этому ключу (Cycle 12). Пара «тег + id»
      * та же, что в [postBakingNotification], — снимается ровно оно.
@@ -117,6 +127,7 @@ class MadreNotifier(private val context: Context) {
         text: String,
         contentIntent: android.app.PendingIntent,
         action: NotificationCompat.Action? = null,
+        actions: List<NotificationCompat.Action> = emptyList(),
     ) {
         if (!canPost()) return
         ensureChannel(channelId, channelName)
@@ -130,7 +141,7 @@ class MadreNotifier(private val context: Context) {
             // сделанное — и звать туда, где делать больше нечего.
             .setAutoCancel(true)
             .setContentIntent(contentIntent)
-            .apply { if (action != null) addAction(action) }
+            .apply { if (action != null) addAction(action);actions.forEach{addAction(it)} }
             .build()
         notifySafely(id, notification, tag)
     }

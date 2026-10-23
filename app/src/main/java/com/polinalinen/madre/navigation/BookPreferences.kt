@@ -55,18 +55,36 @@ class BookPreferences(context: Context, namespace: String = "madre_prefs") : Aut
     fun savePortions(recipeId: String, value: Int) {
         prefs.edit().putInt("chapter_portions_$recipeId", value.coerceIn(1, 5)).apply()
     }
-    fun putPlan(plan: PlannedBake): Boolean {
+    fun putPlan(plan: PlannedBake, replacingId: String? = null): Boolean = synchronized(PLANS_LOCK) {
         require(plan.portions in 1..5 && plan.startAtMillis > 0 && plan.recipeId.isNotBlank())
-        val next = (plans.filterNot { it.id == plan.id } + plan).sortedBy { it.startAtMillis }
-        if (!prefs.edit().putString("planned_bakes", gson.toJson(next)).commit()) return false
+        val previous=readPlans()
+        val next = (previous.filterNot { it.id == plan.id || it.id == replacingId } + plan).sortedBy { it.startAtMillis }
+        val edit=prefs.edit().putString("planned_bakes", gson.toJson(next))
+        if(previous.any{it.id==plan.id && it!=plan})edit.remove("planned_action_nonce_${plan.id}")
+        if(replacingId!=null && replacingId!=plan.id)edit.remove("planned_action_nonce_$replacingId")
+        if (!edit.commit()) return@synchronized false
         plans = next
-        return true
+        true
     }
-    fun removePlan(id: String): Boolean {
-        val next = plans.filterNot { it.id == id }
-        if (!prefs.edit().putString("planned_bakes", gson.toJson(next)).commit()) return false
+    fun removePlan(id: String): Boolean = synchronized(PLANS_LOCK) {
+        val next = readPlans().filterNot { it.id == id }
+        if (!prefs.edit().putString("planned_bakes", gson.toJson(next)).remove("planned_action_nonce_$id").commit()) return@synchronized false
         plans = next
-        return true
+        true
+    }
+    /** Local notification capability, not an account/OAuth token. Never placed in WorkManager data. */
+    fun notificationNonce(id: String, expected: PlannedBake? = null): String? = synchronized(PLANS_LOCK) {
+        val current=readPlans().firstOrNull{it.id==id}?:return@synchronized null
+        if(expected!=null && current!=expected)return@synchronized null
+        prefs.getString("planned_action_nonce_$id",null)?.let{return@synchronized it}
+        val nonce=java.util.UUID.randomUUID().toString()
+        if(prefs.edit().putString("planned_action_nonce_$id",nonce).commit())nonce else null
+    }
+    fun consumeNotificationAction(id: String, nonce: String?): Boolean = synchronized(PLANS_LOCK) {
+        if(nonce==null || readPlans().none{it.id==id})return@synchronized false
+        val stored=prefs.getString("planned_action_nonce_$id",null)?:return@synchronized false
+        if(!java.security.MessageDigest.isEqual(stored.toByteArray(Charsets.UTF_8),nonce.toByteArray(Charsets.UTF_8)))return@synchronized false
+        prefs.edit().remove("planned_action_nonce_$id").commit()
     }
     private fun readPlans(): List<PlannedBake> = runCatching {
         val type = object : TypeToken<List<PlannedBake>>() {}.type
@@ -75,4 +93,5 @@ class BookPreferences(context: Context, namespace: String = "madre_prefs") : Aut
             .distinctBy { it.id }.sortedBy { it.startAtMillis }
     }.getOrDefault(emptyList())
     override fun close() { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    companion object { private val PLANS_LOCK=Any() }
 }

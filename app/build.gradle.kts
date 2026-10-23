@@ -58,8 +58,8 @@ android {
         minSdk = 26
         targetSdk = 35
         // versionCode is monotonic over the latest published release; release_cycle.py enforces it.
-        versionCode = 44
-        versionName = "7.0.8"
+        versionCode = 45
+        versionName = "7.0.9"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -237,6 +237,7 @@ dependencies {
 
     // Testing
     testImplementation("junit:junit:4.13.2")
+    testImplementation("androidx.work:work-testing:2.9.0")
     testImplementation("com.google.truth:truth:1.2.0")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
     testImplementation("androidx.test.ext:junit:1.1.5")

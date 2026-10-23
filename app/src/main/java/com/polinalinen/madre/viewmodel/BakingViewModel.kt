@@ -51,6 +51,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicBoolean
@@ -285,15 +286,23 @@ class BakingViewModel @JvmOverloads constructor(
     /** A timer is opened only after the snapshot is durably created. */
     suspend fun startBaking(recipe: Recipe, scaleFactor: Double): Long? = startBakingInternal(recipe, scaleFactor, false)
     suspend fun startBakingWithUndo(recipe: Recipe, scaleFactor: Double): Long? = startBakingInternal(recipe, scaleFactor, true)
+    /** VM-owned write survives Activity recreation; deterministic bake identity fences replayed plan actions. */
+    suspend fun startPlannedBake(recipe: Recipe, scaleFactor: Double, planId: String): Long? = viewModelScope.async {
+        startBakingInternal(recipe,scaleFactor,true,plannedBakeKey(planId))
+    }.await()
+    fun sessionForPlan(planId: String): BakingSession? = _sessions.value.firstOrNull{it.bakeKey==plannedBakeKey(planId)}
+    private fun plannedBakeKey(planId: String)=java.util.UUID.nameUUIDFromBytes(("planned-bake:$planId").toByteArray(Charsets.UTF_8)).toString()
 
-    private suspend fun startBakingInternal(recipe: Recipe, scaleFactor: Double, withUndo: Boolean): Long? {
+    private suspend fun startBakingInternal(recipe: Recipe, scaleFactor: Double, withUndo: Boolean, dedupeKey: String? = null): Long? {
         sessionIdsReady.await()
         return transitionGate.withLock {
+            if(dedupeKey!=null)_sessions.value.firstOrNull{it.bakeKey==dedupeKey}?.let{return@withLock it.id}
             try {
                 require(scaleFactor in 1.0..5.0 && scaleFactor == scaleFactor.toInt().toDouble())
                 check(controllerLive)
                 val id = nextSessionId++
-                val next = BakingSession.start(id, recipe, scaleFactor).copy(recipeRevision = recipeRepository.revision)
+                val started=BakingSession.start(id,recipe,scaleFactor)
+                val next=started.copy(recipeRevision=recipeRepository.revision,bakeKey=dedupeKey?:started.bakeKey)
                 activeBakeRepository.commit(id, null, next.activeSnapshot(), valid = { controllerLive })
                 sessionLedger.forget(id)
                 _completions.update { it - id }

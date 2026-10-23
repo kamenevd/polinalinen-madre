@@ -60,7 +60,7 @@ class RazvorotSceneActivity : ComponentActivity(), ImmersiveHost {
 
 }
 
-internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","reader-text-16","reader-text-22","curl-top","curl-mid","curl-bottom","curl-back","reader-chrome","reading-sheet","home-dawn","home-night","spine","bake","alice-listening","alice-reading","alice-confirm","alice-night","starter-growing","starter-peak","starter-hungry","shelf","shelf-night","shelf-large","curl-mid-night","gles2-curl-mid","bake-start","bake-end","fulltimer-start","fulltimer-end","timer-weight-start","timer-weight-end")
+internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","reader-text-16","reader-text-22","curl-top","curl-mid","curl-bottom","curl-back","reader-chrome","reading-sheet","home-dawn","home-night","spine","bake","alice-listening","alice-reading","alice-confirm","alice-night","starter-growing","starter-peak","starter-hungry","shelf","shelf-night","shelf-large","curl-mid-night","gles2-curl-mid","bake-start","bake-end","fulltimer-start","fulltimer-end","timer-weight-start","timer-weight-end","toc","oven","chapter-title","chapter-ingr","sheet-calc","bake-more","start-later")
 
 @Composable internal fun RazvorotDebugScene(scene:String,recipes:List<Recipe>,forceAtmosphere:Atmosphere?=null) {
     val context=LocalContext.current
@@ -128,6 +128,15 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
                     }
                     scene=="spine" -> Box(Modifier.fillMaxSize(),contentAlignment=Alignment.BottomCenter){SpineBar(2){}}
                     scene=="bake" -> BakingPaper(BakingSession(7,recipe,9,0L,0L,scaleFactor=2.0),1661L,{},{},{},{},onOpenAlice={})
+                    scene=="start-later" -> {
+                        // Explicit screenshot-only date, not a real user plan or a scheduled Worker.
+                        val zone=java.time.ZoneId.systemDefault()
+                        val day=java.time.LocalDate.of(2026,10,23)
+                        val now=day.atTime(10,0).atZone(zone).toInstant().toEpochMilli()
+                        BookOvenContent(recipes,emptyList(),emptyList(),{},{},{},{},{})
+                        BookStartSheet(recipe,2,{},{},onPlan={_,_->},initialMode=1,
+                            existingPlan=com.polinalinen.madre.navigation.PlannedBake(recipe.id,2,day.atTime(20,0).atZone(zone).toInstant().toEpochMilli()),nowMillis=now)
+                    }
                     scene=="bake-more" -> {
                         val bake=remember(recipe){BakingSession(7,recipe,9,0L,0L,scaleFactor=2.0)}
                         BakingPaper(bake,1661L,{},{},{},{},onOpenAlice={})

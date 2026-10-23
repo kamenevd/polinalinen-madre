@@ -93,9 +93,10 @@ import kotlin.random.Random
     }.clip(RoundedCornerShape(20.dp)).background(p.card).padding(18.dp), content = content)
 }
 
-@Composable fun PaperSection(overline: String, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+@Composable fun PaperSection(overline: String, modifier: Modifier = Modifier,
+    headingModifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Column(modifier.fillMaxWidth()) {
-        SmallLabel(overline, Modifier.padding(bottom = 12.dp))
+        SmallLabel(overline, headingModifier.padding(bottom = 12.dp))
         content()
     }
 }

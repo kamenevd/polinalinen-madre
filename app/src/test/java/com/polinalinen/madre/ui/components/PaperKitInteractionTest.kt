@@ -49,4 +49,16 @@ class PaperKitInteractionTest {
         rule.onNodeWithText("Проверьте имя").assertExists()
         assertThat(edited).isEqualTo("Мадре")
     }
+    @Test fun bakingAliceEntryActuallyInvokesItsRouteCallback() {
+        var opened = false
+        val recipe = com.polinalinen.madre.model.Recipe("fixture", "Демонстрационная выпечка", "", "", emptyMap(),
+            listOf(com.polinalinen.madre.model.TimelineStep(com.polinalinen.madre.model.StepType.ACTION, "Замес", "Текст тестового шага", 5)))
+        rule.setContent { RazvorotTheme(force = Atmosphere.NIGHT) {
+            com.polinalinen.madre.ui.razvorot.BakingPaper(
+                com.polinalinen.madre.model.BakingSession(7, recipe, 0, 0L, 0L, scaleFactor = 1.0),
+                120L, {}, {}, {}, {}, onOpenAlice = { opened = true })
+        } }
+        rule.onNodeWithText("Алиса").performScrollTo().performClick()
+        assertThat(opened).isTrue()
+    }
 }

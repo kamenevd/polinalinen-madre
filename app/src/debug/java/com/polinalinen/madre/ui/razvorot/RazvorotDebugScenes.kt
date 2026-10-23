@@ -107,12 +107,12 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
                         SpineBar(0){}
                     }
                     scene=="spine" -> Box(Modifier.fillMaxSize(),contentAlignment=Alignment.BottomCenter){SpineBar(2){}}
-                    scene=="bake" -> BakingPaper(BakingSession(7,recipe,9,0L,0L,scaleFactor=2.0),1661L,{},{},{},{})
-                    scene=="bake-start" || scene=="bake-end" -> BakingPaper(BakingSession(7,recipe,9,0L,0L,scaleFactor=2.0),if(scene.endsWith("start"))recipe.timeline[9].durationMinutes*60L else 0L,{},{},{},{})
+                    scene=="bake" -> BakingPaper(BakingSession(7,recipe,9,0L,0L,scaleFactor=2.0),1661L,{},{},{},{},onOpenAlice={})
+                    scene=="bake-start" || scene=="bake-end" -> BakingPaper(BakingSession(7,recipe,9,0L,0L,scaleFactor=2.0),if(scene.endsWith("start"))recipe.timeline[9].durationMinutes*60L else 0L,{},{},{},{},onOpenAlice={})
                     scene.startsWith("fulltimer-") -> FullTimer(BakingSession(7,recipe,9,0L,0L,scaleFactor=2.0),if(scene.endsWith("start"))recipe.timeline[9].durationMinutes*60L else 0L){}
                     scene.startsWith("timer-weight-") -> Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) {TimerNumber("27:41",if(scene.endsWith("start"))0f else 1f,72.sp,(-3).sp,LocalPaper.current.ink)}
                     scene.startsWith("alice-") -> {
-                        BakingPaper(BakingSession(7,recipe,9,0L,0L,scaleFactor=2.0),1661L,{},{},{},{})
+                        BakingPaper(BakingSession(7,recipe,9,0L,0L,scaleFactor=2.0),1661L,{},{},{},{},onOpenAlice={})
                         DebugAliceSheet(scene,recipe)
                     }
                     scene.startsWith("starter-") -> {

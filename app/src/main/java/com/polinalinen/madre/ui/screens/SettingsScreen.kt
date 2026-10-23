@@ -280,7 +280,7 @@ private fun SettingsSection(
     content: @Composable () -> Unit,
 ) {
     Spacer(Modifier.height(if (first) 12.dp else 28.dp))
-    PaperSection(title) { content() }
+    PaperSection(title, headingModifier = Modifier.padding(horizontal = 22.dp)) { content() }
 }
 
 /** Cycle 28: ритм кормления снова крутится по кругу одной строкой. */

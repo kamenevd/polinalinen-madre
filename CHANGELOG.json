@@ -218,7 +218,12 @@
       "moved_to_extended": ["bake-more-night.png", "oven-night.png"],
       "added": ["bake-finale-dawn.png", "bake-finale-night.png"],
       "budget": 20,
-      "functional_tests_removed_or_ignored": []
+      "functional_tests_removed_or_ignored": [],
+      "source_guards_replaced_by_real_runtime_tests": [
+        "BakedSealDateTest.seal date is sourced from completion state and not from now",
+        "BakedSealNotAControlTest.wax seal is rendered as stamp and has no click handler",
+        "BakingCompleteBackIsPrivateTest.system back routes to keep decision"
+      ]
     }
   }
 ]

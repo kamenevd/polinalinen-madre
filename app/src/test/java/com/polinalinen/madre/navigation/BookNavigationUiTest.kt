@@ -63,6 +63,9 @@ class BookNavigationUiTest {
         rule.waitUntil(10_000){rule.onAllNodesWithTag(Home.chapterRowTag("ciabatta")).fetchSemanticsNodes().isNotEmpty()}
         rule.onNodeWithTag("book-cover").assertDoesNotExist();rule.onNodeWithTag("chapter-fan").assertDoesNotExist()
         rule.onNodeWithTag("toc-search").performTextReplacement("Чиабатта")
+        rule.onNodeWithTag(Home.chapterRowTag("ciabatta"))
+            .assertContentDescriptionEquals("Глава 5, Чиабатта, 7 часов 40 минут")
+            .assertHasClickAction()
         rule.onNodeWithTag(Home.chapterRowTag("ciabatta")).performScrollTo().performClick()
         rule.waitForIdle()
         assertEquals(MadreDestinations.CHAPTER,nav.currentDestination?.route)
@@ -197,6 +200,7 @@ class BookNavigationUiTest {
         assertEquals(MadreDestinations.HOME,nav.currentDestination?.route)
         assertEquals(1,nav.currentBackStackEntry?.savedStateHandle?.get<Int>("home_section"))
         assertEquals(recordId,ledger.recordIdFor(fixture.id))
+        rule.onNodeWithText("ИСПЕЧЕНО · ВПИШИТЕ В КНИГУ").assertExists()
         rule.runOnIdle{rule.activity.viewModelStore.clear()}
         bindRealController()
         restoration.emulateSavedInstanceStateRestore()

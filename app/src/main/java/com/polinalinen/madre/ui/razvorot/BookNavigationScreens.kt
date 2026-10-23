@@ -63,8 +63,10 @@ import com.polinalinen.madre.ui.screens.Home
             PaperTocRow(match.chapter + 1, recipe.name, BookCatalog.duration(RecipeScale.totalMinutes(recipe, 1)),
                 match.ingredient?.let { "есть: $it" } ?: difficultyLabel(recipe.difficulty),
                 { onChapter(recipe.id, -1) }, modifier=Modifier.testTag(Home.chapterRowTag(recipe.id)),
-                activeLabel = active?.let { "В печи · шаг ${it.currentStepIndex + 1} из ${recipe.timeline.size}" }, query = query)
+                activeLabel = active?.let { "В печи · шаг ${it.currentStepIndex + 1} из ${recipe.timeline.size}" }, query = query,
+                spokenTime=com.polinalinen.madre.notifications.BakingProgress.spokenRemaining(RecipeScale.totalMinutes(recipe,1)*60L))
         }
+        PaperNote("— тираж: одна семья · печатается с любовью —")
         Spacer(Modifier.height(22.dp))
     }
 }
@@ -88,7 +90,8 @@ import com.polinalinen.madre.ui.screens.Home
         }
         PaperCountHeading("Уже печём",sessions.count{!it.isCompleted})
         if (sessions.isNotEmpty()) {
-            SmallLabel("УЖЕ ПЕЧЁМ · ${sessions.size}")
+            val activeCount=sessions.count{!it.isCompleted}
+            if(activeCount>0)SmallLabel("УЖЕ ПЕЧЁМ · $activeCount")
             sessions.forEach { session -> key(session.id) { ActiveBookBake(session) { onOpenSession(session.id) } } }
         } else {
             SmallLabel("ПОКА НИЧЕГО НЕ ПЕЧЁМ")

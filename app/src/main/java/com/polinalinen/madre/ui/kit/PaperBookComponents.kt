@@ -68,9 +68,9 @@ import androidx.compose.runtime.remember
 }
 
 @Composable fun PaperTocRow(number: Int, title: String, time: String, note: String,
-    onClick: () -> Unit, modifier: Modifier = Modifier, activeLabel: String? = null, query: String = "") {
+    onClick: () -> Unit, modifier: Modifier = Modifier, activeLabel: String? = null, query: String = "", spokenTime:String=time) {
     val p = LocalPaper.current
-    val label = "Глава $number, $title, $time"
+    val label = "Глава $number, $title, $spokenTime"
     Row(modifier.fillMaxWidth().heightIn(min = 84.dp).then(bookAction(label, onClick = onClick))
         .semantics(mergeDescendants = true) { contentDescription = label }
         .padding(vertical = 14.dp), verticalAlignment = Alignment.Top) {

@@ -10,6 +10,11 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
 import androidx.test.platform.app.InstrumentationRegistry
@@ -17,6 +22,12 @@ import androidx.test.rule.GrantPermissionRule
 import com.polinalinen.madre.data.repository.RecipeRepository
 import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.ui.screens.Home
+import com.polinalinen.madre.data.repository.SourdoughFeedingSaveRequest
+import com.polinalinen.madre.data.db.entities.FeedingEntity
+import com.polinalinen.madre.data.db.entities.StorageLocation
+import com.polinalinen.madre.sourdough.profileForInterval
+import com.polinalinen.madre.ui.razvorot.starterCycleLevel
+import kotlin.math.roundToInt
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test
@@ -127,6 +138,39 @@ class NavigationSmokeTest {
             rule.onNodeWithContentDescription(recipe.name).assertIsDisplayed()
             pressSystemBack()
             rule.onNodeWithTag(Home.LIST_TAG).assertIsDisplayed()
+        }
+    }
+
+    @Test fun actualStarterReadsRoomProfileAndOpensFeedingForm() {
+        // CI emulator QA database only; this is MainActivity, not a debug scene.
+        val app=InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as MadreApplication
+        val repository=app.sourdoughRepository
+        val old=runBlocking{repository.getOrCreateDefaultConfig()}
+        val inserted=mutableListOf<FeedingEntity>()
+        try {
+            runBlocking { app.database.sourdoughConfigDao().update(old.copy(intervalHours=72,remindersEnabled=false)) }
+            rule.waitUntil(TIMEOUT_MS){rule.onAllNodesWithTag("nav-2").fetchSemanticsNodes().isNotEmpty()}
+            rule.onNodeWithTag("nav-2").performClick()
+            val profile=profileForInterval(72)
+            for((hours,phase) in listOf(12 to "GROWING",26 to "PEAK",80 to "HUNGRY")) {
+                val saved=runBlocking { repository.saveFeeding(SourdoughFeedingSaveRequest(old.id,72,System.currentTimeMillis()-hours*3_600_000L,30,60,30,StorageLocation.KITCHEN,"CI regression only",null,null)) }
+                inserted+=saved.feeding
+                rule.waitUntil(TIMEOUT_MS){rule.onAllNodesWithTag("starter-phase-$phase").fetchSemanticsNodes().isNotEmpty()}
+                rule.onNodeWithTag("starter-jar").assertIsDisplayed()
+                val expected=(starterCycleLevel(hours.toFloat(),profile.peakHours,profile.cycleHours)*100).roundToInt()
+                rule.onNodeWithTag("starter-jar").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription,"Уровень по циклу: $expected%"))
+                rule.onNodeWithTag("nav-2").assertIsSelected()
+            }
+            rule.onNodeWithText("Покормить").performScrollTo().performClick()
+            rule.onNodeWithText("Новая запись").assertIsDisplayed()
+            rule.onNodeWithTag("starter-jar").assertDoesNotExist()
+            pressSystemBack()
+            rule.onNodeWithTag("starter-jar").assertIsDisplayed()
+        } finally {
+            runBlocking {
+                inserted.forEach{app.database.feedingDao().delete(it)}
+                app.database.sourdoughConfigDao().update(old)
+            }
         }
     }
 

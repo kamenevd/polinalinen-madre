@@ -14,12 +14,17 @@ import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.*
 import com.polinalinen.madre.model.BakingSession
 import com.polinalinen.madre.model.RecipeScaler
 import com.polinalinen.madre.sourdough.GrowthPhase
 import kotlin.math.sin
+import kotlin.math.roundToInt
 
 fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(s>=3600) "%d:%02d:%02d".format(s/3600,s/60%60,s%60) else "%02d:%02d".format(s/60,s%60) }
 @Composable fun BakingPaper(session: BakingSession, remaining:Long, onPause:()->Unit, onNext:()->Unit, onDetails:()->Unit, onBack:()->Unit) {
@@ -68,7 +73,7 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
 }
 @Composable fun StarterPaper(name:String,day:Int,phase:GrowthPhase,hours:Float?,hydration:Int?,onFeed:()->Unit,onDiary:()->Unit,onSettings:()->Unit,intervalHours:Int=24) {
     val p=LocalPaper.current
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal=22.dp)) {
+    Column(Modifier.fillMaxSize().testTag("starter-phase-${phase.name}").verticalScroll(rememberScrollState()).padding(horizontal=22.dp)) {
         BookHeader("ЗАКВАСКА · ДЕНЬ $day",onAa=onSettings)
         BookText(name,42);BookText("живая",42,italic=true,color=p.acc)
         SmallLabel("ЛЕВИТО МАДРЕ · ГИДРАТАЦИЯ ${hydration?.let{"$it%"}?:"—"}",Modifier.padding(top=8.dp))
@@ -88,7 +93,10 @@ internal fun starterCycleLevel(hours:Float?,peak:Float,cycle:Float):Float {
 }
 @Composable fun StarterJar(filled:Boolean,level:Float=.5f) {
     val p=LocalPaper.current
-    Canvas(Modifier.fillMaxWidth().height(265.dp).padding(horizontal=38.dp,vertical=16.dp)) {
+    Canvas(Modifier.fillMaxWidth().height(265.dp).testTag("starter-jar").semantics {
+        contentDescription="Банка закваски"
+        stateDescription="Уровень по циклу: ${(level*100).roundToInt()}%"
+    }.padding(horizontal=38.dp,vertical=16.dp)) {
         val w=size.width;val h=size.height
         drawRoundRect(Color(0xFF806044),Offset(w*.08f,0f),Size(w*.84f,24.dp.toPx()),CornerRadius(8.dp.toPx()))
         drawRoundRect(p.secondary.copy(alpha=.3f),Offset(w*.1f,28.dp.toPx()),Size(w*.8f,h-28.dp.toPx()),CornerRadius(22.dp.toPx()),style=Stroke(2.dp.toPx()))

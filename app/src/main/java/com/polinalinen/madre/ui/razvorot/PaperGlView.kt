@@ -32,6 +32,8 @@ internal class PaperGlView(context: Context, private val failure: (String) -> Un
     private var surfaceHeight = 1
     private var stopped = false
     private var frame: PaperGlFrame? = null
+    @Volatile private var paperSwaps = 0L
+    private var presentedSwap = 0L
     private var pendingTextures:List<Bitmap> = emptyList()
     private val textures = linkedMapOf<Bitmap, Int>()
     private val nx = 40
@@ -45,7 +47,7 @@ internal class PaperGlView(context: Context, private val failure: (String) -> Un
         }; position(0)
     }
     init { isOpaque = false; surfaceTextureListener = this }
-    fun submit(value: PaperGlFrame?) { handler.post { frame = value; if (!stopped && program != 0) safeDraw() } }
+    fun submit(value: PaperGlFrame?) { handler.post { if(frame!=value){frame = value; if (!stopped && program != 0) safeDraw()} } }
     fun prefetch(bitmaps: List<Bitmap>) { handler.post {
         pendingTextures=bitmaps
         if (!stopped && program != 0) runCatching {
@@ -93,7 +95,12 @@ internal class PaperGlView(context: Context, private val failure: (String) -> Un
         }
     }
     override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) { handler.post { surfaceWidth = width; surfaceHeight = height; safeDraw() } }
-    override fun onSurfaceTextureUpdated(surface: SurfaceTexture) = Unit
+    override fun onSurfaceTextureUpdated(surface: SurfaceTexture) {
+        // Count a native paper buffer only when TextureView has consumed it, not
+        // merely when the GL producer queued a swap (transparent clears do not count).
+        val swap=paperSwaps
+        if(swap>presentedSwap){presentedSwap=swap;presented()}
+    }
     override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
         handler.post { releaseGl(); surface.release(); worker.quitSafely() }
         return false
@@ -158,7 +165,7 @@ internal class PaperGlView(context: Context, private val failure: (String) -> Un
             check(GLES20.glGetError() == GLES20.GL_NO_ERROR)
         }
         check(EGL14.eglSwapBuffers(display, eglSurface))
-        if(frame!=null)post{presented()}
+        if(frame!=null)paperSwaps++
     }
     companion object {
         private const val VS = """
@@ -171,16 +178,16 @@ else{th=3.14159265;pos=vec3(base-uN*(d-PR),2.*uR);}}
 vUv=a/uS;vD=d;vTh=th;vec2 c=uS*.5;pos.xy=c+(pos.xy-c)*(1.+pos.z/3400.);
 gl_Position=vec4(pos.x/uS.x*2.-1.,1.-pos.y/uS.y*2.,uMode>.5?.5:-pos.z/400.,1.);}
 """
-        private const val FS = """
+        internal val FS = """
 precision mediump float; uniform sampler2D uT; uniform vec3 uPaper;
 uniform float uR,uMode,uNight,uGrid; varying mediump vec2 vUv; varying mediump float vD,vTh;
 void main(){if(uGrid>.5){gl_FragColor=vec4(.8,.25,.1,1.);return;}
 vec3 t=texture2D(uT,vUv).rgb;float K=1.+uNight*.6;float grain=(fract(sin(dot(vUv,vec2(12.9898,78.233)))*43758.5)-.5)*.015;
-if(uMode>.5){float e=vD-uR*.9;float s=.58*K*exp(-max(e,0.)/(uR*1.1+20.));
-if(e<0.)s*=smoothstep(-uR*1.75,0.,e);gl_FragColor=vec4(t*(1.-min(s,.8))+grain,1.);return;}
+if(uMode>.5){float e=vD-uR*.9;float s=${PaperLight.SHADOW}*K*exp(-max(e,0.)/(uR*1.1+20.));
+if(e<0.)s*=smoothstep(-uR*1.75,0.,e);gl_FragColor=vec4(t*(1.-min(s,${PaperLight.SHADOW_MAX}))+grain,1.);return;}
 float th=vTh;float crease=1.-.24*K*exp(-abs(vD)/(uR*.45+6.));float sh;vec3 base;
 if(th<1.5708){sh=1.-.40*(1.-cos(th));base=t;sh+=.035*(1.-uNight*.6)*exp(-pow((th-1.12)/.06,2.));}
-else{sh=.60+.20*(-cos(th));vec3 g=vec3(dot(uPaper,vec3(.333)));base=mix(mix(uPaper,g,.45)*(.92+uNight*.3),t,.07);}
+else{sh=${PaperLight.VERSO_BASE}+${PaperLight.VERSO_RANGE}*(-cos(th));vec3 g=vec3(dot(uPaper,vec3(1./3.)));base=mix(mix(uPaper,g,${PaperLight.DESATURATION}),t,${PaperLight.PRINT});}
 if(vD<=0.)sh=1.;gl_FragColor=vec4(base*sh*crease+grain,1.);}
 """
     }

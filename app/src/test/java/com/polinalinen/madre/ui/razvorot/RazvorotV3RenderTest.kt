@@ -48,4 +48,7 @@ class RazvorotV3RenderTest {
     @Test fun starterPeak()=render("starter-peak")
     @Test fun starterHungry()=render("starter-hungry")
     @Test fun shelf()=render("shelf")
+    @Test fun shelfNight()=render("shelf-night")
+    @Test fun shelfLargeType()=render("shelf-large")
+    @Test fun curlNight()=render("curl-mid-night")
 }

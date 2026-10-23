@@ -11,10 +11,13 @@ import androidx.compose.ui.*
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.viewinterop.AndroidView
 import com.polinalinen.madre.data.repository.RecipeRepository
 import com.polinalinen.madre.model.*
 import com.polinalinen.madre.shelf.*
@@ -32,7 +35,7 @@ class RazvorotSceneActivity : ComponentActivity() {
     }
 }
 
-internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","reader-text-16","reader-text-22","curl-top","curl-mid","curl-bottom","curl-back","reader-chrome","reading-sheet","home-dawn","home-night","spine","bake","alice-listening","alice-reading","alice-confirm","alice-night","starter-growing","starter-peak","starter-hungry","shelf")
+internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","reader-text-16","reader-text-22","curl-top","curl-mid","curl-bottom","curl-back","reader-chrome","reading-sheet","home-dawn","home-night","spine","bake","alice-listening","alice-reading","alice-confirm","alice-night","starter-growing","starter-peak","starter-hungry","shelf","shelf-night","shelf-large","curl-mid-night","gles2-curl-mid")
 
 @Composable internal fun RazvorotDebugScene(scene:String,recipes:List<Recipe>) {
     val context=LocalContext.current
@@ -43,13 +46,14 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
     val debug=remember{PaperDebugState()}
     val night=scene.endsWith("night")
     val recipe=recipes.firstOrNull()?:return
-    CompositionLocalProvider(LocalPaperDebug provides debug,com.polinalinen.madre.ui.theme.LocalCalmMode provides false) {
+    val density=LocalDensity.current
+    CompositionLocalProvider(LocalPaperDebug provides debug,com.polinalinen.madre.ui.theme.LocalCalmMode provides false,LocalDensity provides Density(density.density,if(scene=="shelf-large")1.3f else density.fontScale)) {
         RazvorotTheme(preferences,force=if(night)Atmosphere.NIGHT else Atmosphere.DAWN) {
-            Box(Modifier.fillMaxSize().background(LocalPaper.current.bg).safeDrawingPadding().testTag("scene-$scene").semantics{stateDescription="${debug.renderer}:${debug.renderedFrames}:${debug.reason}"}) {
+            Box(Modifier.fillMaxSize().background(LocalPaper.current.bg).safeDrawingPadding().testTag("scene-$scene").semantics{stateDescription="${debug.renderer}:${debug.renderedFrames}:${debug.cachedPages}:${debug.reason}"}) {
                 when {
                     scene.startsWith("reader-title") -> TitleLeaf(if(scene.contains("last"))recipes.last() else recipe,if(scene.contains("last"))recipes.lastIndex else 0,recipes.size)
                     scene.startsWith("reader-text") -> DebugTextPage(recipe,preferences)
-                    scene.startsWith("curl-") -> DebugCurl(recipe,scene)
+                    scene.startsWith("curl-") || scene.startsWith("gles2-curl-") -> DebugCurl(recipe,scene)
                     scene=="reader-chrome" -> RazvorotReader(recipes,recipe.id,preferences,{},{},{})
                     scene=="reading-sheet" -> { DebugTextPage(recipe,preferences);ReadingSettings(preferences){} }
                     scene.startsWith("home-") -> Column {
@@ -68,8 +72,8 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
                         val hours=when(phase){GrowthPhase.GROWING->3f;GrowthPhase.PEAK->6f;else->28f}
                         Column {Box(Modifier.weight(1f)){StarterPaper("Мадре",42,phase,hours,50,{},{},{},24)};SpineBar(2){}}
                     }
-                    scene=="shelf" -> Column {
-                        Box(Modifier.weight(1f)){ShelfPaper(listOf(ShelfMember("fixture-me","Пекарь",true),ShelfMember("fixture-family","Семья",false)),listOf(ShelfLedgerRow(1L,"Пекарь",recipe.name,"fixture-me","23 октября")),"Демонстрационная полка",emptyList(),false,{},{})}
+                    scene.startsWith("shelf") -> Column {
+                        Box(Modifier.weight(1f)){ShelfPaper(listOf(ShelfMember("fixture-me",if(scene=="shelf-large")"Александра Константиновна" else "Пекарь",true),ShelfMember("fixture-family","Семья",false)),listOf(ShelfLedgerRow(1L,"Пекарь",recipe.name,"fixture-me","23 октября")),"Демонстрационная полка",emptyList(),false,{},{})}
                         Row(Modifier.fillMaxWidth().padding(22.dp)){BookText("Подключить Алису",18,Modifier.weight(1f));SmallLabel("скоро")}
                         SpineBar(3){}
                     }
@@ -89,16 +93,26 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
 }
 @Composable private fun DebugCurl(recipe:Recipe,scene:String) {
     val context=LocalContext.current;val paper=LocalPaper.current;val night=paper==NightPaper
-    val front=remember(recipe,paper){PageRenderer(context).text(recipe,0,720,1480,paper)}
-    val under=remember(recipe,paper){PageRenderer(context).text(recipe,0,720,1480,paper,startStep=5)}
-    val texture=remember(front){PaperTexture(front,paper.bg.toArgb(),night)}
-    DisposableEffect(texture){onDispose{texture.close();front.recycle();under.recycle()}}
-    Canvas(Modifier.fillMaxSize()) {
-        val grip=when(scene){"curl-top"->20f;"curl-bottom"->720f;else->370f}
-        val fold=PaperFold.fromFinger(360f,740f,if(scene=="curl-back")-1 else 1,if(scene=="curl-back")30f else 350f,grip,if(scene=="curl-back")150f else 60f,grip)
-        drawIntoCanvas { c ->
-            val native=c.nativeCanvas;native.save();native.scale(size.width/front.width,size.height/front.height)
-            texture.draw(native,fold,under);native.restore()
+    val debug=LocalPaperDebug.current
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        // Fold coordinates are actual viewport dp, like PaperTurn, not a stretched
+        // 360x740 fixture. Textures use the same <=2x resolution cap as runtime.
+        val w=maxWidth.value;val h=maxHeight.value
+        val front=remember(recipe,paper,w,h){PageRenderer(context).text(recipe,0,(w*2).toInt(),(h*2).toInt(),paper,viewportWidth=w)}
+        val under=remember(recipe,paper,w,h){PageRenderer(context).text(recipe,0,(w*2).toInt(),(h*2).toInt(),paper,startStep=5,viewportWidth=w)}
+        val texture=remember(front){PaperTexture(front,paper.bg.toArgb(),night)}
+        DisposableEffect(texture){onDispose{texture.close();front.recycle();under.recycle()}}
+        val grip=when(scene){"curl-top"->h*.027f;"curl-bottom"->h*.973f;else->h*.5f}
+        val back=scene=="curl-back"
+        val fold=PaperFold.fromFinger(w,h,if(back)-1 else 1,if(back)w/12f else w*35f/36f,grip,if(back)w*5f/12f else w/6f,grip)
+        if(scene.startsWith("gles2-")) {
+            val frame=remember(fold,front,under){PaperGlFrame(fold,front,under,paper.bg.toArgb(),night)}
+            AndroidView(factory={PaperGlView(it,failure={reason->debug.renderer="SLIDE";debug.reason=reason},ready={debug.renderer="GLES2"},presented={debug.renderedFrames++})},modifier=Modifier.fillMaxSize(),update={it.submit(frame)})
+        } else Canvas(Modifier.fillMaxSize()) {
+            drawIntoCanvas { c ->
+                val native=c.nativeCanvas;native.save();native.scale(size.width/front.width,size.height/front.height)
+                texture.draw(native,fold,under);native.restore()
+            }
         }
     }
 }

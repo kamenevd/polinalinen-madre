@@ -7,6 +7,7 @@ internal class PaperDebugState {
     var renderer by mutableStateOf("PENDING")
     var reason by mutableStateOf("awaiting-surface")
     var renderedFrames by mutableIntStateOf(0)
+    var cachedPages by mutableIntStateOf(0)
     var grid by mutableStateOf(false)
     var fps by mutableFloatStateOf(0f)
     var duration by mutableFloatStateOf(0f)

@@ -25,6 +25,7 @@ import androidx.compose.ui.semantics.*
 import androidx.compose.ui.viewinterop.AndroidView
 import com.polinalinen.madre.ui.theme.LocalCalmMode
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CompletableDeferred
 import kotlin.math.*
 
 internal class PaperMotion(val direction: Int, val x0: Float, val y0: Float, var fold: PaperFold) {
@@ -62,6 +63,7 @@ internal class PaperMotion(val direction: Int, val x0: Float, val y0: Float, var
     val debug = LocalPaperDebug.current
     val frameRate = remember { PaperFrameRate() }
     SideEffect {
+        debug.cachedPages=textures.size
         if (!curl) {
             debug.renderer="SLIDE"
             debug.reason=when {
@@ -204,10 +206,12 @@ internal class PaperMotion(val direction: Int, val x0: Float, val y0: Float, var
     }) {
         for (index in max(0, page - 2)..min(count - 1, page + 2)) key(index, cacheKey) {
             val layer = rememberGraphicsLayer()
+            val recorded = remember(layer) { CompletableDeferred<Unit>() }
             DisposableEffect(layer, index) { layers[index] = layer; onDispose { if(layers[index] === layer)layers.remove(index) } }
             LaunchedEffect(layer, index, cacheKey) {
-                // Two frames ensure drawContent was recorded, including loaded hero images.
-                withFrameNanos { }; withFrameNanos { }
+                // A Compose frame-clock tick is NOT an Android draw (especially in
+                // instrumentation). Capture only after a real non-empty record.
+                recorded.await()
                 runCatching {
                     val bitmap=layer.toImageBitmap().asAndroidBitmap().copy(android.graphics.Bitmap.Config.ARGB_8888,false)
                     if(bitmap!=null && density>2f) android.graphics.Bitmap.createScaledBitmap(bitmap,(width*2f).roundToInt().coerceAtLeast(1),(height*2f).roundToInt().coerceAtLeast(1),true).also{if(it!==bitmap)bitmap.recycle()} else bitmap
@@ -221,6 +225,7 @@ internal class PaperMotion(val direction: Int, val x0: Float, val y0: Float, var
             Box(Modifier.fillMaxSize().then(if(index!=page)Modifier.clearAndSetSemantics{} else Modifier).drawWithContent {
                 val source = this
                 layer.record { source.drawContent() }
+                if(size.width>0f && size.height>0f)recorded.complete(Unit)
             }) { content(index) }
         }
         Canvas(Modifier.fillMaxSize()) {

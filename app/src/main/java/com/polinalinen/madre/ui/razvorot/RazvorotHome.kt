@@ -10,6 +10,8 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
 import com.polinalinen.madre.model.BakingSession
 import com.polinalinen.madre.model.Recipe
@@ -75,7 +77,7 @@ import com.polinalinen.madre.ui.components.bookAction
             val labels=listOf("Читать","Печь","Закваска","Полка")
             val icons=listOf(Icons.Outlined.MenuBook,Icons.Outlined.LocalFireDepartment,Icons.Outlined.Science,Icons.Outlined.CollectionsBookmark)
             labels.forEachIndexed { i,label ->
-                Box(Modifier.weight(1f).fillMaxHeight().then(bookAction(label){onSelect(i)}).testTag("nav-$i"),contentAlignment=Alignment.Center) {
+                Box(Modifier.weight(1f).fillMaxHeight().then(bookAction(label){onSelect(i)}).testTag("nav-$i").semantics{selected=i==section},contentAlignment=Alignment.Center) {
                     if(i==section)Ribbon(Modifier.align(Alignment.TopCenter).height(14.dp).width(22.dp))
                     Column(horizontalAlignment=Alignment.CenterHorizontally,modifier=Modifier.padding(top=8.dp)){Icon(icons[i],null,tint=if(i==section)p.ink else p.secondary);SmallLabel(label,color=if(i==section)p.ink else p.secondary)}
                 }

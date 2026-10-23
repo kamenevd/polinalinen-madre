@@ -19,6 +19,11 @@ val releaseSigningInputs = listOf(
 )
 val hasCompleteReleaseSigning = releaseSigningInputs.all { !it.isNullOrBlank() }
 val hasAnyReleaseSigning = releaseSigningInputs.any { !it.isNullOrBlank() }
+// Public OAuth client id only. Never read a client secret or signing material here.
+val yandexClientId = providers.environmentVariable("MADRE_YANDEX_CLIENT_ID").orElse("").get()
+require(yandexClientId.isEmpty() || yandexClientId.matches(Regex("[0-9a-fA-F]{32}"))) {
+    "Invalid public Yandex client id"
+}
 // QA is a separate signing identity. Never fall back to the runner's debug key.
 val qaKeystorePath = System.getenv("QA_KEYSTORE_PATH")
 val qaKeystorePassword = System.getenv("QA_KEYSTORE_PASSWORD")
@@ -67,6 +72,9 @@ android {
         // только по HTTPS. Адрес меняется только здесь — код берёт его
         // исключительно из BuildConfig.MADRE_API_URL.
         buildConfigField("String", "MADRE_API_URL", "\"https://madre-api.kdnfx.space\"")
+        buildConfigField("String", "YANDEX_CLIENT_ID", "\"$yandexClientId\"")
+        // Explicit disabled manifest namespace, NOT an issued/fabricated OAuth client id.
+        manifestPlaceholders["YANDEX_CLIENT_ID"] = yandexClientId.ifEmpty { "disabled-madre-id" }
     }
 
     signingConfigs {
@@ -216,6 +224,7 @@ dependencies {
     // Phase A metadata only; login bearer tokens never enter DataStore.
     // Stable version verified against official AndroidX release notes.
     implementation("androidx.datastore:datastore-preferences:1.2.1")
+    implementation("com.yandex.android:authsdk:3.3.0")
 
     // Room Database. 2.8.x — первая линейка, чей процессор умеет KSP2;
     // 2.6.1 на Kotlin 2.4 просто не запускается.

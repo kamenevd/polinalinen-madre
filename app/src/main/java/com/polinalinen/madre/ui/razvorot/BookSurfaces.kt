@@ -74,7 +74,7 @@ fun Recipe.totalTime(): String { val m = timeline.sumOf { it.durationMinutes }; 
                     drawPath(loaf, Brush.verticalGradient(listOf(Color(0xFFB98547),Color(0xFFE7C99D))))
                     drawLine(Color(0xFF8C5A26), Offset(size.width*.32f,size.height*.45f),Offset(size.width*.7f,size.height*.3f),4f)
                 }
-                Spacer(Modifier.height(24.dp)); BookText("семейная книга рецептов\nна закваске", 12, italic = true, color = Color(0xFFF4EADC))
+                Spacer(Modifier.height(24.dp)); BookText("книга рецептов\nна закваске", 12, italic = true, color = Color(0xFFF4EADC))
                 Spacer(Modifier.height(12.dp)); SmallLabel("11 ГЛАВ · ОДНА СЕМЬЯ", color = Color(0xFFBCA88D))
             }
             Ribbon(Modifier.align(Alignment.BottomEnd).offset(x = (-32).dp,y = 42.dp))
@@ -85,7 +85,7 @@ fun Recipe.totalTime(): String { val m = timeline.sumOf { it.durationMinutes }; 
     val p = LocalPaper.current
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp)) {
         BookHeader("${atmosphereAt(java.time.LocalTime.now().hour).label} · атмосфера по часам", onAa = onAa)
-        BookText("Добрый день,", 40)
+        BookText(when(atmosphereAt(java.time.LocalTime.now().hour)) { Atmosphere.DAWN -> "Доброе утро,"; Atmosphere.DAY -> "Добрый день,"; Atmosphere.DUSK -> "Добрый вечер,"; else -> "Доброй ночи," }, 40)
         BookText("пекарь", 44, italic = true, color = p.acc)
         BookCover(onOpen)
         SmallLabel("ПОТЯНИТЕ ОБЛОЖКУ ВЛЕВО — КНИГА ОТКРОЕТСЯ", Modifier.align(Alignment.CenterHorizontally))
@@ -137,12 +137,15 @@ fun Recipe.totalTime(): String { val m = timeline.sumOf { it.durationMinutes }; 
         Column(Modifier.padding(horizontal=22.dp).verticalScroll(rememberScrollState())) {
             BookText("Как читать",28)
             SmallLabel("АТМОСФЕРА",Modifier.padding(top=16.dp))
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) { Atmosphere.entries.forEach { v -> FilterChip(preferences.atmosphere==v,{preferences.setAtmosphere(v)},label={Text(v.label,fontSize=12.sp)},modifier=Modifier.padding(end=6.dp)) } }
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) { Atmosphere.entries.forEach { v -> FilterChip(preferences.atmosphere==v,{preferences.chooseAtmosphere(v)},label={Text(v.label,fontSize=12.sp)},modifier=Modifier.padding(end=6.dp)) } }
             SmallLabel("РАЗМЕР ТЕКСТА · ${preferences.textSize.toInt()}",Modifier.padding(top=14.dp))
-            Slider(preferences.textSize,preferences::setSize,valueRange=16f..26f,steps=9,modifier=Modifier.testTag("text-size"))
+            Slider(preferences.textSize,preferences::setSize,valueRange=14f..22f,steps=7,modifier=Modifier.testTag("text-size"))
+            SmallLabel("НА СКОЛЬКО ПЕЧЁМ · ×${preferences.portions.toInt()}")
+            Slider(preferences.portions,preferences::choosePortions,valueRange=1f..5f,steps=3,modifier=Modifier.testTag("reader-portions"))
             SmallLabel("ПЕРЕЛИСТЫВАНИЕ")
-            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(6.dp)) { ReadingMode.entries.forEach { v -> FilterChip(preferences.mode==v,{preferences.setMode(v)},label={Text(v.label)},modifier=Modifier.weight(1f)) } }
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(6.dp)) { ReadingMode.entries.forEach { v -> FilterChip(preferences.mode==v,{preferences.chooseMode(v)},label={Text(v.label)},modifier=Modifier.weight(1f)) } }
             Row(Modifier.fillMaxWidth().heightIn(min=58.dp),verticalAlignment=Alignment.CenterVertically) { Text("Меньше движения",Modifier.weight(1f));Switch(preferences.reducedMotion,preferences::setReduced) }
+            Row(Modifier.fillMaxWidth().heightIn(min=58.dp),verticalAlignment=Alignment.CenterVertically) { Text("Тактильные отклики",Modifier.weight(1f));Switch(preferences.haptics,preferences::chooseHaptics) }
             SmallLabel("На слабом устройстве и при выключенной системной анимации — плоский сдвиг.")
             Spacer(Modifier.height(24.dp))
         }

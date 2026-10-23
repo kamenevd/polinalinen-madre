@@ -66,30 +66,37 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
         }
     }
 }
-@Composable fun StarterPaper(name:String,day:Int,phase:GrowthPhase,hours:Float?,hydration:Int?,onFeed:()->Unit,onDiary:()->Unit,onSettings:()->Unit) {
+@Composable fun StarterPaper(name:String,day:Int,phase:GrowthPhase,hours:Float?,hydration:Int?,onFeed:()->Unit,onDiary:()->Unit,onSettings:()->Unit,intervalHours:Int=24) {
     val p=LocalPaper.current
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal=22.dp)) {
         BookHeader("ЗАКВАСКА · ДЕНЬ $day",onAa=onSettings)
         BookText(name,42);BookText("живая",42,italic=true,color=p.acc)
         SmallLabel("ЛЕВИТО МАДРЕ · ГИДРАТАЦИЯ ${hydration?.let{"$it%"}?:"—"}",Modifier.padding(top=8.dp))
-        StarterJar(phase!=GrowthPhase.EMPTY)
-        // The jar is an illustration, not a fabricated rise measurement.
-        SmallLabel("БАНКА — ИЛЛЮСТРАЦИЯ · ПОДЪЁМ НЕ ИЗМЕРЯЕТСЯ")
+        val profile=com.polinalinen.madre.sourdough.profileForInterval(intervalHours)
+        val level=starterCycleLevel(hours,profile.peakHours,profile.cycleHours)
+        StarterJar(phase!=GrowthPhase.EMPTY,level)
+        SmallLabel("УРОВЕНЬ ПО ЦИКЛУ КОРМЛЕНИЯ · НЕ ИЗМЕРЕНИЕ")
+        BookText(when(phase){GrowthPhase.EMPTY->"Пока без кормлений";GrowthPhase.LAG->"Набирается сил";GrowthPhase.GROWING->"Растёт";GrowthPhase.PEAK->"На пике по времени";GrowthPhase.DECLINING->"Пик позади";GrowthPhase.HUNGRY->"Пора покормить"},18,color=p.acc)
         BookText(when(phase){GrowthPhase.EMPTY->"Первое кормление — начало дневника.";GrowthPhase.LAG->"Набираюсь сил после кормления.";GrowthPhase.GROWING->"Время расти. Скоро можно печь.";GrowthPhase.PEAK->"По времени кормления — пора проверить закваску.";else->"Пора проверить, не нужно ли кормление."},22,Modifier.padding(top=14.dp),italic=true)
         SmallLabel(hours?.let{"ПОСЛЕ КОРМЛЕНИЯ · %.1f Ч".format(it)}?:"КОРМЛЕНИЙ ПОКА НЕТ",Modifier.padding(top=20.dp))
         Row(Modifier.fillMaxWidth().padding(vertical=20.dp),horizontalArrangement=Arrangement.spacedBy(12.dp)) {PaperButton("Покормить",onFeed,Modifier.weight(1f),true);PaperButton("Дневник",onDiary,Modifier.weight(1f))}
     }
 }
-@Composable fun StarterJar(filled:Boolean) {
+internal fun starterCycleLevel(hours:Float?,peak:Float,cycle:Float):Float {
+    if(hours==null)return 0f
+    return if(hours<=peak)(.25f+.55f*(hours/peak).coerceIn(0f,1f)) else (.8f-.45f*((hours-peak)/(cycle-peak)).coerceIn(0f,1f))
+}
+@Composable fun StarterJar(filled:Boolean,level:Float=.5f) {
     val p=LocalPaper.current
     Canvas(Modifier.fillMaxWidth().height(265.dp).padding(horizontal=38.dp,vertical=16.dp)) {
         val w=size.width;val h=size.height
         drawRoundRect(Color(0xFF806044),Offset(w*.08f,0f),Size(w*.84f,24.dp.toPx()),CornerRadius(8.dp.toPx()))
         drawRoundRect(p.secondary.copy(alpha=.3f),Offset(w*.1f,28.dp.toPx()),Size(w*.8f,h-28.dp.toPx()),CornerRadius(22.dp.toPx()),style=Stroke(2.dp.toPx()))
         if(filled){
-            val dough=Path().apply{moveTo(w*.13f,h*.5f);for(i in 0..30){val x=w*.13f+w*.74f*i/30;lineTo(x,h*.5f+sin(i*.7f)*5.dp.toPx())};lineTo(w*.87f,h*.94f);quadraticTo(w*.5f,h*1.02f,w*.13f,h*.94f);close()}
+            val top=h*(.94f-.72f*level.coerceIn(0f,1f))
+            val dough=Path().apply{moveTo(w*.13f,top);for(i in 0..30){val x=w*.13f+w*.74f*i/30;lineTo(x,top+sin(i*.7f)*5.dp.toPx())};lineTo(w*.87f,h*.94f);quadraticTo(w*.5f,h*1.02f,w*.13f,h*.94f);close()}
             drawPath(dough,Brush.verticalGradient(listOf(Color(0xFFE4CFAD),Color(0xFFB49468))))
-            repeat(36){i->val x=w*(.18f+(i*37%67)/100f);val y=h*(.55f+(i*19%35)/100f);drawCircle(Color(0xFFF8ECD7).copy(alpha=.65f),(2+i%4).dp.toPx(),Offset(x,y),style=Stroke(1.dp.toPx()))}
+            repeat(36){i->val x=w*(.18f+(i*37%67)/100f);val y=top+(h*.94f-top)*(.1f+(i*19%80)/100f);drawCircle(Color(0xFFF8ECD7).copy(alpha=.65f),(2+i%4).dp.toPx(),Offset(x,y),style=Stroke(1.dp.toPx()))}
         }
         drawRoundRect(Color.White.copy(alpha=.3f),Offset(w*.16f,h*.17f),Size(5.dp.toPx(),h*.65f),CornerRadius(3.dp.toPx()))
     }

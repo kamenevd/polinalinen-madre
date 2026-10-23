@@ -22,6 +22,7 @@ import com.polinalinen.madre.viewmodel.BakingViewModel
     starterName:String, day:Int, phase:GrowthPhase,lastFeedingMillis:Long?,hydration:Int?,
     preferences:ReadingPreferences,onOpenRecipe:(String)->Unit,onOpenTimer:(Long)->Unit,
     onFeed:()->Unit,onDiary:()->Unit,onSettings:()->Unit,shelf:@Composable ()->Unit,
+    intervalHours:Int=24,onContinueReading:(BakingSession)->Unit={},
 ) {
     var section by rememberSaveable{mutableIntStateOf(0)}
     var catalog by rememberSaveable{mutableStateOf(false)}
@@ -35,9 +36,12 @@ import com.polinalinen.madre.viewmodel.BakingViewModel
                     else CoverPage(recipes,{catalog=true},onSettings,{settings=true}) {
                         sessions.forEach { s ->
                             val remaining by viewModel.remainingFor(s.id).collectAsState()
-                            Row(Modifier.fillMaxWidth().padding(top=16.dp).background(p.card,androidx.compose.foundation.shape.RoundedCornerShape(22.dp)).clickable{onOpenTimer(s.id)}.padding(14.dp),verticalAlignment=Alignment.CenterVertically) {
-                                BookText(timerDigits(remaining),30,color=p.acc)
-                                Column(Modifier.padding(start=14.dp)) {SmallLabel("В ПЕЧИ · ШАГ ${s.currentStepIndex+1} ИЗ ${s.recipe.timeline.size}");BookText(s.recipe.name,18)}
+                            Column(Modifier.fillMaxWidth().padding(top=16.dp).background(p.card,androidx.compose.foundation.shape.RoundedCornerShape(22.dp)).padding(14.dp)) {
+                                Row(verticalAlignment=Alignment.CenterVertically) {
+                                    BookText(timerDigits(remaining),30,color=p.acc)
+                                    Column(Modifier.padding(start=14.dp)) {SmallLabel("В ПЕЧИ · ШАГ ${s.currentStepIndex+1} ИЗ ${s.recipe.timeline.size}");BookText(s.recipe.name,18)}
+                                }
+                                Row {TextButton({onContinueReading(s)},Modifier.weight(1f).heightIn(min=48.dp)){Text("Продолжить чтение")};TextButton({onOpenTimer(s.id)},Modifier.weight(1f).heightIn(min=48.dp)){Text("К таймеру")}}
                             }
                         }
                     }
@@ -49,8 +53,13 @@ import com.polinalinen.madre.viewmodel.BakingViewModel
                     }
                     PaperButton("Выбрать рецепт",{section=0;catalog=true},Modifier.padding(top=24.dp),true)
                 }
-                2 -> StarterPaper(starterName,day,phase,lastFeedingMillis?.let{com.polinalinen.madre.sourdough.hoursSinceFeeding(it)},hydration,onFeed,onDiary,{settings=true})
-                3 -> shelf()
+                2 -> StarterPaper(starterName,day,phase,lastFeedingMillis?.let{com.polinalinen.madre.sourdough.hoursSinceFeeding(it)},hydration,onFeed,onDiary,{settings=true},intervalHours)
+                3 -> Column(Modifier.fillMaxSize()) {
+                    Box(Modifier.weight(1f)){shelf()}
+                    if(!com.polinalinen.madre.config.FeatureFlags.ALICE)Row(Modifier.fillMaxWidth().heightIn(min=56.dp).padding(horizontal=22.dp),verticalAlignment=Alignment.CenterVertically) {
+                        BookText("Подключить Алису",18,Modifier.weight(1f));SmallLabel("скоро")
+                    }
+                }
             }
         }
         Row(Modifier.fillMaxWidth().background(p.bg).height(70.dp).testTag("spine-navigation"),verticalAlignment=Alignment.CenterVertically) {

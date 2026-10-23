@@ -198,6 +198,8 @@ fun MadreNavHost(
                     starterName = starterName, day = dayNumber, phase = phase,
                     lastFeedingMillis = authoritativeLastFeedingMillis, hydration = shownHydration,
                     preferences = readingPreferences,
+                    intervalHours = sourdoughConfig?.intervalHours ?: 24,
+                    onContinueReading = { session -> navController.navigate(MadreDestinations.readerStep(session.recipe.id,session.currentStepIndex)) },
                     onOpenRecipe = { id -> navController.navigate(MadreDestinations.recipeDetail(id)) },
                     onOpenTimer = { id -> navController.navigate(MadreDestinations.bakingTimer(id.toString())) },
                     onFeed = enterFeedingForm,
@@ -209,11 +211,24 @@ fun MadreNavHost(
             }
             composable(MadreDestinations.RECIPE_DETAIL) { backStackEntry ->
                 val recipeId = backStackEntry.arguments?.getString("recipeId").orEmpty()
-                RazvorotReader(recipesForStats, recipeId, readingPreferences,
+                val sessions by bakingViewModel.sessions.collectAsState()
+                if(readingPreferences.mode==ReadingMode.SCROLL || androidx.compose.ui.platform.LocalDensity.current.fontScale>1.3f) RecipeDetailScreen(recipeId,{navController.popBackStack()},{id->navController.navigate(MadreDestinations.bakingTimer(id.toString()))},bakingViewModel)
+                else RazvorotReader(recipesForStats, recipeId, readingPreferences,
                     onBack = { navController.popBackStack() },
-                    onBake = { recipe -> val id = bakingViewModel.startBaking(recipe, 1.0); navController.navigate(MadreDestinations.bakingTimer(id.toString())) },
+                    onBake = { recipe -> val id = bakingViewModel.startBaking(recipe, readingPreferences.portions.toDouble()); navController.navigate(MadreDestinations.bakingTimer(id.toString())) },
                     onCalculator = { recipe -> navController.navigate("recipe-calculator/${recipe.id}") },
+                    activeSessions = sessions,
+                    onContinueBake = { id -> navController.navigate(MadreDestinations.bakingTimer(id.toString())) },
                 )
+            }
+            composable(MadreDestinations.READER_STEP) { entry ->
+                val id=entry.arguments?.getString("recipeId").orEmpty()
+                val step=entry.arguments?.getString("step")?.toIntOrNull()
+                val sessions by bakingViewModel.sessions.collectAsState()
+                RazvorotReader(recipesForStats,id,readingPreferences,{navController.popBackStack()},
+                    {recipe-> val sessionId=bakingViewModel.startBaking(recipe,readingPreferences.portions.toDouble());navController.navigate(MadreDestinations.bakingTimer(sessionId.toString()))},
+                    {recipe->navController.navigate("recipe-calculator/${recipe.id}")},initialStep=step,activeSessions=sessions,
+                    onContinueBake={sessionId->navController.navigate(MadreDestinations.bakingTimer(sessionId.toString()))})
             }
             composable("recipe-calculator/{recipeId}") { backStackEntry ->
                 val recipeId = backStackEntry.arguments?.getString("recipeId").orEmpty()

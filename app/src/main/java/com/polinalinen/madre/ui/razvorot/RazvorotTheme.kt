@@ -24,20 +24,26 @@ class ReadingPreferences(context: Context) {
         private set
     var mode by mutableStateOf(ReadingMode.entries.firstOrNull { it.name == prefs.getString("mode", "BOOK") } ?: ReadingMode.BOOK)
         private set
-    var textSize by mutableFloatStateOf(prefs.getFloat("textSize", 18f).coerceIn(16f, 26f))
+    var textSize by mutableFloatStateOf(prefs.getFloat("textSize", 16f).coerceIn(14f, 22f))
+        private set
+    var portions by mutableFloatStateOf(prefs.getFloat("portions", 1f).coerceIn(1f, 5f))
+        private set
+    var haptics by mutableStateOf(prefs.getBoolean("haptics", true))
         private set
     var reducedMotion by mutableStateOf(prefs.getBoolean("reducedMotion", false))
         private set
-    fun setAtmosphere(v: Atmosphere) { atmosphere = v; prefs.edit().putString("atmosphere", v.name).apply() }
-    fun setMode(v: ReadingMode) { mode = v; prefs.edit().putString("mode", v.name).apply() }
-    fun setSize(v: Float) { textSize = v.coerceIn(16f, 26f); prefs.edit().putFloat("textSize", textSize).apply() }
+    fun chooseAtmosphere(v: Atmosphere) { atmosphere = v; prefs.edit().putString("atmosphere", v.name).apply() }
+    fun chooseMode(v: ReadingMode) { mode = v; prefs.edit().putString("mode", v.name).apply() }
+    fun setSize(v: Float) { textSize = v.coerceIn(14f, 22f); prefs.edit().putFloat("textSize", textSize).apply() }
+    fun choosePortions(v: Float) { portions = v.coerceIn(1f, 5f); prefs.edit().putFloat("portions", portions).apply() }
+    fun chooseHaptics(v: Boolean) { haptics = v; prefs.edit().putBoolean("haptics", v).apply() }
     fun setReduced(v: Boolean) { reducedMotion = v; prefs.edit().putBoolean("reducedMotion", v).apply() }
 }
 @Composable fun rememberReadingPreferences(): ReadingPreferences {
     val context = LocalContext.current
     return remember { ReadingPreferences(context) }
 }
-fun atmosphereAt(hour: Int): Atmosphere = when (hour) { in 6..10 -> Atmosphere.DAWN; in 11..17 -> Atmosphere.DAY; in 18..21 -> Atmosphere.DUSK; else -> Atmosphere.NIGHT }
+fun atmosphereAt(hour: Int): Atmosphere = when (hour) { in 5..10 -> Atmosphere.DAWN; in 11..16 -> Atmosphere.DAY; in 17..21 -> Atmosphere.DUSK; else -> Atmosphere.NIGHT }
 @Composable fun RazvorotTheme(preferences: ReadingPreferences = rememberReadingPreferences(), force: Atmosphere? = null, content: @Composable () -> Unit) {
     var hour by remember { mutableIntStateOf(LocalTime.now().hour) }
     LaunchedEffect(Unit) { while (true) { hour = LocalTime.now().hour; delay(60_000) } }

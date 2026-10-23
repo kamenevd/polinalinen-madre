@@ -128,8 +128,10 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
 }
 /** All text below is visibly a fixture; no VoiceCoordinator, API or commands. */
 @Composable private fun DebugAliceSheet(scene:String,recipe:Recipe) {
-    val colors=NightPaper
+    val colors=NightPaper.copy(bg=Color(0xFF0D0A09))
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha=.55f))) {
+        CompositionLocalProvider(LocalPaper provides colors,LocalContentColor provides colors.ink) {
+        MaterialTheme(colorScheme=paperScheme(colors)) {
         Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(colors.bg,androidx.compose.foundation.shape.RoundedCornerShape(topStart=28.dp,topEnd=28.dp)).padding(22.dp)) {
             SmallLabel("ИЗОЛИРОВАННАЯ DEBUG-СЦЕНА · БЕЗ СВЯЗИ",color=colors.ink2)
             Spacer(Modifier.height(100.dp))
@@ -138,6 +140,8 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
             BookText(RecipeScaler.scaledStepText(recipe.timeline[9].description,2.0,RecipeScaler.scalableBindings(recipe)),18,color=colors.ink)
             if(scene=="alice-confirm"||scene=="alice-night")Row(Modifier.padding(vertical=18.dp),horizontalArrangement=Arrangement.spacedBy(10.dp)){PaperButton("Да",{},Modifier.weight(1f),true);PaperButton("Нет",{},Modifier.weight(1f))}
             SmallLabel("Фото, дневник и полка — только на телефоне",Modifier.padding(top=18.dp),colors.ink2)
+        }
+        }
         }
     }
 }

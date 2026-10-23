@@ -53,7 +53,7 @@ class ShelfShortcutTest {
             }
         }
 
-        rule.onNodeWithText("Полка").performClick()
+        rule.onNodeWithTag("nav-3").performClick()
         rule.waitForIdle()
 
         assertThat(navController.currentBackStackEntry?.destination?.route)
@@ -70,7 +70,7 @@ class ShelfShortcutTest {
             }
         }
 
-        rule.onNodeWithText("Полка").performClick()
+        rule.onNodeWithTag("nav-3").performClick()
         rule.waitForIdle()
         navController.popBackStack()
         rule.waitForIdle()
@@ -86,7 +86,7 @@ class ShelfShortcutTest {
                 MadreNavHost()
             }
         }
-        rule.onNodeWithText("Полка").performClick()
+        rule.onNodeWithTag("nav-3").performClick()
         rule.waitForIdle()
         rule.onNodeWithTag(FamilyShelf.UNCUT_SPINE_TAG).assertExists()
         rule.onNodeWithTag(FamilyShelf.UNCUT_SPINE_TAG).assertHasNoClickAction()

@@ -39,6 +39,7 @@ import androidx.compose.material.icons.outlined.LocalFireDepartment
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.semantics
 
 internal data class ReadingLeaf(val chapter: Int, val title: Boolean = false, val lines: List<Pair<String,String>> = emptyList(), val anchor: String = "title", val blocks: List<String> = emptyList(), val end: Boolean = false)
 

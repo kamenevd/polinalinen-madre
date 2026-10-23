@@ -23,6 +23,7 @@ import com.polinalinen.madre.model.BakingSession
 import com.polinalinen.madre.viewmodel.BakingViewModel
 import com.polinalinen.madre.data.repository.activeSnapshot
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import com.polinalinen.madre.ui.kit.*
 import com.polinalinen.madre.ui.razvorot.RazvorotReader
 import com.polinalinen.madre.ui.screens.Home
@@ -43,6 +44,17 @@ class BookNavigationUiTest {
     private val recipes by lazy { runBlocking{RecipeRepository(app).getRecipes()} }
     @Before fun setup() { runCatching{androidx.work.WorkManager.initialize(app,androidx.work.Configuration.Builder().build())} }
     @After fun clearControllers() { rule.activity.viewModelStore.clear() }
+
+    private fun bindRealController():BakingViewModel {
+        lateinit var controller:BakingViewModel
+        rule.activityRule.scenario.onActivity { activity ->
+            assertSame(app,activity.application)
+            // Bind the actual fixture owner, never a cached Application from another test.
+            controller=ViewModelProvider(activity,ViewModelProvider.AndroidViewModelFactory(app))[BakingViewModel::class.java]
+        }
+        assertSame(app,controller.getApplication<MadreApplication>())
+        return controller
+    }
 
     @Test fun realGraphOpensFifthChapterAndRestoresItsPageAndTocSearch() {
         lateinit var nav:NavHostController
@@ -96,16 +108,6 @@ class BookNavigationUiTest {
         val requested=MutableStateFlow<Long?>(fixture.id)
         lateinit var nav:NavHostController
         val restoration=StateRestorationTester(rule)
-        fun bindRealController():BakingViewModel {
-            lateinit var controller:BakingViewModel
-            rule.activityRule.scenario.onActivity { activity ->
-                assertSame(app,activity.application)
-                // Keep the actual fixture Application, not a cached AndroidViewModelFactory singleton.
-                controller=ViewModelProvider(activity,ViewModelProvider.AndroidViewModelFactory(app))[BakingViewModel::class.java]
-            }
-            assertSame(app,controller.getApplication<MadreApplication>())
-            return controller
-        }
         var controller=bindRealController()
         fun awaitActualBake() {
             rule.waitForIdle()
@@ -139,6 +141,79 @@ class BookNavigationUiTest {
         restoration.emulateSavedInstanceStateRestore();rule.waitForIdle()
         assertEquals(MadreDestinations.HOME,nav.currentDestination?.route)
     }
+    @Test fun plannedNotificationOpensOvenAndPauseKeepsItsSection() {
+        val recipe=runBlocking{app.recipeRepository.getRecipes()}.first()
+        val plan=PlannedBake(recipe.id,2,System.currentTimeMillis()+3_600_000L)
+        BookPreferences(app).use{assertTrue(it.putPlan(plan))}
+        bindRealController()
+        val requested=MutableStateFlow<com.polinalinen.madre.notifications.PlannedBakeRequest?>(
+            com.polinalinen.madre.notifications.PlannedBakeRequest(plan.id,com.polinalinen.madre.notifications.PlannedBakeAction.OPEN))
+        lateinit var nav:NavHostController
+        rule.setContent{nav=rememberNavController();MadreNavHost(nav,pendingPlanned=requested)}
+        rule.waitUntil(10_000){rule.onAllNodesWithText("Убрать план").fetchSemanticsNodes().isNotEmpty()}
+        assertEquals(MadreDestinations.HOME,nav.currentDestination?.route)
+        assertNull(requested.value)
+        rule.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.STARTED)
+        BookPreferences(app).use{assertEquals(1,it.initialTab())}
+    }
+
+    @Test fun overlaysAndFinaleStayOnBakeAndColdHomeKeepsTheExistingRecord() {
+        val recipe=runBlocking{app.recipeRepository.getRecipes()}.first()
+        val fixture=BakingSession.start(9001L,recipe,2.0).copy(currentStepIndex=recipe.timeline.lastIndex,
+            recipeRevision=app.recipeRepository.revision)
+        runBlocking{app.activeBakeRepository.commit(fixture.id,null,fixture.activeSnapshot())}
+        val requested=MutableStateFlow<Long?>(fixture.id)
+        lateinit var nav:NavHostController
+        val restoration=StateRestorationTester(rule)
+        bindRealController()
+        restoration.setContent{nav=rememberNavController();MadreNavHost(nav,pendingSessionId=requested)}
+        rule.waitUntil(10_000){rule.onAllNodesWithText("Крупно").fetchSemanticsNodes().isNotEmpty()}
+        val bakeRoute=MadreDestinations.BAKE
+        rule.onNodeWithText("Крупно").performScrollTo().performClick()
+        rule.waitForIdle()
+        rule.onNode(SemanticsMatcher("close actual FullTimer"){
+            it.config.getOrNull(SemanticsActions.OnClick)?.label=="Свернуть таймер"
+        }).assertIsDisplayed()
+        assertEquals(bakeRoute,nav.currentDestination?.route)
+        rule.activityRule.scenario.onActivity{it.onBackPressedDispatcher.onBackPressed()}
+        rule.waitForIdle()
+        rule.onNodeWithContentDescription("Действия выпечки").performClick()
+        rule.onNodeWithText("Бросить выпечку").assertExists()
+        rule.activityRule.scenario.onActivity{it.onBackPressedDispatcher.onBackPressed()}
+        rule.waitForIdle()
+        rule.onNodeWithText("Бросить выпечку").assertDoesNotExist()
+        assertEquals(bakeRoute,nav.currentDestination?.route)
+        rule.onNodeWithText("Испечено").performClick()
+        val ledger=com.polinalinen.madre.utils.PrefsBakeSessionLedger(app.getSharedPreferences("madre_prefs",0))
+        rule.waitUntil(10_000){
+            val ready=rule.onAllNodesWithText("Вписать в книгу").fetchSemanticsNodes().isNotEmpty()
+            ready && ledger.recordIdFor(fixture.id)!=null
+        }
+        val recordId=ledger.recordIdFor(fixture.id)!!
+        assertEquals(bakeRoute,nav.currentDestination?.route)
+        rule.activityRule.scenario.onActivity{it.onBackPressedDispatcher.onBackPressed()}
+        rule.waitForIdle()
+        assertEquals(MadreDestinations.HOME,nav.currentDestination?.route)
+        assertEquals(1,nav.currentBackStackEntry?.savedStateHandle?.get<Int>("home_section"))
+        assertEquals(recordId,ledger.recordIdFor(fixture.id))
+        rule.runOnIdle{rule.activity.viewModelStore.clear()}
+        bindRealController()
+        restoration.emulateSavedInstanceStateRestore()
+        rule.waitUntil(10_000){rule.onAllNodesWithText("Вписать в книгу").fetchSemanticsNodes().isNotEmpty()}
+        rule.onNodeWithText("ИСПЕЧЕНО · ВПИШИТЕ В КНИГУ").assertExists()
+        assertEquals(recordId,ledger.recordIdFor(fixture.id))
+        assertEquals(listOf(recordId),runBlocking{app.bakeHistoryRepository.observeAll().first()}.map{it.id})
+        rule.onNodeWithText("Вписать в книгу").performScrollTo().performClick()
+        rule.waitForIdle()
+        assertEquals(bakeRoute,nav.currentDestination?.route)
+        rule.onNodeWithText("Вписать в книгу").performScrollTo().performClick()
+        rule.waitUntil(10_000){
+            rule.onAllNodesWithText("Что испечь",substring=true).fetchSemanticsNodes()
+            nav.currentDestination?.route==MadreDestinations.HOME && ledger.recordIdFor(fixture.id)==null
+        }
+        assertEquals(listOf(recordId),runBlocking{app.bakeHistoryRepository.observeAll().first()}.map{it.id})
+    }
+
     @Test fun fontScale200UsesTheSameChapterScrollRendererAndNotOtherChapters() {
         val recipe=recipes.single{it.id=="ciabatta"}
         val prefs=ReadingPreferences(app,"nav-large-${UUID.randomUUID()}")

@@ -134,7 +134,7 @@ import com.polinalinen.madre.ui.screens.Home
     val duration = (step.durationMinutes * 60L).coerceAtLeast(1)
     val progress = (1 - remaining.toFloat() / duration).coerceIn(0f, 1f)
     PaperBakeCard(session.recipe.name,
-        if (session.isCompleted) "ИСПЕЧЕНО · СОХРАНИТЬ РЕЗУЛЬТАТ" else "ШАГ ${session.currentStepIndex + 1}/${session.recipe.timeline.size} · ${step.title}",
+        if (session.isCompleted) "ИСПЕЧЕНО · ВПИШИТЕ В КНИГУ" else "ШАГ ${session.currentStepIndex + 1}/${session.recipe.timeline.size} · ${step.title}",
         recipePhoto(session.recipe.id), session.progress, onClick) {
         if (session.isCompleted) PaperNote("Результат ждёт в этой выпечке")
         else {

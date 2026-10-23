@@ -227,7 +227,9 @@ class BakingViewModel @JvmOverloads constructor(
             // Cycle 15/17: посеять nextSessionId И восстановить UI-сессии из
             // active_bakes (policy A) до того, как startBaking выдаст новый id.
             val saved = activeBakeRepository.initializeLegacyKeys()
-            nextSessionId = maxOf(nextSessionId, saved.maxOfOrNull { it.sessionId + 1 } ?: 1L)
+            val pendingFinales=sessionLedger.pendingSessionIds()
+            nextSessionId = maxOf(nextSessionId, saved.maxOfOrNull { it.sessionId + 1 } ?: 1L,
+                pendingFinales.maxOrNull()?.plus(1L) ?: 1L)
             val byId = recipes.associateBy { it.id }
             val nowElapsed = BakingClock.elapsed()
             val nowWall = BakingClock.wallClock()
@@ -263,6 +265,8 @@ class BakingViewModel @JvmOverloads constructor(
                     BakingProgressService.start(getApplication())
                 }
             }
+            // Back leaves the final photo/share choice undecided. Restore its existing record, never insert another.
+            pendingFinales.forEach { restoreCompletionNow(it) }
             recoverCancellationEffects()
             sessionIdsReady.complete(Unit)
             _restoreReady.value = true

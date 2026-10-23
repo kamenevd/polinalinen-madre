@@ -131,6 +131,7 @@ fun MadreNavHost(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer);bookPreferences.close() }
     }
     fun showHome(section:Int) {
+        activeSection=section
         runCatching { navController.getBackStackEntry(MadreDestinations.HOME).savedStateHandle["home_section"]=section }
         navController.popBackStack(MadreDestinations.HOME,inclusive=false)
         bookPreferences.visit(section)

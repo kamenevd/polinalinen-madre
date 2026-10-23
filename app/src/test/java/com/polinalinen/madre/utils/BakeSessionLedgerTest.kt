@@ -23,6 +23,19 @@ class BakeSessionLedgerTest {
         assertThat(BakeSessionLedger.key(123L)).isEqualTo("bake_record_session_123")
     }
 
+    @Test fun `enumeration preserves pending pointers and ignores unrelated or malformed keys`() {
+        val prefs=MemorySharedPreferences()
+        val ledger=PrefsBakeSessionLedger(prefs)
+        assertThat(ledger.remember(5L,77L)).isTrue()
+        prefs.edit().putString("my_name","Не менять").putLong("bake_record_session_06",88L)
+            .putString("bake_record_session_7","wrong type").putLong("bake_record_session_8",0L).commit()
+        assertThat(ledger.pendingSessionIds()).containsExactly(5L)
+        assertThat(prefs.getString("my_name",null)).isEqualTo("Не менять")
+        assertThat(prefs.contains("bake_record_session_06")).isTrue()
+        ledger.forget(5L)
+        assertThat(ledger.pendingSessionIds()).isEmpty()
+    }
+
     @Test
     fun `failed commit does not mark pointer as ready`() {
         val prefs = MemorySharedPreferences(commitSucceeds = false)

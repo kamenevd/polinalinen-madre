@@ -77,6 +77,15 @@ class QaSigningTests(unittest.TestCase):
             self.assertEqual(0o700, stat.S_IMODE(directory.stat().st_mode))
             self.assertEqual(0o600, stat.S_IMODE(restored.stat().st_mode))
 
+    def test_withdrawn_new_qa_identity_is_rejected_before_writing_material(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            environment = self.environment()
+            environment["QA_SIGNING_CERT_SHA256"] = "9ACA5F5F57F301EC8359AD670ECEB6387156132007C07FF36A31266326468258"
+            directory = Path(tmp) / "qa"
+            with self.assertRaisesRegex(ValueError, "certificate pin"):
+                restore_qa_signing.restore_qa_keystore(directory, environment)
+            self.assertFalse(directory.exists())
+
     def test_qa_restore_never_overwrites_an_existing_keystore(self):
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp) / "qa"

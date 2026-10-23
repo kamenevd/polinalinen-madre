@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Restore only the stable QA keystore into a private, disposable runner directory."""
+"""Restore only a QA keystore matching the required 7.0.6 update identity."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ try:
 except ModuleNotFoundError:
     from verify_apk_signature import normalize_fingerprint
 
-EXPECTED_QA_CERT_SHA256 = "9ACA5F5F57F301EC8359AD670ECEB6387156132007C07FF36A31266326468258"
+EXPECTED_QA_CERT_SHA256 = "DDE5FA55A95EA8E5310CB35A6C92A108316663564FD7950C7E5C664D5D80F639"
 REQUIRED = (
     "QA_KEYSTORE_BASE64", "QA_KEYSTORE_PASSWORD", "QA_KEY_ALIAS",
     "QA_KEY_PASSWORD", "QA_SIGNING_CERT_SHA256",

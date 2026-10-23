@@ -191,7 +191,7 @@ internal class PaperGlView(context: Context, private val failure: (String) -> Un
     }
     companion object {
         private const val VS = """
-attribute vec2 a; uniform vec2 uP,uN,uS; uniform mediump float uR,uMode;
+attribute vec2 a; uniform vec2 uP,uN;uniform mediump vec2 uS; uniform mediump float uR,uMode;
 varying mediump vec2 vUv; varying mediump float vD,vTh;
 void main(){vec2 v=a;float d=dot(v-uP,uN);vec3 pos=vec3(v,0.);float th=0.;
 if(uMode<.5&&d>0.){float PR=3.14159265*uR;vec2 base=v-uN*d;
@@ -202,9 +202,9 @@ gl_Position=vec4(pos.x/uS.x*2.-1.,1.-pos.y/uS.y*2.,uMode>.5?.5:-pos.z/400.,1.);}
 """
         internal val FS = """
 precision mediump float; uniform sampler2D uT; uniform vec3 uPaper;
-uniform float uR,uMode,uNight,uGrid; varying mediump vec2 vUv; varying mediump float vD,vTh;
+uniform float uR,uMode,uNight,uGrid;uniform vec2 uS; varying mediump vec2 vUv; varying mediump float vD,vTh;
 void main(){if(uGrid>.5){gl_FragColor=vec4(.8,.25,.1,1.);return;}
-vec3 t=texture2D(uT,vUv).rgb;float K=1.+uNight*${PaperLight.NIGHT};float grain=(fract(sin(dot(vUv,vec2(12.9898,78.233)))*43758.5)-.5)*${PaperLight.GRAIN*2f};
+vec3 t=texture2D(uT,vUv).rgb;float K=1.+uNight*${PaperLight.NIGHT};vec2 q=mod(floor(vUv*uS),16.);float grain=(mod(q.x*13.+q.y*29.+q.x*q.y*3.,16.)/15.*2.-1.)*${PaperLight.GRAIN};
 if(uMode>.5){float e=vD-uR*${PaperLight.SHADOW_START};float s=${PaperLight.SHADOW}*K*exp(-max(e,0.)/(uR*${PaperLight.SHADOW_RADIUS}+${PaperLight.SHADOW_SOFT}));
 if(e<0.)s*=smoothstep(-uR*${PaperLight.SHADOW_FADE},0.,e);gl_FragColor=vec4(t*(1.-min(s,${PaperLight.SHADOW_MAX}))+grain,1.);return;}
 float th=vTh;float crease=1.-${PaperLight.AO}*K*exp(-abs(vD)/(uR*${PaperLight.AO_RADIUS}+${PaperLight.AO_SOFT}));float sh;vec3 base;

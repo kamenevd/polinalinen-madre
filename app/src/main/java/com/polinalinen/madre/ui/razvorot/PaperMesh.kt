@@ -23,53 +23,71 @@ internal fun PaperFold.point(x: Float, y: Float): CurlPoint {
 /** Deterministic native CPU renderer for screenshot fixtures; runtime without GL
  * uses the flat slide, not this mesh (designer Q2). UVs deform with the sheet,
  * so verso print is genuinely mirrored rather than a separate flat label. */
-internal class PaperTexture(val front: Bitmap, paper: Int, private val night: Boolean = false) {
-    private val verso = Bitmap.createBitmap(front.width, front.height, Bitmap.Config.ARGB_8888).apply {
-        val gray = (Color.red(paper) + Color.green(paper) + Color.blue(paper)) / 3f
-        fun channel(v: Int) = ((v * (1f-PaperLight.DESATURATION) + gray * PaperLight.DESATURATION)*(PaperLight.VERSO_TINT+if(night)PaperLight.VERSO_NIGHT else 0f)).toInt().coerceIn(0, 255)
-        val c = Canvas(this)
-        c.drawColor(Color.rgb(channel(Color.red(paper)), channel(Color.green(paper)), channel(Color.blue(paper))))
-        c.drawBitmap(front, 0f, 0f, Paint(Paint.FILTER_BITMAP_FLAG).apply { alpha = (255f*PaperLight.PRINT).roundToInt() })
-        // Subtle deterministic fibres remain visible on an otherwise blank verso.
-        val tile=Bitmap.createBitmap(16,16,Bitmap.Config.ARGB_8888)
-        for(y in 0 until 16)for(x in 0 until 16) {
-            val noise=((x*13+y*29+x*y*3) and 15)*2-15
-            val color=if(noise<0)0 else 255
-            tile.setPixel(x,y,Color.argb((abs(noise)/15f*PaperLight.GRAIN*255f).roundToInt(),color,color,color))
+internal class PaperTexture(val front: Bitmap, private val paper: Int, private val night: Boolean = false) {
+    private class Material(val fold:PaperFold,val sourceUnder:Bitmap?,val face:Bitmap,val back:Bitmap,val under:Bitmap?) {
+        fun close(){face.recycle();back.recycle();under?.recycle()}
+    }
+    private var material:Material?=null
+    /** Shade source texels, not only the24 mesh columns. The canonical rim has
+     * angular width0.06rad: interpolating vertex colours erased it and smeared
+     * face/verso masks across an entire cell. Geometry remains24x48. */
+    private fun prepare(fold:PaperFold,under:Bitmap?):Material {
+        material?.let{if(it.fold===fold && it.sourceUnder===under)return it}
+        material?.close()
+        val w=front.width;val h=front.height;val count=w*h
+        val source=IntArray(count);front.getPixels(source,0,w,0,0,w,h)
+        val lower=under?.let{IntArray(count).also{p->it.getPixels(p,0,w,0,0,w,h)}}
+        val face=IntArray(count);val back=IntArray(count);val receiver=lower?.let{IntArray(count)}
+        val gray=(Color.red(paper)+Color.green(paper)+Color.blue(paper))/3f
+        val tint=PaperLight.VERSO_TINT+if(night)PaperLight.VERSO_NIGHT else 0f
+        fun paperChannel(value:Int)=(value*(1f-PaperLight.DESATURATION)+gray*PaperLight.DESATURATION)*tint
+        val pr=paperChannel(Color.red(paper));val pg=paperChannel(Color.green(paper));val pb=paperChannel(Color.blue(paper))
+        fun rgb(r:Float,g:Float,b:Float,shade:Float,grain:Float)=Color.rgb(
+            (r*shade+grain).roundToInt().coerceIn(0,255),
+            (g*shade+grain).roundToInt().coerceIn(0,255),
+            (b*shade+grain).roundToInt().coerceIn(0,255))
+        for(y in 0 until h)for(x in 0 until w) {
+            val sx=(x+.5f)*fold.width/w;val sy=(y+.5f)*fold.height/h
+            val d=fold.d(sx,sy);val theta=(max(d,0f)/fold.radius).coerceAtMost(PI.toFloat())
+            val crease=PaperLight.crease(d,fold.radius,night)
+            val grain=PaperLight.grain(sx.toInt(),sy.toInt())*255f
+            val i=y*w+x;val tex=source[i]
+            if(theta<=PI/2) {
+                val light=if(d<=0f)1f else PaperLight.faceShade(theta)+PaperLight.highlight(theta,night)
+                face[i]=rgb(Color.red(tex).toFloat(),Color.green(tex).toFloat(),Color.blue(tex).toFloat(),light*crease,grain)
+            } else {
+                val light=PaperLight.versoShade(theta)*crease
+                fun print(base:Float,value:Int)=base*(1f-PaperLight.PRINT)+value*PaperLight.PRINT
+                back[i]=rgb(print(pr,Color.red(tex)),print(pg,Color.green(tex)),print(pb,Color.blue(tex)),light,grain)
+            }
+            if(lower!=null && receiver!=null) {
+                val c=lower[i];val light=PaperLight.receiver(d,fold.radius,night)
+                receiver[i]=rgb(Color.red(c).toFloat(),Color.green(c).toFloat(),Color.blue(c).toFloat(),light,grain)
+            }
         }
-        c.drawPaint(Paint().apply{shader=android.graphics.BitmapShader(tile,android.graphics.Shader.TileMode.REPEAT,android.graphics.Shader.TileMode.REPEAT)})
-        tile.recycle()
+        fun bitmap(pixels:IntArray)=Bitmap.createBitmap(pixels,w,h,Bitmap.Config.ARGB_8888)
+        return Material(fold,under,bitmap(face),bitmap(back),receiver?.let{bitmap(it)}).also{material=it}
     }
     fun draw(canvas: Canvas, fold: PaperFold, under: Bitmap? = null, grid: Boolean = false) {
         val nx = 24; val ny = 48; val n = (nx + 1) * (ny + 1)
         val vertices = FloatArray(n * 2); val flat = FloatArray(n * 2)
-        val face = IntArray(n); val back = IntArray(n); val shadow = IntArray(n)
         val scaleX = front.width / fold.width; val scaleY = front.height / fold.height
-
-        fun rgb(v: Float, visible: Boolean = true): Int {
-            val c = (255f * v.coerceIn(0f, 1f)).toInt()
-            return Color.argb(if (visible) 255 else 0, c, c, c)
-        }
         for (i in 0 until n) {
             val x = fold.width * (i % (nx + 1)) / nx
             val y = fold.height * (i / (nx + 1)) / ny
             val v = fold.point(x, y)
             vertices[2 * i] = v.x * scaleX; vertices[2 * i + 1] = v.y * scaleY
             flat[2 * i] = x * scaleX; flat[2 * i + 1] = y * scaleY
-            val crease = PaperLight.crease(v.d,fold.radius,night)
-            val spec = PaperLight.highlight(v.theta,night)
-            face[i] = rgb((PaperLight.faceShade(v.theta) + spec) * crease, v.theta <= PI / 2)
-            back[i] = rgb(PaperLight.versoShade(v.theta) * crease, v.theta > PI / 2)
-            shadow[i] = rgb(PaperLight.receiver(v.d,fold.radius,night))
         }
         val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-        if (under != null) canvas.drawBitmapMesh(under, nx, ny, flat, 0, shadow, 0, paint)
-        canvas.drawBitmapMesh(front, nx, ny, vertices, 0, face, 0, paint)
-        canvas.drawBitmapMesh(verso, nx, ny, vertices, 0, back, 0, paint)
+        val shaded=prepare(fold,under)
+        shaded.under?.let{canvas.drawBitmapMesh(it,nx,ny,flat,0,null,0,paint)}
+        canvas.drawBitmapMesh(shaded.face,nx,ny,vertices,0,null,0,paint)
+        canvas.drawBitmapMesh(shaded.back,nx,ny,vertices,0,null,0,paint)
         if (grid) {
             paint.color = Color.RED; paint.strokeWidth = 1f
             for (y in 0..ny) for (x in 0 until nx) { val i = y * (nx + 1) + x; canvas.drawLine(vertices[2*i], vertices[2*i+1], vertices[2*i+2], vertices[2*i+3], paint) }
         }
     }
-    fun close() { verso.recycle() }
+    fun close() { material?.close();material=null }
 }

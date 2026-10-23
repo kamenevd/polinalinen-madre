@@ -15,6 +15,8 @@ import androidx.test.services.storage.TestStorage
 import com.google.common.truth.Truth.assertThat
 import com.polinalinen.madre.ui.razvorot.RazvorotSceneActivity
 import com.polinalinen.madre.ui.razvorot.RazvorotScenes
+import com.polinalinen.madre.ui.razvorot.Atmosphere
+import com.polinalinen.madre.ui.razvorot.debugCurlFold
 import java.io.ByteArrayOutputStream
 import java.security.MessageDigest
 import java.util.concurrent.CountDownLatch
@@ -27,8 +29,10 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class MainScreensScreenshotTest {
     @get:Rule val rule=createAndroidComposeRule<RazvorotSceneActivity>()
-    private fun select(scene:String) {
-        rule.runOnIdle{rule.activity.scene=scene}
+    private var marginMedian=0
+    private var pageSpan=0
+    private fun select(scene:String,theme:Atmosphere?=null) {
+        rule.runOnIdle{rule.activity.scene=scene;rule.activity.atmosphere=theme}
         rule.waitUntil(15_000){rule.onAllNodesWithTag("scene-$scene").fetchSemanticsNodes().isNotEmpty()}
         rule.waitForIdle()
         if(scene=="reading-sheet") {
@@ -61,7 +65,7 @@ class MainScreensScreenshotTest {
         rule.waitForIdle()
         // Semantics/idle precede Surface presentation. Commit + PixelCopy fences the
         // actual current Window buffer, not a stale SurfaceFlinger screenshot.
-        val committed=CountDownLatch(1)
+        lateinit var committed:CountDownLatch
         lateinit var bitmap:Bitmap
         lateinit var window:android.view.Window
         rule.runOnIdle {
@@ -69,8 +73,12 @@ class MainScreensScreenshotTest {
             val view=window.decorView
             check(view.isHardwareAccelerated)
             bitmap=Bitmap.createBitmap(view.width,view.height,Bitmap.Config.ARGB_8888)
-            view.viewTreeObserver.registerFrameCommitCallback { committed.countDown() }
-            view.invalidate()
+            val windows=listOfNotNull(rule.activity.window,rule.activity.captureWindow).distinct()
+            committed=CountDownLatch(windows.size)
+            windows.forEach {owner->
+                owner.decorView.viewTreeObserver.registerFrameCommitCallback { committed.countDown() }
+                owner.decorView.invalidate()
+            }
         }
         check(committed.await(5,TimeUnit.SECONDS)){"No native frame committed for ${rule.activity.scene}"}
         val copied=CountDownLatch(1);var result=-1
@@ -79,18 +87,40 @@ class MainScreensScreenshotTest {
         }
         check(copied.await(5,TimeUnit.SECONDS)){"PixelCopy callback missing: $name"}
         check(result==PixelCopy.SUCCESS){"PixelCopy $name failed: $result"}
-        if(name=="gles2-curl-mid") {
+        if(rule.activity.captureWindow!=null) {
+            // PixelCopy of ONE translucent DialogWindow has no activity pixels.
+            // Capture the actual compositor result; never invent a PNG composite.
+            bitmap.recycle()
+            bitmap=checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
+        }
+        assertThat(bitmap.width).isEqualTo(412)
+        assertThat(bitmap.height).isEqualTo(915)
+        marginMedian=(80..280).map{android.graphics.Color.red(bitmap.getPixel(10,it))}.sorted()[100]
+        val band=(80..280 step 2).flatMap{y->(80..260 step 2).map{x->android.graphics.Color.red(bitmap.getPixel(x,y))}}
+        pageSpan=band.max()-band.min()
+        if(name.startsWith("gles2-curl-")) {
             // The GL-only scene holds its non-null fold until this PixelCopy.
             // Blank/transparent readiness or an all-black GL buffer cannot pass.
             var ink=0;var paper=0;var total=0
             for(y in bitmap.height/5 until bitmap.height*4/5)for(x in bitmap.width/10 until bitmap.width*9/10) {
                 val color=bitmap.getPixel(x,y);val r=android.graphics.Color.red(color);val g=android.graphics.Color.green(color);val b=android.graphics.Color.blue(color)
-                if(r<130&&g<130&&b<130)ink++
-                if(r>180&&g>170&&b>160)paper++
+                val night=rule.activity.atmosphere==Atmosphere.NIGHT
+                if(if(night)r>60&&g>50&&b>40 else r<130&&g<130&&b<130)ink++
+                if(if(night)r in 3..40 && g in 2..40 else r>180&&g>150&&b>120)paper++
                 total++
             }
             assertThat(ink).isGreaterThan(100) // real printed text in the GL-only viewport
             assertThat(paper).isGreaterThan(total/3) // not a blank black texture
+        }
+        val scene=rule.activity.scene
+        if(scene=="curl-mid" || scene=="curl-back" || scene.startsWith("gles2-curl-")) {
+            val fold=debugCurlFold(412f,915f,scene)
+            val xs=listOf(1.7f,1.9f,2.3f,2.7f,3.05f).map{theta->fold.point(fold.px+theta*fold.radius,fold.height/2).x.toInt().coerceIn(0,411)}
+            val medians=xs.map{x->(640..820).map{android.graphics.Color.red(bitmap.getPixel(x,it))}.sorted()[90]}
+            val night=rule.activity.atmosphere==Atmosphere.NIGHT
+            assertThat(medians.max()-medians.min()).isAtLeast(if(night)1 else 10)
+            val renderer=if(scene.startsWith("gles2-"))"REAL_GLES2" else "CPU24x48"
+            TestStorage().openOutputFile("screenshots/$name-pixel-profile.json").bufferedWriter().use{it.write("{\"renderer\":\"$renderer\",\"theme\":\"${rule.activity.atmosphere}\",\"width\":412,\"height\":915,\"projectedX\":$xs,\"medianR\":$medians}")}
         }
         val out=ByteArrayOutputStream();check(bitmap.compress(Bitmap.CompressFormat.PNG,100,out));bitmap.recycle()
         val bytes=out.toByteArray();assertThat(bytes.size).isGreaterThan(1000)
@@ -131,5 +161,17 @@ class MainScreensScreenshotTest {
             }
             rule.waitUntil(15_000){(renderer().split(':').getOrNull(1)?.toIntOrNull()?:0)>0}
         } finally {shell("settings put global animator_duration_scale $old")}
+    }
+    @Test fun actualFourThemeCurlAndCompositedReadingSheet() {
+        listOf(Atmosphere.DAWN,Atmosphere.DAY,Atmosphere.DUSK,Atmosphere.NIGHT).forEach {theme->
+            val suffix=theme.name.lowercase()
+            listOf("curl-mid","curl-back","gles2-curl-mid","gles2-curl-back").forEach {scene->select(scene,theme);capture("$scene-$suffix")}
+            select("reader-text-16",theme);capture("scrim-baseline-$suffix")
+            val before=marginMedian
+            select("reading-sheet",theme);capture("reading-sheet-$suffix")
+            assertThat(marginMedian.toFloat()).isWithin(5f).of(before*.6f)
+            assertThat(pageSpan).isGreaterThan(20) // real page glyphs beneath the translucent scrim
+            TestStorage().openOutputFile("screenshots/reading-sheet-$suffix-composite.json").bufferedWriter().use{it.write("{\"capture\":\"actual-UiAutomation-system-composite\",\"beforeR\":$before,\"afterR\":$marginMedian,\"pageSpan\":$pageSpan,\"scrimAlpha\":0.4}")}
+        }
     }
 }

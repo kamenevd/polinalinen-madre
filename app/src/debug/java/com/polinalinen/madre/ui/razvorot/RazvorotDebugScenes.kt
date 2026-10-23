@@ -28,18 +28,21 @@ import kotlinx.coroutines.runBlocking
 /** Explicit debug-only activity: no launcher entry, no production route or voice API. */
 class RazvorotSceneActivity : ComponentActivity() {
     var scene by mutableStateOf("home-dawn")
+    var atmosphere by mutableStateOf<Atmosphere?>(null)
     var captureWindow:android.view.Window?=null
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        @Suppress("DEPRECATION")
+        window.decorView.systemUiVisibility=android.view.View.SYSTEM_UI_FLAG_FULLSCREEN or android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE
         scene=intent.getStringExtra("scene")?:"home-dawn"
         val recipes=runBlocking{RecipeRepository(this@RazvorotSceneActivity).getRecipes()}
-        setContent { key(scene) { RazvorotDebugScene(scene,recipes) } }
+        setContent { key(scene,atmosphere) { RazvorotDebugScene(scene,recipes,atmosphere) } }
     }
 }
 
 internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","reader-text-16","reader-text-22","curl-top","curl-mid","curl-bottom","curl-back","reader-chrome","reading-sheet","home-dawn","home-night","spine","bake","alice-listening","alice-reading","alice-confirm","alice-night","starter-growing","starter-peak","starter-hungry","shelf","shelf-night","shelf-large","curl-mid-night","gles2-curl-mid","bake-start","bake-end","fulltimer-start","fulltimer-end","timer-weight-start","timer-weight-end")
 
-@Composable internal fun RazvorotDebugScene(scene:String,recipes:List<Recipe>) {
+@Composable internal fun RazvorotDebugScene(scene:String,recipes:List<Recipe>,forceAtmosphere:Atmosphere?=null) {
     val context=LocalContext.current
     val preferences=remember(scene){
         context.getSharedPreferences("razvorot_fixture",0).edit().clear().commit()
@@ -50,7 +53,7 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
     val recipe=recipes.firstOrNull()?:return
     val density=LocalDensity.current
     CompositionLocalProvider(LocalPaperDebug provides debug,com.polinalinen.madre.ui.theme.LocalCalmMode provides false,LocalDensity provides Density(density.density,if(scene=="shelf-large")1.3f else density.fontScale)) {
-        RazvorotTheme(preferences,force=if(night)Atmosphere.NIGHT else Atmosphere.DAWN) {
+        RazvorotTheme(preferences,force=forceAtmosphere ?: if(night)Atmosphere.NIGHT else Atmosphere.DAWN) {
             Box(Modifier.fillMaxSize().background(LocalPaper.current.bg).safeDrawingPadding().testTag("scene-$scene").semantics{stateDescription="${debug.renderer}:${debug.renderedFrames}:${debug.cachedPages}:${debug.reason}"}) {
                 when {
                     scene=="font-compat" -> FontCompatibilityPage()
@@ -100,6 +103,12 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
         PageFooter(3,3,5) // explicit fixture position; runtime uses actual leaves
     }
 }
+internal fun debugCurlFold(w:Float,h:Float,scene:String):PaperFold {
+    val pose=scene.removePrefix("gles2-").removeSuffix("-night")
+    val grip=when(pose){"curl-top"->h*.027f;"curl-bottom"->h*.973f;else->h*.5f}
+    val back=pose=="curl-back"
+    return PaperFold.fromFinger(w,h,if(back)-1 else 1,if(back)w/12f else w*35f/36f,grip,if(back)w*5f/12f else w/6f,grip)
+}
 @Composable private fun DebugCurl(recipe:Recipe,scene:String) {
     val context=LocalContext.current;val paper=LocalPaper.current;val night=paper==NightPaper
     val debug=LocalPaperDebug.current
@@ -112,9 +121,7 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
         val under=remember(recipe,paper,w,h,textureDensity){PageRenderer(context).text(recipe,0,(w*textureDensity).toInt(),(h*textureDensity).toInt(),paper,startStep=5,viewportWidth=w)}
         val texture=remember(front){PaperTexture(front,paper.bg.toArgb(),night)}
         DisposableEffect(texture){onDispose{texture.close();front.recycle();under.recycle()}}
-        val grip=when(scene){"curl-top"->h*.027f;"curl-bottom"->h*.973f;else->h*.5f}
-        val back=scene=="curl-back"
-        val fold=PaperFold.fromFinger(w,h,if(back)-1 else 1,if(back)w/12f else w*35f/36f,grip,if(back)w*5f/12f else w/6f,grip)
+        val fold=debugCurlFold(w,h,scene)
         if(scene.startsWith("gles2-")) {
             val frame=remember(fold,front,under){PaperGlFrame(fold,front,under,paper.bg.toArgb(),night)}
             AndroidView(factory={PaperGlView(it,failure={reason->debug.renderer="SLIDE";debug.reason=reason},ready={debug.renderer="GLES2"},presented={debug.renderedFrames++})},modifier=Modifier.fillMaxSize(),update={it.submit(frame)})

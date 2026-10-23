@@ -42,6 +42,33 @@ class PaperMaterialReviewTest {
             assertThat(Color.red(blank)-Color.red(printed)).isAtMost(25) // faint 7% print, not legible face ink
         } finally { texture.close();front.recycle();under.recycle();target.recycle() }
     }
+    private fun blankMaterial(p:PaperColors,fold:PaperFold,verify:(Bitmap)->Unit) {
+        val source=Bitmap.createBitmap(412,915,Bitmap.Config.ARGB_8888).apply{eraseColor(p.bg.toArgb())}
+        val target=Bitmap.createBitmap(412,915,Bitmap.Config.ARGB_8888)
+        val texture=PaperTexture(source,p.bg.toArgb(),p==NightPaper)
+        try{texture.draw(Canvas(target),fold,source);verify(target)}finally{texture.close();source.recycle();target.recycle()}
+    }
+    private fun medianRed(bitmap:Bitmap,x:Float)=(640..820).map{Color.red(bitmap.getPixel(x.roundToInt().coerceIn(0,411),it))}.sorted()[90]
+    @Test fun actualCylinderPixelsHaveThetaGradientInEveryAtmosphere() {
+        val fold=debugCurlFold(412f,915f,"curl-mid")
+        for(p in listOf(DawnPaper,DayPaper,DuskPaper,NightPaper))blankMaterial(p,fold) {bitmap->
+            val values=listOf(1.7f,1.9f,2.3f,2.7f,3.05f).map{theta->medianRed(bitmap,fold.point(fold.px+theta*fold.radius,457.5f).x)}
+            assertThat(values.max()-values.min()).isAtLeast(if(p==NightPaper)1 else 10)
+            assertThat(values.min()).isLessThan(medianRed(bitmap,10f))
+        }
+    }
+    @Test fun actualEarlyFoldDarkensBothSidesAndRetainsPaperTexture() {
+        val fold=PaperFold(412f,915f,457.5f,20f,0f)
+        for(p in listOf(DawnPaper,DayPaper,DuskPaper,NightPaper))blankMaterial(p,fold) {bitmap->
+            val far=medianRed(bitmap,10f)
+            val flat=medianRed(bitmap,fold.px-12f)
+            val curved=medianRed(bitmap,fold.point(fold.px+12f,457.5f).x)
+            assertThat(far-flat).isAtLeast(if(p==NightPaper)1 else 15)
+            assertThat(far-curved).isAtLeast(if(p==NightPaper)1 else 15)
+            val fibres=(640..820).map{Color.red(bitmap.getPixel(10,it))}
+            assertThat(fibres.max()-fibres.min()).isAtLeast(2)
+        }
+    }
     @Test fun runtimeShaderUsesExactV3CoefficientsAndNeverLightsTheVerso() {
         val shader=PaperGlView.FS
         listOf(PaperLight.FACE,PaperLight.AO,PaperLight.NIGHT,PaperLight.HIGHLIGHT,PaperLight.SHADOW_START,PaperLight.SHADOW_RADIUS,PaperLight.SHADOW_FADE,PaperLight.SHADOW,PaperLight.SHADOW_MAX,PaperLight.DESATURATION,PaperLight.PRINT,PaperLight.VERSO_BASE,PaperLight.VERSO_RANGE,PaperLight.VERSO_TINT,PaperLight.VERSO_NIGHT).forEach {

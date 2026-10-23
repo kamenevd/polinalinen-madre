@@ -25,17 +25,30 @@ class RazvorotV3RenderTest {
         val context=ApplicationProvider.getApplicationContext<Context>()
         val recipes=runBlocking{RecipeRepository(context).getRecipes()}
         val module=if(File("app/src/main/AndroidManifest.xml").isFile)File("app") else File(".")
-        val output=File(module,"build/outputs/roborazzi/f-v3/$scene.png").absoluteFile
+        fun capture(theme:Atmosphere?) {
+        val directory=if(theme==null)"f-v3" else "f-v3-matrix/${theme.name.lowercase()}"
+        val output=File(module,"build/outputs/roborazzi/$directory/$scene.png").absoluteFile
         output.parentFile.mkdirs()
         captureRoboImage(filePath=output.path,roborazziOptions=RoborazziOptions(taskType=RoborazziTaskType.Record)) {
-            RazvorotDebugScene(scene,recipes)
+            RazvorotDebugScene(scene,recipes,theme)
         }
         assertThat(output.isFile).isTrue()
         assertThat(output.length()).isGreaterThan(1000L)
         val bitmap=android.graphics.BitmapFactory.decodeFile(output.path)
         assertThat(bitmap.width).isEqualTo(412)
         assertThat(bitmap.height).isEqualTo(915)
+        if(scene=="curl-mid" || scene=="curl-back") {
+            val fold=debugCurlFold(412f,915f,scene)
+            val xs=listOf(1.7f,1.9f,2.3f,2.7f,3.05f).map{theta->fold.point(fold.px+theta*fold.radius,fold.height/2).x.toInt().coerceIn(0,411)}
+            val medians=xs.map{x->(640..820).map{android.graphics.Color.red(bitmap.getPixel(x,it))}.sorted()[90]}
+            val night=theme==Atmosphere.NIGHT
+            assertThat(medians.max()-medians.min()).isAtLeast(if(night)1 else 10)
+            File(output.parentFile,"$scene-pixel-profile.json").writeText("{\"renderer\":\"CPU24x48-native\",\"theme\":\"$theme\",\"projectedX\":$xs,\"medianR\":$medians}")
+        }
         bitmap.recycle()
+        }
+        capture(null)
+        listOf(Atmosphere.DAWN,Atmosphere.DAY,Atmosphere.DUSK,Atmosphere.NIGHT).forEach{capture(it)}
     }
     @Test fun titleMorning()=render("reader-title-dawn")
     @Test fun titleNight()=render("reader-title-night")

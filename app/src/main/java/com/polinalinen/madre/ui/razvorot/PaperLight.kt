@@ -32,6 +32,12 @@ internal object PaperLight {
     const val SHADOW_RADIUS = 1.1f
     const val SHADOW_SOFT = 20f
     const val GRAIN = .0075f
+    // A16x16 integer hash stays exact even in GLES2 mediump. The old
+    // fract(sin(..)*43758.5) lost its fractional bits and became a flat tint.
+    fun grain(x:Int,y:Int):Float {
+        val a=x and 15;val b=y and 15
+        return (((a*13+b*29+a*b*3) and 15)/15f*2f-1f)*GRAIN
+    }
     fun nightFactor(night:Boolean)=if(night)1f+NIGHT else 1f
     fun faceShade(theta:Float)=1f-FACE*(1f-cos(theta))
     fun versoShade(theta: Float) = VERSO_BASE + VERSO_RANGE * -cos(theta)

@@ -18,6 +18,10 @@ import com.polinalinen.madre.ui.razvorot.RazvorotScenes
 import com.polinalinen.madre.ui.razvorot.Atmosphere
 import com.polinalinen.madre.ui.razvorot.debugCurlFold
 import com.polinalinen.madre.ui.razvorot.point
+import com.polinalinen.madre.ui.razvorot.DawnPaper
+import com.polinalinen.madre.ui.razvorot.DayPaper
+import com.polinalinen.madre.ui.razvorot.DuskPaper
+import com.polinalinen.madre.ui.razvorot.NightPaper
 import java.io.ByteArrayOutputStream
 import java.security.MessageDigest
 import java.util.concurrent.CountDownLatch
@@ -92,7 +96,27 @@ class MainScreensScreenshotTest {
             // PixelCopy of ONE translucent DialogWindow has no activity pixels.
             // Capture the actual compositor result; never invent a PNG composite.
             bitmap.recycle()
-            bitmap=checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
+            val paper=when(rule.activity.atmosphere){Atmosphere.DAY->DayPaper;Atmosphere.DUSK->DuskPaper;Atmosphere.NIGHT->NightPaper;else->DawnPaper}
+            val expected=paper.bg.red*255f*.6f
+            val tolerance=if(expected<30f)1f else 5f
+            val deadline=android.os.SystemClock.uptimeMillis()+5_000L
+            // A dialog owns a separate animation clock. Its first committed
+            // buffer can still have scrimAlpha≈0.025, despite activity idle.
+            // Await the actual compositor pixels, not an arbitrary sleep count.
+            while(true) {
+                bitmap=checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
+                assertThat(bitmap.width).isEqualTo(412);assertThat(bitmap.height).isEqualTo(915)
+                val observed=(80..280).map{android.graphics.Color.red(bitmap.getPixel(10,it))}.sorted()[100]
+                if(kotlin.math.abs(observed-expected)<=tolerance)break
+                if(android.os.SystemClock.uptimeMillis()>=deadline) {
+                    val failure=ByteArrayOutputStream();bitmap.compress(Bitmap.CompressFormat.PNG,100,failure)
+                    TestStorage().openOutputFile("screenshots/$name-unsettled-composite.png").use{it.write(failure.toByteArray())}
+                    error("Real modal composite did not reach40% scrim: expectedR=$expected observedR=$observed")
+                }
+                bitmap.recycle()
+                rule.mainClock.advanceTimeByFrame();rule.waitForIdle()
+                android.os.SystemClock.sleep(16L)
+            }
         }
         assertThat(bitmap.width).isEqualTo(412)
         assertThat(bitmap.height).isEqualTo(915)
@@ -170,7 +194,7 @@ class MainScreensScreenshotTest {
             select("reader-text-16",theme);capture("scrim-baseline-$suffix")
             val before=marginMedian
             select("reading-sheet",theme);capture("reading-sheet-$suffix")
-            assertThat(marginMedian.toFloat()).isWithin(5f).of(before*.6f)
+            assertThat(marginMedian.toFloat()).isWithin(if(theme==Atmosphere.NIGHT)1f else 5f).of(before*.6f)
             assertThat(pageSpan).isGreaterThan(20) // real page glyphs beneath the translucent scrim
             TestStorage().openOutputFile("screenshots/reading-sheet-$suffix-composite.json").bufferedWriter().use{it.write("{\"capture\":\"actual-UiAutomation-system-composite\",\"beforeR\":$before,\"afterR\":$marginMedian,\"pageSpan\":$pageSpan,\"scrimAlpha\":0.4}")}
         }

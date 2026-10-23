@@ -13,6 +13,7 @@ import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
+import com.google.common.truth.Truth.assertWithMessage
 import com.polinalinen.madre.MadreApplication
 import com.polinalinen.madre.ui.screens.bakeWord
 import org.junit.Rule
@@ -54,7 +55,7 @@ class ShelfReviewTest {
             assertThat(result.lineCount).isEqualTo(1)
             if(n.length<10) {
                 assertThat(result.isLineEllipsized(0)).isFalse()
-                assertThat(result.hasVisualOverflow).isFalse()
+                assertWithMessage("$n theme=$t scale=$s size=${result.size} width=${result.didOverflowWidth} height=${result.didOverflowHeight} naturalHeight=${result.multiParagraph.height}").that(result.hasVisualOverflow).isFalse()
             } else assertThat(result.isLineEllipsized(0)).isTrue()
         }
     }

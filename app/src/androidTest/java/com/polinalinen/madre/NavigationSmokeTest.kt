@@ -152,7 +152,9 @@ class NavigationSmokeTest {
             rule.waitUntil(TIMEOUT_MS){rule.onAllNodesWithTag("nav-2").fetchSemanticsNodes().isNotEmpty()}
             rule.onNodeWithTag("nav-2").performClick()
             val profile=profileForInterval(72)
-            for((hours,phase) in listOf(12 to "GROWING",26 to "PEAK",80 to "HUNGRY")) {
+            // Avoid the 12h=52.5% rounding boundary: real wall time advances
+            // between insert and draw. These interior samples keep exact assertions.
+            for((hours,phase) in listOf(10 to "GROWING",26 to "PEAK",80 to "HUNGRY")) {
                 val saved=runBlocking { repository.saveFeeding(SourdoughFeedingSaveRequest(old.id,72,System.currentTimeMillis()-hours*3_600_000L,30,60,30,StorageLocation.KITCHEN,"CI regression only",null,null)) }
                 inserted+=saved.feeding
                 rule.waitUntil(TIMEOUT_MS){rule.onAllNodesWithTag("starter-phase-$phase").fetchSemanticsNodes().isNotEmpty()}

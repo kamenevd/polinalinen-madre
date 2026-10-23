@@ -32,8 +32,8 @@ internal class PaperGlView(context: Context, private val failure: (String) -> Un
     private var surfaceHeight = 1
     private var stopped = false
     private var frame: PaperGlFrame? = null
-    @Volatile private var paperSwaps = 0L
-    private var presentedSwap = 0L
+    private val presentation=PaperPresentation()
+    private var canStamp=false
     private var pendingTextures:List<Bitmap> = emptyList()
     private val textures = linkedMapOf<Bitmap, Int>()
     private val nx = 40
@@ -64,6 +64,7 @@ internal class PaperGlView(context: Context, private val failure: (String) -> Un
                 stage="egl-initialize"
                 display = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY)
                 check(EGL14.eglInitialize(display, IntArray(2), 0, IntArray(2), 0))
+                canStamp=EGL14.eglQueryString(display,EGL14.EGL_EXTENSIONS)?.split(' ')?.contains("EGL_ANDROID_presentation_time")==true
                 stage="egl-config"
                 val configs = arrayOfNulls<EGLConfig>(1); val count = IntArray(1)
                 check(EGL14.eglChooseConfig(display, intArrayOf(EGL14.EGL_RENDERABLE_TYPE, EGL14.EGL_OPENGL_ES2_BIT, EGL14.EGL_RED_SIZE, 8, EGL14.EGL_GREEN_SIZE, 8, EGL14.EGL_BLUE_SIZE, 8, EGL14.EGL_ALPHA_SIZE, 8, EGL14.EGL_DEPTH_SIZE, 16, EGL14.EGL_NONE), 0, configs, 0, 1, count, 0) && count[0] > 0)
@@ -96,10 +97,9 @@ internal class PaperGlView(context: Context, private val failure: (String) -> Un
     }
     override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) { handler.post { surfaceWidth = width; surfaceHeight = height; safeDraw() } }
     override fun onSurfaceTextureUpdated(surface: SurfaceTexture) {
-        // Count a native paper buffer only when TextureView has consumed it, not
-        // merely when the GL producer queued a swap (transparent clears do not count).
-        val swap=paperSwaps
-        if(swap>presentedSwap){presentedSwap=swap;presented()}
+        // SurfaceTexture's timestamp identifies the consumed buffer. A newer
+        // transparent clear must never acknowledge an older skipped paper swap.
+        if(presentation.consumed(surface.timestamp))presented()
     }
     override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
         handler.post { releaseGl(); surface.release(); worker.quitSafely() }
@@ -164,8 +164,13 @@ internal class PaperGlView(context: Context, private val failure: (String) -> Un
             }
             check(GLES20.glGetError() == GLES20.GL_NO_ERROR)
         }
+        if(canStamp) {
+            val timestamp=System.nanoTime()
+            if(EGLExt.eglPresentationTimeANDROID(display,eglSurface,timestamp))presentation.queued(timestamp,frame!=null)
+        }
+        // Timestamp verification is diagnostic only, not a new GLES requirement:
+        // unsupported drivers still render, but do not claim verified frame counts.
         check(EGL14.eglSwapBuffers(display, eglSurface))
-        if(frame!=null)paperSwaps++
     }
     companion object {
         private const val VS = """

@@ -43,7 +43,9 @@ class MainScreensScreenshotTest {
             rule.onNodeWithTag("starter-phase-$phase").assertIsDisplayed()
             rule.onNodeWithTag("starter-jar").assertIsDisplayed()
             rule.onNodeWithTag("nav-2").assertIsSelected()
-            rule.onNodeWithText("Покормить").assertIsDisplayed()
+            // The jar screen scrolls on a small viewport; actual MainActivity
+            // navigation below exercises this action after scrolling into view.
+            rule.onNodeWithText("Покормить").assertExists().assertHasClickAction()
             rule.onAllNodesWithText("ИЗОЛИРОВАННАЯ DEBUG-СЦЕНА · БЕЗ СВЯЗИ").assertCountEquals(0)
             rule.onAllNodesWithText("Ответьте «да» или «нет»").assertCountEquals(0)
             rule.onAllNodesWithText("Алиса",substring=true).assertCountEquals(0)
@@ -69,6 +71,19 @@ class MainScreensScreenshotTest {
         }
         check(copied.await(5,TimeUnit.SECONDS)){"PixelCopy callback missing: $name"}
         check(result==PixelCopy.SUCCESS){"PixelCopy $name failed: $result"}
+        if(name=="gles2-curl-mid") {
+            // The GL-only scene holds its non-null fold until this PixelCopy.
+            // Blank/transparent readiness or an all-black GL buffer cannot pass.
+            var ink=0;var paper=0;var total=0
+            for(y in bitmap.height/5 until bitmap.height*4/5)for(x in bitmap.width/10 until bitmap.width*9/10) {
+                val color=bitmap.getPixel(x,y);val r=android.graphics.Color.red(color);val g=android.graphics.Color.green(color);val b=android.graphics.Color.blue(color)
+                if(r<130&&g<130&&b<130)ink++
+                if(r>180&&g>170&&b>160)paper++
+                total++
+            }
+            assertThat(ink).isGreaterThan(100) // real printed text in the GL-only viewport
+            assertThat(paper).isGreaterThan(total/3) // not a blank black texture
+        }
         val out=ByteArrayOutputStream();check(bitmap.compress(Bitmap.CompressFormat.PNG,100,out));bitmap.recycle()
         val bytes=out.toByteArray();assertThat(bytes.size).isGreaterThan(1000)
         TestStorage().openOutputFile("screenshots/$name.png").use{it.write(bytes)}

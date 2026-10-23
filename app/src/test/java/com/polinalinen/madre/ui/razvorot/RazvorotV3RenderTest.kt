@@ -11,6 +11,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import java.io.File
+import com.google.common.truth.Truth.assertThat
 
 /** First native F-v3 evidence, NOT a replacement for approved historical goldens.
  * Output lives under build/ and must be reviewed before becoming a pixel baseline. */
@@ -22,9 +24,14 @@ class RazvorotV3RenderTest {
     private fun render(scene:String) {
         val context=ApplicationProvider.getApplicationContext<Context>()
         val recipes=runBlocking{RecipeRepository(context).getRecipes()}
-        captureRoboImage(filePath="build/outputs/roborazzi/f-v3/$scene.png",roborazziOptions=RoborazziOptions(taskType=RoborazziTaskType.Record)) {
+        val module=if(File("app/src/main/AndroidManifest.xml").isFile)File("app") else File(".")
+        val output=File(module,"build/outputs/roborazzi/f-v3/$scene.png").absoluteFile
+        output.parentFile.mkdirs()
+        captureRoboImage(filePath=output.path,roborazziOptions=RoborazziOptions(taskType=RoborazziTaskType.Record)) {
             RazvorotDebugScene(scene,recipes)
         }
+        assertThat(output.isFile).isTrue()
+        assertThat(output.length()).isGreaterThan(1000L)
     }
     @Test fun titleMorning()=render("reader-title-dawn")
     @Test fun titleNight()=render("reader-title-night")

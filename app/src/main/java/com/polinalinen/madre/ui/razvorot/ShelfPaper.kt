@@ -9,6 +9,7 @@ import androidx.compose.ui.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
@@ -17,6 +18,8 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Text
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import coil.compose.AsyncImage
 import com.polinalinen.madre.data.db.entities.BakeRecordEntity
 import com.polinalinen.madre.shelf.*
@@ -32,12 +35,22 @@ internal fun bookWord(n:Int)=when {
 
 /** Measure along the spine BEFORE rotation, never wrap a word into letter stacks. */
 @Composable internal fun SpineTitle(name:String) {
-    Text(name,Modifier.fillMaxSize().padding(vertical=12.dp).layout { measurable,constraints ->
-        val title=measurable.measure(Constraints(maxWidth=constraints.maxHeight,maxHeight=constraints.maxWidth))
-        layout(constraints.maxWidth,constraints.maxHeight) {
-            title.placeWithLayer((constraints.maxWidth-title.width)/2,(constraints.maxHeight-title.height)/2) { rotationZ=90f }
-        }
-    },color=Color(0xFFF4EADC),fontFamily=Literature,fontSize=18.sp,lineHeight=23.sp,maxLines=1,softWrap=false,overflow=TextOverflow.Ellipsis)
+    val density=LocalDensity.current
+    val measurer=rememberTextMeasurer()
+    BoxWithConstraints(Modifier.fillMaxSize().padding(vertical=12.dp)) {
+        val along=with(density){maxHeight.roundToPx()}
+        val across=with(density){maxWidth.roundToPx()}
+        var font=18f
+        // Keep the user's scale; shrink only if measured natural line height
+        // physically exceeds the spine. Never clip a line to maxHeight before rotation.
+        while(font>12f && measurer.measure(name,TextStyle(fontFamily=Literature,fontSize=font.sp,lineHeight=(font*23f/18f).sp),maxLines=1,softWrap=false,overflow=TextOverflow.Ellipsis,constraints=Constraints(maxWidth=along)).size.height>across)font-=.5f
+        Text(name,Modifier.fillMaxSize().layout { measurable,constraints ->
+            val title=measurable.measure(Constraints(maxWidth=constraints.maxHeight))
+            layout(constraints.maxWidth,constraints.maxHeight) {
+                title.placeWithLayer((constraints.maxWidth-title.width)/2,(constraints.maxHeight-title.height)/2) { rotationZ=90f }
+            }
+        },color=Color(0xFFF4EADC),fontFamily=Literature,fontSize=font.sp,lineHeight=(font*23f/18f).sp,maxLines=1,softWrap=false,overflow=TextOverflow.Ellipsis)
+    }
 }
 
 /** The same stateless shelf is used by Room/ViewModel UI and isolated fixtures. */

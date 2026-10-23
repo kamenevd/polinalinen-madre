@@ -26,6 +26,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.polinalinen.madre.ui.theme.LocalCalmMode
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CancellationException
 import kotlin.math.*
 
 internal class PaperMotion(val direction: Int, val x0: Float, val y0: Float, var fold: PaperFold) {
@@ -217,6 +218,7 @@ internal class PaperMotion(val direction: Int, val x0: Float, val y0: Float, var
                     if(bitmap!=null && density>2f) android.graphics.Bitmap.createScaledBitmap(bitmap,(width*2f).roundToInt().coerceAtLeast(1),(height*2f).roundToInt().coerceAtLeast(1),true).also{if(it!==bitmap)bitmap.recycle()} else bitmap
                 }
                     .onSuccess { if (it != null) textures[index] = it }.onFailure {
+                        if(it is CancellationException)throw it
                         failureReason="texture-capture-${it.javaClass.simpleName}: ${it.message}"
                         android.util.Log.e("MadrePaperGL",failureReason,it); rendererFailed = true
                     }

@@ -27,7 +27,7 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
     if(full) { FullTimer(session,remaining){full=false};return }
     val p=LocalPaper.current
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal=22.dp)) {
-        BookHeader("ПЕЧЬ СЕЙЧАС · ×${session.scaleFactor}",onBack,{})
+        BookHeader("ПЕЧЬ СЕЙЧАС · ×${session.scaleFactor}",onBack)
         BookText(session.recipe.name,31)
         Row(Modifier.fillMaxWidth().padding(top=26.dp),verticalAlignment=Alignment.Bottom) {
             BookText("%02d".format(session.currentStepIndex+1),100)

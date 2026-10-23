@@ -24,6 +24,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.*
 import androidx.compose.ui.unit.*
 import com.polinalinen.madre.R
+import com.polinalinen.madre.BuildConfig
+import com.polinalinen.madre.ui.components.bookAction
 import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.ui.screens.Home
 
@@ -55,17 +57,17 @@ fun Recipe.totalTime(): String { val m = timeline.sumOf { it.durationMinutes }; 
     val p = LocalPaper.current
     Button(onClick, modifier.heightIn(min = 50.dp), enabled = enabled, shape = RoundedCornerShape(26.dp), colors = ButtonDefaults.buttonColors(containerColor = if (primary) p.acc else p.bg2, contentColor = if (primary) Color.White else p.ink)) { Text(text, fontFamily = Manrope, fontSize = 14.sp) }
 }
-@Composable fun BookHeader(title: String, onBack: (() -> Unit)? = null, onAa: () -> Unit) {
+@Composable fun BookHeader(title: String, onBack: (() -> Unit)? = null, onAa: (() -> Unit)? = null) {
     Row(Modifier.fillMaxWidth().heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically) {
         if (onBack != null) IconButton(onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Назад") }
         SmallLabel(title, Modifier.weight(1f))
-        TextButton(onAa, Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp).testTag("reading-settings")) { BookText("Aa", 21) }
+        if(onAa!=null)TextButton(onAa, Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp).testTag("reading-settings")) { BookText("Aa", 21) }
     }
 }
 @Composable fun BookCover(onOpen: () -> Unit, modifier: Modifier = Modifier) {
     Box(modifier.fillMaxWidth().height(350.dp), contentAlignment = Alignment.Center) {
         Box(Modifier.offset(x = 9.dp,y = 10.dp).size(204.dp,284.dp).rotate(-7f).background(Color(0xFFE6DCCD), RoundedCornerShape(4.dp)))
-        Box(Modifier.size(210.dp,300.dp).rotate(-7f).shadow(24.dp,RoundedCornerShape(5.dp)).background(Color(0xFF1C1714), RoundedCornerShape(5.dp)).clickable(onClickLabel = "Открыть книгу", onClick = onOpen).pointerInput(Unit) { detectHorizontalDragGestures { _, drag -> if(drag < -8f) onOpen() } }.testTag("book-cover")) {
+        Box(Modifier.size(210.dp,300.dp).rotate(-7f).shadow(24.dp,RoundedCornerShape(5.dp)).background(Color(0xFF1C1714), RoundedCornerShape(5.dp)).then(bookAction("Открыть книгу",onClick=onOpen)).pointerInput(Unit) { detectHorizontalDragGestures { _, drag -> if(drag < -8f) onOpen() } }.testTag("book-cover")) {
             Column(Modifier.fillMaxSize().padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Spacer(Modifier.height(12.dp)); BookText("МАДРЕ", 40, color = Color(0xFFF4EADC))
                 Spacer(Modifier.weight(1f))
@@ -107,7 +109,7 @@ fun Recipe.totalTime(): String { val m = timeline.sumOf { it.durationMinutes }; 
             IconButton({ grid = !grid }) { Icon(if(grid) Icons.Outlined.ViewCarousel else Icons.Outlined.GridView, if(grid) "Веер глав" else "Вся книга") }
         }
         if(grid) LazyVerticalGrid(GridCells.Fixed(3),Modifier.testTag(Home.LIST_TAG),horizontalArrangement = Arrangement.spacedBy(10.dp),verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(bottom=24.dp)) {
-            itemsIndexed(recipes) { i,r -> Column(Modifier.clip(RoundedCornerShape(10.dp)).clickable { onOpen(r.id) }.testTag(Home.chapterRowTag(r.id))) {
+            itemsIndexed(recipes) { i,r -> Column(Modifier.clip(RoundedCornerShape(10.dp)).then(bookAction("Открыть главу: ${r.name}"){onOpen(r.id)}).testTag(Home.chapterRowTag(r.id))) {
                 Image(painterResource(recipePhoto(r.id)),r.name,Modifier.fillMaxWidth().aspectRatio(.95f),contentScale=ContentScale.Crop)
                 BookText("%02d".format(i+1)+" "+r.name,13, Modifier.padding(top=5.dp)); SmallLabel(r.totalTime())
             } }
@@ -119,7 +121,7 @@ fun Recipe.totalTime(): String { val m = timeline.sumOf { it.durationMinutes }; 
                 for(offset in listOf(2,1,0)) {
                     val index=(selected+offset).coerceAtMost(recipes.lastIndex)
                     if(index>=0) { val r=recipes[index]
-                        Column(Modifier.offset(x=(offset*18).dp,y=(offset*4).dp).rotate(offset*7f-3f).width(232.dp).height(332.dp).shadow(12.dp,RoundedCornerShape(17.dp)).background(LocalPaper.current.card,RoundedCornerShape(17.dp)).clip(RoundedCornerShape(17.dp)).clickable { onOpen(r.id) }.then(if(offset==0)Modifier.testTag(Home.chapterRowTag(r.id)) else Modifier)) {
+                        Column(Modifier.offset(x=(offset*18).dp,y=(offset*4).dp).rotate(offset*7f-3f).width(232.dp).height(332.dp).shadow(12.dp,RoundedCornerShape(17.dp)).background(LocalPaper.current.card,RoundedCornerShape(17.dp)).clip(RoundedCornerShape(17.dp)).then(bookAction("Открыть главу: ${r.name}"){onOpen(r.id)}).then(if(offset==0)Modifier.testTag(Home.chapterRowTag(r.id)) else Modifier)) {
                             Box { Image(painterResource(recipePhoto(r.id)),r.name,Modifier.fillMaxWidth().height(202.dp),contentScale=ContentScale.Crop); Ribbon(Modifier.padding(start=16.dp)); BookText("%02d".format(index+1),48,Modifier.align(Alignment.TopEnd).padding(12.dp),color=Color.White) }
                             BookText(r.name,22,Modifier.padding(14.dp,12.dp,14.dp,4.dp));SmallLabel("${r.totalTime()} · ${r.timeline.size} шагов",Modifier.padding(horizontal=14.dp))
                         }
@@ -133,6 +135,7 @@ fun Recipe.totalTime(): String { val m = timeline.sumOf { it.durationMinutes }; 
 }
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable fun ReadingSettings(preferences: ReadingPreferences, onClose: () -> Unit) {
+    val context=androidx.compose.ui.platform.LocalContext.current
     ModalBottomSheet(onDismissRequest=onClose,containerColor=LocalPaper.current.card) {
         Column(Modifier.padding(horizontal=22.dp).verticalScroll(rememberScrollState())) {
             BookText("Как читать",28)
@@ -147,6 +150,7 @@ fun Recipe.totalTime(): String { val m = timeline.sumOf { it.durationMinutes }; 
             Row(Modifier.fillMaxWidth().heightIn(min=58.dp),verticalAlignment=Alignment.CenterVertically) { Text("Меньше движения",Modifier.weight(1f));Switch(preferences.reducedMotion,preferences::setReduced) }
             Row(Modifier.fillMaxWidth().heightIn(min=58.dp),verticalAlignment=Alignment.CenterVertically) { Text("Тактильные отклики",Modifier.weight(1f));Switch(preferences.haptics,preferences::chooseHaptics) }
             SmallLabel("На слабом устройстве и при выключенной системной анимации — плоский сдвиг.")
+            if(BuildConfig.DEBUG)TextButton({context.startActivity(android.content.Intent().setClassName(context.packageName,"com.polinalinen.madre.ui.razvorot.RazvorotSceneActivity").putExtra("scene","paper"))},Modifier.fillMaxWidth().heightIn(min=48.dp)){Text("Бумага")}
             Spacer(Modifier.height(24.dp))
         }
     }

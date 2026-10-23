@@ -181,7 +181,10 @@ internal class PaperMotion(val direction: Int, val x0: Float, val y0: Float, var
             LaunchedEffect(layer, index, cacheKey) {
                 // Two frames ensure drawContent was recorded, including loaded hero images.
                 withFrameNanos { }; withFrameNanos { }
-                runCatching { layer.toImageBitmap().asAndroidBitmap().copy(android.graphics.Bitmap.Config.ARGB_8888, false) }
+                runCatching {
+                    val bitmap=layer.toImageBitmap().asAndroidBitmap().copy(android.graphics.Bitmap.Config.ARGB_8888,false)
+                    if(bitmap!=null && density>2f) android.graphics.Bitmap.createScaledBitmap(bitmap,(width*2f).roundToInt().coerceAtLeast(1),(height*2f).roundToInt().coerceAtLeast(1),true).also{if(it!==bitmap)bitmap.recycle()} else bitmap
+                }
                     .onSuccess { if (it != null) textures[index] = it }.onFailure { rendererFailed = true }
                 textures.keys.toList().filter { abs(it - page) > 2 }.forEach { textures.remove(it) }
             }

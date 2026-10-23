@@ -38,6 +38,10 @@ class YandexAccountControllerTest {
         c.beginSignIn();advanceTimeBy(60_000);runCurrent()
         assertEquals(YandexAccountState.SignedOut,c.state.value)
         assertTrue(api.events.isEmpty());assertFalse(storage.snapshot.foregroundRetryRequired)
+        val failed=requireNotNull(c.beginSignIn());c.failSignIn(failed,YandexAccountError.YANDEX)
+        assertEquals(YandexAccountState.Error(YandexAccountError.YANDEX),c.state.value)
+        val retried=requireNotNull(c.beginSignIn());c.cancelSignIn(retried)
+        assertEquals(YandexAccountState.SignedOut,c.state.value)
         c.close()
     }
 

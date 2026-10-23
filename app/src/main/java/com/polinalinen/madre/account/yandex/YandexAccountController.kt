@@ -62,7 +62,9 @@ class YandexAccountController(
         return stateLock.withLock {
             if (closed || _state.value is YandexAccountState.Binding || unbindPending) return@withLock null
             signInTimeout?.cancel()
-            if (_state.value !is YandexAccountState.SigningIn) previousState = _state.value
+            if (_state.value !is YandexAccountState.SigningIn) {
+                previousState = (_state.value as? YandexAccountState.SignedIn) ?: YandexAccountState.SignedOut
+            }
             val attempt = ++sequence
             _state.value = YandexAccountState.SigningIn(attempt, browser)
             signInTimeout = scope.launch {

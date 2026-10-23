@@ -5,6 +5,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -191,9 +192,14 @@ enum class PaperButtonVariant { PRIMARY, ACCENT, SECONDARY, TEXT }
             role = Role.Switch, onValueChange = onCheckedChange) else Modifier), contentAlignment = Alignment.Center) {
         Canvas(Modifier.size(52.dp, 32.dp)) {
             val alpha = if (enabled) 1f else .4f
-            drawLine((if (checked) p.rib else p.line).copy(alpha = alpha),
+            if (checked) drawLine(p.rib.copy(alpha = alpha),
                 Offset(8.dp.toPx(), center.y), Offset(size.width - 8.dp.toPx(), center.y),
                 3.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            else drawRoundRect(p.mut.copy(alpha = alpha),
+                topLeft = Offset(5.dp.toPx(), center.y - 6.dp.toPx()),
+                size = androidx.compose.ui.geometry.Size(size.width - 10.dp.toPx(), 12.dp.toPx()),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(6.dp.toPx()),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(1.5.dp.toPx()))
             drawCircle((if (checked) p.rib else p.card).copy(alpha = alpha), 10.dp.toPx(),
                 Offset(12.dp.toPx() + (size.width - 24.dp.toPx()) * position, center.y))
         }
@@ -209,7 +215,10 @@ enum class PaperButtonVariant { PRIMARY, ACCENT, SECONDARY, TEXT }
         steps = steps, onValueChangeFinished = onValueChangeFinished,
         colors = SliderDefaults.colors(thumbColor = p.card, activeTrackColor = p.ink,
             inactiveTrackColor = p.line, activeTickColor = Color.Transparent, inactiveTickColor = Color.Transparent),
-        thumb = { Box(Modifier.size(22.dp).clip(CircleShape).background(p.card)) },
+        thumb = { Box(Modifier.size(22.dp).clip(CircleShape).background(p.card)
+            .border(1.dp, p.mut, CircleShape), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(4.dp).clip(CircleShape).background(p.ink))
+        } },
         track = { state ->
             Box(Modifier.fillMaxWidth().height(2.dp).background(p.line, CircleShape)) {
                 val fraction = ((state.value - valueRange.start) / (valueRange.endInclusive - valueRange.start)).coerceIn(0f, 1f)

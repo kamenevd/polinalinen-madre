@@ -157,8 +157,7 @@ internal val BookRibbonHeight=44.dp
             Row(Modifier.fillMaxWidth().heightIn(min=48.dp),verticalAlignment=Alignment.CenterVertically) {Text("По часам",Modifier.weight(1f),style = PaperType.caption);PaperSwitch(preferences.atmosphere==Atmosphere.AUTO,{preferences.chooseAtmosphere(if(it)Atmosphere.AUTO else activeAtmosphere)})}
             SmallLabel("РАЗМЕР ТЕКСТА · ${preferences.textSize.toInt()}",Modifier.padding(top=14.dp))
             Row(verticalAlignment=Alignment.CenterVertically) {BookText("A",14);PaperSlider(preferences.textSize,preferences::setSize,valueRange=14f..22f,steps=7,modifier=Modifier.weight(1f).testTag("text-size"));BookText("A",24)}
-            SmallLabel("НА СКОЛЬКО ПЕЧЁМ · ×${preferences.portions.toInt()}")
-            PaperSlider(preferences.portions,preferences::choosePortions,valueRange=1f..5f,steps=3,modifier=Modifier.testTag("reader-portions"))
+
             SmallLabel("ПЕРЕЛИСТЫВАНИЕ")
             PaperSegmented(ReadingMode.entries.map { it.label }, ReadingMode.entries.indexOf(preferences.mode),
                 { preferences.chooseMode(ReadingMode.entries[it]) })

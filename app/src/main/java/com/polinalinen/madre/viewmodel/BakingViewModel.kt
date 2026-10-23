@@ -15,6 +15,7 @@ import com.polinalinen.madre.model.BakingSession
 import com.polinalinen.madre.model.BakingTick
 import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.model.StepType
+import com.polinalinen.madre.model.BakeUndo
 import com.polinalinen.madre.notifications.BakingNotificationPlanner
 import com.polinalinen.madre.notifications.BakeStepEndWorker
 import com.polinalinen.madre.notifications.BootRestorePlanner
@@ -80,6 +81,11 @@ class BakingViewModel @JvmOverloads constructor(
     @Volatile private var controllerLive = true
     private val _mutationError = MutableStateFlow<String?>(null)
     val mutationError: StateFlow<String?> = _mutationError.asStateFlow()
+    private val _restoreReady = MutableStateFlow(false)
+    val restoreReady: StateFlow<Boolean> = _restoreReady.asStateFlow()
+    private val _undo = MutableStateFlow<BakeUndo?>(null)
+    val undo: StateFlow<BakeUndo?> = _undo.asStateFlow()
+    private var undoExpiry: Job? = null
 
     private val sourdoughRepository = madreApp.sourdoughRepository
 
@@ -250,6 +256,7 @@ class BakingViewModel @JvmOverloads constructor(
             }
             recoverCancellationEffects()
             sessionIdsReady.complete(Unit)
+            _restoreReady.value = true
             madreApp.voiceCoordinator.attach(this@BakingViewModel)
         }
         // Токен под Keystore — диск, читаем на IO.
@@ -268,7 +275,10 @@ class BakingViewModel @JvmOverloads constructor(
     fun session(id: Long): BakingSession? = _sessions.value.find { it.id == id }
 
     /** A timer is opened only after the snapshot is durably created. */
-    suspend fun startBaking(recipe: Recipe, scaleFactor: Double): Long? {
+    suspend fun startBaking(recipe: Recipe, scaleFactor: Double): Long? = startBakingInternal(recipe, scaleFactor, false)
+    suspend fun startBakingWithUndo(recipe: Recipe, scaleFactor: Double): Long? = startBakingInternal(recipe, scaleFactor, true)
+
+    private suspend fun startBakingInternal(recipe: Recipe, scaleFactor: Double, withUndo: Boolean): Long? {
         sessionIdsReady.await()
         return transitionGate.withLock {
             try {
@@ -285,6 +295,7 @@ class BakingViewModel @JvmOverloads constructor(
                 restartTimer(id)
                 publishProgress()
                 BakingProgressService.start(getApplication())
+                if (withUndo) offerUndo(next, next.revision, BakeUndo.Kind.START, 5000, "Начали «${recipe.name}» · ×${next.trustedPortions}")
                 _mutationError.value = null
                 id
             } catch (e: CancellationException) { throw e }
@@ -292,21 +303,56 @@ class BakingViewModel @JvmOverloads constructor(
         }
     }
 
-    fun advanceStep(id: Long, onCompleted: () -> Unit = {}) = launchTransition {
+    fun advanceStep(id: Long, onCompleted: () -> Unit = {}) = advanceStepInternal(id, onCompleted, false)
+    fun advanceStepWithUndo(id: Long, onCompleted: () -> Unit = {}) = advanceStepInternal(id, onCompleted, true)
+    private fun advanceStepInternal(id: Long, onCompleted: () -> Unit, undoable: Boolean) = launchTransition {
         val old = session(id) ?: return@launchTransition
         if (old.isCompleted) return@launchTransition
         if (old.isLastStep && old.trustedPortions == null) {
             _mutationError.value = "Сначала подтверди порции этой выпечки."
             return@launchTransition
         }
-        val next = old.advance(BakingClock.elapsed(), BakingClock.wallClock()).copy(revision = old.revision + 1)
+        val beforeClock = BakingClock.elapsed()
+        val beforeRemaining = (old.stepEndsAtElapsed(beforeClock)-beforeClock).coerceAtLeast(0)
+        val next = old.advance(beforeClock, BakingClock.wallClock()).copy(revision = old.revision + 1)
         persistTransition(old, next)
         if (next.isCompleted) {
             val completion = reserveCompletion(id, next.recipe.id, next.recipe.name,
                 requireNotNull(next.trustedPortions), requireNotNull(next.completedAt))
             startRecordInsert(id, completion)
             onCompleted()
+        } else if (undoable) offerUndo(old, next.revision, BakeUndo.Kind.ADVANCE, 6000,
+            "Шаг ${next.currentStepIndex + 1} · ${next.currentStep.title}", capturedRemainingMillis=beforeRemaining)
+    }
+
+    private fun offerUndo(before: BakingSession, expectedRevision: Long, kind: BakeUndo.Kind, millis: Long, message: String, capturedRemainingMillis: Long? = null) {
+        undoExpiry?.cancel()
+        val now = BakingClock.elapsed()
+        val token = BakeUndo(java.util.UUID.randomUUID().toString(), before, expectedRevision, now + millis, kind,
+            capturedRemainingMillis ?: (before.stepEndsAtElapsed(now) - now).coerceAtLeast(0), message)
+        _undo.value = token
+        undoExpiry = viewModelScope.launch {
+            delay(millis)
+            if (_undo.value?.token == token.token) _undo.value = null
         }
+    }
+
+    fun undo(token: String) = launchTransition {
+        val pending = _undo.value?.takeIf { it.token == token } ?: return@launchTransition
+        val current = session(pending.sessionId)
+        if (!pending.valid(current, BakingClock.elapsed())) { _undo.value = null; return@launchTransition }
+        val old = requireNotNull(current)
+        when (pending.kind) {
+            BakeUndo.Kind.START -> { persistTransition(old, null); cleanExitedSession(old.id) }
+            BakeUndo.Kind.ADVANCE -> persistTransition(old, pending.restoredStep(old, BakingClock.elapsed(), BakingClock.wallClock()))
+        }
+        _undo.value = null
+    }
+
+    /** Await real Room/ledger restoration before interpreting a notification as a missing bake. */
+    suspend fun prepareBakeDestination(sessionId: Long): Boolean {
+        sessionIdsReady.await()
+        return session(sessionId) != null || ensureCompletion(sessionId) != null
     }
 
     private fun launchTransition(block: suspend () -> Unit) = viewModelScope.launch {
@@ -328,6 +374,7 @@ class BakingViewModel @JvmOverloads constructor(
     }
 
     private fun publishTransition(old: BakingSession, next: BakingSession?) {
+        if (_undo.value?.sessionId == old.id) { undoExpiry?.cancel(); _undo.value = null }
         _sessions.update { list -> list.mapNotNull { if (it.id == old.id) next else it } }
         if (next == null || next.isCompleted) {
             stopTimer(old.id)
@@ -420,9 +467,11 @@ class BakingViewModel @JvmOverloads constructor(
 
         return viewModelScope.launch {
             val completion = transitionGate.withLock { ensureCompletion(sessionId) }
+            var retiredRestoredCompletion = false
             try {
                 val recordId = completion?.let { withTimeoutOrNull(RECORD_WAIT_MS) { it.recordId.await() } }
                 if (recordId != null && completion != null) {
+                    retiredRestoredCompletion = true
                     if (!frozenPhoto.isNullOrBlank()) {
                         runCatching { bakeHistory.attachPhoto(recordId, frozenPhoto) }
                     }
@@ -445,6 +494,8 @@ class BakingViewModel @JvmOverloads constructor(
             } finally {
                 if (session(sessionId) != null) {
                     transitionGate.withLock { exitSessionNow(sessionId) }
+                } else if(retiredRestoredCompletion) {
+                    transitionGate.withLock { cleanExitedSession(sessionId) }
                 }
                 onExit()
             }

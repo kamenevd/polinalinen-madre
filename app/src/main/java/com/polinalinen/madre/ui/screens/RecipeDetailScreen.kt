@@ -32,6 +32,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
@@ -76,6 +77,9 @@ fun RecipeDetailScreen(
     onStartBaking: (sessionId: Long) -> Unit,
     viewModel: BakingViewModel = viewModel(),
     onOpenAlice: () -> Unit = {},
+    embedded: Boolean = false,
+    scaleFactorOverride: Double? = null,
+    textSize: Float = 16f,
 ) {
     val startScope = androidx.compose.runtime.rememberCoroutineScope()
     val mutationError by viewModel.mutationError.collectAsState()
@@ -93,7 +97,7 @@ fun RecipeDetailScreen(
     // Cycle 14: порции — единственный источник масштаба. Коэффициент, выход,
     // подписи шагов и запись в историю берут его отсюда и только отсюда.
     var portions by rememberSaveable { mutableIntStateOf(RecipeScale.MIN_PORTIONS) }
-    val scaleFactor = RecipeScale.factor(portions)
+    val scaleFactor = scaleFactorOverride ?: RecipeScale.factor(portions)
 
     // Сколько раз печён именно этот рецепт — питает крошки, износ и кофейные
     // круги. Берём из общего среза bake_records, который уже держит
@@ -117,6 +121,11 @@ fun RecipeDetailScreen(
     // прерывали — пишет BakingViewModel.cancelSession в те же madre_prefs.
     val coffeeRingCount = remember(recipeId) {
         prefs.getInt(CoffeeRing.prefsKey(recipeId), 0)
+    }
+
+    if (embedded) {
+        RecipeChapterContent(recipe, scaleFactor, textSize, onOpenAlice)
+        return
     }
 
     PaperSurface(color = colors.bg, modifier = Modifier.fillMaxSize()) {
@@ -312,8 +321,42 @@ private fun MissingRecipePage(loading: Boolean, onBack: () -> Unit) {
     }
 }
 
+/** Same chapter renderer in scroll/large-type mode; no second navigation or start button. */
 @Composable
-private fun FullRecipeSection(recipe: Recipe, scaleFactor: Double, modifier: Modifier = Modifier) {
+fun RecipeChapterContent(recipe: Recipe, scaleFactor: Double, textSize: Float = 16f, onOpenAlice: (() -> Unit)? = null) {
+    val colors = LocalPaper.current
+    LazyColumn(Modifier.fillMaxSize().testTag("reader-scroll"),
+        contentPadding = PaddingValues(bottom = 24.dp)) {
+        item(key = "title") { BookText(recipe.name, 30, Modifier.padding(22.dp)) }
+        item(key = "description") { PaperNote(recipe.description, Modifier.padding(horizontal = 22.dp)) }
+        recipe.ingredients.forEach { (section, ingredients) -> item(key = "ingredients-$section") {
+            SmallLabel(ingredientSectionTitle(section), Modifier.padding(horizontal = 22.dp, vertical = 14.dp))
+            ingredients.forEach { ingredient ->
+                Text(RecipeScaler.scaledDisplayText(ingredient, scaleFactor), color = colors.ink2,
+                    style = PaperType.body.copy(fontSize = textSize.sp, lineHeight = (textSize * 25f / 16f).sp),
+                    modifier = Modifier.padding(horizontal = 22.dp, vertical = 5.dp))
+            }
+        } }
+        // Keep this as one item and retain the exact recipeId key/coordinate space.
+        // Existing vector and legacy bitmap notes are neither copied nor deleted.
+        item(key = "full-recipe") { HandwrittenEditSurface(recipe.id, Modifier.padding(top = 32.dp)) {
+            FullRecipeSection(recipe, scaleFactor, textSize = textSize)
+        } }
+        if(recipe.servingTips.isNotEmpty())item(key = "serving") {
+            SmallLabel("К столу", Modifier.padding(22.dp))
+            recipe.servingTips.forEach { PaperNote(it.text, Modifier.padding(horizontal = 22.dp, vertical = 6.dp)) }
+        }
+        if(recipe.variations.isNotEmpty())item(key = "variations") {
+            SmallLabel("Варианты", Modifier.padding(22.dp))
+            recipe.variations.forEach { PaperNote(it.text, Modifier.padding(horizontal = 22.dp, vertical = 6.dp)) }
+        }
+        if(onOpenAlice!=null)item(key = "alice") { PaperAliceButton(onOpenAlice, Modifier.padding(22.dp)) }
+        item(key = "end") { BookText("Конец главы. Теперь — испечь.", 24, Modifier.padding(22.dp), italic = true) }
+    }
+}
+
+@Composable
+private fun FullRecipeSection(recipe: Recipe, scaleFactor: Double, modifier: Modifier = Modifier, textSize: Float = 15.5f) {
     val colors = LocalPaper.current
     // Пересчитываются только те числа, которые сам рецепт пометил весом и
     // назвал по имени строки: остальное — проза, и трогать её книга не берётся.
@@ -360,8 +403,8 @@ private fun FullRecipeSection(recipe: Recipe, scaleFactor: Double, modifier: Mod
                             // два разных рецепта.
                             RecipeScaler.scaledStepText(step.description, scaleFactor, quantityBindings),
                             color = colors.ink,style = PaperType.body,
-                            fontSize = 15.5.sp,
-                            lineHeight = 23.sp,
+                            fontSize = textSize.sp,
+                            lineHeight = (textSize * 25f / 16f).sp,
                             modifier = Modifier.padding(top = 3.dp),
                         )
                     }

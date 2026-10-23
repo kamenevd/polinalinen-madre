@@ -77,6 +77,27 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
             Immersive(enabled = (scene.startsWith("reader-") && scene != "reader-chrome") || scene.startsWith("curl-") || scene.startsWith("gles2-curl-") || scene.startsWith("fulltimer-") || scene == "bake" || scene == "reading-sheet")
             Box(Modifier.fillMaxSize().background(LocalPaper.current.bg).testTag("scene-$scene").semantics{stateDescription="${debug.renderer}:${debug.renderedFrames}:${debug.cachedPages}:${debug.reason}"}) {
                 when {
+                    scene=="toc" || scene=="catalog" -> Column {
+                        Box(Modifier.weight(1f).safeDrawingPadding()) { BookTocContent(recipes,emptyList(),
+                            com.polinalinen.madre.navigation.BookBookmark(recipe.id,1),{_,_->},{},onAa={}) }
+                        SpineBar(0){}
+                    }
+                    scene=="oven" -> Column {
+                        val now=BakingClock.elapsed()
+                        val active=remember(recipe){BakingSession(7,recipe,9,now-(recipe.timeline[9].durationMinutes*60L-1661L)*1000L,
+                            BakingClock.wallClock(),scaleFactor=2.0)}
+                        Box(Modifier.weight(1f).safeDrawingPadding()){BookOvenContent(recipes,listOf(active),emptyList(),{},{},{},{},{})}
+                        SpineBar(1){}
+                    }
+                    scene.startsWith("chapter-") -> {
+                        val selected=if(scene=="chapter-title")recipes.getOrNull(4)?:recipe else recipe
+                        RazvorotReader(recipes,selected.id,preferences,{},{},{},initialPage=if(scene=="chapter-ingr")1 else -1,
+                            scaleFactor=2.0,onScaleFactor={},onOpenAlice={})
+                    }
+                    scene=="sheet-calc" -> {
+                        RazvorotReader(recipes,recipe.id,preferences,{},{},{},initialPage=1,scaleFactor=2.0,onOpenAlice={})
+                        BookPortionsSheet(recipe,2.0,{},{})
+                    }
                     scene=="kit" -> KitShowcase()
                     scene=="photo-viewer" -> PaperPhotoViewer({}) { BookText("Фото · локальная тестовая поверхность", 18) }
                     scene.startsWith("alice-sheet-") -> {
@@ -95,15 +116,14 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
                             flourGrams=100, waterGrams=50, retainedStarterGrams=50, finalHydrationPercent=50,
                             storageLocation=StorageLocation.KITCHEN)), {}, {}, {}, starterName="Мадре", currentYear=2026, nowMillis=1792735200000L)
                     scene=="font-compat" -> FontCompatibilityPage()
-                    scene=="catalog" -> Column {Box(Modifier.weight(1f)){ChapterCatalog(recipes,{},{},{})};SpineBar(0){}}
+
                     scene.startsWith("reader-title") -> TitleLeaf(if(scene.contains("last"))recipes.last() else recipe,if(scene.contains("last"))recipes.lastIndex else 0,recipes.size)
                     scene.startsWith("reader-text") -> DebugTextPage(recipe,preferences)
                     scene.startsWith("curl-") || scene.startsWith("gles2-curl-") -> DebugCurl(recipe,scene)
                     scene=="reader-chrome" -> RazvorotReader(recipes,recipe.id,preferences,{},{},{})
                     scene=="reading-sheet" -> { DebugTextPage(recipe,preferences);ReadingSettings(preferences,onWindow={(context as? RazvorotSceneActivity)?.captureWindow=it}){} }
                     scene.startsWith("home-") -> Column {
-                        var catalog by remember{mutableStateOf(false)}
-                        Box(Modifier.weight(1f)) { if(catalog)ChapterCatalog(recipes,{},{catalog=false},{}) else CoverPage(recipes,{catalog=true},{},{}) }
+                        Box(Modifier.weight(1f).safeDrawingPadding()){BookTocContent(recipes,emptyList(),null,{_,_->},{})}
                         SpineBar(0){}
                     }
                     scene=="spine" -> Box(Modifier.fillMaxSize(),contentAlignment=Alignment.BottomCenter){SpineBar(2){}}
@@ -158,7 +178,7 @@ internal fun debugCurlFold(w:Float,h:Float,scene:String):PaperFold {
         val textureDensity=LocalDensity.current.density.coerceAtMost(2f)
         val front=remember(recipe,paper,w,h,textureDensity){PageRenderer(context).text(recipe,0,(w*textureDensity).toInt(),(h*textureDensity).toInt(),paper,viewportWidth=w)}
         val under=remember(recipe,paper,w,h,textureDensity){PageRenderer(context).text(recipe,0,(w*textureDensity).toInt(),(h*textureDensity).toInt(),paper,startStep=5,viewportWidth=w)}
-        val texture=remember(front){PaperTexture(front,paper.bg.toArgb(),night)}
+        val texture=remember(front,textureDensity){PaperTexture(front,paper.bg.toArgb(),night,density=textureDensity)}
         DisposableEffect(texture){onDispose{texture.close();front.recycle();under.recycle()}}
         val fold=debugCurlFold(w,h,scene)
         if(scene.startsWith("gles2-")) {

@@ -42,12 +42,14 @@ class PaperTurnGestureTest {
         rule.waitForIdle();assertThat(page).isEqualTo(1)
         rule.onNodeWithTag("paper-test").performTouchInput{swipe(center,Offset(width*.05f,center.y),400)}
         rule.waitForIdle();assertThat(page).isEqualTo(1)
+        rule.onNodeWithTag("paper-test").performTouchInput{swipe(Offset(width*.12f,center.y),Offset(width*.85f,center.y),150)}
+        rule.waitForIdle();assertThat(page).isEqualTo(1) // the left edge belongs to system Back
     }
     @Test fun forwardAndBackwardFlickUseRealWidget() {
         show()
         rule.onNodeWithTag("paper-test").performTouchInput{swipeLeft(durationMillis=150)}
         rule.waitUntil(3000){page==2};assertThat(page).isEqualTo(2)
-        rule.onNodeWithTag("paper-test").performTouchInput{swipe(Offset(width*.12f,center.y),Offset(width*.85f,center.y),150)}
+        rule.onNodeWithTag("paper-test").performTouchInput{swipe(Offset(width*.82f,center.y),Offset(width*.99f,center.y),100)}
         rule.waitUntil(3000){page==1};assertThat(page).isEqualTo(1)
     }
     @Test fun cancellationKeepsCurrentPage() {

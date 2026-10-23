@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package com.polinalinen.madre.ui.screens
 
 import com.polinalinen.madre.ui.kit.*
@@ -7,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -68,6 +71,7 @@ fun BakingCompleteScreen(
     sessionId: Long?,
     onHome: () -> Unit,
     viewModel: BakingViewModel = viewModel(),
+    onBack: (() -> Unit)? = null,
 ) {
     val colors = LocalPaper.current
 
@@ -81,12 +85,19 @@ fun BakingCompleteScreen(
     val busy = sessionId != null && finishing.contains(sessionId)
     val photoPath = sessionId?.let { photoPaths[it] }
     val sealMillis = completion?.completedAtMillis ?: session?.completedAt
-    var shelfDecision by rememberSaveable { mutableStateOf(ShelfSharePolicy.DEFAULT_DECISION) }
-    var pendingFinish by rememberSaveable { mutableStateOf(false) }
+    var shelfDecision by rememberSaveable(sessionId) { mutableStateOf(ShelfShareDecision.KEEP) }
+    var decisionTouched by rememberSaveable(sessionId) { mutableStateOf(false) }
+    LaunchedEffect(sharingAvailable,photoPath) {
+        if(!sharingAvailable)shelfDecision=ShelfShareDecision.KEEP
+        else if(!decisionTouched)shelfDecision=if(photoPath==null)ShelfShareDecision.PUT_WITHOUT_PHOTO else ShelfShareDecision.PUT_WITH_PHOTO
+        else if(photoPath==null && shelfDecision==ShelfShareDecision.PUT_WITH_PHOTO)shelfDecision=ShelfShareDecision.PUT_WITHOUT_PHOTO
+    }
+
 
     // Системная «назад» с «Испечено» — личный выбор: не ставить на полку.
     BackHandler {
         if (busy) return@BackHandler
+        if(onBack!=null){onBack();return@BackHandler}
         val id = sessionId ?: return@BackHandler onHome()
         viewModel.finish(id, ShelfShareDecision.KEEP, onHome)
     }
@@ -101,14 +112,10 @@ fun BakingCompleteScreen(
     val openPhotoSource = rememberPhotoAttachment(
         kind = PhotoStore.PhotoKind.BAKE,
         key = sessionId ?: 0L,
-        onCancelled = { pendingFinish = false },
+        onCancelled = {},
     ) { path ->
         sessionId?.let { id ->
             viewModel.stageBakePhoto(id, path)
-            if (pendingFinish) {
-                pendingFinish = false
-                viewModel.finish(id, shelfDecision, onHome)
-            }
         }
     }
 
@@ -136,7 +143,7 @@ fun BakingCompleteScreen(
             Spacer(Modifier.height(22.dp))
 
             Text(
-                session?.recipe?.name ?: "испечено",
+                completion?.recipeName ?: session?.recipe?.name ?: "испечено",
                 color = colors.ink,style = PaperType.body,
                 fontWeight = FontWeight.Medium,
                 fontSize = 26.sp,
@@ -225,29 +232,27 @@ fun BakingCompleteScreen(
                 modifier = Modifier.padding(top = 18.dp),
             )
 
-            if (sharingAvailable && session != null) {
-                PaperButton(
-                    label = ShelfSharePolicy.labelOf(shelfDecision),
-                    variant = PaperButtonVariant.SECONDARY,
-                    enabled = !busy,
-                    repeatable = true,
-                    onClick = { shelfDecision = ShelfSharePolicy.next(shelfDecision) },
-                    modifier = Modifier.padding(top = 8.dp),
-                )
+            if (sharingAvailable && (session != null || completion != null)) {
+                FlowRow(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+                    PaperChip("С фото",shelfDecision==ShelfShareDecision.PUT_WITH_PHOTO,
+                        {decisionTouched=true;shelfDecision=ShelfShareDecision.PUT_WITH_PHOTO},enabled=!busy && photoPath!=null)
+                    PaperChip("Без фото",shelfDecision==ShelfShareDecision.PUT_WITHOUT_PHOTO,
+                        {decisionTouched=true;shelfDecision=ShelfShareDecision.PUT_WITHOUT_PHOTO},enabled=!busy)
+                    PaperChip("Только мне",shelfDecision==ShelfShareDecision.KEEP,
+                        {decisionTouched=true;shelfDecision=ShelfShareDecision.KEEP},enabled=!busy)
+                }
             }
 
             Spacer(Modifier.weight(1f))
             Spacer(Modifier.height(24.dp))
 
             PaperButton(
-                label = "На главную",
-                enabled = !busy,
+                label = if(onBack!=null)"Вписать в книгу" else "На главную",
+                enabled = !busy && !(ShelfSharePolicy.wantsPhoto(shelfDecision) && photoPath==null),
                 onClick = {
                     val id = sessionId ?: return@PaperButton onHome()
                     val needsPhoto = ShelfSharePolicy.wantsPhoto(shelfDecision)
                     if (needsPhoto && photoPath == null) {
-                        pendingFinish = true
-                        openPhotoSource()
                         return@PaperButton
                     }
                     viewModel.finish(id, shelfDecision, onHome)

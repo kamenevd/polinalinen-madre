@@ -72,6 +72,8 @@ class BakingRestoreFinishFromRecordTest {
         assertThat(sync.calls.single().recordId).isEqualTo(55L)
         assertThat(sync.calls.single().photoPath).isEqualTo("bake_photos/restored.jpg")
         assertThat(exits).isEqualTo(1)
+        assertThat(ledger.recordIdFor(7L)).isNull()
+        assertThat(vm.completions.value.containsKey(7L)).isFalse()
     }
 
     @Test

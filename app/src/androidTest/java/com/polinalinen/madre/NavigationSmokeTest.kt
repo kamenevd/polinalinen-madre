@@ -77,24 +77,21 @@ class NavigationSmokeTest {
      * прочитаны, тапать не по чему.
      */
     private fun awaitTableOfContents() {
-        rule.waitUntil(TIMEOUT_MS){rule.onAllNodesWithTag("book-cover").fetchSemanticsNodes().isNotEmpty()}
-        rule.onNodeWithTag("book-cover").performClick()
-        rule.waitForIdle()
-        rule.onNodeWithContentDescription("Вся книга").performClick()
         rule.waitUntil(TIMEOUT_MS) {
             rule.onAllNodesWithTag(Home.LIST_TAG).fetchSemanticsNodes().isNotEmpty() &&
                 recipes.isNotEmpty() &&
                 rule.onAllNodesWithTag(Home.chapterRowTag(recipes.first().id))
                     .fetchSemanticsNodes().isNotEmpty()
         }
+        rule.onNodeWithTag("book-cover").assertDoesNotExist()
+        rule.onNodeWithTag("chapter-fan").assertDoesNotExist()
     }
 
     private fun openChapter(recipe: Recipe) {
         val tag = Home.chapterRowTag(recipe.id)
         // Первая полоса длинная: до строки главы надо доехать, иначе её нет
         // в композиции и тапать не по чему.
-        rule.onNodeWithTag(Home.LIST_TAG).performScrollToNode(hasTestTag(tag))
-        rule.onNodeWithTag(tag).performClick()
+        rule.onNodeWithTag(tag).performScrollTo().performClick()
         rule.waitForIdle()
     }
 
@@ -120,7 +117,7 @@ class NavigationSmokeTest {
         rule.onNodeWithContentDescription(first.name).assertIsDisplayed()
         // The visible reader chrome is now a canonical locale-aware CAPS
         // overline. Keep an exact visible-text assertion, not ignoreCase/exists.
-        rule.onNodeWithText(first.name.uppercase(java.util.Locale.getDefault())).assertIsDisplayed()
+        rule.onNodeWithText("ГЛАВА 01 ИЗ 11").assertIsDisplayed()
 
         pressSystemBack()
         rule.onNodeWithTag(Home.LIST_TAG).assertIsDisplayed()

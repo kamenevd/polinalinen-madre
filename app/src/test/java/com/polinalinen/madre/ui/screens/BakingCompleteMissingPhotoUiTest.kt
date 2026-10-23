@@ -47,7 +47,7 @@ class BakingCompleteMissingPhotoUiTest {
     }
 
     @Test
-    fun `missing photo with restored completion does not leave complete screen`() {
+    fun `missing photo with restored completion finishes privately without forcing a picker`() {
         val history = FakeBakeHistory().apply {
             put(
                 BakeRecordEntity(
@@ -85,8 +85,9 @@ class BakingCompleteMissingPhotoUiTest {
         rule.onNodeWithText("На главную").performScrollTo().performClick()
         rule.waitForIdle()
 
-        assertThat(exited).isFalse()
-        rule.onNodeWithText("На главную").assertExists()
-        rule.onNodeWithText("ушли с экрана").assertDoesNotExist()
+        rule.waitUntil(5_000){exited}
+        assertThat(exited).isTrue()
+        assertThat(history.recordCalls).isEmpty()
+        rule.onNodeWithText("ушли с экрана").assertExists()
     }
 }

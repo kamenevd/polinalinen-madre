@@ -10,6 +10,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import com.polinalinen.madre.navigation.BookPreferences
 import androidx.compose.ui.*
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
@@ -34,40 +36,33 @@ import com.polinalinen.madre.ui.components.bookAction
     onFeed:()->Unit,onDiary:()->Unit,onSettings:()->Unit,shelf:@Composable ()->Unit,
     intervalHours:Int=24,onContinueReading:(BakingSession)->Unit={},
     onOpenShelf:(()->Unit)?=null,initialSection:Int=0,onSectionChanged:(Int)->Unit={},
+    bookPreferences:BookPreferences?=null,onOpenChapter:((String,Int)->Unit)?=null,
+    onStartRecipe:((Recipe)->Unit)?=null,onConfigureRecipe:((Recipe)->Unit)?=null,
 ) {
     var section by rememberSaveable{mutableIntStateOf(initialSection)}
     LaunchedEffect(initialSection){section=initialSection}
-    var catalog by rememberSaveable{mutableStateOf(false)}
+    val tabStates=rememberSaveableStateHolder()
     var settings by remember{mutableStateOf(false)}
     val p=LocalPaper.current
-    BackHandler(enabled=catalog||section!=0){catalog=false;section=0;onSectionChanged(0)}
+    BackHandler(enabled=section!=0){section=0;onSectionChanged(0)}
     Column(Modifier.fillMaxSize().paperBackground()) {
         Box(Modifier.weight(1f).safeDrawingPadding()) {
+          tabStates.SaveableStateProvider(section) {
             when(section) {
-                0 -> if(catalog)ChapterCatalog(recipes,onOpenRecipe,{catalog=false},{settings=true})
-                    else CoverPage(recipes,{catalog=true},onSettings,{settings=true}) {
-                        sessions.forEach { s ->
-                            val remaining by viewModel.remainingFor(s.id).collectAsState()
-                            Column(Modifier.fillMaxWidth().padding(top=16.dp).background(p.card,androidx.compose.foundation.shape.RoundedCornerShape(22.dp)).padding(14.dp)) {
-                                Row(verticalAlignment=Alignment.CenterVertically) {
-                                    BookText(timerDigits(remaining),30,color=p.acc)
-                                    Column(Modifier.padding(start=14.dp)) {SmallLabel("В ПЕЧИ · ШАГ ${s.currentStepIndex+1} ИЗ ${s.recipe.timeline.size}");BookText(s.recipe.name,18)}
-                                }
-                                Row {PaperTextButton({onContinueReading(s)},Modifier.weight(1f).heightIn(min=48.dp),label="Продолжить чтение"){Text("Продолжить чтение")};PaperTextButton({onOpenTimer(s.id)},Modifier.weight(1f).heightIn(min=48.dp),label="К таймеру"){Text("К таймеру")}}
-                            }
-                        }
-                    }
-                1 -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp)) {
-                    BookHeader("ПЕЧЬ",onAa={settings=true});BookText(if(sessions.isEmpty())"Пора испечь\nновую главу." else "Сейчас\nна кухне",42)
-                    sessions.forEach { s ->
-                        val remaining by viewModel.remainingFor(s.id).collectAsState()
-                        Column(Modifier.fillMaxWidth().clickable{onOpenTimer(s.id)}.padding(vertical=20.dp)) {SmallLabel("ШАГ ${s.currentStepIndex+1} · ${s.currentStep.title}");BookText(s.recipe.name,26);BookText(timerDigits(remaining),48,color=p.acc);PaperButton("Продолжить выпечку",{onOpenTimer(s.id)},primary=true)}
-                    }
-                    PaperButton("Выбрать рецепт",{section=0;onSectionChanged(0);catalog=true},Modifier.padding(top=24.dp),true)
+                0 -> BookTocContent(recipes,sessions,bookPreferences?.bookmark,
+                    {id,page->onOpenChapter?.invoke(id,page)?:onOpenRecipe(id)},onSettings,onAa={settings=true})
+                1 -> {
+                    val completions by viewModel.completions.collectAsState()
+                    BookOvenContent(recipes,sessions,bookPreferences?.plans.orEmpty(),onOpenTimer,
+                        {recipe->onConfigureRecipe?.invoke(recipe)?:onOpenRecipe(recipe.id)},
+                        {recipe->onStartRecipe?.invoke(recipe)?:onOpenRecipe(recipe.id)},
+                        {plan->recipes.firstOrNull{it.id==plan.recipeId}?.let{onConfigureRecipe?.invoke(it)}},
+                        onSettings,onAa={settings=true},pendingFinished=completions.filterKeys{id->sessions.none{it.id==id}}.toList())
                 }
                 2 -> StarterPaper(starterName,day,phase,lastFeedingMillis?.let{com.polinalinen.madre.sourdough.hoursSinceFeeding(it)},hydration,onFeed,onDiary,{settings=true},intervalHours)
                 3 -> shelf()
             }
+          }
         }
         SpineBar(section){if(it==3&&onOpenShelf!=null)onOpenShelf()else {section=it;onSectionChanged(it)}}
     }
@@ -101,6 +96,6 @@ import com.polinalinen.madre.ui.components.bookAction
     val session=sessions.find{it.id==sessionId}
     Box(Modifier.fillMaxSize().paperBackground()) {
         if(session==null)Column(Modifier.padding(22.dp)){BookText("Выпечка закрыта",32);PaperButton("К книге",onBack)}
-        else BakingPaper(session,remaining,{viewModel.togglePause(sessionId)},{viewModel.advanceStep(sessionId, onComplete)},onDetails,onBack, onOpenAlice = onOpenAlice, onConfirmPortions = { viewModel.confirmPortions(sessionId, it) })
+        else BakingPaper(session,remaining,{viewModel.togglePause(sessionId)},{viewModel.advanceStepWithUndo(sessionId, onComplete)},onDetails,onBack, onOpenAlice = onOpenAlice, onConfirmPortions = { viewModel.confirmPortions(sessionId, it) })
     }
 }

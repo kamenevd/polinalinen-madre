@@ -28,15 +28,33 @@ import androidx.compose.ui.unit.*
 import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.model.RecipeScaler
 import com.polinalinen.madre.model.BakingSession
+import kotlinx.coroutines.delay
+import com.polinalinen.madre.ui.screens.RecipeChapterContent
+import com.polinalinen.madre.ui.components.bookAction
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.LocalFireDepartment
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.LiveRegionMode
 
-internal data class ReadingLeaf(val chapter: Int, val title: Boolean = false, val lines: List<Pair<String,String>> = emptyList(), val anchor: String = "title", val blocks: List<String> = emptyList())
+internal data class ReadingLeaf(val chapter: Int, val title: Boolean = false, val lines: List<Pair<String,String>> = emptyList(), val anchor: String = "title", val blocks: List<String> = emptyList(), val end: Boolean = false)
 
 @Composable
-fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: ReadingPreferences, onBack: () -> Unit, onBake: (Recipe) -> Unit, onCalculator: (Recipe) -> Unit, initialStep: Int? = null, activeSessions: List<BakingSession> = emptyList(), onContinueBake: (Long) -> Unit = {}) {
+fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: ReadingPreferences, onBack: () -> Unit, onBake: (Recipe) -> Unit, onCalculator: (Recipe) -> Unit, initialStep: Int? = null, activeSessions: List<BakingSession> = emptyList(), onContinueBake: (Long) -> Unit = {},
+    initialPage: Int = -1, onPageChanged: (Int) -> Unit = {}, scaleFactor: Double? = null,
+    onScaleFactor: ((Double) -> Unit)? = null, onSchedule: ((Recipe) -> Unit)? = null,
+    onOpenAlice: (() -> Unit)? = null, scrollContent: (@Composable (Recipe) -> Unit)? = null) {
     var settings by remember { mutableStateOf(false) }
-    var chrome by rememberSaveable { mutableStateOf(false) }
+    var chrome by rememberSaveable { mutableStateOf(true) }
+    var annotations by rememberSaveable(recipeId) { mutableStateOf(false) }
+    var edgeMessage by remember { mutableStateOf<String?>(null) }
+    val factor = scaleFactor ?: preferences.portions.toDouble()
+    val setFactor: (Double) -> Unit = { value -> onScaleFactor?.invoke(value) ?: preferences.choosePortions(value.toFloat()) }
     var anchor by rememberSaveable(recipeId) { mutableStateOf("$recipeId:title") }
-    var seekActive by rememberSaveable(recipeId,initialStep) { mutableStateOf(initialStep != null) }
+    var seekActive by rememberSaveable(recipeId,initialStep,initialPage) { mutableStateOf(initialStep != null || initialPage >= 0) }
     val p = LocalPaper.current
     Immersive(barsRevealed = chrome)
     val stableInsets = WindowInsets.systemBarsIgnoringVisibility.union(WindowInsets.displayCutout)
@@ -45,19 +63,22 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
     BoxWithConstraints(Modifier.fillMaxSize().background(p.bg)) {
         val measurer = rememberTextMeasurer()
         val density = androidx.compose.ui.platform.LocalDensity.current
+        var headerHeight by remember { mutableStateOf(56.dp + stablePadding.calculateTopPadding()) }
+        var footerHeight by remember { mutableStateOf(150.dp + stablePadding.calculateBottomPadding()) }
         val width = with(density) { (maxWidth-52.dp-stablePadding.calculateLeftPadding(androidx.compose.ui.unit.LayoutDirection.Ltr)-stablePadding.calculateRightPadding(androidx.compose.ui.unit.LayoutDirection.Ltr)).roundToPx() }.coerceAtLeast(1)
-        val height = with(density) { (maxHeight-160.dp-stablePadding.calculateTopPadding()-stablePadding.calculateBottomPadding()).roundToPx() }.coerceAtLeast(200)
+        val height = with(density) { (maxHeight-headerHeight-footerHeight-52.dp).roundToPx() }.coerceAtLeast(200)
         val style = PaperType.body.copy(fontSize=preferences.textSize.sp,lineHeight=(preferences.textSize*25f/16f).sp)
-        val leaves = remember(recipes,width,height,preferences.textSize,preferences.portions,density.fontScale) {
+        val leaves = remember(recipes,recipeId,width,height,preferences.textSize,factor,density.fontScale) {
             buildList {
                 recipes.forEachIndexed { ci,r ->
+                    if (r.id != recipeId) return@forEachIndexed
                     add(ReadingLeaf(ci,true,anchor="${r.id}:title"))
                     var used=0;var lines=mutableListOf<Pair<String,String>>();var first="ingredients";var fragmentIds=mutableListOf<String>()
                     fun flush() { if(lines.isNotEmpty()) { add(ReadingLeaf(ci,lines=lines.toList(),anchor="${r.id}:$first",blocks=fragmentIds.toList()));lines=mutableListOf();fragmentIds=mutableListOf();used=0 } }
                     val bindings=RecipeScaler.scalableBindings(r)
                     val blocks=buildList {
-                        r.ingredients.forEach { (section,items) -> add(section to items.joinToString("\n") { RecipeScaler.scaledDisplayText(it,preferences.portions.toDouble()) }) }
-                        r.timeline.forEachIndexed { si,step -> add("%02d · %s · %d мин".format(si+1,step.title,step.durationMinutes) to RecipeScaler.scaledStepText(step.description,preferences.portions.toDouble(),bindings)) }
+                        r.ingredients.forEach { (section,items) -> add(com.polinalinen.madre.utils.ingredientSectionTitle(section) to items.joinToString("\n") { RecipeScaler.scaledDisplayText(it,factor) }) }
+                        r.timeline.forEachIndexed { si,step -> add("%02d · %s · %d мин".format(si+1,step.title,step.durationMinutes) to RecipeScaler.scaledStepText(step.description,factor,bindings)) }
                         if(r.servingTips.isNotEmpty()) add("К столу" to r.servingTips.joinToString("\n") { it.text })
                         if(r.variations.isNotEmpty()) add("Варианты" to r.variations.joinToString("\n") { it.text })
                     }
@@ -84,11 +105,19 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
                             if(rest.isNotEmpty())flush()
                         }
                     };flush()
+                    add(ReadingLeaf(ci, anchor = "${r.id}:end", end = true))
                 }
             }
         }
         var page by rememberSaveable(recipeId) { mutableIntStateOf(0) }
         LaunchedEffect(leaves) {
+            if (leaves.isEmpty()) return@LaunchedEffect
+            if (seekActive && initialPage >= 0) {
+                page = initialPage.coerceIn(0, leaves.lastIndex)
+                anchor = leaves[page].anchor
+                seekActive = false
+                return@LaunchedEffect
+            }
             val target=if(seekActive) "$recipeId:${recipes.firstOrNull{it.id==recipeId}?.ingredients?.size?.plus(initialStep?:0)}:" else anchor.substringBeforeLast(':')+":"
             val offset=if(seekActive)0 else anchor.substringAfterLast(':').toIntOrNull()?:0
             val containing=leaves.withIndex().flatMap{(index,leaf)->leaf.blocks.filter{it.startsWith(target)}.mapNotNull{key->key.substringAfterLast(':').toIntOrNull()?.let{start->Triple(index,start,key)}}}.filter{it.second<=offset}.maxByOrNull{it.second}?.first
@@ -98,49 +127,84 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
             if(seekActive)anchor=leaves.getOrNull(page)?.anchor?:anchor
             seekActive=false
         }
-        fun move(index:Int) { page=index.coerceIn(0,(leaves.size-1).coerceAtLeast(0));leaves.getOrNull(page)?.let { anchor=it.anchor } }
+        fun move(index:Int) { page=index.coerceIn(0,(leaves.size-1).coerceAtLeast(0));leaves.getOrNull(page)?.let { anchor=it.anchor }; if(leaves.getOrNull(page)?.end==true)chrome=true }
+        val currentPage by rememberUpdatedState(page)
+        val pageCallback by rememberUpdatedState(onPageChanged)
+        val hasPages by rememberUpdatedState(leaves.isNotEmpty())
+        LaunchedEffect(page, leaves) { if(leaves.isNotEmpty()) { if(leaves.getOrNull(page)?.end==true)chrome=true;delay(500);pageCallback(page.coerceIn(0,leaves.lastIndex)) } }
+        DisposableEffect(recipeId) { onDispose { if(hasPages)pageCallback(currentPage) } }
+        LaunchedEffect(edgeMessage) { if(edgeMessage!=null){delay(1500);edgeMessage=null} }
         val current=leaves.getOrNull(page)
-        val recipe=recipes.getOrNull(current?.chapter?:0)
+        val recipe=recipes.firstOrNull { it.id == recipeId }
         if(current!=null && recipe!=null) {
-            if(preferences.mode==ReadingMode.SCROLL) {
-                LazyColumn(Modifier.fillMaxSize().padding(top=56.dp,bottom=110.dp).testTag("reader-scroll")) {
-                    recipes.forEachIndexed { ci,r ->
-                        item(key="${r.id}:title") { TitleLeaf(r,ci,recipes.size) }
-                        r.ingredients.forEach { (section,items) -> item { LeafBlock(section,items.joinToString("\n") { it.displayText() },preferences) } }
-                        r.timeline.forEachIndexed { i,step -> item { LeafBlock("%02d · %s · %d мин".format(i+1,step.title,step.durationMinutes),step.description,preferences,r) } }
-                    }
+            if(preferences.mode==ReadingMode.SCROLL || density.fontScale>1.3f || annotations) {
+                Box(Modifier.fillMaxSize().padding(top=headerHeight,bottom=footerHeight)) {
+                    if(scrollContent!=null)scrollContent(recipe) else RecipeChapterContent(recipe,factor,preferences.textSize)
                 }
-            } else PaperTurn(page,leaves.size,preferences,{move(it)},Modifier.testTag("paper-turn"),onCenter={chrome=!chrome}) { index ->
+            } else PaperTurn(page,leaves.size,preferences,{move(it)},Modifier.testTag("paper-turn"),onCenter={chrome=!chrome},
+                contentKey=listOf(recipeId,factor,width,height,preferences.textSize),onGestureStart={chrome=false},
+                onEdge={ direction -> chrome=true;edgeMessage=if(direction>0)"Конец главы · «Испечь» — внизу" else "Это титул · назад — к оглавлению" }) { index ->
                 val leaf=leaves[index];val r=recipes[leaf.chapter]
-                Column(Modifier.fillMaxSize().background(p.bg).clearAndSetSemantics { contentDescription = if(leaf.title)r.name else leaf.lines.joinToString("\n"){it.first+"\n"+it.second} }.then(if (leaf.title) Modifier else Modifier.windowInsetsPadding(stableInsets)).padding(top=if(leaf.title)0.dp else 46.dp,bottom=44.dp)) {
+                Column(Modifier.fillMaxSize().background(p.bg).clearAndSetSemantics { contentDescription = if(leaf.title)r.name else if(leaf.end)"Конец главы ${leaf.chapter+1}. Теперь — испечь." else leaf.lines.joinToString("\n"){it.first+"\n"+it.second} }.padding(top=if(leaf.title)0.dp else headerHeight,bottom=footerHeight)) {
                     if(leaf.title) TitleLeaf(r,leaf.chapter,recipes.size)
+                    else if(leaf.end) Column(Modifier.fillMaxWidth().weight(1f).padding(26.dp),verticalArrangement=Arrangement.Center,horizontalAlignment=Alignment.CenterHorizontally) {
+                        SmallLabel("КОНЕЦ ГЛАВЫ %02d".format(leaf.chapter+1))
+                        BookText("Теперь — испечь.",28,Modifier.padding(vertical=20.dp),italic=true)
+                        PaperNote("«Испечь» внизу · назад — к оглавлению")
+                        Ribbon(Modifier.padding(top=28.dp))
+                    }
                     else {
                         SmallLabel("ГЛАВА %02d · %s".format(leaf.chapter+1,r.name.uppercase()),Modifier.padding(horizontal=26.dp,vertical=8.dp))
                         leaf.lines.forEach { (heading,text) -> LeafBlock(heading,text,preferences,r) }
                     }
                     Spacer(Modifier.weight(1f))
-                    PageFooter(index+1,leaves.take(index+1).count{it.chapter==leaf.chapter},leaves.count{it.chapter==leaf.chapter})
+                    PageFooter(index+1,index+1,leaves.size)
                 }
             }
             if(chrome) {
-                Column(Modifier.align(Alignment.TopCenter).fillMaxWidth().background(p.bg).windowInsetsPadding(stableInsets.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)).padding(horizontal=10.dp)) { BookHeader(recipe.name,onBack,{settings=true}) }
-                Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(p.bg).windowInsetsPadding(stableInsets.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal)).padding(horizontal=20.dp,vertical=8.dp)) {
-                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) { SmallLabel("${page+1} / ${leaves.size}");SmallLabel("ГЛАВА ${current.chapter+1}") }
-                    Canvas(Modifier.fillMaxWidth().height(22.dp)) {
-                        drawLine(p.bg2,Offset(0f,size.height/2),Offset(size.width,size.height/2),3.dp.toPx())
-                        drawLine(p.ribbon,Offset(0f,size.height/2),Offset(size.width*(page+1)/leaves.size,size.height/2),3.dp.toPx())
-                        leaves.forEachIndexed { i,leaf -> if(leaf.title) {val x=size.width*i/leaves.size;drawLine(p.mut,Offset(x,3.dp.toPx()),Offset(x,size.height-3.dp.toPx()),1.dp.toPx())} }
+                edgeMessage?.let { Text(it,style=PaperType.note,color=p.acc,modifier=Modifier.align(Alignment.BottomCenter)
+                    .padding(start=20.dp,end=20.dp,bottom=footerHeight+8.dp).testTag("chapter-edge").semantics { liveRegion=LiveRegionMode.Polite }) }
+                Row(Modifier.align(Alignment.TopCenter).fillMaxWidth().background(p.glass)
+                    .onSizeChanged { headerHeight=with(density){it.height.toDp()} }
+                    .windowInsetsPadding(stableInsets.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+                    .padding(horizontal=4.dp),verticalAlignment=Alignment.CenterVertically) {
+                    PaperIconButton(onBack,label="В оглавление") { Icon(Icons.AutoMirrored.Outlined.ArrowBack,"В оглавление") }
+                    Column(Modifier.weight(1f)) { SmallLabel("ГЛАВА %02d ИЗ %02d".format(current.chapter+1,recipes.size));BookText(recipe.name,17) }
+                    PaperIconButton({annotations=!annotations},label="Пометки этой главы") { Icon(Icons.Outlined.Edit,"Пометки этой главы") }
+                    if(onOpenAlice!=null)PaperIconButton(onOpenAlice,label="Открыть Алису") { Icon(Icons.Outlined.LocalFireDepartment,"Открыть Алису") }
+                    PaperTextButton({settings=true},label="Как читать") { BookText("Aa",21) }
+                }
+                Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(p.bg)
+                    .onSizeChanged { footerHeight=with(density){it.height.toDp()} }
+                    .windowInsetsPadding(stableInsets.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal))
+                    .padding(horizontal=20.dp,vertical=8.dp)) {
+
+                    SmallLabel(if(current.title)"Титул главы" else if(current.end)"Последняя страница главы" else "Стр. ${page+1} из ${leaves.size}")
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.Center) {
+                        leaves.forEachIndexed { index,_ -> Box(Modifier.size(48.dp).then(bookAction("Страница ${index+1}"){move(index)}),contentAlignment=Alignment.Center) {
+                            Box(Modifier.size(if(index==page)18.dp else 6.dp,6.dp).background(if(index==page)p.rib else p.line,androidx.compose.foundation.shape.CircleShape))
+                        } }
                     }
-                    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                        PaperButton("Оглавление",onBack,Modifier.weight(1f))
-                        val active=activeSessions.firstOrNull{it.recipe.id==recipe.id}
-                        PaperButton(active?.let{"Печь · шаг ${it.currentStepIndex+1}"}?:"Печь · ×${preferences.portions.toInt()}",{if(active!=null)onContinueBake(active.id)else onBake(recipe)},Modifier.weight(1f),primary=true)
+                    val active=activeSessions.firstOrNull{it.recipe.id==recipe.id}
+                    if(active!=null)PaperButton(if(active.isCompleted)"Испечено · вписать" else "В печи · шаг ${active.currentStepIndex+1}",{onContinueBake(active.id)},Modifier.fillMaxWidth(),primary=true)
+                    else {
+                        val trusted=factor in 1.0..5.0 && factor==factor.toInt().toDouble()
+                        val stepper: @Composable ()->Unit = { PaperCompactStepper("×${BookCatalog.number(factor)}",{setFactor((factor-1).coerceAtLeast(1.0))},
+                            {setFactor((factor+1).coerceAtMost(5.0))},{onCalculator(recipe)},minusEnabled=factor>1,plusEnabled=factor<5) }
+                        if(density.fontScale>1.3f)stepper()
+                        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
+                            if(density.fontScale<=1.3f)stepper()
+                            PaperButton("Испечь · ×${BookCatalog.number(factor)}",{onBake(recipe)},Modifier.weight(1f),primary=true,enabled=trusted)
+                            if(onSchedule!=null)PaperIconButton({onSchedule(recipe)},label="Испечь ко времени") { Icon(Icons.Outlined.Schedule,"Испечь ко времени") }
+                        }
+                        if(!trusted)PaperNote("Для таймера выберите целые порции от 1 до 5")
                     }
-                    PaperTextButton({onCalculator(recipe)},Modifier.fillMaxWidth().heightIn(min=48.dp),label="Расчёт и заметки") {Text("Расчёт и заметки",fontSize=12.sp)}
                 }
             }
-        } else Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) { PaperProgress() }
-        if(settings)ReadingSettings(preferences){settings=false;chrome=false}
+        } else Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) {
+            if(recipes.isEmpty())PaperProgress() else PaperEmpty("Такой главы в книге нет","Вернитесь к оглавлению") { PaperButton("В оглавление",onBack) }
+        }
+        if(settings)ReadingSettings(preferences){settings=false;chrome=true}
     }
 }
 @Composable internal fun TitleLeaf(recipe: Recipe, chapter: Int, count:Int) {

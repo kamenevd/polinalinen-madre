@@ -159,6 +159,7 @@ internal class PaperGlView(context: Context, private val failure: (String) -> Un
             fun one(name: String, v: Float) = GLES20.glUniform1f(GLES20.glGetUniformLocation(program, name), v)
             fun two(name: String, x: Float, y: Float) = GLES20.glUniform2f(GLES20.glGetUniformLocation(program, name), x, y)
             two("uP", g.px, g.py); two("uN", g.nx, g.ny); two("uS", g.width, g.height); one("uR", g.radius); one("uNight", if (f.night) 1f else 0f)
+            one("uRimWidth", PaperLight.RIM_DP * resources.displayMetrics.density * g.width / surfaceWidth)
             GLES20.glUniform3f(GLES20.glGetUniformLocation(program, "uPaper"), android.graphics.Color.red(f.paper) / 255f, android.graphics.Color.green(f.paper) / 255f, android.graphics.Color.blue(f.paper) / 255f)
             GLES20.glUniform1i(GLES20.glGetUniformLocation(program, "uT"), 0)
             fun pass(bitmap: Bitmap, under: Boolean) {
@@ -202,7 +203,7 @@ gl_Position=vec4(pos.x/uS.x*2.-1.,1.-pos.y/uS.y*2.,uMode>.5?.5:-pos.z/400.,1.);}
 """
         internal val FS = """
 precision mediump float; uniform sampler2D uT; uniform vec3 uPaper;
-uniform float uR,uMode,uNight,uGrid;uniform vec2 uS; varying mediump vec2 vUv; varying mediump float vD,vTh;
+uniform float uR,uMode,uNight,uGrid,uRimWidth;uniform vec2 uS; varying mediump vec2 vUv; varying mediump float vD,vTh;
 void main(){if(uGrid>.5){gl_FragColor=vec4(.8,.25,.1,1.);return;}
 vec3 t=texture2D(uT,vUv).rgb;float K=1.+uNight*${PaperLight.NIGHT};vec2 q=mod(floor(vUv*uS),16.);float grain=(mod(q.x*13.+q.y*29.+q.x*q.y*3.,16.)/15.*2.-1.)*${PaperLight.GRAIN};
 if(uMode>.5){float e=vD-uR*${PaperLight.SHADOW_START};float s=${PaperLight.SHADOW}*K*exp(-max(e,0.)/(uR*${PaperLight.SHADOW_RADIUS}+${PaperLight.SHADOW_SOFT}));
@@ -210,7 +211,8 @@ if(e<0.)s*=smoothstep(-uR*${PaperLight.SHADOW_FADE},0.,e);gl_FragColor=vec4(t*(1
 float th=vTh;float crease=1.-${PaperLight.AO}*K*exp(-abs(vD)/(uR*${PaperLight.AO_RADIUS}+${PaperLight.AO_SOFT}));float sh;vec3 base;
 if(th<1.5708){sh=1.-${PaperLight.FACE}*(1.-cos(th));base=t;sh+=${PaperLight.HIGHLIGHT}*(1.-uNight*${PaperLight.HIGHLIGHT_NIGHT})*exp(-pow((th-${PaperLight.HIGHLIGHT_ANGLE})/${PaperLight.HIGHLIGHT_WIDTH},2.));}
 else{sh=${PaperLight.VERSO_BASE}+${PaperLight.VERSO_RANGE}*(-cos(th));vec3 g=vec3(dot(uPaper,vec3(1./3.)));base=mix(mix(uPaper,g,${PaperLight.DESATURATION})*(${PaperLight.VERSO_TINT}+uNight*${PaperLight.VERSO_NIGHT})+uNight*${PaperLight.VERSO_NIGHT_LIFT},t,${PaperLight.PRINT});}
-if(vD<=0.)sh=1.;gl_FragColor=vec4(base*sh*crease+grain,1.);}
+float rim=0.;if(uNight>.5&&vD>0.&&th<1.5708){float edge=uR*(1.-sin(th));rim=${PaperLight.RIM_LIGHT}*clamp(1.-edge/uRimWidth,0.,1.);}
+if(vD<=0.)sh=1.;gl_FragColor=vec4(base*sh*crease+grain+rim,1.);}
 """
     }
 }

@@ -35,9 +35,17 @@ internal class PaperMotion(val direction: Int, val x0: Float, val y0: Float, var
     var settling = false
 }
 
+/** NAV arbitrates gestures; the established curl geometry is unchanged. */
+internal fun chapterTurnDirection(x: Float, dx: Float, dy: Float, width: Float): Int {
+    if (x < width * (1f - Curl.EDGE)) return 0
+    val origin = if (dx > 0f) (width - x).coerceIn(24f, max(24f, width * Curl.EDGE)) else x
+    return Curl.direction(origin, dx, dy, width)
+}
+
 @Composable fun PaperTurn(
     page: Int, count: Int, preferences: ReadingPreferences, onPage: (Int) -> Unit,
-    modifier: Modifier = Modifier, onCenter: () -> Unit = {}, content: @Composable (Int) -> Unit,
+    modifier: Modifier = Modifier, onCenter: () -> Unit = {}, contentKey: Any? = null,
+    onGestureStart: () -> Unit = {}, onEdge: (Int) -> Unit = {}, content: @Composable (Int) -> Unit,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current.density
@@ -60,6 +68,9 @@ internal class PaperMotion(val direction: Int, val x0: Float, val y0: Float, var
     val scope = rememberCoroutineScope()
     val latestPage by rememberUpdatedState(onPage)
     val latestCenter by rememberUpdatedState(onCenter)
+    val latestStart by rememberUpdatedState(onGestureStart)
+    val latestEdge by rememberUpdatedState(onEdge)
+    var edgeOffset by remember { mutableFloatStateOf(0f) }
     val latestCurl by rememberUpdatedState(curl)
     val latestMotion by rememberUpdatedState(motion)
     val debug = LocalPaperDebug.current
@@ -88,8 +99,8 @@ internal class PaperMotion(val direction: Int, val x0: Float, val y0: Float, var
             if (android.os.Build.VERSION.SDK_INT >= 29) {
                 val center = view.height / 2
                 val half = minOf((100f * density).roundToInt(), view.height / 2)
-                view.systemGestureExclusionRects = listOf(android.graphics.Rect(0, (center-half).coerceAtLeast(0),
-                    (24f*density).roundToInt(), center+half))
+                view.systemGestureExclusionRects = listOf(android.graphics.Rect(
+                    (view.width-(24f*density).roundToInt()).coerceAtLeast(0), (center-half).coerceAtLeast(0), view.width, center+half))
             }
         }
         val listener = android.view.View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> update() }
@@ -103,7 +114,7 @@ internal class PaperMotion(val direction: Int, val x0: Float, val y0: Float, var
 
     // The next two pages in BOTH directions are laid out and captured before a gesture.
     // Theme/size/content changes invalidate these real Compose textures.
-    val cacheKey = listOf(width, height, p, preferences.textSize, preferences.portions, count)
+    val cacheKey = listOf(width, height, p, preferences.textSize, preferences.portions, count, contentKey)
     LaunchedEffect(cacheKey) { textures.clear() }
     LaunchedEffect(motion) {
         var last = 0L
@@ -164,6 +175,20 @@ internal class PaperMotion(val direction: Int, val x0: Float, val y0: Float, var
             glView?.submit(null); motion = null; fold = null
         }
     }
+    fun edge(direction: Int) {
+        latestEdge(direction)
+        if(preferences.haptics)view.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+        scope.launch {
+            for(target in listOf(-direction*12f,0f)) {
+                val spring=PaperSpring(edgeOffset,0f,target,Curl.K_CANCEL,Curl.Z_CANCEL)
+                var last=withFrameNanos{it};val start=last
+                while(last-start<280_000_000L)withFrameNanos { now ->
+                    spring.step(((now-last)/1_000_000f).coerceIn(1f,64f));last=now;edgeOffset=spring.x
+                }
+            }
+            edgeOffset=0f
+        }
+    }
     val motionNow = motion
     val turning = if (motionNow?.direction == -1) page - 1 else page
     val under = if (motionNow?.direction == 1) page + 1 else page
@@ -171,11 +196,11 @@ internal class PaperMotion(val direction: Int, val x0: Float, val y0: Float, var
     val underBitmap = textures[under]
     val glFrame = if (curl && fold != null && frontBitmap != null && underBitmap != null) PaperGlFrame(fold!!, frontBitmap, underBitmap, p.bg.toArgb(), p == NightPaper, debug.grid) else null
 
-    Box(modifier.fillMaxSize().onSizeChanged { width = it.width / density; height = it.height / density }.semantics(mergeDescendants=true) {
+    Box(modifier.fillMaxSize().graphicsLayer { translationX=edgeOffset*density }.onSizeChanged { width = it.width / density; height = it.height / density }.semantics(mergeDescendants=true) {
         stateDescription = "Страница ${page + 1} из $count"
         customActions = listOf(
-            CustomAccessibilityAction("Следующая страница") { if (page + 1 < count) { latestPage(page + 1); true } else false },
-            CustomAccessibilityAction("Предыдущая страница") { if (page > 0) { latestPage(page - 1); true } else false },
+            CustomAccessibilityAction("Следующая страница") { if (page + 1 < count) { latestPage(page + 1); true } else {edge(1);false} },
+            CustomAccessibilityAction("Предыдущая страница") { if (page > 0) { latestPage(page - 1); true } else {edge(-1);false} },
         )
     }.pointerInput(page, count, width, height) {
         awaitEachGesture {
@@ -191,23 +216,31 @@ internal class PaperMotion(val direction: Int, val x0: Float, val y0: Float, var
                     val pos = change.position / density; val delta = pos - start
                     tracker.addPosition(change.uptimeMillis, change.position)
                     if (!started && !ignored && delta.getDistance() >= 8f) {
-                        val direction = Curl.direction(start.x, delta.x, delta.y, width)
-                        if (direction == 0 || page + direction !in 0 until count) ignored = true
+                        val direction = chapterTurnDirection(start.x, delta.x, delta.y, width)
+                        if (direction == 0) ignored = true
+                        else if (page + direction !in 0 until count) { edge(direction);ignored=true;change.consume() }
                         else {
-                            val g = PaperFold.fromFinger(width, height, direction, start.x, start.y, pos.x, pos.y)
-                            motion = PaperMotion(direction, start.x, start.y, g); fold = g; started = true
+                            val origin = if(direction<0)(width-start.x).coerceIn(24f,max(24f,width*Curl.EDGE)) else start.x
+                            val finger = if(direction<0)origin+delta.x else pos.x
+                            val g = PaperFold.fromFinger(width, height, direction, origin, start.y, finger, pos.y)
+                            latestStart()
+                            motion = PaperMotion(direction, origin, start.y, g); fold = g; started = true
                         }
                     }
-                    if (started) { motion?.target = PaperFold.fromFinger(width, height, motion!!.direction, start.x, start.y, pos.x, pos.y); change.consume() }
+                    if (started) { motion?.let { m ->
+                        val finger=if(m.direction<0)m.x0+delta.x else pos.x
+                        m.target = PaperFold.fromFinger(width,height,m.direction,m.x0,m.y0,finger,pos.y)
+                    };change.consume() }
                     if (!change.pressed) {
                         released = true
                         if (started) settle(false, tracker.calculateVelocity().x / density / 1000f)
                         else if (!ignored && change.uptimeMillis - down.uptimeMillis < 350L) {
-                            val dir = if (start.x >= width * .72f) 1 else if (start.x <= width * .28f) -1 else 0
+                            val dir = if (start.x >= width * (1f-Curl.EDGE)) 1 else 0
                             if (dir == 0) latestCenter() else if (page + dir in 0 until count) {
                                 val g = PaperFold.anchored(width, height, start.y, if (dir > 0) 24f else 2f * width - 30f, 0f)
+                                latestStart()
                                 motion = PaperMotion(dir, start.x, start.y, g); fold = g; settle(false, -dir * .7f, true)
-                            }
+                            } else edge(dir)
                         }
                         break
                     }

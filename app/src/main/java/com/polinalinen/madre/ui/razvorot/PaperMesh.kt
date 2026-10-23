@@ -23,14 +23,14 @@ internal fun PaperFold.point(x: Float, y: Float): CurlPoint {
 /** Deterministic native CPU renderer for screenshot fixtures; runtime without GL
  * uses the flat slide, not this mesh (designer Q2). UVs deform with the sheet,
  * so verso print is genuinely mirrored rather than a separate flat label. */
-internal class PaperTexture(val front: Bitmap, private val paper: Int, private val night: Boolean = false) {
+internal class PaperTexture(val front: Bitmap, private val paper: Int, private val night: Boolean = false,
+    private val density: Float = front.density.takeIf { it > 0 }?.div(160f) ?: 1f) {
     private class Material(val fold:PaperFold,val sourceUnder:Bitmap?,val face:Bitmap,val back:Bitmap,val under:Bitmap?) {
         fun close(){face.recycle();back.recycle();under?.recycle()}
     }
     private var material:Material?=null
-    /** Shade source texels, not only the24 mesh columns. The canonical rim has
-     * angular width0.06rad: interpolating vertex colours erased it and smeared
-     * face/verso masks across an entire cell. Geometry remains24x48. */
+    /** Shade texels, not vertices: gaussian highlight and the separate1.5dp
+     * projected night rim must not smear across an entire24x48 mesh cell. */
     private fun prepare(fold:PaperFold,under:Bitmap?):Material {
         material?.let{if(it.fold===fold && it.sourceUnder===under)return it}
         material?.close()
@@ -54,7 +54,8 @@ internal class PaperTexture(val front: Bitmap, private val paper: Int, private v
             val i=y*w+x;val tex=source[i]
             if(theta<=PI/2) {
                 val light=if(d<=0f)1f else PaperLight.faceShade(theta)+PaperLight.highlight(theta,night)
-                face[i]=rgb(Color.red(tex).toFloat(),Color.green(tex).toFloat(),Color.blue(tex).toFloat(),light*crease,grain)
+                val rim = PaperLight.nightRim(d, fold.radius, night, density * fold.width / w) * 255f
+                face[i]=rgb(Color.red(tex).toFloat(),Color.green(tex).toFloat(),Color.blue(tex).toFloat(),light*crease,grain + rim)
             } else {
                 val light=PaperLight.versoShade(theta)*crease
                 fun print(base:Float,value:Int)=base*(1f-PaperLight.PRINT)+value*PaperLight.PRINT

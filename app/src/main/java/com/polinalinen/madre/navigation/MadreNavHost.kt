@@ -14,11 +14,22 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.polinalinen.madre.MadreApplication
 import com.polinalinen.madre.sourdough.GrowthPhase
@@ -75,6 +86,47 @@ fun MadreNavHost(
     val context = LocalContext.current
     val readingPreferences = rememberReadingPreferences()
     val bakingViewModel: BakingViewModel = viewModel()
+    val bookPreferences = remember(context) { BookPreferences(context) }
+    val initialHomeSection = remember { bookPreferences.initialTab() }
+    var activeSection by rememberSaveable { mutableStateOf(initialHomeSection) }
+    val currentEntry by navController.currentBackStackEntryAsState()
+    LaunchedEffect(currentEntry) {
+        activeSection=when(currentEntry?.destination?.route) {
+            MadreDestinations.CHAPTER->0
+            MadreDestinations.BAKE->1
+            MadreDestinations.STARTER_DETAIL,MadreDestinations.FEEDING_FORM,MadreDestinations.PHOTO_GALLERY->2
+            MadreDestinations.SHELF,MadreDestinations.BOOK_STATS,MadreDestinations.SETTINGS_SHELF->3
+            MadreDestinations.HOME->currentEntry?.savedStateHandle?.get<Int>("home_section")?:initialHomeSection
+            else->activeSection
+        }
+    }
+    val navSnackbar = remember { PaperSnackbarState() }
+    val restoreReady by bakingViewModel.restoreReady.collectAsState()
+    var startupHandled by rememberSaveable { mutableStateOf(false) }
+    var startRecipeId by rememberSaveable { mutableStateOf<String?>(null) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, bookPreferences) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_PAUSE) {
+                val route = navController.currentDestination?.route
+                val section = when(route) {
+                    MadreDestinations.CHAPTER->0
+                    MadreDestinations.BAKE->1
+                    MadreDestinations.SHELF,MadreDestinations.BOOK_STATS,MadreDestinations.SETTINGS_SHELF->3
+                    MadreDestinations.STARTER_DETAIL,MadreDestinations.FEEDING_FORM,MadreDestinations.PHOTO_GALLERY->2
+                    else->activeSection
+                }
+                bookPreferences.visit(section)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer);bookPreferences.close() }
+    }
+    fun showHome(section:Int) {
+        runCatching { navController.getBackStackEntry(MadreDestinations.HOME).savedStateHandle["home_section"]=section }
+        navController.popBackStack(MadreDestinations.HOME,inclusive=false)
+        bookPreferences.visit(section)
+    }
     val sourdoughViewModel: SourdoughViewModel = viewModel()
     val shelfViewModel: ShelfViewModel = viewModel()
     val familyBookViewModel: FamilyBookViewModel = viewModel()
@@ -95,12 +147,14 @@ fun MadreNavHost(
     // на таймер второй раз.
     if (pendingSessionId != null) {
         val requested by pendingSessionId.collectAsState()
-        LaunchedEffect(requested) {
+        LaunchedEffect(requested,restoreReady) {
+            if(!restoreReady)return@LaunchedEffect
             val id = requested ?: return@LaunchedEffect
+            startupHandled=true
             pendingSessionId.value = null
-            navController.navigate(MadreDestinations.bakingTimer(id.toString())) {
-                popUpTo(MadreDestinations.HOME) { inclusive = false }
-            }
+            showHome(1)
+            if(bakingViewModel.prepareBakeDestination(id))navController.navigate(MadreDestinations.bake(id.toString()))
+            else navSnackbar.showSnackbar("Выпечка уже закрыта")
         }
     }
 
@@ -111,8 +165,29 @@ fun MadreNavHost(
         val requested by pendingFeeding.collectAsState()
         LaunchedEffect(requested) {
             if (!requested) return@LaunchedEffect
+            startupHandled=true
             pendingFeeding.value = false
             enterFeedingForm()
+        }
+    }
+
+    LaunchedEffect(restoreReady) {
+        if(!restoreReady || startupHandled)return@LaunchedEffect
+        startupHandled=true
+        if(navController.currentDestination?.route!=MadreDestinations.HOME || pendingSessionId?.value!=null || pendingFeeding?.value==true)return@LaunchedEffect
+        val now=com.polinalinen.madre.model.BakingClock.elapsed()
+        bakingViewModel.sessions.value.filter { !it.isCompleted && !it.isPaused && it.restoredStepValid && it.remainingSeconds(now)==0L }
+            .minByOrNull { it.stepEndsAtElapsed(now) }?.let { showHome(1);navController.navigate(MadreDestinations.bake(it.id.toString())) }
+    }
+    val undo by bakingViewModel.undo.collectAsState()
+    val undoScope = rememberCoroutineScope()
+    LaunchedEffect(undo?.token) {
+        val token=undo?:return@LaunchedEffect
+        if(navSnackbar.showSnackbar(token.message,token.actionLabel,indefinite=true)) {
+            undoScope.launch {
+                bakingViewModel.undo(token.token).join()
+                if(token.kind==com.polinalinen.madre.model.BakeUndo.Kind.START && bakingViewModel.session(token.sessionId)==null && navController.currentDestination?.route==MadreDestinations.BAKE)navController.popBackStack()
+            }
         }
     }
 
@@ -197,10 +272,11 @@ fun MadreNavHost(
 
     CompositionLocalProvider(LocalCalmMode provides calmMode) {
         RazvorotTheme(readingPreferences) {
+        Box(Modifier.fillMaxSize()) {
         NavHost(navController = navController, startDestination = MadreDestinations.HOME) {
             composable(MadreDestinations.HOME) {
                 val sessions by bakingViewModel.sessions.collectAsState()
-                val homeSection by it.savedStateHandle.getStateFlow("home_section",0).collectAsState()
+                val homeSection by it.savedStateHandle.getStateFlow("home_section",initialHomeSection).collectAsState()
                 RazvorotHome(
                     recipes = recipesForStats, sessions = sessions, viewModel = bakingViewModel,
                     starterName = starterName, day = dayNumber, phase = phase,
@@ -208,11 +284,15 @@ fun MadreNavHost(
                     preferences = readingPreferences,
                     intervalHours = sourdoughConfig?.intervalHours ?: 24,
                     initialSection = homeSection,
-                    onSectionChanged = {section->it.savedStateHandle["home_section"]=section},
+                    onSectionChanged = {section->activeSection=section;it.savedStateHandle["home_section"]=section;bookPreferences.visit(section)},
+                    bookPreferences = bookPreferences,
+                    onOpenChapter = {id,page->navController.navigate(MadreDestinations.chapter(id,page=page))},
+                    onStartRecipe = {recipe->navigationScope.launch { bakingViewModel.startBakingWithUndo(recipe,bookPreferences.portions(recipe.id).toDouble())?.let{id->navController.navigate(MadreDestinations.bake(id.toString()))} }},
+                    onConfigureRecipe = {recipe->startRecipeId=recipe.id},
                     onOpenShelf = { navController.navigate(MadreDestinations.SHELF) },
-                    onContinueReading = { session -> session.trustedPortions?.let { readingPreferences.choosePortions(it.toFloat()) };navController.navigate(MadreDestinations.readerStep(session.recipe.id,session.currentStepIndex)) },
-                    onOpenRecipe = { id -> navController.navigate(MadreDestinations.recipeDetail(id)) },
-                    onOpenTimer = { id -> navController.navigate(MadreDestinations.bakingTimer(id.toString())) },
+                    onContinueReading = { session -> navController.navigate(MadreDestinations.chapter(session.recipe.id,step=session.currentStepIndex)) },
+                    onOpenRecipe = { id -> navController.navigate(MadreDestinations.chapter(id)) },
+                    onOpenTimer = { id -> navController.navigate(MadreDestinations.bake(id.toString())) },
                     onFeed = enterFeedingForm,
                     onDiary = { navController.navigate(MadreDestinations.STARTER_DETAIL) },
                     onSettings = { navController.navigate(MadreDestinations.SETTINGS) },
@@ -220,72 +300,53 @@ fun MadreNavHost(
                         { owner -> navController.navigate(MadreDestinations.bookStats(owner)) }, familyBookState.account, shelfViewModel, onOpenAlice = { navController.navigate(MadreDestinations.ALICE) }) },
                 )
             }
-            composable(MadreDestinations.RECIPE_DETAIL) { backStackEntry ->
+            composable(MadreDestinations.CHAPTER,arguments=listOf(
+                navArgument("page"){type=NavType.IntType;defaultValue=-1},navArgument("step"){type=NavType.IntType;defaultValue=-1})) { backStackEntry ->
                 val recipeId = backStackEntry.arguments?.getString("recipeId").orEmpty()
                 val sessions by bakingViewModel.sessions.collectAsState()
-                if(readingPreferences.mode==ReadingMode.SCROLL || androidx.compose.ui.platform.LocalDensity.current.fontScale>1.3f) RecipeDetailScreen(recipeId,{navController.popBackStack()},{id->navController.navigate(MadreDestinations.bakingTimer(id.toString()))},bakingViewModel,onOpenAlice={navController.navigate(MadreDestinations.ALICE)})
-                else RazvorotReader(recipesForStats, recipeId, readingPreferences,
+                var factor by rememberSaveable(recipeId) { mutableStateOf(bookPreferences.portions(recipeId).toDouble()) }
+                var calculator by rememberSaveable(recipeId) { mutableStateOf(false) }
+                val changeFactor:(Double)->Unit={value->factor=value;if(value in 1.0..5.0 && value==value.toInt().toDouble())bookPreferences.savePortions(recipeId,value.toInt())}
+                RazvorotReader(recipesForStats, recipeId, readingPreferences,
                     onBack = { navController.popBackStack() },
-                    onBake = { recipe -> navigationScope.launch { bakingViewModel.startBaking(recipe, readingPreferences.portions.toDouble())?.let { id -> navController.navigate(MadreDestinations.bakingTimer(id.toString())) } } },
-                    onCalculator = { recipe -> navController.navigate("recipe-calculator/${recipe.id}") },
+                    onBake = { recipe -> navigationScope.launch { bakingViewModel.startBakingWithUndo(recipe, factor)?.let { id -> navController.navigate(MadreDestinations.bake(id.toString())) } } },
+                    onCalculator = { calculator=true },
                     activeSessions = sessions,
-                    onContinueBake = { id -> navController.navigate(MadreDestinations.bakingTimer(id.toString())) },
+                    onContinueBake = { id -> navController.navigate(MadreDestinations.bake(id.toString())) },
+                    initialStep=backStackEntry.arguments?.getInt("step")?.takeIf{it>=0},
+                    initialPage=backStackEntry.arguments?.getInt("page")?:-1,
+                    onPageChanged={page->bookPreferences.saveBookmark(BookBookmark(recipeId,page))},
+                    scaleFactor=factor,onScaleFactor=changeFactor,onOpenAlice={aliceSheet=true},
+                    scrollContent={ RecipeDetailScreen(recipeId,{navController.popBackStack()},{},bakingViewModel,onOpenAlice={aliceSheet=true},
+                        embedded=true,scaleFactorOverride=factor,textSize=readingPreferences.textSize) },
                 )
+                if(calculator)recipesForStats.firstOrNull{it.id==recipeId}?.let { recipe->BookPortionsSheet(recipe,factor,changeFactor){calculator=false} }
             }
-            composable(MadreDestinations.READER_STEP) { entry ->
-                val id=entry.arguments?.getString("recipeId").orEmpty()
-                val step=entry.arguments?.getString("step")?.toIntOrNull()
-                val sessions by bakingViewModel.sessions.collectAsState()
-                if(readingPreferences.mode==ReadingMode.SCROLL || androidx.compose.ui.platform.LocalDensity.current.fontScale>1.3f) RecipeDetailScreen(id,{navController.popBackStack()},{sessionId->navController.navigate(MadreDestinations.bakingTimer(sessionId.toString()))},bakingViewModel,onOpenAlice={navController.navigate(MadreDestinations.ALICE)})
-                else RazvorotReader(recipesForStats,id,readingPreferences,{navController.popBackStack()},
-                    {recipe-> navigationScope.launch { bakingViewModel.startBaking(recipe,readingPreferences.portions.toDouble())?.let { sessionId -> navController.navigate(MadreDestinations.bakingTimer(sessionId.toString())) } }},
-                    {recipe->navController.navigate("recipe-calculator/${recipe.id}")},initialStep=step,activeSessions=sessions,
-                    onContinueBake={sessionId->navController.navigate(MadreDestinations.bakingTimer(sessionId.toString()))})
-            }
-            composable("recipe-calculator/{recipeId}") { backStackEntry ->
-                val recipeId = backStackEntry.arguments?.getString("recipeId").orEmpty()
-                RecipeDetailScreen(
-                    recipeId = recipeId,
-                    onBack = { navController.popBackStack() },
-                    onStartBaking = { sessionId -> navController.navigate(MadreDestinations.bakingTimer(sessionId.toString())) },
-                    viewModel = bakingViewModel,
-                    onOpenAlice = { navController.navigate(MadreDestinations.ALICE) },
-                )
-            }
-            composable(MadreDestinations.BAKING_TIMER) { backStackEntry ->
+            composable(MadreDestinations.BAKE) { backStackEntry ->
                 val sessionId = backStackEntry.arguments?.getString("sessionId")?.toLongOrNull() ?: return@composable
-                RazvorotTimer(
+                val sessions by bakingViewModel.sessions.collectAsState()
+                val completions by bakingViewModel.completions.collectAsState()
+                var prepared by remember(sessionId) { mutableStateOf(false) }
+                var details by rememberSaveable(sessionId) { mutableStateOf(false) }
+                LaunchedEffect(sessionId) {
+                    if(!bakingViewModel.prepareBakeDestination(sessionId)) { showHome(1);navSnackbar.showSnackbar("Выпечка уже закрыта") }
+                    prepared=true
+                }
+                val session=sessions.firstOrNull{it.id==sessionId}
+                if(!prepared)Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){PaperProgress()}
+                else if(session?.isCompleted==true || completions.containsKey(sessionId))BakingCompleteScreen(sessionId,
+                    onHome={showHome(1);navigationScope.launch{navSnackbar.showSnackbar("Вписано в книгу")}},viewModel=bakingViewModel,onBack={showHome(1)})
+                else RazvorotTimer(
                     sessionId = sessionId,
-                    onDetails = { navController.navigate("bake-actions/$sessionId") },
+                    onDetails = { details=true },
                     onOpenAlice = { aliceSheet = true },
-                    onBack = { navController.popBackStack(MadreDestinations.HOME, inclusive = false) },
-                    onComplete = {
-                        // Cycle 12: «Готово» не кладётся поверх таймера, а
-                        // сворачивает всю дорогу выпечки до первой полосы.
-                        // Раньше «назад» со страницы «Готово» возвращал на
-                        // таймер уже закрытой выпечки — то есть в никуда.
-                        navController.navigate(MadreDestinations.bakingComplete(sessionId.toString())) {
-                            popUpTo(MadreDestinations.HOME) { inclusive = false }
-                        }
-                    },
+                    onBack = { navController.popBackStack() },
+                    onComplete = {},
                     viewModel = bakingViewModel,
                 )
-            }
-            composable("bake-actions/{sessionId}") { entry ->
-                val id = entry.arguments?.getString("sessionId")?.toLongOrNull() ?: return@composable
-                BakingTimerScreen(id, { navController.popBackStack() }, {
-                    navController.navigate(MadreDestinations.bakingComplete(id.toString())) { popUpTo(MadreDestinations.HOME) { inclusive = false } }
-                }, bakingViewModel, onOpenAlice = { aliceSheet = true })
-            }
-            composable(MadreDestinations.BAKING_COMPLETE) { backStackEntry ->
-                val sessionId = backStackEntry.arguments?.getString("sessionId")?.toLongOrNull()
-                BakingCompleteScreen(
-                    sessionId = sessionId,
-                    onHome = {
-                        navController.popBackStack(MadreDestinations.HOME, inclusive = false)
-                    },
-                    viewModel = bakingViewModel,
-                )
+                if(details && session?.isCompleted!=true)PaperSheet({details=false}) {
+                    Box(Modifier.fillMaxWidth().fillMaxHeight(.9f)) { BakingTimerScreen(sessionId,{details=false},{details=false},bakingViewModel,onOpenAlice={aliceSheet=true}) }
+                }
             }
             composable(MadreDestinations.STARTER_DETAIL) {
                 val cancelledBakeCount by bakingViewModel.cancelledCount.collectAsState()
@@ -407,6 +468,14 @@ fun MadreNavHost(
                 )
             }
         }
+            PaperSnackbar(navSnackbar,Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(horizontal=12.dp,vertical=80.dp))
+        }
+            startRecipeId?.let { id->recipesForStats.firstOrNull{it.id==id}?.let { recipe->
+                BookStartSheet(recipe,bookPreferences.portions(id),onStart={portions->
+                    bookPreferences.savePortions(id,portions);startRecipeId=null
+                    navigationScope.launch{bakingViewModel.startBakingWithUndo(recipe,portions.toDouble())?.let{sid->navController.navigate(MadreDestinations.bake(sid.toString()))}}
+                },onDismiss={startRecipeId=null},onChapter={startRecipeId=null;navController.navigate(MadreDestinations.chapter(id))})
+            } }
             if (aliceSheet) AliceSheet(bakingViewModel, app.voiceCoordinator,
                 onDismiss = { aliceSheet = false }, onOpenSettings = {
                     aliceSheet = false; navController.navigate(MadreDestinations.ALICE)

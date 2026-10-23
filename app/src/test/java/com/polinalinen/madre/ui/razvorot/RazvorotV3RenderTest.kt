@@ -40,14 +40,16 @@ class RazvorotV3RenderTest {
         bitmap.recycle()
         }
     }
-    @Test fun titleMorning()=render("reader-title-dawn")
+    @Test fun chapterTitle()=render("chapter-title")
+    @Test fun chapterIngredients()=render("chapter-ingr")
+    @Test fun tableOfContents()=render("toc")
+    @Test fun oven()=render("oven")
+    @Test fun calculator()=render("sheet-calc")
     @Test fun readingSettings()=render("reading-sheet", listOf(Atmosphere.DAWN, Atmosphere.DAY, Atmosphere.DUSK, Atmosphere.NIGHT))
-    @Test fun settings()=render("settings")
-    @Test fun feeding()=render("feeding")
-    @Test fun diary()=render("diary", listOf(Atmosphere.DAWN))
+
     @Test fun bake()=render("bake")
-    @Test fun starterGrowing()=render("starter-growing")
-    @Test fun shelf()=render("shelf")
-    @Test fun aliceUnlinked()=render("alice-sheet-unlinked")
+    @Test fun starterGrowing()=render("starter-growing", listOf(Atmosphere.DAWN))
+    @Test fun shelf()=render("shelf", listOf(Atmosphere.DAWN))
+    @Test fun aliceUnlinked()=render("alice-sheet-unlinked", listOf(Atmosphere.NIGHT))
     @Test fun curlNight()=render("curl-mid-night", listOf(Atmosphere.NIGHT))
 }

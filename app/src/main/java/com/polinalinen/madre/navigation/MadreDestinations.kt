@@ -7,10 +7,8 @@ package com.polinalinen.madre.navigation
  */
 object MadreDestinations {
     const val HOME = "home"
-    const val RECIPE_DETAIL = "recipe/{recipeId}"
-    const val READER_STEP = "read/{recipeId}/{step}"
-    const val BAKING_TIMER = "baking/{sessionId}"
-    const val BAKING_COMPLETE = "baking/{sessionId}/complete"
+    const val CHAPTER = "chapter/{recipeId}?page={page}&step={step}"
+    const val BAKE = "bake/{sessionId}"
     const val STARTER_DETAIL = "starter"
     const val FEEDING_FORM = "starter/feed"
     const val PHOTO_GALLERY = "photo-gallery"
@@ -23,9 +21,8 @@ object MadreDestinations {
     const val SHELF = "shelf"
     const val BOOK_STATS = "shelf/{ownerId}"
 
-    fun recipeDetail(recipeId: String) = "recipe/$recipeId"
-    fun readerStep(recipeId: String,step:Int) = "read/$recipeId/$step"
-    fun bakingTimer(sessionId: String) = "baking/$sessionId"
-    fun bakingComplete(sessionId: String) = "baking/$sessionId/complete"
+    fun chapter(recipeId: String, page: Int = -1, step: Int = -1): String =
+        "chapter/${java.net.URLEncoder.encode(recipeId, "UTF-8").replace("+", "%20")}?page=$page&step=$step"
+    fun bake(sessionId: String) = "bake/$sessionId"
     fun bookStats(ownerId: String) = "shelf/$ownerId"
 }

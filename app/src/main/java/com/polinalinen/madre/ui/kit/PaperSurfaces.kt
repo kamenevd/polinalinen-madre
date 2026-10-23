@@ -204,9 +204,16 @@ import kotlin.random.Random
     else LinearProgressIndicator(progress = { progress.coerceIn(0f, 1f) }, modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)), color = p.acc, trackColor = p.line)
 }
 
-@Composable fun PaperSnackbar(hostState: SnackbarHostState, modifier: Modifier = Modifier) {
+/** Navigation owns messages; kit owns their presentation and platform state. */
+class PaperSnackbarState {
+    internal val host = SnackbarHostState()
+    suspend fun showSnackbar(message: String, actionLabel: String? = null, indefinite: Boolean = false): Boolean =
+        host.showSnackbar(message, actionLabel, duration = if(indefinite)SnackbarDuration.Indefinite else SnackbarDuration.Short) == SnackbarResult.ActionPerformed
+}
+
+@Composable fun PaperSnackbar(hostState: PaperSnackbarState, modifier: Modifier = Modifier) {
     val p = LocalPaper.current
-    SnackbarHost(hostState, modifier) { data ->
+    SnackbarHost(hostState.host, modifier) { data ->
         Snackbar(data, shape = RoundedCornerShape(16.dp), containerColor = p.ink,
             contentColor = p.bg, actionColor = p.acc, dismissActionContentColor = p.bg)
     }

@@ -25,12 +25,50 @@ class WorkflowContractTests(unittest.TestCase):
             "python3 scripts/cycle.py validate",
             "testDebugUnitTest",
             "lintDebug",
+            "compileDebugKotlin",
+            "20 key native frames",
             "verifyRoborazziDebug",
             "assembleDebug",
             "connectedDebugAndroidTest",
             "retention-days:",
         ):
             self.assertIn(required, text)
+
+    def test_pr_keeps_protected_smoke_name_but_skips_native_work(self):
+        text = self.read(".github/workflows/quality-gates.yml")
+        smoke = text.split("  instrumented-smoke:\n", 1)[1]
+        self.assertIn("name: Instrumented smoke", smoke)
+        self.assertIn("if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'", smoke)
+        quality = text.split("  android-quality:\n", 1)[1].split("  lint-report:\n", 1)[0]
+        self.assertNotIn("needs:", quality)
+        critical = next(line for line in quality.splitlines() if "run: ./gradlew compileDebugKotlin" in line)
+        self.assertIn("testDebugUnitTest assembleDebug", critical)
+        self.assertNotIn("lintDebug", critical)
+        self.assertNotIn("verifyRoborazziDebug", critical)
+        self.assertIn("-Pmadre.extendedVerification=true", quality)
+        self.assertIn("github.event_name == 'workflow_dispatch' && inputs.capture_baseline", quality)
+
+    def test_lint_is_a_separate_nonblocking_report(self):
+        text = self.read(".github/workflows/quality-gates.yml")
+        lint = text.split("  lint-report:\n", 1)[1].split("  instrumented-smoke:\n", 1)[0]
+        self.assertIn("continue-on-error: true", lint)
+        self.assertIn("lintDebug", lint)
+        self.assertIn("lint-reports", lint)
+
+    def test_style_boundary_is_a_real_checked_scanner_not_a_placeholder(self):
+        text = self.read("app/src/test/java/com/polinalinen/madre/ui/StyleBoundaryTest.kt")
+        self.assertIn('"scripts/style_boundary.py", "--check"', text)
+        self.assertIn("assertEquals(output, 0, process.waitFor())", text)
+        self.assertNotIn("@Ignore", text)
+
+    def test_rc_exclusions_are_exact_visual_classes_not_domain_packages(self):
+        text = self.read("app/build.gradle.kts")
+        excluded = text.split("val extendedOnlyTests = listOf(\n", 1)[1].split("\n)", 1)[0]
+        for name in re.findall(r'"([^"]+)"', excluded):
+            self.assertNotIn("*", name)
+            self.assertTrue((ROOT / "app/src/test/java" / (name.replace(".", "/") + ".kt")).is_file(), name)
+            self.assertTrue(name.endswith(("GoldenTest", "ExtendedRenderTest", "MaterialExtendedTest", "StaticFontCompatibilityTest")), name)
+        self.assertTrue((ROOT / "app/src/androidTest/java/com/polinalinen/madre/data/db/MigrationTest.kt").is_file())
 
     def test_release_workflow_is_tag_only_and_fail_closed(self):
         text = self.read(".github/workflows/release.yml")

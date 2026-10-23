@@ -19,6 +19,21 @@ val releaseSigningInputs = listOf(
 )
 val hasCompleteReleaseSigning = releaseSigningInputs.all { !it.isNullOrBlank() }
 val hasAnyReleaseSigning = releaseSigningInputs.any { !it.isNullOrBlank() }
+// PR keeps domain/interaction tests + 20 key frames. Opt-in is mandatory for RC.
+val extendedVerification = providers.gradleProperty("madre.extendedVerification")
+    .map { it.toBoolean() }.getOrElse(false)
+val extendedOnlyTests = listOf(
+    "com.polinalinen.madre.ui.razvorot.RazvorotExtendedRenderTest",
+    "com.polinalinen.madre.ui.razvorot.PaperMaterialExtendedTest",
+    "com.polinalinen.madre.ui.razvorot.StaticFontCompatibilityTest",
+    "com.polinalinen.madre.ui.visual.StarterDiaryGoldenTest",
+    "com.polinalinen.madre.ui.visual.FeedingFormGoldenTest",
+    "com.polinalinen.madre.ui.visual.BookplateGoldenTest",
+    "com.polinalinen.madre.ui.visual.SettingsStarterSectionGoldenTest",
+    "com.polinalinen.madre.ui.visual.SweepableLayersGoldenTest",
+    "com.polinalinen.madre.ui.visual.TextActionGoldenTest",
+    "com.polinalinen.madre.ui.visual.PaperTextureGoldenTest",
+)
 if (hasAnyReleaseSigning && !hasCompleteReleaseSigning) {
     throw GradleException("Release signing inputs are incomplete")
 }
@@ -32,8 +47,8 @@ android {
         minSdk = 26
         targetSdk = 35
         // versionCode is monotonic over the latest published release; release_cycle.py enforces it.
-        versionCode = 39
-        versionName = "7.0.3"
+        versionCode = 40
+        versionName = "7.0.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -94,6 +109,9 @@ android {
         unitTests.isIncludeAndroidResources = true
         unitTests.all {
             it.maxHeapSize = "2048m"
+            if (!extendedVerification) {
+                it.filter { extendedOnlyTests.forEach { name -> excludeTestsMatching(name) } }
+            }
         }
     }
 

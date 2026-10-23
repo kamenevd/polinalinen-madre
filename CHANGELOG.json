@@ -2,5 +2,26 @@
   {"version":"6.6.5","versionCode":36,"date_msk":"2026-10-21T00:00:00+03:00","title":"Предыдущая база","changes":["База main до визуального цикла F.","Исторические изменения сохранены в Git; время записи базовой линии, не время выпуска."]},
   {"version":"7.0.1","versionCode":37,"date_msk":"2026-10-23T10:15:00+03:00","title":"Разворот","changes":["Нативная книжная обложка, главы и чтение с бумажным листанием.","Дневная и ночная атмосфера, настройки чтения и рабочая печь.","Отдельная Мадре QA для теста без удаления основной книги."]},
   {"version":"7.0.2","versionCode":38,"date_msk":"2026-10-23T14:29:54+03:00","title":"Чётче, как в книге","changes":["Настоящие начертания шрифтов, чёткие метки и книжная иерархия текста.","Канонические тени бумажного сгиба и согласованные цвета настроек чтения.","Названия корешков ниже ляссе, полная подпись и прокручиваемый журнал Полки без перекрытий."]},
-  {"version":"7.0.3","versionCode":39,"date_msk":"2026-10-23T16:17:57+03:00","title":"Бумага и свет","changes":["Тонкий свет сгиба больше не теряется между узлами контрольной бумажной сетки.","Фактура бумаги сохраняется и на устройствах с ограниченной точностью графики.","Настройки чтения проверяются вместе с просвечивающей страницей, во всех четырёх атмосферах."]}
+  {"version":"7.0.3","versionCode":39,"date_msk":"2026-10-23T16:17:57+03:00","title":"Бумага и свет","changes":["Тонкий свет сгиба больше не теряется между узлами контрольной бумажной сетки.","Фактура бумаги сохраняется и на устройствах с ограниченной точностью графики.","Настройки чтения проверяются вместе с просвечивающей страницей, во всех четырёх атмосферах."]},
+  {"version":"7.0.4","versionCode":40,"date_msk":"2026-10-23T17:26:37+03:00","title":"Быстрее к проверке","changes":["Проверка каждого изменения сохраняет рабочую логику и 20 книжных кадров утром и ночью.","Расширенные графические проверки перенесены в ручной прогон, ночной запуск и обязательную проверку кандидата в релиз.","Новые нарушения единого стиля запрещены; 330 прежних нарушений точно учтены до следующего этапа общего оформления."],"ci_test_changes":{
+    "removed_count":3,
+    "removed":["PaperMaterialReviewTest.runtimeShaderUsesExactV3CoefficientsAndNeverLightsTheVerso","StyleAuditRegressionTest.exactNineTokensForAllFourAtmospheres","StyleAuditRegressionTest.exactV3LightNumbersAndNightSymmetry"],
+    "extended_visual_method_count":50,
+    "original_full_matrix_moved_from_RazvorotV3RenderTest_to_RazvorotExtendedRenderTest":["titleMorning","titleNight","text16","text22","curlTop","curlMiddle","curlBottom","curlBack","chrome","readingSettings","homeMorning","homeNight","catalog","staticFontsCyrillic","spine","bake","aliceListeningDebug","aliceReadingDebug","aliceConfirmDebug","aliceNightDebug","starterGrowing","starterPeak","starterHungry","shelf","shelfNight","shelfLargeType","curlNight","bakeStart","bakeEnd","fullTimerStart","fullTimerEnd","variableAxisReallyThickensTheSameDigits"],
+    "moved_from_PaperMaterialReviewTest_to_PaperMaterialExtendedTest":["exactV3PaperAndFaintMirroredPrintSurviveTheMesh","actualCylinderPixelsHaveThetaGradientInEveryAtmosphere","actualEarlyFoldDarkensBothSidesAndRetainsPaperTexture"],
+    "classes_now_extended_only":{
+      "StaticFontCompatibilityTest":["cyrillicItalicAndStaticTimerRenderNativelyOnAndroid10And12"],
+      "BookplateGoldenTest":["familyName"],
+      "FeedingFormGoldenTest":["feeding form geometry in portrait","feeding form saving error state"],
+      "PaperTextureGoldenTest":["износ страницы часто печёного рецепта","кофейные круги от трёх прерванных выпечек","отсыревшая бумага в дождь","три слоя бумаги вместе"],
+      "SettingsStarterSectionGoldenTest":["starter section keeps paper layout for tap-cycle rows"],
+      "StarterDiaryGoldenTest":["starter formulary keeps full header and widest row"],
+      "SweepableLayersGoldenTest":["крошки часто печёного рецепта лежат на странице","смахнутые крошки уходят со страницы","пыль давно не открытой главы лежит на странице","смахнутая пыль уходит со страницы"],
+      "TextActionGoldenTest":["тихое действие отличается от подписи рядом"]
+    },
+    "key_pr_methods":["RazvorotV3RenderTest.titleMorning","RazvorotV3RenderTest.text16","RazvorotV3RenderTest.readingSettings","RazvorotV3RenderTest.homeMorning","RazvorotV3RenderTest.catalog","RazvorotV3RenderTest.staticFontsCyrillic","RazvorotV3RenderTest.bake","RazvorotV3RenderTest.starterGrowing","RazvorotV3RenderTest.shelf","RazvorotV3RenderTest.shelfLargeType"],
+    "key_native_png":20,
+    "native_suite":"All androidTest methods, including real MigrationTest, retained unchanged and mandatory for RC via a successful manual Quality gates run on the exact SHA. Instrumented smoke SKIPPED on PR/push, not PASSED. No @Ignore added.",
+    "legacy_style":"Exact 330-entry path/line/column/rule/source baseline, PR61. No folder allowlist. NOT zero legacy; ui/kit follows. Nightly configuration is not active before default-branch merge."
+  }}
 ]

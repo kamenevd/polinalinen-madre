@@ -10,12 +10,13 @@ data class BakeUndo(
     val remainingMillis: Long,
     val message: String,
 ) {
-    enum class Kind { START, ADVANCE }
+    enum class Kind { START, ADVANCE, ABANDON }
     val sessionId get() = before.id
     val actionLabel get() = if (kind == Kind.START) "Отменить" else "Вернуть"
-    fun valid(current: BakingSession?, nowElapsed: Long) = current != null &&
+    fun matches(current: BakingSession?) = current != null &&
         current.id == before.id && current.bakeKey == before.bakeKey &&
-        current.revision == expectedRevision && nowElapsed < expiresAtElapsed
+        current.revision == expectedRevision
+    fun valid(current: BakingSession?, nowElapsed: Long) = matches(current) && nowElapsed < expiresAtElapsed
 
     /** Restore duration consumed, not a fresh full step, and always issue a NEW revision. */
     fun restoredStep(current: BakingSession, nowElapsed: Long, nowWall: Long): BakingSession {

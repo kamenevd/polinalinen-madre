@@ -186,7 +186,11 @@ fun MadreNavHost(
         if(navSnackbar.showSnackbar(token.message,token.actionLabel,indefinite=true)) {
             undoScope.launch {
                 bakingViewModel.undo(token.token).join()
-                if(token.kind==com.polinalinen.madre.model.BakeUndo.Kind.START && bakingViewModel.session(token.sessionId)==null && navController.currentDestination?.route==MadreDestinations.BAKE)navController.popBackStack()
+                if(token.kind==com.polinalinen.madre.model.BakeUndo.Kind.START && bakingViewModel.session(token.sessionId)==null &&
+                    navController.currentDestination?.route==MadreDestinations.BAKE && navController.currentBackStackEntry?.arguments?.getString("sessionId")==token.sessionId.toString())navController.popBackStack()
+                if(token.kind==com.polinalinen.madre.model.BakeUndo.Kind.ABANDON && bakingViewModel.session(token.sessionId)!=null) {
+                    showHome(1);navController.navigate(MadreDestinations.bake(token.sessionId.toString()))
+                }
             }
         }
     }
@@ -327,7 +331,7 @@ fun MadreNavHost(
                 val sessions by bakingViewModel.sessions.collectAsState()
                 val completions by bakingViewModel.completions.collectAsState()
                 var prepared by remember(sessionId) { mutableStateOf(false) }
-                var details by rememberSaveable(sessionId) { mutableStateOf(false) }
+
                 LaunchedEffect(sessionId) {
                     if(!bakingViewModel.prepareBakeDestination(sessionId)) { showHome(1);navSnackbar.showSnackbar("Выпечка уже закрыта") }
                     prepared=true
@@ -338,15 +342,22 @@ fun MadreNavHost(
                     onHome={showHome(1);navigationScope.launch{navSnackbar.showSnackbar("Вписано в книгу")}},viewModel=bakingViewModel,onBack={showHome(1)})
                 else RazvorotTimer(
                     sessionId = sessionId,
-                    onDetails = { details=true },
+
                     onOpenAlice = { aliceSheet = true },
                     onBack = { navController.popBackStack() },
                     onComplete = {},
                     viewModel = bakingViewModel,
+                    onOpenChapter={ bake->navController.navigate(MadreDestinations.chapter(bake.recipe.id,step=bake.currentStepIndex)) {
+                        popUpTo(MadreDestinations.HOME){inclusive=false}
+                    } },
+                    onSwitchSession={id->navController.navigate(MadreDestinations.bake(id.toString())) {
+                        popUpTo(MadreDestinations.BAKE){inclusive=true}
+                    } },
+                    onAbandon={id->navigationScope.launch {
+                        bakingViewModel.abandonWithUndo(id).join()
+                        if(bakingViewModel.pendingAbandons.value.containsKey(id))showHome(1)
+                    } },
                 )
-                if(details && session?.isCompleted!=true)PaperSheet({details=false}) {
-                    Box(Modifier.fillMaxWidth().fillMaxHeight(.9f)) { BakingTimerScreen(sessionId,{details=false},{details=false},bakingViewModel,onOpenAlice={aliceSheet=true}) }
-                }
             }
             composable(MadreDestinations.STARTER_DETAIL) {
                 val cancelledBakeCount by bakingViewModel.cancelledCount.collectAsState()

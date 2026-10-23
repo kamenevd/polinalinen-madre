@@ -56,6 +56,7 @@ class BookNavigationUiTest {
         rule.waitForIdle()
         val page=rule.onNodeWithTag("paper-turn").fetchSemanticsNode().config[SemanticsProperties.StateDescription]
         assertTrue(page.startsWith("Страница 2 из "))
+        assertTrue("N2: no truncated text or extra chapters: $page",page.substringAfter(" из ").toInt() in 3..5)
         restoration.emulateSavedInstanceStateRestore()
         rule.waitForIdle()
         assertEquals(page,rule.onNodeWithTag("paper-turn").fetchSemanticsNode().config[SemanticsProperties.StateDescription])

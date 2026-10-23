@@ -44,16 +44,18 @@ import com.polinalinen.madre.ui.components.bookAction
     val tabStates=rememberSaveableStateHolder()
     var settings by remember{mutableStateOf(false)}
     val p=LocalPaper.current
+    val pendingAbandons by viewModel.pendingAbandons.collectAsState()
+    val visibleSessions=sessions.filterNot{pendingAbandons.containsKey(it.id)}
     BackHandler(enabled=section!=0){section=0;onSectionChanged(0)}
     Column(Modifier.fillMaxSize().paperBackground()) {
         Box(Modifier.weight(1f).safeDrawingPadding()) {
           tabStates.SaveableStateProvider(section) {
             when(section) {
-                0 -> BookTocContent(recipes,sessions,bookPreferences?.bookmark,
+                0 -> BookTocContent(recipes,visibleSessions,bookPreferences?.bookmark,
                     {id,page->onOpenChapter?.invoke(id,page)?:onOpenRecipe(id)},onSettings,onAa={settings=true})
                 1 -> {
                     val completions by viewModel.completions.collectAsState()
-                    BookOvenContent(recipes,sessions,bookPreferences?.plans.orEmpty(),onOpenTimer,
+                    BookOvenContent(recipes,visibleSessions,bookPreferences?.plans.orEmpty(),onOpenTimer,
                         {recipe->onConfigureRecipe?.invoke(recipe)?:onOpenRecipe(recipe.id)},
                         {recipe->onStartRecipe?.invoke(recipe)?:onOpenRecipe(recipe.id)},
                         {plan->recipes.firstOrNull{it.id==plan.recipeId}?.let{onConfigureRecipe?.invoke(it)}},
@@ -89,13 +91,20 @@ import com.polinalinen.madre.ui.components.bookAction
             }
     }
 }
-@Composable fun RazvorotTimer(sessionId:Long,viewModel:BakingViewModel,onBack:()->Unit,onComplete:()->Unit,onDetails:()->Unit,onOpenAlice:()->Unit={}) {
-    Immersive(keepScreenOn = true)
+@Composable fun RazvorotTimer(sessionId:Long,viewModel:BakingViewModel,onBack:()->Unit,onComplete:()->Unit,onDetails:()->Unit={},onOpenAlice:()->Unit={},
+    onOpenChapter:(BakingSession)->Unit={},onAbandon:(Long)->Unit={},onSwitchSession:(Long)->Unit={}) {
+    var more by rememberSaveable(sessionId){mutableStateOf(false)}
+    var keepScreenOn by rememberSaveable(sessionId){mutableStateOf(true)}
+    Immersive(keepScreenOn = keepScreenOn)
     val sessions by viewModel.sessions.collectAsState()
     val remaining by viewModel.remainingFor(sessionId).collectAsState()
     val session=sessions.find{it.id==sessionId}
     Box(Modifier.fillMaxSize().paperBackground()) {
         if(session==null)Column(Modifier.padding(22.dp)){BookText("Выпечка закрыта",32);PaperButton("К книге",onBack)}
-        else BakingPaper(session,remaining,{viewModel.togglePause(sessionId)},{viewModel.advanceStepWithUndo(sessionId, onComplete)},onDetails,onBack, onOpenAlice = onOpenAlice, onConfirmPortions = { viewModel.confirmPortions(sessionId, it) })
+        else BakingPaper(session,remaining,{viewModel.togglePause(sessionId)},{viewModel.advanceStepWithUndo(sessionId, onComplete)},
+            {more=true},onBack,onOpenAlice=onOpenAlice,onConfirmPortions={viewModel.confirmPortions(sessionId,it)},
+            onAdjustMinutes={viewModel.adjustTime(sessionId,it)},sessions=sessions.filterNot{it.isCompleted},onSwitchSession=onSwitchSession)
     }
+    if(more && session!=null)BookBakeMoreSheet(session,keepScreenOn,{keepScreenOn=it},
+        {onOpenChapter(session)},{onAbandon(sessionId)},{more=false})
 }

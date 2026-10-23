@@ -44,7 +44,7 @@ class RazvorotV3RenderTest {
     @Test fun chapterIngredients()=render("chapter-ingr")
     @Test fun tableOfContents()=render("toc")
     @Test fun oven()=render("oven")
-    @Test fun calculator()=render("sheet-calc")
+    @Test fun bakeMore()=render("bake-more")
     @Test fun readingSettings()=render("reading-sheet", listOf(Atmosphere.DAWN, Atmosphere.DAY, Atmosphere.DUSK, Atmosphere.NIGHT))
 
     @Test fun bake()=render("bake")

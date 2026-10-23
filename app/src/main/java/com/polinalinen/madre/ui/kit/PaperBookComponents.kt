@@ -43,6 +43,17 @@ import androidx.compose.runtime.remember
     Text(text, modifier, color = LocalPaper.current.mut, style = PaperType.note)
 }
 
+@Composable fun PaperStepParagraph(text: String, modifier: Modifier = Modifier) {
+    val p=LocalPaper.current
+    val paragraph=buildAnnotatedString {
+        append(text)
+        Regex("\\b\\d+(?:[,.]\\d+)?\\s*(?:г|мл)\\b").findAll(text).forEach { match ->
+            addStyle(PaperType.ui.toSpanStyle().copy(fontWeight=FontWeight.Bold,color=p.ink),match.range.first,match.range.last+1)
+        }
+    }
+    Text(paragraph,modifier,style=PaperType.body,color=p.ink2)
+}
+
 @Composable fun PaperChipRow(labels: List<String>, selected: Int, onSelect: (Int) -> Unit) {
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         labels.forEachIndexed { index, label -> PaperChip(label, selected == index, { onSelect(index) }) }

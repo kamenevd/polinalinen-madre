@@ -2,6 +2,7 @@ package com.polinalinen.madre.viewmodel
 
 import android.os.SystemClock
 import androidx.test.core.app.ApplicationProvider
+import androidx.lifecycle.viewModelScope
 import com.polinalinen.madre.MadreApplication
 import com.polinalinen.madre.model.*
 import com.polinalinen.madre.shelf.ShelfShareDecision
@@ -26,14 +27,19 @@ class BakeNavigationUndoTest {
     private val app get()=ApplicationProvider.getApplicationContext<MadreApplication>()
     private val history=FakeBakeHistory()
     private val sync=FakeShelfSync()
+    private val mainDispatcher=UnconfinedTestDispatcher()
     private lateinit var vm:BakingViewModel
     @Before fun setup() {
-        Dispatchers.setMain(UnconfinedTestDispatcher())
+        Dispatchers.setMain(mainDispatcher)
         runCatching{androidx.work.WorkManager.initialize(app,androidx.work.Configuration.Builder().build())}
         vm=BakingViewModel(app,history,sync,FakeBakeSessionLedger())
     }
     @After fun cleanup() {
+        val scope=vm.viewModelScope.coroutineContext[Job]
         androidx.lifecycle.ViewModelStore().apply{put("bake",vm);clear()}
+        runBlocking { withTimeout(10_000) {
+            while(scope?.isCompleted==false){mainDispatcher.scheduler.runCurrent();delay(1)}
+        } }
         Dispatchers.resetMain()
     }
     private fun twoSteps()=sampleRecipe().copy(timeline=listOf(
@@ -108,5 +114,47 @@ class BakeNavigationUndoTest {
         assertTrue(restored.isPaused);assertEquals(6L,restored.revision)
         assertEquals(before.remainingSeconds(5000),restored.remainingSeconds(12_000))
         assertEquals(before.bakeKey,restored.bakeKey);assertEquals(before.recipeRevision,restored.recipeRevision)
+    }
+
+    @Test fun abandonUndoKeepsTheActualRunningSessionAndNeverTouchesRoomOrCancellationMark()=runBlocking {
+        val id=vm.startBaking(twoSteps(),2.0)!!
+        val before=vm.session(id)!!
+        val snapshot=app.activeBakeRepository.all().single{it.sessionId==id}
+        val prefs=app.getSharedPreferences("madre_prefs",0);val rings=prefs.getInt(CoffeeRing.prefsKey("rye"),0)
+        vm.abandonWithUndo(id).join();val token=vm.undo.value!!
+        assertTrue(vm.pendingAbandons.value.containsKey(id))
+        SystemClock.sleep(7000)
+        vm.undo(token.token).join()
+        assertSame(before,vm.session(id))
+        assertTrue(vm.session(id)!!.remainingSeconds(BakingClock.elapsed())<before.currentStep.durationMinutes*60L)
+        assertEquals(snapshot,app.activeBakeRepository.all().single{it.sessionId==id})
+        assertTrue(vm.pendingAbandons.value.isEmpty());assertEquals(0,vm.cancelledCount.value)
+        assertEquals(rings,prefs.getInt(CoffeeRing.prefsKey("rye"),0));assertTrue(history.recordCalls.isEmpty())
+    }
+    @Test fun abandonCommitsOnlyAfterGraceThenCannotBeReplayed()=runBlocking {
+        val id=vm.startBaking(twoSteps(),2.0)!!
+        val prefs=app.getSharedPreferences("madre_prefs",0);val key=CoffeeRing.prefsKey("rye");val rings=prefs.getInt(key,0)
+        vm.abandonWithUndo(id).join();val token=vm.undo.value!!
+        mainDispatcher.scheduler.advanceTimeBy(7999);mainDispatcher.scheduler.runCurrent()
+        assertNotNull(vm.session(id));assertEquals(rings,prefs.getInt(key,0))
+        SystemClock.sleep(8000)
+        mainDispatcher.scheduler.advanceTimeBy(1);mainDispatcher.scheduler.runCurrent()
+        withTimeout(10_000){while(vm.cancelledCount.value!=1 || prefs.getInt(key,0)!=rings+1)delay(5)}
+        assertNull(vm.session(id));assertNull(app.activeBakeRepository.all().find{it.sessionId==id})
+        vm.undo(token.token).join()
+        assertEquals(1,vm.cancelledCount.value);assertTrue(history.recordCalls.isEmpty());assertTrue(sync.calls.isEmpty())
+    }
+    @Test fun plusFiveChangesDurableDeadlineAndNotificationWithoutChangingTheRecipeAsset()=runBlocking {
+        val recipe=twoSteps();val id=vm.startBaking(recipe,2.0)!!;val before=vm.session(id)!!
+        val now=BakingClock.elapsed();val deadline=before.stepEndsAtElapsed(now)
+        vm.adjustTime(id,5).join();val after=vm.session(id)!!
+        assertEquals(before.revision+1,after.revision)
+        assertEquals(deadline+5*60_000L,after.stepEndsAtElapsed(BakingClock.elapsed()))
+        assertEquals(10,recipe.timeline[0].durationMinutes)
+        val row=app.activeBakeRepository.all().single{it.sessionId==id}
+        assertEquals(after.currentStep.durationMinutes,row.stepDurationMinutes);assertEquals(after.revision,row.revision)
+        val work=androidx.work.WorkManager.getInstance(app).getWorkInfosForUniqueWork(
+            com.polinalinen.madre.notifications.BootRestorePlanner.uniqueWorkName(id)).get()
+        assertTrue(work.any{it.state==androidx.work.WorkInfo.State.ENQUEUED})
     }
 }

@@ -64,15 +64,19 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
     BoxWithConstraints(Modifier.fillMaxSize().background(p.bg)) {
         val measurer = rememberTextMeasurer()
         val density = androidx.compose.ui.platform.LocalDensity.current
+        val locale=androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
         var headerHeight by remember { mutableStateOf(56.dp + stablePadding.calculateTopPadding()) }
         var footerHeight by remember { mutableStateOf(150.dp + stablePadding.calculateBottomPadding()) }
         val width = with(density) { (maxWidth-52.dp-stablePadding.calculateLeftPadding(androidx.compose.ui.unit.LayoutDirection.Ltr)-stablePadding.calculateRightPadding(androidx.compose.ui.unit.LayoutDirection.Ltr)).roundToPx() }.coerceAtLeast(1)
         val height = with(density) { (maxHeight-headerHeight-footerHeight-52.dp).roundToPx() }.coerceAtLeast(200)
         val style = PaperType.body.copy(fontSize=preferences.textSize.sp,lineHeight=(preferences.textSize*25f/16f).sp)
-        val leaves = remember(recipes,recipeId,width,height,preferences.textSize,factor,density.fontScale) {
+        val leaves = remember(recipes,recipeId,width,height,preferences.textSize,factor,density.fontScale,locale) {
             buildList {
                 recipes.forEachIndexed { ci,r ->
                     if (r.id != recipeId) return@forEachIndexed
+                    val label="ГЛАВА %02d · %s".format(ci+1,r.name.uppercase(locale))
+                    val pageLabelHeight=measurer.measure(label,PaperType.overline,constraints=Constraints(maxWidth=width)).size.height
+                    val pageLimit=height+with(density){52.dp.roundToPx()}-pageLabelHeight-with(density){40.dp.roundToPx()}
                     add(ReadingLeaf(ci,true,anchor="${r.id}:title"))
                     var used=0;var lines=mutableListOf<Pair<String,String>>();var first="ingredients";var fragmentIds=mutableListOf<String>()
                     fun flush() { if(lines.isNotEmpty()) { add(ReadingLeaf(ci,lines=lines.toList(),anchor="${r.id}:$first",blocks=fragmentIds.toList()));lines=mutableListOf();fragmentIds=mutableListOf();used=0 } }
@@ -91,11 +95,24 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
                             var take=rest.size
                             val step=heading.take(2).toIntOrNull()!=null
                             val blockWidth=if(step)(width-with(density){54.dp.roundToPx()}).coerceAtLeast(1) else width
-                            fun measured(n:Int)=measurer.measure(heading,style.copy(fontSize=18.sp,lineHeight=25.sp),constraints=Constraints(maxWidth=blockWidth)).size.height+measurer.measure(rest.take(n).joinToString(" "),style,constraints=Constraints(maxWidth=blockWidth)).size.height+with(density){36.dp.roundToPx()}
-                            if(used+measured(1)>height)flush()
-                            if(used+measured(take)>height) {
+                            fun measured(n:Int):Int {
+                                val number=heading.substringBefore(" · ").toIntOrNull()
+                                val actual=number?.let{r.timeline.getOrNull(it-1)}
+                                val title=actual?.title?:heading
+                                val titleStyle=PaperType.body.copy(fontSize=18.sp,lineHeight=(18*1.27f).sp,fontWeight=FontWeight.Medium,
+                                    fontStyle=if(actual?.type==com.polinalinen.madre.model.StepType.WAIT)androidx.compose.ui.text.font.FontStyle.Italic else androidx.compose.ui.text.font.FontStyle.Normal)
+                                val titleHeight=measurer.measure(title,titleStyle,constraints=Constraints(maxWidth=blockWidth)).size.height
+                                val metaHeight=if(number!=null)measurer.measure(stepOverline(r,number-1).uppercase(locale),PaperType.overline,
+                                    constraints=Constraints(maxWidth=blockWidth)).size.height else 0
+                                val bodyHeight=measurer.measure(rest.take(n).joinToString(" "),style,constraints=Constraints(maxWidth=blockWidth)).size.height
+                                val numeralHeight=if(number!=null)measurer.measure("%02d".format(number),PaperType.body.copy(fontSize=38.sp,
+                                    lineHeight=(38*1.27f).sp,fontWeight=FontWeight.ExtraLight)).size.height else 0
+                                return maxOf(numeralHeight,titleHeight+metaHeight+bodyHeight+with(density){6.dp.roundToPx()})+with(density){20.dp.roundToPx()}
+                            }
+                            if(used+measured(1)>pageLimit)flush()
+                            if(used+measured(take)>pageLimit) {
                                 var lo=1;var hi=take
-                                while(lo<hi){val mid=(lo+hi+1)/2;if(used+measured(mid)<=height)lo=mid else hi=mid-1}
+                                while(lo<hi){val mid=(lo+hi+1)/2;if(used+measured(mid)<=pageLimit)lo=mid else hi=mid-1}
                                 take=lo
                             }
                             if(lines.isEmpty())first="$bi:$offset"

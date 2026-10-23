@@ -58,7 +58,7 @@ class PaperKitInteractionTest {
                 com.polinalinen.madre.model.BakingSession(7, recipe, 0, 0L, 0L, scaleFactor = 1.0),
                 120L, {}, {}, {}, {}, onOpenAlice = { opened = true })
         } }
-        rule.onNodeWithText("Алиса").performScrollTo().performClick()
+        rule.onNodeWithText("Алиса").assertIsDisplayed().performClick()
         assertThat(opened).isTrue()
     }
 }

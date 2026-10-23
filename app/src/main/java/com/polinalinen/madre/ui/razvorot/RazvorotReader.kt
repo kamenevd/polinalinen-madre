@@ -76,7 +76,7 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
                     if (r.id != recipeId) return@forEachIndexed
                     val label="ГЛАВА %02d · %s".format(ci+1,r.name.uppercase(locale))
                     val pageLabelHeight=measurer.measure(label,PaperType.overline,constraints=Constraints(maxWidth=width)).size.height
-                    val pageLimit=height+with(density){52.dp.roundToPx()}-pageLabelHeight-with(density){40.dp.roundToPx()}
+                    val pageLimit=height+with(density){52.dp.roundToPx()}-pageLabelHeight-with(density){16.dp.roundToPx()}
                     add(ReadingLeaf(ci,true,anchor="${r.id}:title"))
                     var used=0;var lines=mutableListOf<Pair<String,String>>();var first="ingredients";var fragmentIds=mutableListOf<String>()
                     fun flush() { if(lines.isNotEmpty()) { add(ReadingLeaf(ci,lines=lines.toList(),anchor="${r.id}:$first",blocks=fragmentIds.toList()));lines=mutableListOf();fragmentIds=mutableListOf();used=0 } }
@@ -107,7 +107,7 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
                                 val bodyHeight=measurer.measure(rest.take(n).joinToString(" "),style,constraints=Constraints(maxWidth=blockWidth)).size.height
                                 val numeralHeight=if(number!=null)measurer.measure("%02d".format(number),PaperType.body.copy(fontSize=38.sp,
                                     lineHeight=(38*1.27f).sp,fontWeight=FontWeight.ExtraLight)).size.height else 0
-                                return maxOf(numeralHeight,titleHeight+metaHeight+bodyHeight+with(density){6.dp.roundToPx()})+with(density){20.dp.roundToPx()}
+                                return maxOf(numeralHeight,titleHeight+metaHeight+bodyHeight+with(density){6.dp.roundToPx()})+with(density){12.dp.roundToPx()}
                             }
                             if(used+measured(1)>pageLimit)flush()
                             if(used+measured(take)>pageLimit) {
@@ -176,8 +176,10 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
                         leaf.lines.forEach { (heading,text) -> LeafBlock(heading,text,preferences,r) }
                     }
                     Spacer(Modifier.weight(1f))
-                    PageFooter(index+1,index+1,leaves.size)
                 }
+            }
+            if(!chrome)Box(Modifier.align(Alignment.BottomCenter).windowInsetsPadding(stableInsets.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal))) {
+                PageFooter(page+1,page+1,leaves.size)
             }
             if(chrome) {
                 edgeMessage?.let { Text(it,style=PaperType.note,color=p.acc,modifier=Modifier.align(Alignment.BottomCenter)
@@ -197,11 +199,13 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
                     .windowInsetsPadding(stableInsets.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal))
                     .padding(horizontal=20.dp,vertical=8.dp)) {
 
-                    SmallLabel(if(current.title)"Титул главы" else if(current.end)"Последняя страница главы" else "Стр. ${page+1} из ${leaves.size}")
-                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.Center) {
+                    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+                        SmallLabel(if(current.title)"Титул главы" else if(current.end)"Последняя страница главы" else "Стр. ${page+1} из ${leaves.size}",Modifier.width(128.dp))
+                        Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.Center) {
                         leaves.forEachIndexed { index,_ -> Box(Modifier.size(48.dp).then(bookAction("Страница ${index+1}"){move(index)}),contentAlignment=Alignment.Center) {
                             Box(Modifier.size(if(index==page)18.dp else 6.dp,6.dp).background(if(index==page)p.rib else p.line,androidx.compose.foundation.shape.CircleShape))
                         } }
+                        }
                     }
                     val active=activeSessions.firstOrNull{it.recipe.id==recipe.id}
                     if(active!=null)PaperButton(if(active.isCompleted)"Испечено · вписать" else "В печи · шаг ${active.currentStepIndex+1}",{onContinueBake(active.id)},Modifier.fillMaxWidth(),primary=true)
@@ -254,7 +258,7 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
 @Composable internal fun LeafBlock(heading:String,text:String,preferences:ReadingPreferences,recipe:Recipe?=null) {
     val step=heading.substringBefore(" · ").toIntOrNull()
     val actual=step?.let{recipe?.timeline?.getOrNull(it-1)}
-    Row(Modifier.padding(horizontal=26.dp,vertical=10.dp)) {
+    Row(Modifier.padding(horizontal=26.dp,vertical=6.dp)) {
         if(step!=null)BookText("%02d".format(step),38,Modifier.width(54.dp),color=LocalPaper.current.mut,weight=FontWeight.ExtraLight)
         Column(Modifier.weight(1f)) {
             if(step!=null)SmallLabel(if(actual!=null && recipe!=null)stepOverline(recipe,step-1) else heading.substringAfterLast(" · "))

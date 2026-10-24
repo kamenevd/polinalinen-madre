@@ -98,6 +98,21 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertNotIn("secrets.MADRE_KEYSTORE_", text)
         self.assertIn("if: always()\n        run: python3 scripts/restore_qa_signing.py --cleanup", quality)
 
+    def test_delivery_artifact_is_frozen_before_test_only_abi_and_runtime_uses_delivery(self):
+        text=self.read(".github/workflows/quality-gates.yml")
+        freeze=text.index("name: Freeze ordinary delivery QA")
+        instrument=text.index("name: Build minified QA instrumentation separately")
+        self.assertLess(freeze,instrument)
+        delivery=text.split("name: madre-qa-release-like\n",1)[1].split("retention-days:",1)[0]
+        self.assertIn("path: .ci-delivery/",delivery)
+        self.assertIn("name: madre-qa-regression-target",text)
+        self.assertIn("MADRE_EXACT_QA_REGRESSION_DIR",self.read("scripts/run_minified_plan_regression.py"))
+        runtime=self.read("scripts/run_qa_runtime_acceptance.sh")
+        self.assertIn("delivery_phase delivery-seed",runtime)
+        self.assertIn("delivery_phase delivery-check",runtime)
+        self.assertIn("'test_only_persistence_ABI':False",runtime)
+        self.assertIn("actualUnmodifiedDeliveryReadsLegacyAndAddsPlan",self.read("macrobenchmark/src/main/java/com/polinalinen/madre/macrobenchmark/QaOwnerAcceptance.kt"))
+
     def test_debug_signing_has_its_own_identity_and_keeps_qa_isolation(self):
         text = self.read("app/build.gradle.kts")
         debug = text.split("        debug {", 1)[1].split("        release {", 1)[0]

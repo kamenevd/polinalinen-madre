@@ -13,6 +13,49 @@ import java.io.File
 
 /** External UIAutomator: actual non-debuggable QA; no fixture/seeder Activity or login. */
 class QaOwnerAcceptance {
+    @Test fun actualUnmodifiedDeliveryReadsLegacyAndAddsPlan() {
+        val context=InstrumentationRegistry.getInstrumentation().context
+        val device=UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+        val target="com.polinalinen.madre.qa"
+        val output=File(context.getExternalFilesDir(null),"huawei-p0").apply{mkdirs()}
+        try {
+            context.startActivity(Intent().setClassName(target,"com.polinalinen.madre.MainActivity").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
+            assertTrue(device.wait(Until.hasObject(By.pkg(target)),20_000))
+            device.wait(Until.findObject(By.text("ПОЗЖЕ")),3000)?.click()
+            device.wait(Until.findObject(By.text(java.util.regex.Pattern.compile("(?iu)печь"))),5000)?.click()
+            assertTrue("Legacy JSON must render in ordinary R8 delivery",device.wait(Until.hasObject(By.text("Чиабатта")),10_000))
+            fun findByScrolling(selector:androidx.test.uiautomator.BySelector):androidx.test.uiautomator.UiObject2 {
+                repeat(14) {
+                    device.findObject(selector)?.let{return it}
+                    device.swipe(device.displayWidth/2,device.displayHeight*3/4,device.displayWidth/2,device.displayHeight/3,25)
+                    device.waitForIdle(500)
+                }
+                error("Real delivery control not found: $selector")
+            }
+            assertNotNull(findByScrolling(By.text("Хлебушек домашний")))
+            findByScrolling(By.text("Хлеб «Семейный»")).click()
+            val schedule=device.wait(Until.findObject(By.text("Ко времени")),10_000)
+            assertNotNull("Real start sheet missing",schedule);schedule!!.click()
+            findByScrolling(By.textStartsWith("Запланировать")).click()
+            assertTrue(device.wait(Until.hasObject(By.textContains("Уже печём")),10_000))
+            device.dumpWindowHierarchy(File(output,"qa-delivery-plans-written.xml"))
+            assertTrue(device.takeScreenshot(File(output,"qa-delivery-plans-written.png")))
+            device.executeShellCommand("am force-stop $target")
+            context.startActivity(Intent().setClassName(target,"com.polinalinen.madre.MainActivity").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
+            assertTrue(device.wait(Until.hasObject(By.text("Чиабатта")),15_000))
+            assertNotNull(findByScrolling(By.text("Хлебушек домашний")))
+            assertNotNull(findByScrolling(By.text("Хлеб «Семейный»")))
+            device.dumpWindowHierarchy(File(output,"qa-delivery-plans-restored.xml"))
+            assertTrue(device.takeScreenshot(File(output,"qa-delivery-plans-restored.png")))
+        } catch(failure:Throwable) {
+            device.dumpWindowHierarchy(File(output,"qa-delivery-failure.xml"))
+            device.takeScreenshot(File(output,"qa-delivery-failure.png"))
+            throw failure
+        } finally {
+            device.executeShellCommand("mkdir -p /sdcard/Download/madre-qa-p0; cp -R ${output.absolutePath}/. /sdcard/Download/madre-qa-p0/")
+        }
+    }
+
     @Test fun actualR8SettingsProbeAndLocalFpsAreVisible() {
         val instrumentation=InstrumentationRegistry.getInstrumentation()
         val context=instrumentation.context
@@ -32,6 +75,7 @@ class QaOwnerAcceptance {
             assertTrue(device.takeScreenshot(File(output,"$name.png")))
             assertEquals("Only full actual QA window is accepted",target,device.currentPackageName)
         }
+        try {
         dismissKnownLauncherAnr()
         context.startActivity(Intent().setClassName(target,"com.polinalinen.madre.MainActivity").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
         assertTrue(device.wait(Until.hasObject(By.pkg(target)),20_000))
@@ -75,5 +119,12 @@ class QaOwnerAcceptance {
         val exported=device.executeShellCommand("ls /sdcard/Download/madre-qa-p0/")
         for(name in listOf("qa-haptic-diagnostics.png","qa-fps-settings.png","qa-night-settings.png","qa-night-toc.png"))
             assertTrue("Raw frame must survive test APK uninstall: $name",exported.contains(name))
+        } catch(failure:Throwable) {
+            device.dumpWindowHierarchy(File(output,"qa-owner-failure.xml"))
+            device.takeScreenshot(File(output,"qa-owner-failure.png"))
+            throw failure
+        } finally {
+            device.executeShellCommand("mkdir -p /sdcard/Download/madre-qa-p0; cp -R ${output.absolutePath}/. /sdcard/Download/madre-qa-p0/")
+        }
     }
 }

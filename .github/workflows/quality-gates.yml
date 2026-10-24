@@ -93,6 +93,12 @@ jobs:
         run: python3 scripts/restore_qa_signing.py
       - name: Compile, domain tests, style boundary, 20 key native frames and QA APK
         run: ./gradlew compileDebugKotlin compileReleaseKotlin testDebugUnitTest assembleDebug assembleQa --no-daemon --stacktrace --no-configuration-cache
+      - name: Freeze ordinary delivery QA before building the test-only persistence ABI
+        run: |
+          mkdir -p .ci-delivery/outputs/apk/qa .ci-delivery/outputs/mapping .ci-delivery/intermediates/merged_manifests
+          cp app/build/outputs/apk/qa/app-qa.apk .ci-delivery/outputs/apk/qa/
+          cp -R app/build/outputs/mapping/qa .ci-delivery/outputs/mapping/
+          cp -R app/build/intermediates/merged_manifests/qa .ci-delivery/intermediates/merged_manifests/
       - name: Build minified QA instrumentation separately without displacing debug domain and render tests
         run: ./gradlew :app:assembleQa :app:assembleQaAndroidTest -Pmadre.qaRegression=true --no-daemon --stacktrace --no-configuration-cache
       - name: Verify stable QA APK identity before any APK upload
@@ -105,7 +111,11 @@ jobs:
         id: verify_real_qa
         run: |
           python3 scripts/verify_apk_signature.py app/build/outputs/apk/qa/app-qa.apk
-          python3 scripts/verify_qa_release_like.py app/build/outputs/apk/qa/app-qa.apk --mapping app/build/outputs/mapping/qa/mapping.txt > app/build/reports/qa-binary-provenance.json
+          python3 scripts/verify_qa_release_like.py app/build/outputs/apk/qa/app-qa.apk --mapping app/build/outputs/mapping/qa/mapping.txt > app/build/reports/qa-regression-binary-provenance.json
+          python3 scripts/verify_apk_signature.py .ci-delivery/outputs/apk/qa/app-qa.apk
+          mkdir -p .ci-delivery/reports
+          python3 scripts/verify_qa_release_like.py .ci-delivery/outputs/apk/qa/app-qa.apk --mapping .ci-delivery/outputs/mapping/qa/mapping.txt > .ci-delivery/reports/qa-binary-provenance.json
+          ! grep -Fq 'qa-persistence-api.pro' .ci-delivery/outputs/mapping/qa/configuration.txt
       - name: Extended visual verification (manual, nightly and RC)
         if: (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && !inputs.fixes_7013_acceptance && !inputs.fixes_7014_acceptance && !inputs.fixes_7014_instrumented && !inputs.fixes_7015_huawei && !inputs.bake_numbers_native
         run: ./gradlew testDebugUnitTest verifyRoborazziDebug -Pmadre.extendedVerification=true --no-daemon --stacktrace --no-configuration-cache
@@ -124,10 +134,18 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: madre-qa-release-like
+          path: .ci-delivery/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload explicitly test-only R8 persistence target, never deliver it
+        if: success() && steps.verify_real_qa.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: madre-qa-regression-target
           path: |
             app/build/outputs/apk/qa/app-qa.apk
             app/build/outputs/mapping/qa/
-            app/build/reports/qa-binary-provenance.json
+            app/build/reports/qa-regression-binary-provenance.json
             app/build/intermediates/merged_manifests/qa/
           if-no-files-found: error
           retention-days: 14
@@ -211,6 +229,7 @@ jobs:
       MADRE_FIXES_7014_ACCEPTANCE: ${{ (inputs.fixes_7014_acceptance || inputs.fixes_7014_instrumented) && 'true' || 'false' }}
       MADRE_FIXES_7015_ACCEPTANCE: ${{ (inputs.fixes_7015_huawei || inputs.bake_numbers_native) && 'true' || 'false' }}
       MADRE_EXACT_QA_DIR: ${{ github.workspace }}/.ci-exact/qa
+      MADRE_EXACT_QA_REGRESSION_DIR: ${{ github.workspace }}/.ci-exact/qa-regression
       MADRE_EXACT_QA_TEST_DIR: ${{ github.workspace }}/.ci-exact/qa-test
       QA_KEYSTORE_PASSWORD: ${{ secrets.MADRE_QA_KEYSTORE_PASSWORD }}
       QA_KEY_ALIAS: ${{ secrets.MADRE_QA_KEY_ALIAS }}
@@ -250,6 +269,12 @@ jobs:
         with:
           name: madre-qa-regression-test
           path: ${{ env.MADRE_EXACT_QA_TEST_DIR }}
+      - name: Download separately labelled test-only persistence target
+        if: inputs.bake_numbers_native
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: madre-qa-regression-target
+          path: ${{ env.MADRE_EXACT_QA_REGRESSION_DIR }}
       - name: Restore private stable QA signing for instrumentation
         env:
           QA_KEYSTORE_BASE64: ${{ secrets.MADRE_QA_KEYSTORE_BASE64 }}

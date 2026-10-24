@@ -36,6 +36,10 @@ public class MinifiedPlanRegressionTest {
         assertEquals("com.polinalinen.madre.qa",context.getPackageName());
         assertEquals(0,context.getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE);
         SharedPreferences raw=context.getSharedPreferences(NAMESPACE,Context.MODE_PRIVATE);
+        File external=context.getExternalFilesDir(null);
+        assertNotNull(external);
+        File evidence=new File(external,"minified-plan-regression");
+        if(!evidence.exists()) assertTrue(evidence.mkdirs());
         PlannedBake old=new PlannedBake("ciabatta",2,2_000_000_000_000L,0);
         PlannedBake second=new PlannedBake("home_bread",3,2_000_000_060_000L,0);
         PlannedBake added=new PlannedBake("waffles",4,2_000_000_120_000L,3);
@@ -59,6 +63,7 @@ public class MinifiedPlanRegressionTest {
                 assertEquals(negative?empty:expected,reread.snapshotPlans());
             }
             if(!negative) {
+                int errorIndex=0;
                 for(String broken:Arrays.asList("[{","null","[null]","[{\"recipeId\":\"ciabatta\",\"portions\":0,\"startAtMillis\":2000000000000}]")) {
                     assertTrue(raw.edit().putString("planned_bakes",broken).putString("planned_action_nonce_"+old.getId(),"synthetic-capability").commit());
                     Map<String,?> before=new HashMap<>(raw.getAll());
@@ -73,6 +78,11 @@ public class MinifiedPlanRegressionTest {
                         assertFalse(book.consumeNotificationAction(old.getId(),"synthetic-capability"));
                     }
                     assertEquals("Read errors must not alter any original pref or capability",before,raw.getAll());
+                    org.json.JSONObject proof=new org.json.JSONObject();
+                    proof.put("before",new org.json.JSONObject(before));
+                    proof.put("after",new org.json.JSONObject(raw.getAll()));
+                    proof.put("all_original_prefs_and_capabilities_unchanged",true);
+                    write(new File(evidence,"error-"+(errorIndex++)+"-unchanged.json"),proof.toString());
                 }
                 assertTrue(raw.edit().putString("planned_bakes",valid).commit());
             }
@@ -83,10 +93,6 @@ public class MinifiedPlanRegressionTest {
             }
         }
         assertEquals("keep",raw.getString("unrelated",null));
-        File external=context.getExternalFilesDir(null);
-        assertNotNull(external);
-        File evidence=new File(external,"minified-plan-regression");
-        if(!evidence.exists()) assertTrue(evidence.mkdirs());
         String saved=raw.getString("planned_bakes",null);
         assertNotNull(saved);
         write(new File(evidence,phase+"-prefs.json"),saved);

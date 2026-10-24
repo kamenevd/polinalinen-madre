@@ -10,7 +10,11 @@ version = "3.3.0"
 // No publishing task/repository is configured; this is a local security source build.
 android {
     namespace = "com.yandex.authsdk"
-    compileSdk = 35
+    // Keep upstream CompatUtils source and certificate handling unchanged.
+    // API35 adds nullable platform annotations absent from this pinned source;
+    // API34 supports its API33 calls and AndroidX dependencies. The app's own
+    // compile/target SDK and the runtime35 custody regression are unchanged.
+    compileSdk = 34
     defaultConfig {
         minSdk = 21
     }

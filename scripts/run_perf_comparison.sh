@@ -13,11 +13,15 @@ adb shell dumpsys SurfaceFlinger > "$out/renderer.txt"
 cp "$before/benchmark-baseline-source.json" "$out/"
 run_scroll() {
   local dir="$1" dest="$2"
+  python3 "$root/scripts/perf_preflight.py" "$dir" "$dest"
+  local result=0
   (cd "$dir" && ./gradlew :macrobenchmark:connectedBenchmarkAndroidTest \
     -Pandroid.testInstrumentationRunnerArguments.class=com.polinalinen.madre.macrobenchmark.ScrollBenchmarks \
-    --no-daemon --stacktrace --no-configuration-cache)
-  cp -R "$dir/macrobenchmark/build/outputs" "$dest/"
+    --no-daemon --stacktrace --no-configuration-cache) || result=$?
+  cp -R "$dir/macrobenchmark/build/outputs" "$dest/" || true
   cp -R "$dir/macrobenchmark/build/reports" "$dest/" || true
+  adb logcat -d > "$dest/actual-test-logcat.txt" || true
+  return "$result"
 }
 run_scroll "$before" "$out/before"
 if [[ "${MADRE_PERF_COMPARE:-false}" == "true" ]]; then

@@ -29,12 +29,14 @@ class WorkflowContractTests(unittest.TestCase):
             "20 key native frames",
             "verifyRoborazziDebug",
             "assembleDebug",
-            "bash scripts/run_instrumented_acceptance.sh",
+            "bash scripts/run_native_acceptance.sh",
             "retention-days:",
         ):
             self.assertIn(required, text)
         # The pinned emulator action executes each input line in its own shell.
         # Follow the exact invoked helper, not a decoy command in a YAML comment.
+        coordinator = self.read("scripts/run_native_acceptance.sh")
+        self.assertIn("bash scripts/run_instrumented_acceptance.sh", coordinator)
         script = self.read("scripts/run_instrumented_acceptance.sh")
         self.assertRegex(script, r"(?m)^\s*\./gradlew connectedDebugAndroidTest ")
         self.assertIn("./gradlew :app:connectedDebugAndroidTest", script)
@@ -64,15 +66,22 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("lintDebug", lint)
         self.assertIn("lint-reports", lint)
 
-    def test_real_qa_runtime_condition_executes_under_the_pinned_actions_posix_shell(self):
+    def test_coordinator_executes_as_one_command_under_the_pinned_actions_posix_shell(self):
         import subprocess
         text=self.read(".github/workflows/quality-gates.yml")
-        line=next(line.strip() for line in text.splitlines() if 'then bash scripts/run_qa_runtime_acceptance.sh' in line)
-        line=line.replace('bash scripts/run_qa_runtime_acceptance.sh','printf QA_RUNTIME_CALLED')
-        for value,expected in [('true','QA_RUNTIME_CALLED'),('false','')]:
-            result=subprocess.run(['sh','-c',line.replace('${{ inputs.bake_numbers_native }}',value)],capture_output=True,text=True)
+        smoke=text.split("  instrumented-smoke:\n",1)[1].split("  required-7015-performance:\n",1)[0]
+        line=next(line.strip().removeprefix('script: ') for line in smoke.splitlines() if line.strip().startswith('script: '))
+        self.assertEqual('bash scripts/run_native_acceptance.sh "${{ inputs.bake_numbers_native && \'true\' || \'false\' }}"',line)
+        line=line.replace('bash scripts/run_native_acceptance.sh','printf %s')
+        for value in ['true','false']:
+            result=subprocess.run(['sh','-c',line.replace("${{ inputs.bake_numbers_native && 'true' || 'false' }}",value)],capture_output=True,text=True)
             self.assertEqual(0,result.returncode,result.stderr)
-            self.assertEqual(expected,result.stdout)
+            self.assertEqual(value,result.stdout)
+        upload=smoke.split('name: Upload independent native group logs and exact exit codes',1)[1].split('      - name:',1)[0]
+        self.assertIn('if: always()',upload)
+        self.assertIn('name: native-acceptance-status',upload)
+        self.assertIn('path: performance-evidence/native-acceptance/',upload)
+        self.assertIn('if-no-files-found: error',upload)
 
     def test_qa_signing_is_verified_before_upload_without_a_fallback(self):
         text = self.read(".github/workflows/quality-gates.yml")

@@ -3,7 +3,7 @@
 set -euo pipefail
 out="$PWD/performance-evidence/qa-runtime"
 mkdir -p "$out"
-# Minified persistence already ran first in the same CI AVD, before ordinary debug smoke.
+# This ordinary delivery lane runs independently before minified and legacy debug.
 python3 - "$out" <<'PY'
 import hashlib,json,os,pathlib,shutil,sys
 out=pathlib.Path(sys.argv[1]);source=pathlib.Path(os.environ['MADRE_EXACT_QA_DIR'])

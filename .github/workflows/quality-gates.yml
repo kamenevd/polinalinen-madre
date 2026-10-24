@@ -300,10 +300,15 @@ jobs:
           profile: pixel_5
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: |
-            if [ "${{ inputs.bake_numbers_native }}" = "true" ]; then python3 scripts/run_minified_plan_regression.py; fi
-            bash scripts/run_instrumented_acceptance.sh
-            if [ "${{ inputs.bake_numbers_native }}" = "true" ]; then bash scripts/run_qa_runtime_acceptance.sh; fi
+          script: bash scripts/run_native_acceptance.sh "${{ inputs.bake_numbers_native && 'true' || 'false' }}"
+      - name: Upload independent native group logs and exact exit codes
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: native-acceptance-status
+          path: performance-evidence/native-acceptance/
+          if-no-files-found: error
+          retention-days: 14
       - name: Upload actual non-debuggable QA runtime and owner diagnostics PNG
         if: always() && inputs.bake_numbers_native
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a

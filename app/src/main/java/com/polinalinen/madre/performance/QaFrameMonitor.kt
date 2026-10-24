@@ -38,7 +38,7 @@ internal class QaFrameMonitor(private val window:Window) {
         if(!value)accumulator.sample()
     }
     fun resume(){resumed=true;tracker?.isTrackingEnabled=enabled}
-    fun pause(){resumed=false;tracker?.isTrackingEnabled=false}
+    fun pause(){resumed=false;tracker?.isTrackingEnabled=false;accumulator.sample()}
     fun close(){pause();tracker=null}
     fun sample()=accumulator.sample()
 }

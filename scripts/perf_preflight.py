@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Fail-fast real release-like CI launch; retain actual platform crash evidence, never fake metrics."""
-import hashlib,json,os,subprocess,sys,time,zipfile
+import hashlib,json,os,shutil,subprocess,sys,time,zipfile
 from pathlib import Path
 root=Path(sys.argv[1]);out=Path(sys.argv[2]);out.mkdir(parents=True,exist_ok=True)
 r=subprocess.run([str(root/'gradlew'),':app:assembleBenchmark','--no-daemon','--stacktrace','--no-configuration-cache'],cwd=root)
@@ -21,7 +21,8 @@ source_file=root/'benchmark-baseline-source.json'
 source=json.loads(source_file.read_text()) if source_file.exists() else {'functional_source':subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()}
 debug_arm=source.get('debug_comparison_arm',False)
 assert debuggable==debug_arm and r8!=debug_arm,'Actual APK does not match the declared debug/release-like comparison arm'
-(out/'actual-apk-controls.json').write_text(json.dumps({'head':source['functional_source'],'apk_sha256':hashlib.sha256(apks[0].read_bytes()).hexdigest(),'variant':'benchmark','debuggable':debuggable,'R8':r8,'compilation':'CompilationMode.None','iterations_per_route':5,'renderer':'see renderer.txt; no physical Huawei claim','profile_packed':(root/'app/src/main/baseline-prof.txt').exists()},indent=2)+'\n')
+(out/'actual-apk-controls.json').write_text(json.dumps({'head':source['functional_source'],'apk_sha256':hashlib.sha256(apks[0].read_bytes()).hexdigest(),'variant':'benchmark','debuggable':debuggable,'R8':r8,'compilation':'CompilationMode.None','iterations_per_route':5,'API':subprocess.check_output(['adb','shell','getprop','ro.build.version.sdk'],text=True).strip(),'renderer':'see renderer.txt; no physical Huawei claim','profile_packed':(root/'app/src/main/baseline-prof.txt').exists()},indent=2)+'\n')
+shutil.copy2(apks[0],out/'measured-target.apk')
 subprocess.run(['adb','install','-r',str(apks[0])],check=True)
 subprocess.run(['adb','logcat','-c'],check=True)
 launch=subprocess.run(['adb','shell','am','start','-W','-n','com.polinalinen.madre.benchmark/com.polinalinen.madre.ui.razvorot.RazvorotSceneActivity','--es','scene','toc'],text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)

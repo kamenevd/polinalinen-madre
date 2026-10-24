@@ -59,7 +59,7 @@ internal class AndroidPaperHapticPlatform(private val context:Context,private va
         try {
             val vibrator=vibratorProvider()
             if(vibrator==null){PaperHapticDiagnostics.report(PaperHapticDiagnostic(lastCall="Нет сервиса Vibrator"));return false}
-            val diagnostic=PaperHapticDiagnostic(vibrator.hasVibrator(),vibrator.hasAmplitudeControl())
+            val diagnostic=PaperHapticDiagnostic(vibrator.hasVibrator(),runCatching{vibrator.hasAmplitudeControl()}.getOrNull())
             if(diagnostic.hasVibrator!=true){PaperHapticDiagnostics.report(diagnostic.copy(lastCall="Устройство сообщает: мотора нет"));return false}
             if(kind==PaperHaptic.TIMER) {
                 vibrationSender(vibrator,VibrationEffect.createWaveform(longArrayOf(0,80,60,120),-1),

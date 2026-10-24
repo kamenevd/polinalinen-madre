@@ -22,5 +22,8 @@ import pathlib,re,sys
 out=pathlib.Path(sys.argv[1])
 assert re.search(r'result=[12]\b', (out/'profile-install.txt').read_text()),'Actual profile installer did not report success/already installed'
 assert 'Success' in (out/'profile-compile.txt').read_text(),'Actual speed-profile compilation failed'
+assert 'speed-profile' in (out/'actual-installed-package.txt').read_text(),'Installed package does not report actual speed-profile compilation'
+import hashlib,json
+(out/'profile-runtime.json').write_text(json.dumps({'apk_sha256':hashlib.sha256((out/'app-qa.apk').read_bytes()).hexdigest(),'ProfileInstaller_success_or_already_installed':True,'actual_dexopt_status':'speed-profile','physical_Huawei_acceptance':False},indent=2)+'\n')
 PY
 exit "$result"

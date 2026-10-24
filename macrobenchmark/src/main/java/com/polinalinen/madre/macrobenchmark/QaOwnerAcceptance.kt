@@ -56,6 +56,16 @@ class QaOwnerAcceptance {
         repeat(3){device.swipe(device.displayWidth/2,device.displayHeight*3/4,device.displayWidth/2,device.displayHeight/2,20);device.waitForIdle(300)}
         shot("qa-fps-settings")
         File(output,"qa-fps-visible.txt").writeText(device.findObject(By.textContains("кадров · UI p95"))?.text?:"No frame sample label")
+        device.findObject(By.desc("Показывать FPS"))?.click()
+        repeat(3){device.swipe(device.displayWidth/2,device.displayHeight/4,device.displayWidth/2,device.displayHeight*3/4,30)}
+        val themeSearch=device.wait(Until.findObject(By.clazz("android.widget.EditText")),5000)
+        assertNotNull(themeSearch);themeSearch!!.text="Тема"
+        val night=device.wait(Until.findObject(By.text(java.util.regex.Pattern.compile("(?iu)ночь"))),5000)
+        assertNotNull("Actual night theme control missing",night);night!!.click()
+        shot("qa-night-settings")
+        device.pressBack()
+        assertTrue(device.wait(Until.hasObject(By.text("Оглавление")),10_000))
+        shot("qa-night-toc")
         // Diagnostics off by default/on relaunch; this explicit test never changes global OS settings.
         File(output,"acceptance.txt").writeText("Actual qa variant; FLAG_DEBUGGABLE=false; full unmodified UiDevice frames. Android request is not physical Huawei vibration or smoothness acceptance.\n")
     }

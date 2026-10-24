@@ -13,6 +13,12 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertIsOff
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
@@ -74,9 +80,9 @@ class SettingsIaUiTest {
      * прописными: тест смотрит на страницу, а не на исходник.
      */
     @Test
-    fun `the colophon is five named sections, not one long strip`() {
+    fun `the colophon has six named searchable sections`() {
         showSettings()
-        assertThat(Sections.ALL).hasSize(5)
+        assertThat(Sections.ALL).hasSize(6)
         Sections.ALL.forEach { title ->
             rule.onNodeWithText(title.uppercase()).assertExists("нет раздела «$title»")
         }
@@ -99,20 +105,21 @@ class SettingsIaUiTest {
         rule.onNodeWithText("Тираж").assertDoesNotExist()
     }
 
-    /** Ритм кормления остаётся одной accessible-кнопкой с merged label. */
+    /** All five choices are visible and directly selectable, including their position for TalkBack. */
     @Test
     fun `the feeding rhythm is exposed as one accessible control`() {
         showSettings(intervalHours = 24)
-        val label = "Как часто кормить: Ваш ритм: раз в сутки"
-        val node = rule.onAllNodes(hasClickAction(), useUnmergedTree = true)
-            .fetchSemanticsNodes()
-            .single { it.config.getOrNull(SemanticsActions.OnClick)?.label == label }
-        assertThat(node.config.getOrNull(SemanticsProperties.Role)).isEqualTo(Role.Button)
-        assertThat(node.config.getOrNull(SemanticsActions.OnClick)?.label).isEqualTo(label)
+        val nodes = rule.onAllNodes(hasClickAction(), useUnmergedTree = true).fetchSemanticsNodes()
+            .filter { it.config.getOrNull(SemanticsActions.OnClick)?.label?.startsWith("Ритм кормления:") == true }
+        assertThat(nodes).hasSize(5)
+        val node = nodes.single { it.config.getOrNull(SemanticsActions.OnClick)?.label == "Ритм кормления: сутки" }
+        assertThat(node.config.getOrNull(SemanticsProperties.Role)).isEqualTo(Role.RadioButton)
+        assertThat(node.config.getOrNull(SemanticsProperties.Selected)).isTrue()
+        assertThat(node.config.getOrNull(SemanticsProperties.StateDescription)).isEqualTo("2 из 5")
         rule.onNodeWithText("раз в 24 часа", useUnmergedTree = true).assertDoesNotExist()
     }
 
-    /** Cycle 28: оформление крутится одной строкой, текущее значение видно сразу. */
+    /** The real switch changes the existing persisted callback, not an invisible next tap-cycle. */
     @Test
     fun `look row shows current value and tap advances to next`() {
         rule.setContent {
@@ -129,13 +136,10 @@ class SettingsIaUiTest {
             }
         }
         rule.onNodeWithText("спокойное").assertExists()
-        val clickables = rule.onAllNodes(hasClickAction(), useUnmergedTree = true)
-        val targetIndex = clickables.fetchSemanticsNodes().indexOfFirst {
-            it.config.getOrNull(SemanticsActions.OnClick)?.label == "Оформление: спокойное"
-        }
-        assertThat(targetIndex).isAtLeast(0)
-        clickables[targetIndex].performSemanticsAction(SemanticsActions.OnClick)
+        val control = rule.onNodeWithContentDescription("Спокойный режим")
+        control.assertIsOn().performScrollTo().performClick()
         rule.waitForIdle()
+        control.assertIsOff()
         rule.onNodeWithText("живое").assertExists()
     }
 
@@ -199,14 +203,20 @@ class SettingsIaUiTest {
     }
 
     @Test
-    fun `everything tappable in the colophon says it is a button`() {
+    fun `every settings action has the correct native button radio or switch role`() {
         showSettings()
         val nodes = tappableNodes()
         assertThat(nodes).isNotEmpty()
         nodes.forEach { node ->
+            val label = node.config.getOrNull(SemanticsActions.OnClick)?.label.orEmpty()
+            val expected = when {
+                label == "Спокойный режим" || label == "Напоминания" -> Role.Switch
+                label.startsWith("Ритм кормления:") || label.startsWith("Как читать рецепт:") || label.startsWith("Тема:") -> Role.RadioButton
+                else -> Role.Button
+            }
             assertWithMessage("${describe(node)}: роль")
                 .that(node.config.getOrNull(SemanticsProperties.Role))
-                .isEqualTo(Role.Button)
+                .isEqualTo(expected)
         }
     }
 

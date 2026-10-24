@@ -32,6 +32,8 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -117,15 +119,20 @@ enum class PaperButtonVariant { PRIMARY, ACCENT, SECONDARY, TEXT }
 }
 
 @Composable fun PaperSegmented(labels: List<String>, selectedIndex: Int, onSelect: (Int) -> Unit,
-    modifier: Modifier = Modifier) {
+    modifier: Modifier = Modifier, label: String? = null) {
     val p = LocalPaper.current
     Row(modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(p.bg2).padding(3.dp)) {
-        labels.forEachIndexed { index, label ->
+        labels.forEachIndexed { index, optionLabel ->
             Box(Modifier.weight(1f).heightIn(min = 48.dp).clip(RoundedCornerShape(22.dp))
                 .background(if (index == selectedIndex) p.ink else Color.Transparent)
                 .selectable(index == selectedIndex, role = Role.RadioButton, onClick = { onSelect(index) })
+                .semantics {
+                    onClick(if (label == null) optionLabel else "$label: $optionLabel", null)
+                    if (label != null) contentDescription = "$label, $optionLabel"
+                    stateDescription = "${index + 1} из ${labels.size}"
+                }
                 .padding(horizontal = 6.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
-                Text(label, color = if (index == selectedIndex) p.bg else p.mut,
+                Text(optionLabel, color = if (index == selectedIndex) p.bg else p.mut,
                     style = PaperType.ui.copy(fontSize = 12.sp), textAlign = TextAlign.Center)
             }
         }

@@ -126,7 +126,8 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
                                 recipeName = "Демонстрационная выпечка", stepText = recipe.timeline[0].description) }
                         }
                     }
-                    scene=="settings" -> SettingsContent("Пекарь", {}, {}, {}, "Мадре", {}, 12, 42, 24, {}, true, {}, true, {}, "Демонстрационная семья", FamilyBookState.SignedOut, {}, {})
+                    scene=="settings" || scene=="settings-search" -> SettingsContent("Пекарь", {}, {}, {}, "Мадре", {}, 12, 42, 24, {}, true, {}, true, {}, "Демонстрационная семья", FamilyBookState.SignedOut, {}, {},
+                        preferences=preferences,initialSearch=if(scene=="settings-search")"увед" else "")
                     scene=="feeding" || scene=="feeding-error" -> FeedingFormScreen({ _, _, _, _, _, _ -> }, {}, if (scene.endsWith("error")) FeedingSaveState.Error("Не удалось записать кормление. Попробуйте ещё раз.") else FeedingSaveState.Idle, 50)
                     scene=="gallery-empty" -> PhotoGalleryScreen(emptyList(), {})
                     scene=="diary" -> StarterDiaryScreen(42, GrowthPhase.GROWING, profileForInterval(24),

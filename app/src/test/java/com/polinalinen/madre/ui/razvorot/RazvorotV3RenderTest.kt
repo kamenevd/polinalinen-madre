@@ -43,7 +43,7 @@ class RazvorotV3RenderTest {
     @Test fun chapterTitle()=render("chapter-title",listOf(Atmosphere.DAWN))
     @Test fun chapterIngredients()=render("chapter-ingr")
     @Test fun tableOfContents()=render("toc",listOf(Atmosphere.DAWN))
-    @Test fun optionalYandexOffer()=render("yandex-offer")
+    @Test fun optionalYandexOffer()=render("yandex-offer",listOf(Atmosphere.DAWN))
     @Test fun oven()=render("oven",listOf(Atmosphere.DAWN))
     @Test fun bakeFinale()=render("bake-finale")
     @Test fun startLater()=render("start-later",listOf(Atmosphere.DAWN))
@@ -53,5 +53,6 @@ class RazvorotV3RenderTest {
     @Test fun starterGrowing()=render("starter-growing", listOf(Atmosphere.DAWN))
     @Test fun shelf()=render("shelf", listOf(Atmosphere.DAWN))
     @Test fun aliceUnlinked()=render("alice-sheet-unlinked", listOf(Atmosphere.NIGHT))
-    @Test fun explicitYandexVoiceConsent()=render("alice-yandex-consent", listOf(Atmosphere.NIGHT))
+    @Test fun settings()=render("settings", listOf(Atmosphere.DAWN))
+    @Test fun settingsSearch()=render("settings-search", listOf(Atmosphere.NIGHT))
 }

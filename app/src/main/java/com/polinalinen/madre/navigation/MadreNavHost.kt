@@ -513,6 +513,7 @@ fun MadreNavHost(
                     onOpenShelfSettings = { navController.navigate(MadreDestinations.SETTINGS_SHELF) },
                     onOpenAlice = { navController.navigate(MadreDestinations.ALICE) },
                     familyBookViewModel = familyBookViewModel,
+                    readingPreferences = readingPreferences,
                 )
             }
             composable(MadreDestinations.ALICE) {

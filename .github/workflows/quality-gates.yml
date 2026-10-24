@@ -135,6 +135,9 @@ jobs:
         with:
           name: madre-qa-release-like
           path: .ci-delivery/
+          # Dedicated allowlist above contains only APK/mapping/manifest/provenance,
+          # never the keystore; upload-artifact excludes dot directories otherwise.
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
       - name: Upload explicitly test-only R8 persistence target, never deliver it

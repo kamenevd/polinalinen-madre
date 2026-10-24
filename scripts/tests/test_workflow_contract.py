@@ -105,6 +105,7 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertLess(freeze,instrument)
         delivery=text.split("name: madre-qa-release-like\n",1)[1].split("retention-days:",1)[0]
         self.assertIn("path: .ci-delivery/",delivery)
+        self.assertIn("include-hidden-files: true",delivery)
         self.assertIn("name: madre-qa-regression-target",text)
         self.assertIn("MADRE_EXACT_QA_REGRESSION_DIR",self.read("scripts/run_minified_plan_regression.py"))
         runtime=self.read("scripts/run_qa_runtime_acceptance.sh")

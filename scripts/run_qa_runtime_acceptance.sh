@@ -3,11 +3,19 @@
 set -euo pipefail
 out="$PWD/performance-evidence/qa-runtime"
 mkdir -p "$out"
-./gradlew :app:assembleQa --no-daemon --stacktrace --no-configuration-cache
-python3 scripts/verify_apk_signature.py app/build/outputs/apk/qa/app-qa.apk --expected 9ACA5F5F57F301EC8359AD670ECEB6387156132007C07FF36A31266326468258
-python3 scripts/verify_qa_release_like.py app/build/outputs/apk/qa/app-qa.apk --mapping app/build/outputs/mapping/qa/mapping.txt > "$out/qa-binary-provenance.json"
-cp app/build/outputs/apk/qa/app-qa.apk "$out/"
-cp app/build/outputs/mapping/qa/mapping.txt "$out/"
+python3 scripts/run_minified_plan_regression.py
+python3 - "$out" <<'PY'
+import hashlib,json,os,pathlib,shutil,sys
+out=pathlib.Path(sys.argv[1]);source=pathlib.Path(os.environ['MADRE_EXACT_QA_DIR'])
+apks=list(source.rglob('app-qa.apk'));mappings=list(source.rglob('mapping.txt'));proofs=list(source.rglob('qa-binary-provenance.json'))
+assert len(apks)==len(mappings)==len(proofs)==1
+proof=json.loads(proofs[0].read_text())
+assert hashlib.sha256(apks[0].read_bytes()).hexdigest()==proof['apk_sha256'],'Artifact APK differs from its exact quality provenance'
+assert hashlib.sha256(mappings[0].read_bytes()).hexdigest()==proof['mapping_sha256']
+for item,name in [(apks[0],'app-qa.apk'),(mappings[0],'mapping.txt'),(proofs[0],'qa-binary-provenance.json')]:shutil.copy2(item,out/name)
+PY
+python3 scripts/verify_apk_signature.py "$out/app-qa.apk" --expected 9ACA5F5F57F301EC8359AD670ECEB6387156132007C07FF36A31266326468258
+python3 scripts/verify_qa_release_like.py "$out/app-qa.apk" --mapping "$out/mapping.txt" > "$out/qa-runtime-binary-verification.json"
 adb install -r "$out/app-qa.apk"
 adb shell pm grant com.polinalinen.madre.qa android.permission.POST_NOTIFICATIONS
 result=0

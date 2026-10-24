@@ -23,6 +23,11 @@ import kotlinx.coroutines.withContext
     fun flag(value:Boolean?)=when(value){true->"да";false->"нет";null->"неизвестно"}
     Text("hasVibrator: ${flag(diagnostic.hasVibrator)} · amplitudeControl: ${flag(diagnostic.amplitudeControl)}",style=PaperType.note,color=LocalPaper.current.ink2)
     Text("Последний вызов: ${diagnostic.lastCall}"+diagnostic.error?.let{" · ошибка: $it"}.orEmpty(),style=PaperType.note,color=LocalPaper.current.ink2)
+    Text(when(diagnostic.systemTouchEnabled) {
+        false->"Android: вибрация касаний выключена. Система может подавить запрос TOUCH."
+        true->"Android: вибрация касаний включена. Другие ограничения ОС могут подавить TOUCH."
+        null->"Android: настройка касаний недоступна. Система может подавить запрос TOUCH."
+    },style=PaperType.note,color=LocalPaper.current.ink2)
     Text("Запрос Android не подтверждает ощущение вибрации. Ограничения ОС и телефона сохраняются.",style=PaperType.note,color=LocalPaper.current.ink2)
     QaDiagnosticControls()
 }

@@ -5,8 +5,10 @@ import android.content.Context
 import android.media.AudioAttributes
 import android.os.Build
 import android.os.VibrationEffect
+import android.os.VibrationAttributes
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.provider.Settings
 
 import android.view.HapticFeedbackConstants
 import android.view.View
@@ -29,7 +31,7 @@ internal class PaperHapticDispatcher(private val platform:PaperHapticPlatform) {
     }
 }
 internal data class PaperHapticDiagnostic(val hasVibrator:Boolean?=null,val amplitudeControl:Boolean?=null,
-    val lastCall:String="Ещё не проверяли",val error:String?=null)
+    val lastCall:String="Ещё не проверяли",val error:String?=null,val systemTouchEnabled:Boolean?=null)
 internal object PaperHapticDiagnostics {
     var state by androidx.compose.runtime.mutableStateOf(PaperHapticDiagnostic())
         private set
@@ -40,10 +42,15 @@ internal class AndroidPaperHapticPlatform(private val context:Context,private va
         (if(Build.VERSION.SDK_INT>=31)context.getSystemService(VibratorManager::class.java)?.defaultVibrator else null)
             ?: @Suppress("DEPRECATION") (context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator)
     },private val vibrationSender:(Vibrator,VibrationEffect,AudioAttributes?)->Unit={motor,effect,attributes->
-        if(attributes==null)motor.vibrate(effect) else @Suppress("DEPRECATION") motor.vibrate(effect,attributes)
+        if(Build.VERSION.SDK_INT>=33)motor.vibrate(effect,VibrationAttributes.Builder().setUsage(
+            if(attributes?.usage==AudioAttributes.USAGE_ALARM)VibrationAttributes.USAGE_ALARM else VibrationAttributes.USAGE_TOUCH).build())
+        else @Suppress("DEPRECATION") motor.vibrate(effect,requireNotNull(attributes))
     }):PaperHapticPlatform {
+    private fun systemTouchEnabled():Boolean?=runCatching {
+        Settings.System.getInt(context.contentResolver,Settings.System.HAPTIC_FEEDBACK_ENABLED)!=0
+    }.getOrNull()
     fun probe():PaperHapticDiagnostic = try {
-        vibratorProvider()?.let{PaperHapticDiagnostics.state.copy(hasVibrator=it.hasVibrator(),amplitudeControl=it.hasAmplitudeControl())}
+        vibratorProvider()?.let{PaperHapticDiagnostics.state.copy(hasVibrator=it.hasVibrator(),amplitudeControl=it.hasAmplitudeControl(),systemTouchEnabled=systemTouchEnabled())}
             ?:PaperHapticDiagnostic(lastCall="Нет сервиса Vibrator")
     }catch(error:Exception){PaperHapticDiagnostic(lastCall="Ошибка сервиса",error=error.javaClass.simpleName)}
     override fun systemAllows():Boolean {
@@ -59,17 +66,19 @@ internal class AndroidPaperHapticPlatform(private val context:Context,private va
         try {
             val vibrator=vibratorProvider()
             if(vibrator==null){PaperHapticDiagnostics.report(PaperHapticDiagnostic(lastCall="Нет сервиса Vibrator"));return false}
-            val diagnostic=PaperHapticDiagnostic(vibrator.hasVibrator(),runCatching{vibrator.hasAmplitudeControl()}.getOrNull())
+            val diagnostic=PaperHapticDiagnostic(vibrator.hasVibrator(),runCatching{vibrator.hasAmplitudeControl()}.getOrNull(),systemTouchEnabled=systemTouchEnabled())
             if(diagnostic.hasVibrator!=true){PaperHapticDiagnostics.report(diagnostic.copy(lastCall="Устройство сообщает: мотора нет"));return false}
             if(kind==PaperHaptic.TIMER) {
                 vibrationSender(vibrator,VibrationEffect.createWaveform(longArrayOf(0,80,60,120),-1),
                     AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
             } else {
-                // UNKNOWN/default usage, no FORCE flags, no alarm disguise or system-setting writes.
-                // Android/OEM still decides whether the foreground request can play.
-                vibrationSender(vibrator,VibrationEffect.createOneShot(25,VibrationEffect.DEFAULT_AMPLITUDE),null)
+                // API26–32 audio overload maps sonification to TOUCH; API33+ uses VibrationAttributes.
+                // UNKNOWN is not a workaround: API31 reclassifies a short UNKNOWN as TOUCH.
+                // OS/OEM touch/DND policy still applies. No alarm disguise or bypass flags.
+                vibrationSender(vibrator,VibrationEffect.createOneShot(25,VibrationEffect.DEFAULT_AMPLITUDE),
+                    AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
             }
-            PaperHapticDiagnostics.report(diagnostic.copy(lastCall=if(kind==PaperHaptic.TIMER)"TIMER · waveform · ALARM" else "$kind · oneShot 25 мс · DEFAULT"))
+            PaperHapticDiagnostics.report(diagnostic.copy(lastCall=if(kind==PaperHaptic.TIMER)"TIMER · waveform · ALARM" else "TOUCH · oneShot 25 мс · DEFAULT_AMPLITUDE"))
             return true
         } catch(error:Exception) {
             PaperHapticDiagnostics.report(PaperHapticDiagnostics.state.copy(lastCall="Прямой запрос не передан",error=error.javaClass.simpleName))

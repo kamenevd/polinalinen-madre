@@ -40,6 +40,8 @@ class BakeNumberStore(context: Context) {
 
     /** Room backfill owns priority; pending finales next, then plans. Idempotent across process death. */
     fun reconcile(active: List<ActiveBakeEntity>, pendingFinales: Set<Long>, book: BookPreferences) {
+        // Existing timers still restore; unreadable plans cannot authorize any backfill write.
+        val plans=try { book.snapshotPlans() } catch (_:IllegalStateException) { return }
         val edit = prefs.edit()
         held().keys.filter { id -> active.none { it.sessionId == id } && id !in pendingFinales }
             .forEach { edit.remove("bake_number_session_$it") }
@@ -51,7 +53,7 @@ class BakeNumberStore(context: Context) {
             val n = prior.takeIf { it in 1..9 && it !in used } ?: BakeNumbers.allocate(used, emptyMap(), 0) ?: 0
             reserve(id, n); used.add(n)
         }
-        book.snapshotPlans().sortedWith(compareBy<PlannedBake> { it.startAtMillis }.thenBy { it.id }).forEach { plan ->
+        plans.sortedWith(compareBy<PlannedBake> { it.startAtMillis }.thenBy { it.id }).forEach { plan ->
             val transferred = active.firstOrNull { it.bakeKey == plannedBakeKey(plan.id) }
             val n = transferred?.bakeNumber ?: plan.number.takeIf { it in 1..9 && it !in used }
                 ?: BakeNumbers.allocate(used, emptyMap(), 0) ?: 0

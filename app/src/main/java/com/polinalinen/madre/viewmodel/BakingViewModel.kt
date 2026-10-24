@@ -311,7 +311,10 @@ class BakingViewModel @JvmOverloads constructor(
     suspend fun previewBakeNumber(): Int? {
         sessionIdsReady.await()
         return madreApp.plannedBakeOperationGate.withLock {
-            com.polinalinen.madre.navigation.BookPreferences(madreApp).use { book -> numberStore.next(activeBakeRepository.all(),book.snapshotPlans()) }
+            com.polinalinen.madre.navigation.BookPreferences(madreApp).use { book ->
+                try { numberStore.next(activeBakeRepository.all(),book.snapshotPlans()) }
+                catch (_:IllegalStateException) { _mutationError.value=com.polinalinen.madre.navigation.BookPreferences.PLANS_READ_ERROR;null }
+            }
         }
     }
     /** Durable primitive. All production card/sheet/notification entries use plannedBakes transactions. */

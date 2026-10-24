@@ -92,7 +92,7 @@ jobs:
           QA_SIGNING_CERT_SHA256: ${{ secrets.MADRE_QA_SIGNING_CERT_SHA256 }}
         run: python3 scripts/restore_qa_signing.py
       - name: Compile, domain tests, style boundary, 20 key native frames and QA APK
-        run: ./gradlew compileDebugKotlin compileReleaseKotlin testDebugUnitTest assembleDebug assembleQa --no-daemon --stacktrace --no-configuration-cache
+        run: ./gradlew compileDebugKotlin compileReleaseKotlin testDebugUnitTest assembleDebug assembleQa assembleQaAndroidTest -Pmadre.qaRegression=true --no-daemon --stacktrace --no-configuration-cache
       - name: Verify stable QA APK identity before any APK upload
         id: verify_qa_signature
         run: python3 scripts/verify_apk_signature.py app/build/outputs/apk/debug/app-debug.apk
@@ -127,6 +127,14 @@ jobs:
             app/build/outputs/mapping/qa/
             app/build/reports/qa-binary-provenance.json
             app/build/intermediates/merged_manifests/qa/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload same-certificate minified QA instrumentation
+        if: success() && steps.verify_real_qa.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: madre-qa-regression-test
+          path: app/build/outputs/apk/androidTest/qa/*.apk
           if-no-files-found: error
           retention-days: 14
       - name: Upload verified debug APK first
@@ -191,6 +199,7 @@ jobs:
 
   instrumented-smoke:
     name: Instrumented smoke
+    needs: android-quality
     # Keep the protected check name; PR/push is SKIPPED, not a passed smoke.
     # RC release gate still requires a real success at this exact SHA.
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
@@ -199,6 +208,8 @@ jobs:
     env:
       MADRE_FIXES_7014_ACCEPTANCE: ${{ (inputs.fixes_7014_acceptance || inputs.fixes_7014_instrumented) && 'true' || 'false' }}
       MADRE_FIXES_7015_ACCEPTANCE: ${{ (inputs.fixes_7015_huawei || inputs.bake_numbers_native) && 'true' || 'false' }}
+      MADRE_EXACT_QA_DIR: ${{ runner.temp }}/exact-quality-qa
+      MADRE_EXACT_QA_TEST_DIR: ${{ runner.temp }}/exact-quality-qa-test
       QA_KEYSTORE_PASSWORD: ${{ secrets.MADRE_QA_KEYSTORE_PASSWORD }}
       QA_KEY_ALIAS: ${{ secrets.MADRE_QA_KEY_ALIAS }}
       QA_KEY_PASSWORD: ${{ secrets.MADRE_QA_KEY_PASSWORD }}
@@ -222,6 +233,21 @@ jobs:
             | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+      - name: Fetch immutable negative-control source
+        if: inputs.bake_numbers_native
+        run: git fetch --no-tags origin 2880abbe51d85145c4b666d60f35153e05a02727
+      - name: Download exact verified QA from this run, never rebuild a different delivery candidate
+        if: inputs.bake_numbers_native
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: madre-qa-release-like
+          path: ${{ env.MADRE_EXACT_QA_DIR }}
+      - name: Download corresponding minified QA instrumentation
+        if: inputs.bake_numbers_native
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: madre-qa-regression-test
+          path: ${{ env.MADRE_EXACT_QA_TEST_DIR }}
       - name: Restore private stable QA signing for instrumentation
         env:
           QA_KEYSTORE_BASE64: ${{ secrets.MADRE_QA_KEYSTORE_BASE64 }}

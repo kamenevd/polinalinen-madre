@@ -41,6 +41,51 @@ class BookNavigationStateTest {
         assertEquals("Синтетическая книга",raw.getString("my_name",null))
         assertEquals("Не менять",raw.getString("margin_notes",null))
     }
+    @Test fun unreadablePlansCannotAuthorizeAnyMutationOrLoseCapabilities() {
+        val namespace="book-corrupt-${UUID.randomUUID()}"
+        val raw=app.getSharedPreferences(namespace,0)
+        val plan=PlannedBake("ciabatta",2,2_000_000_000_000L)
+        for(broken in listOf("[{", "null", "[null]", "[{\"recipeId\":\"ciabatta\",\"portions\":0,\"startAtMillis\":10}]")) {
+            raw.edit().putString("planned_bakes",broken).putString("unrelated","keep")
+                .putString("planned_action_nonce_${plan.id}","synthetic").commit()
+            val before=raw.all.toMap()
+            BookPreferences(app,namespace).use { book ->
+                assertNotNull(book.plansReadError)
+                assertTrue(runCatching { book.snapshotPlans() }.isFailure)
+                assertTrue(runCatching { book.currentPlan(plan.id) }.isFailure)
+                assertFalse(book.putPlan(plan));assertFalse(book.putPlan(plan,replacingId=plan.id))
+                assertFalse(book.removePlan(plan.id));assertNull(book.notificationNonce(plan.id))
+                assertFalse(book.consumeNotificationAction(plan.id,"synthetic"))
+            }
+            assertEquals(before,raw.all)
+        }
+        raw.edit().putInt("planned_bakes",42).commit()
+        val wrongType=raw.all.toMap()
+        BookPreferences(app,namespace).use { assertFalse(it.putPlan(plan));assertFalse(it.removePlan(plan.id)) }
+        assertEquals(wrongType,raw.all)
+    }
+    @Test fun legacy15PlansSurviveNewPlanReadBackAndNumberBackfill() {
+        val namespace="book-legacy-${UUID.randomUUID()}"
+        val raw=app.getSharedPreferences(namespace,0)
+        raw.edit().putString("planned_bakes","""[{"recipeId":"ciabatta","portions":2,"startAtMillis":2000000000000}]""").commit()
+        val legacy=PlannedBake("ciabatta",2,2_000_000_000_000L)
+        val added=PlannedBake("home_bread",3,2_000_000_060_000L,2)
+        BookPreferences(app,namespace).use { book ->
+            assertEquals(listOf(legacy),book.snapshotPlans());assertNull(book.plansReadError)
+            val nonce=book.notificationNonce(legacy.id)
+            assertTrue(book.putPlan(legacy.copy(number=1)));assertEquals(nonce,book.notificationNonce(legacy.id))
+            assertTrue(book.putPlan(added))
+        }
+        BookPreferences(app,namespace).use { assertEquals(listOf(legacy.copy(number=1),added),it.snapshotPlans()) }
+    }
+    @Test fun corruptPlansDoNotTriggerPartialNumberReconciliation() {
+        val raw=app.getSharedPreferences("madre_prefs",0)
+        raw.edit().clear().putString("planned_bakes","[{").putInt("bake_number_session_777",4).commit()
+        val before=raw.all.toMap()
+        BookPreferences(app).use { BakeNumberStore(app).reconcile(emptyList(),emptySet(),it) }
+        assertEquals(before,raw.all)
+        raw.edit().clear().commit()
+    }
     @Test fun recentTabBoundaryRollbackAndMalformedBookmarkAreSafe() {
         val now=100_000_000L
         assertEquals(2,BookStartup.tab(2,now-43_199_999,now))

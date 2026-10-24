@@ -16,6 +16,8 @@ def inspect(apk:Path,mapping:Path)->dict:
     assert fields.get('DEBUG') is False,'BuildConfig.DEBUG must be false'
     assert fields.get('QA_DIAGNOSTICS') is True,'QA diagnostics disappeared in R8'
     assert fields.get('BUILD_TYPE')=='qa','Not the actual deliverable qa variant'
+    package=re.search(r"package: name='([^']+)' versionCode='([^']+)' versionName='([^']+)'",badging)
+    assert package and package.groups()==(fields['APPLICATION_ID'],str(fields['VERSION_CODE']),fields['VERSION_NAME']),'Binary package/version differs from compiled identity'
     assert 'application-debuggable' not in badging,'Binary APK is debuggable'
     assert not re.search(r'android:debuggable[^\n]*0xffffffff',manifest),'Merged binary manifest enables debugging'
     assert "uses-permission: name='android.permission.VIBRATE'" in badging,'Actual APK lacks VIBRATE'

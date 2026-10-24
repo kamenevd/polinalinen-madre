@@ -179,6 +179,10 @@ fun MadreNavHost(
         }
     }
 
+    LaunchedEffect(bookPreferences.plansReadError) {
+        bookPreferences.plansReadError?.let { navSnackbar.showSnackbar(it) }
+    }
+
     val enterFeedingForm = {
         sourdoughViewModel.clearSaveState()
         navController.navigate(MadreDestinations.FEEDING_FORM) {

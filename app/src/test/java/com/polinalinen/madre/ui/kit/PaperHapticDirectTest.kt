@@ -27,12 +27,21 @@ class PaperHapticDirectTest {
         Settings.System.putInt(context.contentResolver,Settings.System.HAPTIC_FEEDBACK_ENABLED,0)
         val motor=motor();val shadow=Shadows.shadowOf(motor);shadow.setHasVibrator(true);shadow.setHasAmplitudeControl(false)
         val view=AcceptedView(context);val effects=mutableListOf<VibrationEffect>()
-        val platform=AndroidPaperHapticPlatform(context,view,vibrationSender={v,e,a->effects+=e;if(a==null)v.vibrate(e) else v.vibrate(e,a)})
+        var usage:Int?=null
+        val platform=AndroidPaperHapticPlatform(context,view,vibrationSender={v,e,a->effects+=e;usage=a?.usage;v.vibrate(e,requireNotNull(a))})
         assertTrue(PaperHapticDispatcher(platform).perform(true,PaperHaptic.PAGE))
         assertEquals(listOf(VibrationEffect.createOneShot(25,VibrationEffect.DEFAULT_AMPLITUDE)),effects)
         assertEquals(25L,shadow.milliseconds);assertEquals(0,view.calls)
         assertEquals(false,PaperHapticDiagnostics.state.amplitudeControl)
+        assertEquals(false,PaperHapticDiagnostics.state.systemTouchEnabled)
+        assertEquals(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION,usage)
+        assertTrue(PaperHapticDiagnostics.state.lastCall.contains("TOUCH"))
         assertTrue(PaperHapticDiagnostics.state.lastCall.contains("25 мс"))
+    }
+    @Test fun defaultPublicApiActuallyRequestsMotorOnEverySupportedApi() {
+        val motor=motor();val shadow=Shadows.shadowOf(motor);shadow.setHasVibrator(true)
+        assertTrue(PaperHapticDispatcher(AndroidPaperHapticPlatform(context,null)).perform(true))
+        assertEquals(25L,shadow.milliseconds)
     }
     @Test fun realTimerUsesFiniteWaveformAndAlarmCategoryNotTouch() {
         val motor=motor();val shadow=Shadows.shadowOf(motor);shadow.setHasVibrator(true)

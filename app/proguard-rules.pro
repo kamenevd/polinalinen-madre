@@ -21,6 +21,10 @@
 # Durable local plan/finale JSON must retain its field names across upgrades too.
 -keep class com.polinalinen.madre.navigation.PlannedBake { *; }
 -keep class com.polinalinen.madre.navigation.BakeNumberStore$Finale { *; }
+# Other concrete Gson DTOs outside model/account/remote; encrypted storage is not an exemption.
+-keep class com.polinalinen.madre.voice.VoiceIdentity { *; }
+-keep class com.polinalinen.madre.voice.VoiceCommand { *; }
+-keep enum com.polinalinen.madre.voice.VoiceOperation { *; }
 -keepclassmembers,allowobfuscation class * {
   @com.google.gson.annotations.SerializedName <fields>;
 }

@@ -6,7 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
+
 
 /** Navigation-only state. Existing family/notes/Room keys are never replaced. */
 data class BookBookmark(val recipeId: String, val page: Int, val section:String?=null, val step:Int?=null) {
@@ -33,13 +33,15 @@ object BookStartup {
 class BookPreferences(context: Context, namespace: String = "madre_prefs") : AutoCloseable {
     private val prefs = context.getSharedPreferences(namespace, Context.MODE_PRIVATE)
     private val gson = Gson()
+    var plansReadError by mutableStateOf<String?>(null)
+        private set
     var bookmark by mutableStateOf(readBookmark())
         private set
-    var plans by mutableStateOf(readPlans())
+    var plans by mutableStateOf(runCatching { readPlans() }.getOrDefault(emptyList()))
         private set
     private val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == "bookmark" || key?.startsWith("bookmark_")==true) bookmark = readBookmark()
-        if (key == "planned_bakes") plans = readPlans()
+        if (key == "planned_bakes") runCatching { readPlans() }.onSuccess { plans = it }
     }
     init { prefs.registerOnSharedPreferenceChangeListener(listener) }
     fun initialTab(now: Long = System.currentTimeMillis()) = BookStartup.tab(
@@ -67,7 +69,7 @@ class BookPreferences(context: Context, namespace: String = "madre_prefs") : Aut
     fun snapshotPlans():List<PlannedBake> = synchronized(PLANS_LOCK){readPlans()}
     fun putPlan(plan: PlannedBake, replacingId: String? = null): Boolean = synchronized(PLANS_LOCK) {
         require(plan.portions in 1..5 && plan.startAtMillis > 0 && plan.recipeId.isNotBlank())
-        val previous=readPlans()
+        val previous=runCatching { readPlans() }.getOrElse { return@synchronized false }
         val next = (previous.filterNot { it.id == plan.id || it.id == replacingId } + plan).sortedBy { it.startAtMillis }
         val edit=prefs.edit().putString("planned_bakes", gson.toJson(next))
         // Number backfill changes presentation only; existing local reminder capabilities stay valid.
@@ -78,31 +80,42 @@ class BookPreferences(context: Context, namespace: String = "madre_prefs") : Aut
         true
     }
     fun removePlan(id: String): Boolean = synchronized(PLANS_LOCK) {
-        val next = readPlans().filterNot { it.id == id }
+        val previous=runCatching { readPlans() }.getOrElse { return@synchronized false }
+        val next = previous.filterNot { it.id == id }
         if (!prefs.edit().putString("planned_bakes", gson.toJson(next)).remove("planned_action_nonce_$id").commit()) return@synchronized false
         plans = next
         true
     }
     /** Local notification capability, not an account/OAuth token. Never placed in WorkManager data. */
     fun notificationNonce(id: String, expected: PlannedBake? = null): String? = synchronized(PLANS_LOCK) {
-        val current=readPlans().firstOrNull{it.id==id}?:return@synchronized null
+        val current=runCatching { readPlans() }.getOrElse { return@synchronized null }.firstOrNull{it.id==id}?:return@synchronized null
         if(expected!=null && current!=expected)return@synchronized null
         prefs.getString("planned_action_nonce_$id",null)?.let{return@synchronized it}
         val nonce=java.util.UUID.randomUUID().toString()
         if(prefs.edit().putString("planned_action_nonce_$id",nonce).commit())nonce else null
     }
     fun consumeNotificationAction(id: String, nonce: String?): Boolean = synchronized(PLANS_LOCK) {
-        if(nonce==null || readPlans().none{it.id==id})return@synchronized false
+        if(nonce==null)return@synchronized false
+        if(runCatching { readPlans() }.getOrElse { return@synchronized false }.none{it.id==id})return@synchronized false
         val stored=prefs.getString("planned_action_nonce_$id",null)?:return@synchronized false
         if(!java.security.MessageDigest.isEqual(stored.toByteArray(Charsets.UTF_8),nonce.toByteArray(Charsets.UTF_8)))return@synchronized false
         prefs.edit().remove("planned_action_nonce_$id").commit()
     }
-    private fun readPlans(): List<PlannedBake> = runCatching {
-        val type = object : TypeToken<List<PlannedBake>>() {}.type
-        (gson.fromJson<List<PlannedBake>>(prefs.getString("planned_bakes", "[]"), type) ?: emptyList())
-            .filter { it.recipeId.isNotBlank() && it.portions in 1..5 && it.startAtMillis > 0 }
-            .distinctBy { it.id }.sortedBy { it.startAtMillis }
-    }.getOrDefault(emptyList())
+    /** Concrete array needs no anonymous generic Signature under R8 full mode.
+     * A failed read is NOT an empty collection and may never authorize a write.
+     */
+    private fun readPlans(): List<PlannedBake> = try {
+        val decoded=requireNotNull(gson.fromJson(prefs.getString("planned_bakes", "[]"), Array<PlannedBake>::class.java))
+        decoded.forEach { require(it.recipeId.isNotBlank() && it.portions in 1..5 && it.startAtMillis > 0 && it.number in 0..9) }
+        require(decoded.map { it.id }.distinct().size == decoded.size)
+        decoded.sortedBy { it.startAtMillis }.also { plansReadError=null }
+    } catch (error:Exception) {
+        plansReadError=PLANS_READ_ERROR
+        throw IllegalStateException(PLANS_READ_ERROR,error)
+    }
     override fun close() { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
-    companion object { private val PLANS_LOCK=Any() }
+    companion object {
+        private val PLANS_LOCK=Any()
+        const val PLANS_READ_ERROR="Не удалось прочитать планы. Исходные данные сохранены без изменений."
+    }
 }

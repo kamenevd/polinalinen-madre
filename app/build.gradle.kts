@@ -41,6 +41,8 @@ if (qaSigningInputs.any { !it.isNullOrBlank() } && !hasCompleteQaSigning) {
 // PR keeps domain/interaction tests + 20 key frames. Opt-in is mandatory for RC.
 val extendedVerification = providers.gradleProperty("madre.extendedVerification")
     .map { it.toBoolean() }.getOrElse(false)
+// Same-certificate instrumentation of the deliverable minified variant; ordinary smoke stays debug.
+val qaRegression = providers.gradleProperty("madre.qaRegression").map { it.toBoolean() }.getOrElse(false)
 val extendedOnlyTests = listOf(
     "com.polinalinen.madre.ui.razvorot.Fixes7013ExtendedRenderTest",
     "com.polinalinen.madre.ui.razvorot.RazvorotExtendedRenderTest",
@@ -62,6 +64,7 @@ if (hasAnyReleaseSigning && !hasCompleteReleaseSigning) {
 android {
     namespace = "com.polinalinen.madre"
     compileSdk = 35
+    if (qaRegression) testBuildType = "qa"
 
     defaultConfig {
         applicationId = "com.polinalinen.madre"
@@ -192,6 +195,11 @@ android {
         }
         getByName("androidTest") {
             assets.srcDirs(files("$projectDir/schemas"))
+            if (qaRegression) {
+                java.setSrcDirs(listOf("src/qaRegression/java"))
+                kotlin.directories.clear()
+                kotlin.directories.add("src/qaRegression/java")
+            }
         }
     }
 }

@@ -316,6 +316,7 @@ jobs:
       MADRE_YANDEX_CLIENT_ID: ${{ secrets.MADRE_YANDEX_CLIENT_ID }}
       MADRE_PERF_COMPARE: ${{ inputs.perf_compare && 'true' || 'false' }}
       MADRE_PERF_BASE: ef9fc07f5591b755faaea32cf6430dc1d6b828e9
+      MADRE_PERF_PREBUILT: 'true'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -338,6 +339,10 @@ jobs:
           sdkmanager "build-tools;36.0.0"
           python3 scripts/prepare_perf_baseline.py "$RUNNER_TEMP/madre-perf-before"
 
+      - name: Build both actual R8 timing targets and driver before booting AVD
+        run: |
+          (cd "$RUNNER_TEMP/madre-perf-before" && ./gradlew :app:assembleBenchmark :macrobenchmark:assembleBenchmark --no-daemon --stacktrace --no-configuration-cache)
+          ./gradlew :app:assembleBenchmark :macrobenchmark:assembleBenchmark --no-daemon --stacktrace --no-configuration-cache
       - name: Enable KVM for controlled CI AVD
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -351,7 +356,7 @@ jobs:
           arch: x86_64
           profile: pixel_5
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          emulator-options: -no-window -gpu swiftshader_indirect -feature -Vulkan -noaudio -no-boot-anim -camera-back none
           script: bash scripts/run_perf_comparison.sh
       - name: Upload real metrics traces profiles and exact controls even on failure
         if: always()

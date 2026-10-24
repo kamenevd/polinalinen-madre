@@ -3,8 +3,9 @@
 import hashlib,json,os,shutil,subprocess,sys,time,zipfile
 from pathlib import Path
 root=Path(sys.argv[1]);out=Path(sys.argv[2]);out.mkdir(parents=True,exist_ok=True)
-r=subprocess.run([str(root/'gradlew'),':app:assembleBenchmark','--no-daemon','--stacktrace','--no-configuration-cache'],cwd=root)
-assert r.returncode==0,'Cannot profile a failed release-like build'
+if os.environ.get('MADRE_PERF_PREBUILT')!='true':
+    r=subprocess.run([str(root/'gradlew'),':app:assembleBenchmark','--no-daemon','--stacktrace','--no-configuration-cache'],cwd=root)
+    assert r.returncode==0,'Cannot profile a failed release-like build'
 apks=list((root/'app/build/outputs/apk/benchmark').glob('*.apk'));assert len(apks)==1
 with zipfile.ZipFile(apks[0]) as apk:
     descriptor=b'Lcom/polinalinen/madre/ui/razvorot/RazvorotSceneActivity;'
@@ -23,6 +24,11 @@ debug_arm=source.get('debug_comparison_arm',False)
 assert debuggable==debug_arm and r8!=debug_arm,'Actual APK does not match the declared debug/release-like comparison arm'
 (out/'actual-apk-controls.json').write_text(json.dumps({'head':source['functional_source'],'apk_sha256':hashlib.sha256(apks[0].read_bytes()).hexdigest(),'variant':'benchmark','debuggable':debuggable,'R8':r8,'compilation':'CompilationMode.None','iterations_per_route':5,'API':subprocess.check_output(['adb','shell','getprop','ro.build.version.sdk'],text=True).strip(),'renderer':'see renderer.txt; no physical Huawei claim','profile_packed':(root/'app/src/main/baseline-prof.txt').exists()},indent=2)+'\n')
 shutil.copy2(apks[0],out/'measured-target.apk')
+build_source=out/'build-source';build_source.mkdir(exist_ok=True)
+for relative in ('app/build.gradle.kts','app/proguard-rules.pro','build.gradle.kts','settings.gradle.kts','gradle.properties','app/build/outputs/mapping/benchmark/mapping.txt'):
+    source_path=root/relative
+    if source_path.is_file():
+        target=build_source/relative;target.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(source_path,target)
 subprocess.run(['adb','install','-r',str(apks[0])],check=True)
 subprocess.run(['adb','logcat','-c'],check=True)
 launch=subprocess.run(['adb','shell','am','start','-W','-n','com.polinalinen.madre.benchmark/com.polinalinen.madre.ui.razvorot.RazvorotSceneActivity','--es','scene','toc'],text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)

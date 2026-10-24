@@ -28,7 +28,7 @@ on:
         type: boolean
         default: false
       perf_compare:
-        description: Compare immutable14 functional baseline with current15 on the same CI AVD and generate real ART profile
+        description: Compare immutable issued15 functional debug/release-like controls with current QA on the same CI AVD
         type: boolean
         default: false
       bake_numbers_native:
@@ -195,7 +195,7 @@ jobs:
     # RC release gate still requires a real success at this exact SHA.
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     env:
       MADRE_FIXES_7014_ACCEPTANCE: ${{ (inputs.fixes_7014_acceptance || inputs.fixes_7014_instrumented) && 'true' || 'false' }}
       MADRE_FIXES_7015_ACCEPTANCE: ${{ (inputs.fixes_7015_huawei || inputs.bake_numbers_native) && 'true' || 'false' }}
@@ -243,6 +243,15 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
             bash scripts/run_instrumented_acceptance.sh
+            if [[ "${{ inputs.bake_numbers_native }}" == "true" ]]; then bash scripts/run_qa_runtime_acceptance.sh; fi
+      - name: Upload actual non-debuggable QA runtime and owner diagnostics PNG
+        if: always() && inputs.bake_numbers_native
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: qa-native-runtime
+          path: performance-evidence/qa-runtime/
+          if-no-files-found: error
+          retention-days: 14
       - name: Upload instrumentation reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -271,13 +280,14 @@ jobs:
     name: Required15 release-like performance
     if: github.event_name == 'workflow_dispatch' && inputs.fixes_7015_huawei
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     env:
       QA_KEYSTORE_PASSWORD: ${{ secrets.MADRE_QA_KEYSTORE_PASSWORD }}
       QA_KEY_ALIAS: ${{ secrets.MADRE_QA_KEY_ALIAS }}
       QA_KEY_PASSWORD: ${{ secrets.MADRE_QA_KEY_PASSWORD }}
       MADRE_YANDEX_CLIENT_ID: ${{ secrets.MADRE_YANDEX_CLIENT_ID }}
       MADRE_PERF_COMPARE: ${{ inputs.perf_compare && 'true' || 'false' }}
+      MADRE_PERF_BASE: ef9fc07f5591b755faaea32cf6430dc1d6b828e9
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -295,8 +305,11 @@ jobs:
           QA_KEYSTORE_BASE64: ${{ secrets.MADRE_QA_KEYSTORE_BASE64 }}
           QA_SIGNING_CERT_SHA256: ${{ secrets.MADRE_QA_SIGNING_CERT_SHA256 }}
         run: python3 scripts/restore_qa_signing.py
-      - name: Prepare immutable14 functional source with benchmark-only overlay
-        run: python3 scripts/prepare_perf_baseline.py "$RUNNER_TEMP/madre-perf-before"
+      - name: Prepare immutable15 debug and release-like controls with benchmark-only overlays
+        run: |
+          sdkmanager "build-tools;36.0.0"
+          python3 scripts/prepare_perf_baseline.py "$RUNNER_TEMP/madre-perf-before"
+          MADRE_BASE_DEBUG=true python3 scripts/prepare_perf_baseline.py "$RUNNER_TEMP/madre-perf-before-debug"
       - name: Enable KVM for controlled CI AVD
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules

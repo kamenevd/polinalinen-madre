@@ -139,7 +139,7 @@ android {
 
     // Opt-in CI measurement only: release code/R8, never a delivered QA/production package.
     buildTypes.create("benchmark") {
-        initWith(buildTypes.getByName("release"))
+        initWith(buildTypes.getByName("qa"))
         applicationIdSuffix=".benchmark"
         isDebuggable=false
         signingConfig=signingConfigs.findByName("qa")

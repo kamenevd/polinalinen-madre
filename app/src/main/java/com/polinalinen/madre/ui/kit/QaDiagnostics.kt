@@ -20,7 +20,7 @@ import java.util.Locale
     var open by remember{mutableStateOf(false)}
     PaperTextAction("Диагностика QA",{open=!open})
     if(open) {
-        PaperSettingSwitch("Показывать FPS",monitor.enabled,monitor::setEnabled)
+        PaperSettingSwitch("Показывать FPS",monitor.enabled,monitor::chooseEnabled)
         Text("Локальный JankStats, без отправки данных. Обновление раз в секунду. Простой не означает лаги.",style=PaperType.note,color=LocalPaper.current.ink2)
     }
 }

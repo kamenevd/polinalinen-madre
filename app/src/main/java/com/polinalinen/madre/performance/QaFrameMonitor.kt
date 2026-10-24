@@ -29,7 +29,7 @@ internal class QaFrameMonitor(private val window:Window) {
     private var resumed=false
     private var tracker:JankStats?=null
     private val accumulator=QaFrameAccumulator()
-    fun setEnabled(value:Boolean) {
+    fun chooseEnabled(value:Boolean) {
         enabled=value
         if(value && tracker==null)tracker=JankStats.createAndTrack(window){data->
             accumulator.add(data.frameStartNanos,data.frameDurationUiNanos,data.isJank)

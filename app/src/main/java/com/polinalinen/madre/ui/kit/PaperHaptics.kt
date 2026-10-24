@@ -1,6 +1,6 @@
 package com.polinalinen.madre.ui.kit
 
-import android.app.NotificationManager
+
 import android.content.Context
 import android.media.AudioAttributes
 import android.os.Build
@@ -37,8 +37,8 @@ internal object PaperHapticDiagnostics {
 }
 internal class AndroidPaperHapticPlatform(private val context:Context,private val view:View?,
     private val vibratorProvider:()->Vibrator?={
-        if(Build.VERSION.SDK_INT>=31)context.getSystemService(VibratorManager::class.java)?.defaultVibrator
-        else @Suppress("DEPRECATION") (context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator)
+        (if(Build.VERSION.SDK_INT>=31)context.getSystemService(VibratorManager::class.java)?.defaultVibrator else null)
+            ?: @Suppress("DEPRECATION") (context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator)
     },private val vibrationSender:(Vibrator,VibrationEffect,AudioAttributes?)->Unit={motor,effect,attributes->
         if(attributes==null)motor.vibrate(effect) else @Suppress("DEPRECATION") motor.vibrate(effect,attributes)
     }):PaperHapticPlatform {
@@ -47,10 +47,9 @@ internal class AndroidPaperHapticPlatform(private val context:Context,private va
             ?:PaperHapticDiagnostic(lastCall="Нет сервиса Vibrator")
     }catch(error:Exception){PaperHapticDiagnostic(lastCall="Ошибка сервиса",error=error.javaClass.simpleName)}
     override fun systemAllows():Boolean {
-        val policy=context.getSystemService(NotificationManager::class.java)?.currentInterruptionFilter
-        val allowed=policy==null || policy==NotificationManager.INTERRUPTION_FILTER_ALL || policy==NotificationManager.INTERRUPTION_FILTER_UNKNOWN
-        if(!allowed)PaperHapticDiagnostics.report(PaperHapticDiagnostics.state.copy(lastCall="Ограничено режимом «Не беспокоить»",error=null))
-        return allowed
+        // Do not guess per-usage DND policy from a coarse interruption-filter enum.
+        // Unprivileged native vibrate() enforces OS/OEM policy; no bypass flags/settings.
+        return true
     }
     override fun viewFeedback(kind:PaperHaptic):Boolean = view?.performHapticFeedback(
         if(kind==PaperHaptic.TIMER)HapticFeedbackConstants.LONG_PRESS else HapticFeedbackConstants.CLOCK_TICK,

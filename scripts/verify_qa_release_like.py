@@ -49,7 +49,7 @@ def main():
     try: print(json.dumps(inspect(args.apk,args.mapping),indent=2))
     except Exception as error:
         # Do not echo binary manifest, client values, DEX or tool stderr.
-        print('QA BINARY VERIFICATION FAILED:',type(error).__name__)
+        print('QA BINARY VERIFICATION FAILED:',str(error) if isinstance(error,AssertionError) else type(error).__name__)
         return 1
     return 0
 

@@ -477,7 +477,7 @@ private fun FullRecipeSection(recipe: Recipe, scaleFactor: Double, modifier: Mod
                 Row(Modifier.fillMaxWidth().padding(bottom = 20.dp).then(stepModifier(i,false))) {
                     Text(
                         "${i + 1}",
-                        color = colors.line,style = PaperType.body,
+                        color = if(LocalAtmosphere.current==Atmosphere.NIGHT)colors.ink2 else colors.line,style = PaperType.body,
                         fontWeight = FontWeight.ExtraBold,
                         fontSize = 26.sp,
                         modifier = Modifier.width(34.dp),

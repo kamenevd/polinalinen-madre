@@ -419,7 +419,8 @@ class BookNavigationUiTest {
         rule.onNodeWithTag("reader-scroll").assertIsDisplayed()
         rule.onNodeWithTag("paper-turn").assertDoesNotExist()
         recipes.filter{it.id!=recipe.id}.forEach{rule.onAllNodesWithText(it.name).assertCountEquals(0)}
-        rule.onNodeWithText("редактировать от руки").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Как печём").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("редактировать от руки").assertDoesNotExist()
     }
 
     @Test fun largeTypeBookmarkPageOpensActualIngredientsRatherThanTheTitle() {

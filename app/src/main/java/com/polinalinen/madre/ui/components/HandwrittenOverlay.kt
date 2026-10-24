@@ -166,6 +166,11 @@ fun HandwrittenEditSurface(
     recipeId: String,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
+) = HandwrittenEditLayer(recipeId,modifier,com.polinalinen.madre.config.FeatureFlags.RECIPE_EDIT,content)
+
+/** Retained editor renderer for future enablement/tests. All production entrypoints use the gated facade. */
+@Composable internal fun HandwrittenEditLayer(
+    recipeId:String,modifier:Modifier=Modifier,canEdit:Boolean,content:@Composable ()->Unit,
 ) {
     val colors = LocalPaper.current
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -191,12 +196,12 @@ fun HandwrittenEditSurface(
 
     // Сохраняем на каждое изменение истории, а не только по «готово»: уйти со
     // страницы посреди правки — обычное дело, и написанное должно пережить это.
-    LaunchedEffect(history, loaded) {
-        if (loaded) HandwrittenEdit.saveStrokes(context, recipeId, history.strokes)
+    LaunchedEffect(history, loaded,canEdit) {
+        if (loaded && canEdit) HandwrittenEdit.saveStrokes(context, recipeId, history.strokes)
     }
 
     Column(modifier) {
-        Row(
+        if(canEdit)Row(
             Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -208,6 +213,7 @@ fun HandwrittenEditSurface(
                 modifier = Modifier
                     .weight(1f)
                     .then(bookAction("Рисование от руки") {
+                        if(!canEdit)return@bookAction
                         if (editing) currentStroke = emptyList()
                         editing = !editing
                     }),
@@ -262,7 +268,7 @@ fun HandwrittenEditSurface(
                 }
             }
 
-            if (editing) {
+            if (editing && canEdit) {
                 Box(
                     Modifier
                         .matchParentSize()

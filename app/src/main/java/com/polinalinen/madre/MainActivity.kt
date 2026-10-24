@@ -20,6 +20,8 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.safeDrawingPadding
 import kotlinx.coroutines.launch
 import com.polinalinen.madre.account.yandex.*
 import com.polinalinen.madre.config.FeatureFlags
@@ -41,6 +43,7 @@ class MainActivity : ComponentActivity(), ImmersiveHost {
         ViewModelProvider.AndroidViewModelFactory(application)
     }
     private var yandexBridge: YandexSdkResultBridge? = null
+    private var qaFrameMonitor:com.polinalinen.madre.performance.QaFrameMonitor?=null
 
     /**
      * Выпечка, которую попросили открыть. MutableStateFlow, а не разовый
@@ -94,29 +97,35 @@ class MainActivity : ComponentActivity(), ImmersiveHost {
         }
         askForNotificationsOnce()
 
+        qaFrameMonitor=if(BuildConfig.QA_DIAGNOSTICS)com.polinalinen.madre.performance.QaFrameMonitor(window) else null
         setContent {
             val account=if(accountEnabled)remember(accountModel) {
                 YandexAccountUi(accountModel){browser->lifecycleScope.launch{yandexBridge?.launch(browser)}}
             } else null
-            CompositionLocalProvider(LocalYandexAccountUi provides account) {
+            androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) {
+            CompositionLocalProvider(LocalYandexAccountUi provides account,
+                com.polinalinen.madre.performance.LocalQaFrameMonitor provides qaFrameMonitor) {
             MadreNavHost(
                 pendingSessionId = pendingSessionId,
                 pendingFeeding = pendingFeeding,
                 pendingPlanned = pendingPlanned,
             )
             }
+            qaFrameMonitor?.takeIf{it.enabled}?.let{QaFpsOverlay(it,androidx.compose.ui.Modifier.align(androidx.compose.ui.Alignment.TopEnd).safeDrawingPadding())}
+            }
         }
     }
 
     override fun onResume() {
-        super.onResume(); immersiveController.reapply(window)
+        super.onResume(); immersiveController.reapply(window);qaFrameMonitor?.resume()
         if(accountEnabled)accountModel.retryPendingUnbind()
     }
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) immersiveController.reapply(window)
     }
-    override fun onDestroy() { yandexBridge?.close(); immersiveController.detach(window); super.onDestroy() }
+    override fun onPause(){qaFrameMonitor?.pause();super.onPause()}
+    override fun onDestroy() { qaFrameMonitor?.close();yandexBridge?.close(); immersiveController.detach(window); super.onDestroy() }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)

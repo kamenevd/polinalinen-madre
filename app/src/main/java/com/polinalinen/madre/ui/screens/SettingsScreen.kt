@@ -209,9 +209,7 @@ fun SettingsScreen(
                     SettingsCaption("В спокойном режиме нет непрерывных декораций. Бумага, рамки и следы на страницах остаются.")
                 }
                 if(shown(SettingsEntry.HAPTICS)) {
-                    val view=androidx.compose.ui.platform.LocalView.current
-                    PaperSettingSwitch("Тактильный отклик",preferences.haptics,preferences::chooseHaptics)
-                    PaperTextAction("Попробовать отклик",{performPaperHaptic(view.context,view,enabled=preferences.haptics)},enabled=preferences.haptics)
+                    PaperHapticSettings(preferences)
                 }
             }
             if (shown(SettingsEntry.TIMER_SOUND, SettingsEntry.LOCK_PROGRESS)) SettingsSection(Sections.NOTIFICATIONS) {

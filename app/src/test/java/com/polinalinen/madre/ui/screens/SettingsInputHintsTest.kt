@@ -54,7 +54,8 @@ class SettingsInputHintsTest {
         rule.onNodeWithText(com.polinalinen.madre.BuildConfig.VERSION_NAME).performScrollTo().assertIsDisplayed()
         rule.onNodeWithContentDescription("Тактильный отклик").performScrollTo().assertIsDisplayed().assertIsOn().performClick().assertIsOff()
         rule.runOnIdle{assertFalse(ReadingPreferences(context,"settings15-large").haptics)}
-        rule.onNodeWithText("Попробовать отклик").performScrollTo().assertIsNotEnabled()
+        rule.onNodeWithText("Проверить").performScrollTo().assertIsEnabled().performClick()
+        rule.runOnIdle{assertFalse(ReadingPreferences(context,"settings15-large").haptics)}
     }
     @Test fun actualStarterFieldRequestsSentencesWithoutChangingStoredText() {
         show{StarterNameField("соня",{})}

@@ -28,7 +28,15 @@ class YandexFeatureGateTest(unittest.TestCase):
         self.assertNotIn('applicationIdSuffix', release)
         self.assertNotIn('signingConfigs.findByName("qa")', release)
         self.assertIn('signingConfigs.findByName("release")', release)
-        self.assertEqual(2, len(re.findall(r'buildConfigField\("boolean",\s*"YANDEX_ID"', self.source)))
+        self.assertEqual(3, len(re.findall(r'buildConfigField\("boolean",\s*"YANDEX_ID"', self.source)))
+
+    def test_deliverable_qa_reuses_only_explicit_qa_approval_and_registered_identity(self):
+        qa=self.source.split('buildTypes.create("qa") {',1)[1].split('\n    }',1)[0]
+        self.assertIn('initWith(buildTypes.getByName("release"))',qa)
+        self.assertIn('buildConfigField("boolean", "YANDEX_ID", qaYandexActivationApproved.toString())',qa)
+        for required in ('applicationIdSuffix=".qa"','isDebuggable=false','isMinifyEnabled=true','signingConfigs.findByName("qa")'):
+            self.assertIn(required,qa)
+        self.assertNotIn('src/debug',qa)
 
     def test_feature_flags_delegate_to_the_actual_variant_instead_of_a_second_global_gate(self):
         flags = (ROOT / "app/src/main/java/com/polinalinen/madre/config/FeatureFlags.kt").read_text()

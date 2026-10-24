@@ -14,7 +14,7 @@ import zipfile
 from pathlib import Path
 
 DESCRIPTOR = "Lcom/polinalinen/madre/BuildConfig;"
-FIELDS = {"APPLICATION_ID", "YANDEX_ID", "YANDEX_CLIENT_ID", "VERSION_NAME", "VERSION_CODE"}
+FIELDS = {"APPLICATION_ID", "YANDEX_ID", "YANDEX_CLIENT_ID", "VERSION_NAME", "VERSION_CODE", "DEBUG", "QA_DIAGNOSTICS", "BUILD_TYPE"}
 
 
 def parse_build_config(dump: str) -> dict[str, object] | None:

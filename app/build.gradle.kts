@@ -78,6 +78,7 @@ android {
         // исключительно из BuildConfig.MADRE_API_URL.
         buildConfigField("String", "MADRE_API_URL", "\"https://madre-api.kdnfx.space\"")
         buildConfigField("String", "YANDEX_CLIENT_ID", "\"$yandexClientId\"")
+        buildConfigField("boolean", "QA_DIAGNOSTICS", "false")
         // Explicit disabled manifest namespace, NOT an issued/fabricated OAuth client id.
         manifestPlaceholders["YANDEX_CLIENT_ID"] = yandexClientId.ifEmpty { "disabled-madre-id" }
     }
@@ -103,6 +104,7 @@ android {
 
     buildTypes {
         debug {
+            buildConfigField("boolean", "QA_DIAGNOSTICS", "true")
             buildConfigField("boolean", "YANDEX_ID", qaYandexActivationApproved.toString())
             applicationIdSuffix = ".qa"
             // Missing QA inputs produce an unsigned build, rejected by the mandatory CI verifier.
@@ -119,6 +121,20 @@ android {
                 "proguard-rules.pro"
             )
         }
+    }
+
+    // Deliverable QA: same registered identity, release R8, NO debug fixture source set.
+    buildTypes.create("qa") {
+        initWith(buildTypes.getByName("release"))
+        applicationIdSuffix=".qa"
+        isDebuggable=false
+        isMinifyEnabled=true
+        isShrinkResources=true
+        signingConfig=signingConfigs.findByName("qa")
+        buildConfigField("boolean", "YANDEX_ID", qaYandexActivationApproved.toString())
+        buildConfigField("boolean", "QA_DIAGNOSTICS", "true")
+        resValue("string", "app_name", "Мадре QA")
+        matchingFallbacks.add("release")
     }
 
     // Opt-in CI measurement only: release code/R8, never a delivered QA/production package.
@@ -242,6 +258,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-service:2.8.1")
     implementation("androidx.activity:activity-compose:1.9.0")
     implementation("androidx.profileinstaller:profileinstaller:1.4.1")
+    implementation("androidx.metrics:metrics-performance:1.0.0")
 
     // Compose UI
     implementation("androidx.compose.ui:ui")

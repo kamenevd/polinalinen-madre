@@ -11,7 +11,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk=[26,35])
+@Config(sdk=[26,31,35])
 class PaperHapticsPlatformTest {
     private class RecordingView(context:Context):View(context) {
         var calls=0;var kind=-1;var flags=0
@@ -19,10 +19,10 @@ class PaperHapticsPlatformTest {
             calls++;kind=feedbackConstant;this.flags=flags;return true
         }
     }
-    @Test fun actualViewUsesIgnoreViewSettingAndStrongerTimerType() {
+    @Test fun supplementaryViewNeverForcesSystemSettingsAndUsesTimerType() {
         val context=ApplicationProvider.getApplicationContext<Context>();val view=RecordingView(context)
         val platform=AndroidPaperHapticPlatform(context,view)
-        assertTrue(platform.viewFeedback(PaperHaptic.PAGE));assertEquals(HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING,view.flags)
+        assertTrue(platform.viewFeedback(PaperHaptic.PAGE));assertEquals(0,view.flags)
         assertEquals(HapticFeedbackConstants.CLOCK_TICK,view.kind)
         assertTrue(platform.viewFeedback(PaperHaptic.TIMER));assertEquals(HapticFeedbackConstants.LONG_PRESS,view.kind)
         assertEquals(2,view.calls)

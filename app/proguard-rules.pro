@@ -30,3 +30,6 @@
 # List<Recipe> разбирается в List<LinkedTreeMap>.
 -keepattributes Signature, *Annotation*, InnerClasses
 -dontnote kotlinx.serialization.AnnotationsKt
+
+# Binary QA verification reads public constants without exposing OAuth identifiers.
+-keep class com.polinalinen.madre.BuildConfig { *; }

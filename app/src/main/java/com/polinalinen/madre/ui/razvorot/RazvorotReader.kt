@@ -80,7 +80,7 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
     val stablePadding = stableInsets.asPaddingValues()
     BackHandler(onBack = onBack)
     BoxWithConstraints(Modifier.fillMaxSize().background(p.bg)) {
-        val measurer = rememberTextMeasurer()
+        val measurer = rememberTextMeasurer(cacheSize=64)
         val density = androidx.compose.ui.platform.LocalDensity.current
         val locale=androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
         fun chromeHeight(saved:FloatArray,fallback:Dp):Dp =
@@ -116,7 +116,7 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
                             var take=rest.size
                             val step=heading.take(2).toIntOrNull()!=null
                             val blockWidth=if(step)(width-with(density){54.dp.roundToPx()}).coerceAtLeast(1) else width
-                            fun measured(n:Int):Int {
+                            fun calculateHeight(n:Int):Int {
                                 val extra=when {
                                     bi==0 && offset==0 -> {
                                         // Measure the actual new title/portion block, not the old guessed height:
@@ -156,6 +156,10 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
                                     lineHeight=(38*1.27f).sp,fontWeight=FontWeight.ExtraLight)).size.height else 0
                                 return extra+maxOf(numeralHeight,titleHeight+metaHeight+bodyHeight+with(density){6.dp.roundToPx()})+with(density){12.dp.roundToPx()}
                             }
+                            // Pagination probes the same fragment length several times. Reuse its
+                            // actual layout instead of re-measuring all ingredient rows each time.
+                            val heightCache=HashMap<Int,Int>()
+                            fun measured(n:Int)=heightCache.getOrPut(n){calculateHeight(n)}
                             if(bi<r.ingredients.size && measured(take)<=pageLimit && used+measured(take)>pageLimit)flush()
                             if(used+measured(1)>pageLimit)flush()
                             if(used+measured(take)>pageLimit) {

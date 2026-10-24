@@ -25,7 +25,28 @@ class Huawei7015AcceptanceTest {
     }
     private fun evidence(name:String)=TestStorage().openOutputFile("screenshots/huawei15/$name")
     private fun shot(name:String) {
-        val bitmap=requireNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
+        val automation=InstrumentationRegistry.getInstrumentation().uiAutomation
+        fun nodes(root:android.view.accessibility.AccessibilityNodeInfo):List<android.view.accessibility.AccessibilityNodeInfo> =
+            listOf(root)+(0 until root.childCount).flatMap{index->root.getChild(index)?.let{nodes(it)}?:emptyList()}
+        val initial=automation.rootInActiveWindow
+        val texts=initial?.let{nodes(it)}?.mapNotNull{it.text?.toString()}.orEmpty()
+        // Close only the known CI Launcher ANR. An app ANR is a failure, never dismissed or cropped.
+        if(texts.any{it.contains("Pixel Launcher") || it.contains("Nexus Launcher")}) {
+            initial?.findAccessibilityNodeInfosByViewId("android:id/aerr_close")?.firstOrNull()
+                ?.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)
+        }
+        rule.waitForIdle()
+        rule.waitUntil(10_000){automation.rootInActiveWindow?.packageName?.toString()==rule.activity.packageName}
+        assertEquals(rule.activity.packageName,automation.rootInActiveWindow?.packageName?.toString())
+        // Wait for a real rendered vsync and compositor frame, not merely a changed scene variable.
+        val frame=java.util.concurrent.CountDownLatch(1)
+        rule.activity.runOnUiThread{android.view.Choreographer.getInstance().postFrameCallback{frame.countDown()}}
+        assertTrue(frame.await(5,java.util.concurrent.TimeUnit.SECONDS))
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+        Thread.sleep(250)
+        assertEquals(rule.activity.packageName,automation.rootInActiveWindow?.packageName?.toString())
+        evidence("$name-window.txt").bufferedWriter().use{it.write("activePackage=${automation.rootInActiveWindow?.packageName}\nscene=${rule.activity.scene}\nFull unmodified UiAutomation frame; app foreground verified after vsync.\n")}
+        val bitmap=requireNotNull(automation.takeScreenshot())
         evidence("$name.png").use{assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG,100,it))};bitmap.recycle()
     }
     private fun page()=rule.onNodeWithTag("paper-turn").fetchSemanticsNode().config[SemanticsProperties.StateDescription]

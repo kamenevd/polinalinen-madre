@@ -38,10 +38,11 @@ import kotlin.math.roundToInt
 
 fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(s>=3600) "%d:%02d:%02d".format(s/3600,s/60%60,s%60) else "%02d:%02d".format(s/60,s%60) }
 @Composable fun BakingPaper(session: BakingSession, remaining:Long, onPause:()->Unit, onNext:()->Unit, onDetails:()->Unit, onBack:()->Unit, onOpenAlice:(()->Unit)?=null, onConfirmPortions:(Int)->Unit={},
-    onAdjustMinutes:(Int)->Unit={},sessions:List<BakingSession> = emptyList(),onSwitchSession:(Long)->Unit={}) {
+    onAdjustMinutes:(Int)->Unit={},sessions:List<BakingSession> = emptyList(),onSwitchSession:(Long)->Unit={},
+    plans:List<com.polinalinen.madre.navigation.PlannedBake> = emptyList(),onOpenPlan:(com.polinalinen.madre.navigation.PlannedBake)->Unit={}) {
     var full by rememberSaveable { mutableStateOf(false) }
     var stationTimer by rememberSaveable(session.id) { mutableStateOf(false) }
-    if(full) { FullTimer(session,remaining,sessions=sessions,onSwitchSession=onSwitchSession){full=false};return }
+    if(full) { FullTimer(session,remaining,sessions=sessions,onSwitchSession=onSwitchSession,plans=plans,onOpenPlan=onOpenPlan){full=false};return }
     val actionBarHeight=LocalBakeActionBarHeight.current
     val density=LocalDensity.current
     val bottomInset=WindowInsets.systemBarsIgnoringVisibility.union(WindowInsets.displayCutout).getBottom(density)
@@ -50,7 +51,7 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBarsIgnoringVisibility.union(WindowInsets.displayCutout))) {
         Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
             PaperIconButton(onBack,label="Назад") { Icon(Icons.AutoMirrored.Outlined.ArrowBack,"Назад") }
-            Box(Modifier.weight(1f)){BookBakeSessionChips(sessions,session.id,onSwitchSession)}
+            Box(Modifier.weight(1f)){BookBakeSessionChips(sessions,session.id,onSwitchSession,plans,onOpenPlan)}
             PaperIconButton(onDetails,label="Действия выпечки") { Icon(Icons.Outlined.MoreHoriz,"Действия выпечки") }
         }
       Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal=22.dp)) {
@@ -101,7 +102,8 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
     }
     if(stationTimer)com.polinalinen.madre.account.yandex.StationTimerSheet(remaining,bakeNumber=session.bakeNumber){stationTimer=false}
 }
-@Composable fun FullTimer(session:BakingSession,remaining:Long,sessions:List<BakingSession> = emptyList(),onSwitchSession:(Long)->Unit={},onClose:()->Unit) {
+@Composable fun FullTimer(session:BakingSession,remaining:Long,sessions:List<BakingSession> = emptyList(),onSwitchSession:(Long)->Unit={},
+    plans:List<com.polinalinen.madre.navigation.PlannedBake> = emptyList(),onOpenPlan:(com.polinalinen.madre.navigation.PlannedBake)->Unit={},onClose:()->Unit) {
     val keepScreenOn = LocalBookDisplaySettings.current.keepScreenOn
     Immersive(keepScreenOn = keepScreenOn)
     val progress=timerProgress(session.currentStep.durationMinutes*60L,remaining)
@@ -115,7 +117,7 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
             TimerNumber(if(remaining>=3600)"%02d:%02d".format(remaining/60%60,remaining%60) else "%02d".format(remaining%60),progress,100.sp,0.sp,NightPaper.acc)
             BookText(if(session.isPaused)"Пауза" else if(remaining==0L)"Время вышло" else session.recipe.name,24,Modifier.padding(top=20.dp),italic=true,color=NightPaper.ink)
             SmallLabel(if(keepScreenOn)"ЭКРАН НЕ ГАСНЕТ · КОСНИТЕСЬ, ЧТОБЫ СВЕРНУТЬ" else "КОСНИТЕСЬ, ЧТОБЫ СВЕРНУТЬ",Modifier.padding(top=24.dp),color=NightPaper.ink2)
-            CompositionLocalProvider(LocalPaper provides NightPaper) { BookBakeSessionChips(sessions.filter{it.id!=session.id},session.id,onSwitchSession) }
+            CompositionLocalProvider(LocalPaper provides NightPaper) { BookBakeSessionChips(sessions.filter{it.id!=session.id},session.id,onSwitchSession,plans,onOpenPlan) }
         }
     }
 }

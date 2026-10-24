@@ -347,7 +347,7 @@ val MIGRATION_11_12 = object : Migration(11, 12) {
         db.query("SELECT sessionId FROM active_bakes ORDER BY startedAtWallClock, sessionId").use { rows ->
             var number = 1
             while (rows.moveToNext()) {
-                if (number <= 9) db.execSQL("UPDATE active_bakes SET bake_number = ? WHERE sessionId = ?", arrayOf(number, rows.getLong(0)))
+                if (number <= 9) db.execSQL("UPDATE active_bakes SET bake_number = ? WHERE sessionId = ?", arrayOf<Any>(number, rows.getLong(0)))
                 number++
             }
         }

@@ -12,8 +12,9 @@ import com.polinalinen.madre.model.BakingSession
 import com.polinalinen.madre.ui.kit.*
 import kotlinx.coroutines.delay
 
-@Composable fun BookBakeSessionChips(sessions: List<BakingSession>, selected: Long, onSelect: (Long) -> Unit) {
-    if(sessions.isEmpty() || sessions.size==1 && sessions.single().id==selected)return
+@Composable fun BookBakeSessionChips(sessions: List<BakingSession>, selected: Long, onSelect: (Long) -> Unit,
+    plans:List<com.polinalinen.madre.navigation.PlannedBake> = emptyList(),onOpenPlan:(com.polinalinen.madre.navigation.PlannedBake)->Unit={}) {
+    if(plans.isEmpty() && (sessions.isEmpty() || sessions.size==1 && sessions.single().id==selected))return
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
         sessions.forEach { session -> key(session.id) {
             var remaining by remember(session.id,session.revision) { mutableLongStateOf(session.remainingSeconds(BakingClock.elapsed())) }
@@ -21,6 +22,10 @@ import kotlinx.coroutines.delay
                 while(true){remaining=session.remainingSeconds(BakingClock.elapsed());delay(1000)}
             }
             PaperBakeChip(session.bakeNumber,if(session.id==selected)session.recipe.name else if(session.isCompleted)"Испечено" else timerDigits(remaining),session.id==selected,{onSelect(session.id)})
+        } }
+        plans.forEach { plan -> key(plan.id) {
+            val time=java.time.Instant.ofEpochMilli(plan.startAtMillis).atZone(LocalBookClock.current.zone).format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
+            PaperBakeChip(plan.number,time,false,{onOpenPlan(plan)},planned=true)
         } }
     }
 }

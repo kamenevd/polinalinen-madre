@@ -17,7 +17,7 @@ adb shell dumpsys display > screenshots/cutout/display-before.txt
 result=0
 if [[ "${MADRE_FIXES_7015_ACCEPTANCE:-false}" == "true" ]]; then
     ./gradlew :app:connectedDebugAndroidTest \
-        -Pandroid.testInstrumentationRunnerArguments.class=com.polinalinen.madre.Huawei7015AcceptanceTest \
+        -Pandroid.testInstrumentationRunnerArguments.class=com.polinalinen.madre.Huawei7015AcceptanceTest,com.polinalinen.madre.BakeNumberInstrumentedTest,com.polinalinen.madre.data.db.MigrationTest \
         --no-daemon --stacktrace --no-configuration-cache || result=$?
 elif [[ "${MADRE_FIXES_7014_ACCEPTANCE:-false}" == "true" ]]; then
     ./gradlew :app:connectedDebugAndroidTest \

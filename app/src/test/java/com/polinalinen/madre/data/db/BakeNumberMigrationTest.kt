@@ -32,7 +32,7 @@ class BakeNumberMigrationTest {
                     }
                     schema.getAsJsonArray("setupQueries").forEach{db.execSQL(it.asString)}
                     // Tied clocks must use sessionId, never SQLite insertion order.
-                    (count downTo 1).forEach { n -> db.execSQL("INSERT INTO active_bakes(sessionId,recipeId,recipeName,stepTitle,stepIndex,stepDurationMinutes,isWaitStep,startedAtWallClock,pausedAtWallClock,scaleFactor,bakeKey,revision,recipeRevision) VALUES(?, 'ciabatta','Чиабатта','Отдых',4,30,1,?,1200,NULL,?,7,'digest')",arrayOf(n,if(n==1)2000 else 1000,"key-$n")) }
+                    (count downTo 1).forEach { n -> db.execSQL("INSERT INTO active_bakes(sessionId,recipeId,recipeName,stepTitle,stepIndex,stepDurationMinutes,isWaitStep,startedAtWallClock,pausedAtWallClock,scaleFactor,bakeKey,revision,recipeRevision) VALUES(?, 'ciabatta','Чиабатта','Отдых',4,30,1,?,1200,NULL,?,7,'digest')",arrayOf<Any>(n,if(n==1)2000 else 1000,"key-$n")) }
                     db.execSQL("INSERT INTO family_settings VALUES('kept','семья')")
                     db.execSQL("INSERT INTO bake_records(id,recipeId,recipeName,portions,completedAtMillis,photoPath) VALUES(90,'ciabatta','Чиабатта',2,999,'bake_photos/kept.jpg')")
                 }

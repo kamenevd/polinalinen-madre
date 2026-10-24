@@ -109,7 +109,8 @@ import com.polinalinen.madre.ui.components.bookAction
 }
 @Composable fun RazvorotTimer(sessionId:Long,viewModel:BakingViewModel,onBack:()->Unit,onComplete:()->Unit,onDetails:()->Unit={},onOpenAlice:()->Unit={},
     onOpenChapter:(BakingSession)->Unit={},onAbandon:(Long)->Unit={},onSwitchSession:(Long)->Unit={},
-    onKeepScreenOnChange:(Boolean)->Unit={}) {
+    onKeepScreenOnChange:(Boolean)->Unit={},plans:List<com.polinalinen.madre.navigation.PlannedBake> = emptyList(),
+    onOpenPlan:(com.polinalinen.madre.navigation.PlannedBake)->Unit={}) {
     var more by rememberSaveable(sessionId){mutableStateOf(false)}
     val keepScreenOn = LocalBookDisplaySettings.current.keepScreenOn
     Immersive(keepScreenOn = keepScreenOn)
@@ -120,7 +121,7 @@ import com.polinalinen.madre.ui.components.bookAction
         if(session==null)Column(Modifier.padding(22.dp)){BookText("Выпечка закрыта",32);PaperButton("К книге",onBack)}
         else BakingPaper(session,remaining,{viewModel.togglePause(sessionId)},{viewModel.advanceStepWithUndo(sessionId, onComplete)},
             {more=true},onBack,onOpenAlice=onOpenAlice,onConfirmPortions={viewModel.confirmPortions(sessionId,it)},
-            onAdjustMinutes={viewModel.adjustTime(sessionId,it)},sessions=sessions.filterNot{it.isCompleted},onSwitchSession=onSwitchSession)
+            onAdjustMinutes={viewModel.adjustTime(sessionId,it)},sessions=sessions.filterNot{it.isCompleted},onSwitchSession=onSwitchSession,plans=plans,onOpenPlan=onOpenPlan)
     }
     if(more && session!=null)BookBakeMoreSheet(session,keepScreenOn,onKeepScreenOnChange,
         {onOpenChapter(session)},{onAbandon(sessionId)},{more=false})

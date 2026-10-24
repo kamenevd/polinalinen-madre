@@ -84,6 +84,7 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
             Immersive(enabled = (scene.startsWith("reader-") && scene != "reader-chrome") || scene.startsWith("curl-") || scene.startsWith("gles2-curl-") || scene.startsWith("fulltimer-") || scene == "bake" || scene == "reading-sheet")
             Box(Modifier.fillMaxSize().background(LocalPaper.current.bg).testTag("scene-$scene").semantics{stateDescription="${debug.renderer}:${debug.renderedFrames}:${debug.cachedPages}:${debug.reason}"}) {
                 when {
+                    scene in BakeNumberScenes->BakeNumberScene(scene,recipes,preferences)
                     scene in FixesNativeScenes->FixesNativeScene(scene,recipes,preferences,recentPhotos)
                     scene=="alice-yandex-consent" -> {
                         // Actual production page, synthetic selected bake/signed-in boundary; no account/network effects.

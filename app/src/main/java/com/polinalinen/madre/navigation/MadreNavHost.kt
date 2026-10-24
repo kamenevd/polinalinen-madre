@@ -458,6 +458,7 @@ fun MadreNavHost(
                     onBack = { navController.popBackStack() },
                     onComplete = {},
                     viewModel = bakingViewModel,
+                    plans=bookPreferences.plans,onOpenPlan={plan->openStart(plan.recipeId,1,plan.id)},
                     onOpenChapter={ bake->openChapter(bake.recipe.id,step=bake.currentStepIndex) },
                     onKeepScreenOnChange={ value->navigationScope.launch {
                         try { app.familySettingsRepository.setKeepScreenOn(value) }

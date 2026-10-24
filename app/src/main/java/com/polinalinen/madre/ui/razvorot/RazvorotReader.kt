@@ -68,6 +68,11 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
     var page by rememberSaveable(recipeId) { mutableIntStateOf(0) }
     var scrollRequest by rememberSaveable(recipeId) { mutableLongStateOf(0L) }
     var seekAnchor by rememberSaveable(recipeId) { mutableStateOf("$recipeId:title") }
+    // Keep measured chrome beside the saved cursor, outside transient subcomposition.
+    // A hidden footer is not measured after recreation; guessed defaults repaginate the same page.
+    // Entries are widthDp/density/fontScale/heightDp, so changed geometry cannot reuse stale measurements.
+    var savedHeader by rememberSaveable(recipeId) { mutableStateOf(floatArrayOf()) }
+    var savedFooter by rememberSaveable(recipeId) { mutableStateOf(floatArrayOf()) }
     val scrollCursor = rememberSaveable(recipeId, saver=ChapterScrollState.Saver) { ChapterScrollState() }
     val p = LocalPaper.current
     Immersive(barsRevealed = chrome, keepScreenOn = LocalBookDisplaySettings.current.keepScreenOn)
@@ -78,8 +83,11 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
         val measurer = rememberTextMeasurer()
         val density = androidx.compose.ui.platform.LocalDensity.current
         val locale=androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
-        var headerHeight by remember { mutableStateOf(56.dp + stablePadding.calculateTopPadding()) }
-        var footerHeight by remember { mutableStateOf(150.dp + stablePadding.calculateBottomPadding()) }
+        fun chromeHeight(saved:FloatArray,fallback:Dp):Dp =
+            if(saved.size==4 && saved[0]==maxWidth.value && saved[1]==density.density && saved[2]==density.fontScale)
+                saved[3].dp else fallback
+        val headerHeight=chromeHeight(savedHeader,56.dp+stablePadding.calculateTopPadding())
+        val footerHeight=chromeHeight(savedFooter,150.dp+stablePadding.calculateBottomPadding())
         val width = with(density) { (maxWidth-52.dp-stablePadding.calculateLeftPadding(androidx.compose.ui.unit.LayoutDirection.Ltr)-stablePadding.calculateRightPadding(androidx.compose.ui.unit.LayoutDirection.Ltr)).roundToPx() }.coerceAtLeast(1)
         val height = with(density) { (maxHeight-headerHeight-footerHeight-52.dp).roundToPx() }.coerceAtLeast(200)
         val style = PaperType.body.copy(fontSize=preferences.textSize.sp,lineHeight=(preferences.textSize*25f/16f).sp)
@@ -248,7 +256,7 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
                 edgeMessage?.let { Text(it,style=PaperType.note,color=p.acc,modifier=Modifier.align(Alignment.BottomCenter)
                     .padding(start=20.dp,end=20.dp,bottom=footerHeight+8.dp).testTag("chapter-edge").semantics { liveRegion=LiveRegionMode.Polite }) }
                 Row(Modifier.align(Alignment.TopCenter).fillMaxWidth().background(p.glass)
-                    .onSizeChanged { headerHeight=with(density){it.height.toDp()} }
+                    .onSizeChanged { savedHeader=floatArrayOf(maxWidth.value,density.density,density.fontScale,with(density){it.height.toDp().value}) }
                     .windowInsetsPadding(stableInsets.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
                     .padding(horizontal=4.dp),verticalAlignment=Alignment.CenterVertically) {
                     PaperIconButton(onBack,label="В оглавление") { Icon(Icons.AutoMirrored.Outlined.ArrowBack,"В оглавление") }
@@ -258,7 +266,7 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
                     PaperTextButton({settings=true;chrome=false},label="Как читать") { BookText("Aa",21) }
                 }
                 Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(p.bg)
-                    .onSizeChanged { footerHeight=with(density){it.height.toDp()} }
+                    .onSizeChanged { savedFooter=floatArrayOf(maxWidth.value,density.density,density.fontScale,with(density){it.height.toDp().value}) }
                     .windowInsetsPadding(stableInsets.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal))
                     .padding(horizontal=20.dp,vertical=8.dp)) {
 

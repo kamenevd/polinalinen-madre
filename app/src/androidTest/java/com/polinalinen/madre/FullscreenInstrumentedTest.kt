@@ -10,7 +10,7 @@ import android.graphics.Bitmap
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.lifecycle.Lifecycle
-import java.io.File
+import androidx.test.services.storage.TestStorage
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.core.view.ViewCompat
@@ -52,10 +52,11 @@ class FullscreenInstrumentedTest {
         val action=rule.onNodeWithTag("paper-turn").fetchSemanticsNode().config[SemanticsActions.CustomActions].first{it.label=="Следующая страница"}
         rule.runOnIdle{assertTrue(action.action())};rule.waitForIdle()
     }
-    private val evidence get()=File(rule.activity.getExternalFilesDir(null),"fs-evidence").apply{mkdirs()}
+    // TestStorage survives Gradle's target-APK cleanup; app external files do not.
+    private fun evidence(name:String)=TestStorage().openOutputFile("screenshots/fs-evidence/$name")
     private fun shot(name:String):Bitmap {
         val bitmap=requireNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
-        File(evidence,"$name.png").outputStream().use{assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG,100,it))}
+        evidence("$name.png").use{assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG,100,it))}
         return bitmap
     }
     private fun verifyRealCutout(name:String) {
@@ -65,7 +66,7 @@ class FullscreenInstrumentedTest {
             assertTrue("Actual cutout bounds missing",cutout.boundingRects.isNotEmpty())
             val safe=insets.getInsetsIgnoringVisibility(WindowInsetsCompat.Type.displayCutout())
             assertTrue("Actual cutout safe inset missing",safe.top>0 || safe.left>0 || safe.right>0)
-            File(evidence,"$name-insets.txt").writeText("boundingRects=${cutout.boundingRects}\nsafeInsets=$safe\nsystemBarsVisible=${insets.isVisible(WindowInsetsCompat.Type.systemBars())}\n")
+            evidence("$name-insets.txt").bufferedWriter().use{it.write("boundingRects=${cutout.boundingRects}\nsafeInsets=$safe\nsystemBarsVisible=${insets.isVisible(WindowInsetsCompat.Type.systemBars())}\n")}
         }
     }
 

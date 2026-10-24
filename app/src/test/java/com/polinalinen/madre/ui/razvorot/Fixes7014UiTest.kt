@@ -148,6 +148,30 @@ class Fixes7014UiTest {
         }
     }
 
+    @Test @Config(qualifiers="ru-w393dp-h851dp-mdpi")
+    fun hiddenReaderRecreationKeepsTheActualPageContentAndCount() {
+        val prefs=ReadingPreferences(app,"fixes7014-hidden-recreate")
+        val recipe=recipes.single{it.id=="home_bread"}
+        val restoration=StateRestorationTester(rule)
+        restoration.setContent{RazvorotTheme(prefs,force=Atmosphere.DAWN){
+            RazvorotReader(recipes,recipe.id,prefs,{},{},{})
+        }}
+        rule.waitForIdle()
+        val next=rule.onNodeWithTag("paper-turn").fetchSemanticsNode().config[SemanticsActions.CustomActions].first{it.label=="Следующая страница"}
+        rule.runOnIdle{assertTrue(next.action())}
+        rule.onNodeWithTag("paper-turn").performTouchInput{click(center)}
+        rule.waitForIdle()
+        rule.onNodeWithContentDescription("В оглавление").assertDoesNotExist()
+        val before=rule.onNodeWithTag("paper-turn").fetchSemanticsNode().config
+        val page=before[SemanticsProperties.StateDescription]
+        val content=before[SemanticsProperties.ContentDescription]
+        restoration.emulateSavedInstanceStateRestore();rule.waitForIdle()
+        val after=rule.onNodeWithTag("paper-turn").fetchSemanticsNode().config
+        assertEquals(page,after[SemanticsProperties.StateDescription])
+        assertEquals(content,after[SemanticsProperties.ContentDescription])
+        rule.onNodeWithContentDescription("В оглавление").assertDoesNotExist()
+    }
+
     @Test fun accountAndPairingStateSelectExactlyOneCurrentConnectionStep() {
         val name=mutableStateOf<String?>(null)
         val waiting=mutableStateOf(true)

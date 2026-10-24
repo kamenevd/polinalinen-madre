@@ -23,9 +23,12 @@ else
     ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace --no-configuration-cache || result=$?
 fi
 # Preserve genuine failing-test evidence too; never turn a test failure into success.
-adb pull /sdcard/googletest/test_outputfiles/screenshots screenshots/ || true
-if ! adb pull /sdcard/Android/data/com.polinalinen.madre.qa/files/fs-evidence screenshots/cutout/; then
+if ! adb pull /sdcard/googletest/test_outputfiles/screenshots screenshots/; then
     if [[ "${MADRE_FIXES_7014_ACCEPTANCE:-false}" == "true" && "$result" == 0 ]]; then result=1; fi
+fi
+if [[ "${MADRE_FIXES_7014_ACCEPTANCE:-false}" == "true" ]]; then
+    test -s screenshots/screenshots/fs-evidence/fs6-insets.txt || result=1
+    test -s screenshots/screenshots/fs-evidence/fs6-after.png || result=1
 fi
 adb shell dumpsys window > screenshots/cutout/window-after.txt || true
 exit "$result"

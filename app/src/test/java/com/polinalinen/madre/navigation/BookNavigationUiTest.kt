@@ -222,7 +222,10 @@ class BookNavigationUiTest {
         rule.waitUntil(10_000){rule.onAllNodesWithText("ПОРА НАЧИНАТЬ · ×2").fetchSemanticsNodes().isNotEmpty()}
         assertTrue(runBlocking{app.activeBakeRepository.all()}.isEmpty())
         rule.onNodeWithText("Начать").performClick()
-        rule.waitUntil(10_000){rule.onAllNodesWithText("Крупно").fetchSemanticsNodes().isNotEmpty()}
+        rule.waitUntil(10_000){
+            rule.mainClock.advanceTimeByFrame()
+            rule.onAllNodesWithText("Дальше →").fetchSemanticsNodes().isNotEmpty()
+        }
         assertEquals(MadreDestinations.BAKE,nav.currentDestination?.route)
         val session=controller.sessions.value.single()
         assertEquals(recipe.id,session.recipe.id);assertEquals(2,session.trustedPortions)

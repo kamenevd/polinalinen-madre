@@ -102,6 +102,11 @@ internal fun syntheticNativeBake(recipe:Recipe,id:Long=7):BakingSession {
         photo={BakeFinalePhoto(selected,photos,PhotoAttachmentActions({},{},{},{}),true,{})},
         extra={if(scene!="bake-finale-noaccount") {
             SmallLabel("НА ПОЛКУ «ТЕСТОВАЯ ПОЛКА»")
-            BakeFinaleShareChoices(decision,{decision=it},selected!=null,false)
+            BakeFinaleShareChoices(
+                decision=decision,
+                photoAvailable=selected!=null,
+                busy=false,
+                onDecision={decision=it},
+            )
         }})
 }

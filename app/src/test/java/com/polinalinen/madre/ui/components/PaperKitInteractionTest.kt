@@ -38,6 +38,74 @@ class PaperKitInteractionTest {
         assertThat(calls).isEqualTo(0)
     }
 
+    @Test fun shortManropeLabelsKeepOriginalSpacesAndActuallyWidenWordBoundaries() {
+        val labels=listOf("По часам","Как книга","По муке")
+        val original=mutableMapOf<String,androidx.compose.ui.text.TextLayoutResult>()
+        val spaced=mutableMapOf<String,androidx.compose.ui.text.TextLayoutResult>()
+        rule.setContent{RazvorotTheme(force=Atmosphere.DAWN){Column {
+            labels.forEach{label->
+                androidx.compose.material3.Text(label,style=PaperType.caption,onTextLayout={original[label]=it})
+                androidx.compose.material3.Text(paperControlText(label),style=PaperType.caption,onTextLayout={spaced[label]=it})
+            }
+        }}}
+        rule.runOnIdle{labels.forEach{label->
+            val before=original.getValue(label);val after=spaced.getValue(label)
+            val space=label.indexOf(' ')
+            assertThat(after.layoutInput.text.text).isEqualTo(label)
+            assertThat(after.getBoundingBox(space).width).isGreaterThan(before.getBoundingBox(space).width)
+            assertThat(after.getBoundingBox(0).width).isWithin(.01f).of(before.getBoundingBox(0).width)
+        }}
+    }
+
+    @Test fun sharedSegmentsAndChipsKeepMultiwordSemanticsAndRealSelection() {
+        var segment=0;var chip=false
+        rule.setContent{RazvorotTheme(force=Atmosphere.NIGHT){
+            var selected by remember{mutableIntStateOf(0)}
+            var checked by remember{mutableStateOf(false)}
+            Column {
+                PaperSegmented(listOf("Как книга","По главам"),selected,{selected=it;segment=it})
+                PaperChip("Мои рецепты",checked,{checked=!checked;chip=checked})
+            }
+        }}
+        rule.onNodeWithText("Как книга").assertIsSelected()
+        rule.onNodeWithText("По главам").assertIsNotSelected().performClick().assertIsSelected()
+        rule.onNodeWithText("Мои рецепты").assertIsNotSelected().performClick().assertIsSelected()
+        rule.runOnIdle{assertThat(segment).isEqualTo(1);assertThat(chip).isTrue()}
+        rule.onNodeWithText("Каккнига").assertDoesNotExist()
+    }
+
+    @Test fun actualReadingSliderUpdatesPersistedTextSizeWithinItsRange() {
+        val context=androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        context.getSharedPreferences("kit15-reading",0).edit().clear().commit()
+        val prefs=ReadingPreferences(context,"kit15-reading")
+        rule.setContent{RazvorotTheme(prefs,Atmosphere.DAWN){com.polinalinen.madre.ui.razvorot.ReadingSettings(prefs){}}}
+        rule.onNodeWithTag("text-size").performScrollTo()
+            .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress){assertThat(it(20f)).isTrue()}
+        rule.runOnIdle{
+            assertThat(prefs.textSize).isEqualTo(20f)
+            assertThat(ReadingPreferences(context,"kit15-reading").textSize).isEqualTo(20f)
+        }
+        rule.onNodeWithTag("text-size").assertRangeInfoEquals(androidx.compose.ui.semantics.ProgressBarRangeInfo(20f,14f..22f,7))
+    }
+
+    @Test fun actualQuantitySliderChangesRecipeFactorAndPreservesIntegerBounds() {
+        val context=androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        val recipe=kotlinx.coroutines.runBlocking{com.polinalinen.madre.data.repository.RecipeRepository(context).getRecipes().first()}
+        var factor=2.0
+        rule.setContent{RazvorotTheme(force=Atmosphere.DAWN){
+            var value by remember{mutableDoubleStateOf(2.0)}
+            com.polinalinen.madre.ui.razvorot.BookPortionsSheet(recipe,value,{value=it;factor=it},{})
+        }}
+        val slider=rule.onNodeWithTag("quantity-scale").performScrollTo()
+        slider.performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress){assertThat(it(3f)).isTrue()}
+        rule.runOnIdle{assertThat(factor).isEqualTo(3.0)}
+        slider.assertRangeInfoEquals(androidx.compose.ui.semantics.ProgressBarRangeInfo(3f,1f..5f,3))
+        slider.performTouchInput{click(androidx.compose.ui.geometry.Offset(width*.05f,center.y))}
+        rule.runOnIdle{assertThat(factor).isEqualTo(1.0)}
+        slider.performTouchInput{click(androidx.compose.ui.geometry.Offset(width*.95f,center.y))}
+        rule.runOnIdle{assertThat(factor).isEqualTo(5.0)}
+    }
+
     @Test fun aPaperFieldRetainsRealTextEditingAndItsError() {
         var edited = ""
         rule.setContent { RazvorotTheme(force = Atmosphere.DUSK) {

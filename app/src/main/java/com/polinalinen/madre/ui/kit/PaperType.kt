@@ -6,6 +6,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontSynthesis
 import androidx.compose.ui.text.font.FontWeight
@@ -14,11 +17,12 @@ import androidx.compose.ui.text.font.FontFamily
 import com.polinalinen.madre.R
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.em
 
 /** Static bundled Cyrillic faces only. No platform or synthetic bold/italic. */
 object PaperType {
     private val literary = TextStyle(fontFamily = Literature, fontWeight = FontWeight.Normal, fontSynthesis = FontSynthesis.None)
-    private val interfaceType = TextStyle(fontFamily = Manrope, fontWeight = FontWeight.Normal, fontSynthesis = FontSynthesis.None)
+    private val interfaceType = TextStyle(fontFamily = Manrope, fontWeight = FontWeight.Normal, fontSynthesis = FontSynthesis.None,letterSpacing=0.sp)
     val display = literary.copy(fontSize = 40.sp, lineHeight = 42.sp, letterSpacing = (-.8).sp)
     // Genuine static 700/opsz72 from the already bundled OFL Literata, scoped to the finale only.
     val finale = literary.copy(fontFamily=FontFamily(Font(R.font.literata_finale_700,FontWeight.Bold)),
@@ -33,6 +37,16 @@ object PaperType {
     val overline = interfaceType.copy(fontSize = 11.sp, lineHeight = 17.sp, letterSpacing = 1.8.sp, fontWeight = FontWeight.Bold)
     val number = interfaceType.copy(fontSize = 44.sp, lineHeight = 50.sp, fontWeight = FontWeight.ExtraLight, fontFeatureSettings = "tnum")
     val chapterNumber = literary.copy(fontSize = 38.sp, fontWeight = FontWeight.ExtraLight)
+}
+
+/** Bundled Manrope's U+0020 advances only .2em (2.4px at12sp).
+ * Space-only tracking preserves the face, letter metrics, raw strings and semantics;
+ * it does not insert double/nonbreaking spaces or change normal paragraph typography. */
+internal fun paperControlText(text:String):AnnotatedString = buildAnnotatedString {
+    append(text)
+    text.forEachIndexed { index,char ->
+        if(char==' ')addStyle(SpanStyle(letterSpacing=.14.em),index,index+1)
+    }
 }
 
 @Composable fun BookText(text: String, size: Int = 20, modifier: Modifier = Modifier,

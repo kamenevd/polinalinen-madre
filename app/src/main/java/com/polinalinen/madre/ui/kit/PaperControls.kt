@@ -121,7 +121,7 @@ enum class PaperButtonVariant { PRIMARY, ACCENT, SECONDARY, TEXT }
             .padding(horizontal = 14.dp, vertical = 8.dp)) {
             Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(5.dp)) {
                 if(icon!=null)Icon(icon,null,Modifier.size(18.dp),tint=if(selected)p.acc else p.ink2)
-                Text(label, style = PaperType.ui.copy(fontSize = 13.sp), color = if (selected) p.acc else p.mut)
+                Text(paperControlText(label), style = PaperType.ui.copy(fontSize = 13.sp), color = if (selected) p.acc else p.mut)
             }
         }
     }
@@ -141,7 +141,7 @@ enum class PaperButtonVariant { PRIMARY, ACCENT, SECONDARY, TEXT }
                     stateDescription = "${index + 1} из ${labels.size}"
                 }
                 .padding(horizontal = 6.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
-                Text(optionLabel, color = (if (index == selectedIndex) p.bg else p.mut).copy(alpha=if(enabled(index))1f else .4f),
+                Text(paperControlText(optionLabel), color = (if (index == selectedIndex) p.bg else p.mut).copy(alpha=if(enabled(index))1f else .4f),
                     style = PaperType.ui.copy(fontSize = 12.sp), textAlign = TextAlign.Center)
             }
         }
@@ -214,9 +214,16 @@ enum class PaperButtonVariant { PRIMARY, ACCENT, SECONDARY, TEXT }
             role = Role.Switch, onValueChange = onCheckedChange) else Modifier), contentAlignment = Alignment.Center) {
         Canvas(Modifier.size(52.dp, 32.dp)) {
             val alpha = if (enabled) 1f else .4f
-            drawRoundRect((if(checked)p.ink else p.line).copy(alpha=alpha),
+            drawRoundRect((if(checked)p.ink else p.bg2).copy(alpha=alpha),
                 cornerRadius=androidx.compose.ui.geometry.CornerRadius(16.dp.toPx()))
+            if(!checked) {
+                val inset=.75.dp.toPx()
+                drawRoundRect(p.mut.copy(alpha=alpha),topLeft=Offset(inset,inset),
+                    size=androidx.compose.ui.geometry.Size(size.width-2*inset,size.height-2*inset),
+                    cornerRadius=androidx.compose.ui.geometry.CornerRadius(16.dp.toPx()-inset),style=Stroke(1.5.dp.toPx()))
+            }
             drawCircle(p.card.copy(alpha=alpha),12.dp.toPx(),Offset(16.dp.toPx()+20.dp.toPx()*position,center.y))
+            if(!checked)drawCircle(p.mut.copy(alpha=alpha),12.dp.toPx(),Offset(16.dp.toPx()+20.dp.toPx()*position,center.y),style=Stroke(1.dp.toPx()))
         }
     }
 }
@@ -230,12 +237,12 @@ enum class PaperButtonVariant { PRIMARY, ACCENT, SECONDARY, TEXT }
         steps = steps, onValueChangeFinished = onValueChangeFinished,
         colors = SliderDefaults.colors(thumbColor = p.card, activeTrackColor = p.ink,
             inactiveTrackColor = p.line, activeTickColor = Color.Transparent, inactiveTickColor = Color.Transparent),
-        thumb = { Box(Modifier.size(22.dp).clip(CircleShape).background(p.card)
-            .border(1.dp, p.mut, CircleShape), contentAlignment = Alignment.Center) {
-            Box(Modifier.size(4.dp).clip(CircleShape).background(p.ink))
+        thumb = { Box(Modifier.size(22.dp).alpha(if(enabled)1f else .4f).clip(CircleShape).background(p.card)
+            .border(1.5.dp, p.mut, CircleShape), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(8.dp).clip(CircleShape).background(p.ink))
         } },
         track = { state ->
-            Box(Modifier.fillMaxWidth().height(2.dp).background(p.line, CircleShape)) {
+            Box(Modifier.fillMaxWidth().height(2.dp).alpha(if(enabled)1f else .4f).background(p.line, CircleShape)) {
                 val fraction = ((state.value - valueRange.start) / (valueRange.endInclusive - valueRange.start)).coerceIn(0f, 1f)
                 Box(Modifier.fillMaxWidth(fraction).height(2.dp).background(p.ink, CircleShape))
             }

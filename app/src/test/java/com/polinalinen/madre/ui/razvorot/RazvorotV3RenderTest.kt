@@ -17,7 +17,7 @@ import org.robolectric.annotation.GraphicsMode
 import java.io.File
 import com.google.common.truth.Truth.assertThat
 
-/** PR key evidence: 20 real frames, including the reading sheet in all four atmospheres.
+/** PR key evidence: 20 real frames, with changed7.0.15 controls in morning/night.
  * No taste-based light/curl probes. Extended matrices live in the RC suite. */
 @OptIn(ExperimentalRoborazziApi::class)
 @RunWith(AndroidJUnit4::class)
@@ -46,19 +46,19 @@ class RazvorotV3RenderTest {
         bitmap.recycle()
         }
     }
-    @Test fun chapterTitle()=render("chapter-title",listOf(Atmosphere.DAWN))
+    @Test fun quantitiesAtMiddleValue()=render("sheet-calc-mid")
     @Test fun chapterIngredients()=render("chapter-ingr")
     @Test fun tableOfContents()=render("toc",listOf(Atmosphere.DAWN))
     @Test fun optionalYandexOffer()=render("yandex-offer",listOf(Atmosphere.DAWN))
-    @Test fun oven()=render("oven",listOf(Atmosphere.DAWN))
+
     @Test fun bakeFinale()=render("bake-finale")
-    @Test fun startLater()=render("start-later",listOf(Atmosphere.DAWN))
-    @Test fun readingSettings()=render("reading-sheet", listOf(Atmosphere.DAWN, Atmosphere.DAY, Atmosphere.DUSK, Atmosphere.NIGHT))
+    @Test fun readingSettings()=render("reading-sheet")
+    @Test fun readingSettingsMotionOn()=render("reading-sheet-motion-on")
 
     @Test fun bake()=render("bake")
     @Test fun starterGrowing()=render("starter-growing", listOf(Atmosphere.DAWN))
     @Test fun shelf()=render("shelf", listOf(Atmosphere.DAWN))
-    @Test fun aliceUnlinked()=render("alice-sheet-unlinked", listOf(Atmosphere.NIGHT))
+    @Test fun aliceUnlinked()=render("alice-sheet-unlinked")
     @Test fun settings()=render("settings", listOf(Atmosphere.DAWN))
     @Test fun settingsSearch()=render("settings-search", listOf(Atmosphere.NIGHT))
 }

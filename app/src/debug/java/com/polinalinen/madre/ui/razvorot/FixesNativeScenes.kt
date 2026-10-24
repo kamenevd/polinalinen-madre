@@ -32,6 +32,11 @@ internal fun syntheticNativeBake(recipe:Recipe,id:Long=7):BakingSession {
         BakingClock.wallClock(),scaleFactor=2.0)
 }
 
+/** Explicit SignedOut QA rendering only: real branded control, pure callback, no auth owner/SDK. */
+@Composable internal fun NativeAliceSignedOutStep(onSignIn:(Boolean)->Unit={}) {
+    YandexAccountPanel(YandexAccountState.SignedOut,false,onSignIn,{},{},compactAlice=true)
+}
+
 @Composable internal fun FixesNativeScene(scene:String,recipes:List<Recipe>,preferences:ReadingPreferences,photos:List<GalleryPhoto>) {
     val recipe=recipes.first()
     val bake=remember(recipe){syntheticNativeBake(recipe)}
@@ -89,7 +94,8 @@ internal fun syntheticNativeBake(recipe:Recipe,id:Long=7):BakingSession {
             PaperSheet({}){AliceSheetContent(if(linked)AliceSheetMode.LISTENING else AliceSheetMode.UNLINKED,
                 VoiceUiState(if(linked)VoiceStatus.CONNECTED else if(scene=="alice-connect-1")VoiceStatus.WAITING_LINK else VoiceStatus.UNLINKED,
                     selectedBake=if(linked)bake.bakeKey else null),recipeName=recipe.name,
-                accountStep={YandexAccountPanel(if(scene=="alice-connect-0")YandexAccountState.SignedOut else YandexAccountState.SignedIn(profile),false,{},{},{})},
+                accountStep={if(scene=="alice-connect-0")NativeAliceSignedOutStep()
+                    else YandexAccountPanel(YandexAccountState.SignedIn(profile),false,{},{},{})},
                 verifiedName=if(scene=="alice-connect-0")null else profile.displayName)}
         }
         scene=="station-timer"->{

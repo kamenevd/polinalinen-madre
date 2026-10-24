@@ -35,15 +35,17 @@ import androidx.compose.ui.unit.sp
 class YandexAccountUi(val model:YandexAccountViewModel,val signIn:(Boolean)->Unit)
 val LocalYandexAccountUi=staticCompositionLocalOf<YandexAccountUi?>{null}
 private const val PRIVACY="Мадре получит только имя, портрет и номер аккаунта. Пароль Яндекс нам не показывает. Книга остаётся на телефоне."
+private const val ALICE_PRIVACY="Только имя, портрет и номер аккаунта. Пароль Яндекс не передаёт. Книга остаётся на телефоне."
 
 @Composable fun YandexAccountPanel(state:YandexAccountState,pendingUnbind:Boolean,
     onSignIn:(Boolean)->Unit,onProfile:()->Unit,onRetryUnbind:()->Unit,
-    size:YandexIdButtonSize=YandexIdButtonSize.M) {
+    size:YandexIdButtonSize=YandexIdButtonSize.M,compactAlice:Boolean=false) {
+    val compactSignedOut=compactAlice && state is YandexAccountState.SignedOut && !pendingUnbind
     val snackbar=remember{PaperSnackbarState()}
     LaunchedEffect(state,pendingUnbind) {
         if(state is YandexAccountState.Error && !pendingUnbind && snackbar.showSnackbar("Вход не удался","ПОВТОРИТЬ",indefinite=true))onSignIn(false)
     }
-    Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+    Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(if(compactSignedOut)8.dp else 12.dp)) {
         when {
             pendingUnbind -> {
                 PaperNote("На телефоне отключено. Отзыв доступа на сервере ещё не подтверждён.")
@@ -70,7 +72,7 @@ private const val PRIVACY="Мадре получит только имя, пор
                     else Text(accountErrorCopy(state.kind),style=PaperType.note,color=LocalPaper.current.ink2)
                 }
                 YandexIdButton({onSignIn(false)},size=size)
-                Text(PRIVACY,style=PaperType.note,color=LocalPaper.current.ink2)
+                Text(if(compactSignedOut)ALICE_PRIVACY else PRIVACY,style=PaperType.note,color=LocalPaper.current.ink2)
                 if(state is YandexAccountState.Error)PaperSnackbar(snackbar)
             }
         }
@@ -214,7 +216,7 @@ private fun accountErrorCopy(kind:YandexAccountError)=when(kind) {
 }
 
 /** Login is optional and never substitutes for the existing explicit bake/voice consent. */
-@Composable fun YandexAliceAccountStep(onOpenSettings:()->Unit) {
+@Composable fun YandexAliceAccountStep(onOpenSettings:()->Unit,compactAlice:Boolean=false) {
     val owner=LocalYandexAccountUi.current
     if(owner==null) {
         YandexIdButton({},size=YandexIdButtonSize.M,enabled=false)
@@ -223,7 +225,7 @@ private fun accountErrorCopy(kind:YandexAccountError)=when(kind) {
     }
     val state by owner.model.state.collectAsState()
     val pending by owner.model.pendingUnbind.collectAsState()
-    YandexAccountPanel(state,pending,owner.signIn,onOpenSettings,owner.model::retryPendingUnbind)
+    YandexAccountPanel(state,pending,owner.signIn,onOpenSettings,owner.model::retryPendingUnbind,compactAlice=compactAlice)
 }
 
 /** Works without account/voice linking. It does not send a command or invent a Station name. */

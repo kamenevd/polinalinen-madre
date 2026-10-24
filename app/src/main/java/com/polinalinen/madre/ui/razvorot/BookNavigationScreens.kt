@@ -192,6 +192,8 @@ import androidx.compose.ui.Alignment
         if(mode==0) {
             PaperStepper("×${BookCatalog.number(factor)}", { onFactor((factor.roundToInt()-1).coerceAtLeast(1).toDouble()) },
                 { onFactor((factor.roundToInt()+1).coerceAtMost(5).toDouble()) },minusEnabled=factor>1,plusEnabled=factor<5)
+            PaperSlider(factor.toFloat().coerceIn(1f,5f),{onFactor(it.roundToInt().coerceIn(1,5).toDouble())},
+                valueRange=1f..5f,steps=3,modifier=Modifier.fillMaxWidth().testTag("quantity-scale"))
             PaperSegmented((1..5).map { "×$it" },factor.roundToInt().coerceIn(1,5)-1,{onFactor((it+1).toDouble())})
         } else {
             PaperField(input,{raw->input=raw;raw.replace(',','.').toDoubleOrNull()?.let(::applyMass)},

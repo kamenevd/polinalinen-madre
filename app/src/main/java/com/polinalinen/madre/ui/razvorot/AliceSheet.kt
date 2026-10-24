@@ -49,7 +49,7 @@ internal fun aliceSheetMode(state: VoiceUiState): AliceSheetMode = when {
             onNext = { answer = selected?.let { it.recipe.timeline.getOrNull(it.currentStepIndex + 1)?.description ?: "Последний шаг · завершение на телефоне" }; localRead = true },
             paused = selected?.isPaused == true, onPause = { selected?.let { viewModel.togglePause(it.id) } },
             onApprove = { scope.launch { coordinator.approvePair() } }, onReject = coordinator::dismissPairPreview,
-            accountStep = { com.polinalinen.madre.account.yandex.YandexAliceAccountStep(onOpenSettings) },hasActiveBakes=sessions.any{!it.isCompleted})
+            accountStep = { com.polinalinen.madre.account.yandex.YandexAliceAccountStep(onOpenSettings,compactAlice=true) },hasActiveBakes=sessions.any{!it.isCompleted})
     }
 }
 
@@ -62,25 +62,32 @@ internal fun aliceSheetMode(state: VoiceUiState): AliceSheetMode = when {
     onPause: () -> Unit = {}, onApprove: () -> Unit = {}, onReject: () -> Unit = {},
     accountStep: (@Composable () -> Unit)? = null,hasActiveBakes:Boolean=recipeName!=null,verifiedName:String?=null) {
     val p = LocalPaper.current
-    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        SmallLabel("АЛИСА", color = p.acc)
-        BookText(when (mode) {
+    val compact=mode==AliceSheetMode.UNLINKED
+    val title=when (mode) {
             AliceSheetMode.UNLINKED -> "Подключить Алису"
             AliceSheetMode.LISTENING -> "Телефон на связи"
             AliceSheetMode.READING -> "Шаг на телефоне"
             AliceSheetMode.CONFIRM -> "Разрешить доступ?"
             AliceSheetMode.OFFLINE, AliceSheetMode.ERROR -> "Нет связи"
             AliceSheetMode.PHONE_REQUIRED -> "На телефоне"
-        }, 28)
-        if (recipeName != null) Text(recipeName, color = p.ink, style = PaperType.title)
-        else Text(if(hasActiveBakes)"Выберите выпечку" else "Сейчас ничего не печётся",color=p.ink2,style=PaperType.note)
+        }
+    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp, vertical = if(compact)8.dp else 12.dp),
+        verticalArrangement = Arrangement.spacedBy(if(compact)8.dp else 14.dp)) {
+        if(compact)Column(verticalArrangement=Arrangement.spacedBy(4.dp)) {
+            SmallLabel("АЛИСА",color=p.acc)
+            BookText(title,28)
+        } else {
+            SmallLabel("АЛИСА",color=p.acc)
+            BookText(title,28)
+            if (recipeName != null) Text(recipeName, color = p.ink, style = PaperType.title)
+            else Text(if(hasActiveBakes)"Выберите выпечку" else "Сейчас ничего не печётся",color=p.ink2,style=PaperType.note)
+        }
         state.message?.let { Text(it, color = p.error, style = PaperType.note) }
         when (mode) {
             AliceSheetMode.UNLINKED -> {
                 com.polinalinen.madre.ui.screens.AliceConnectionSteps(
                     waiting=state.status==VoiceStatus.WAITING_LINK || state.status==VoiceStatus.LOADING,
-                    onHelp=onConnect,accountStep=accountStep,verifiedName=verifiedName)
+                    onHelp=onConnect,accountStep=accountStep,verifiedName=verifiedName,compact=true)
 
             }
             AliceSheetMode.CONFIRM -> {
@@ -112,6 +119,6 @@ internal fun aliceSheetMode(state: VoiceUiState): AliceSheetMode = when {
             }
         }
         Text(if(mode==AliceSheetMode.UNLINKED)"Работает, пока Мадре открыта на телефоне" else AliceCopy.AVAILABILITY, color = p.mut, style = PaperType.note)
-        Spacer(Modifier.height(12.dp))
+        if(!compact)Spacer(Modifier.height(12.dp))
     }
 }

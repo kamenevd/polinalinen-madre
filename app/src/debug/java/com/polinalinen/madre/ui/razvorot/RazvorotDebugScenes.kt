@@ -68,7 +68,10 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
     val context=LocalContext.current
     val preferences=remember(scene){
         context.getSharedPreferences("razvorot_fixture",0).edit().clear().commit()
-        ReadingPreferences(context,"razvorot_fixture").apply{setSize(if(scene.endsWith("22"))22f else 16f)}
+        ReadingPreferences(context,"razvorot_fixture").apply{
+            setSize(if(scene.endsWith("22"))22f else 16f)
+            if(scene=="reading-sheet-motion-on")setReduced(true)
+        }
     }
     val debug=remember{PaperDebugState()}
     val night=scene.endsWith("night")
@@ -116,9 +119,10 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
                         if(start)BookStartSheet(selected,factor.toInt(),{},{start=false},onPlan={_,_->},initialMode=1)
                         if(quantities)BookPortionsSheet(selected,factor,{factor=it},{quantities=false})
                     }
-                    scene=="sheet-calc" -> {
-                        RazvorotReader(recipes,recipe.id,preferences,{},{},{},initialPage=1,scaleFactor=2.0,onOpenAlice={})
-                        BookPortionsSheet(recipe,2.0,{},{})
+                    scene=="sheet-calc" || scene=="sheet-calc-mid" -> {
+                        val factor=if(scene=="sheet-calc-mid")3.0 else 2.0
+                        RazvorotReader(recipes,recipe.id,preferences,{},{},{},initialPage=1,scaleFactor=factor,onOpenAlice={})
+                        BookPortionsSheet(recipe,factor,{},{})
                     }
                     scene=="bake-finale" -> {
                         NativeFinaleFixture(recipe,recipes,scene,recentPhotos)
@@ -130,7 +134,8 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
                         BakingPaper(BakingSession(7,recipe,9,0L,0L,scaleFactor=2.0),1661L,{},{},{},{},onOpenAlice={})
                             PaperSheet({}) { AliceSheetContent(mode, com.polinalinen.madre.voice.VoiceUiState(
                                 if (mode == AliceSheetMode.OFFLINE) com.polinalinen.madre.voice.VoiceStatus.OFFLINE else com.polinalinen.madre.voice.VoiceStatus.UNLINKED),
-                                recipeName = recipe.name, stepText = recipe.timeline[0].description) }
+                                recipeName = recipe.name, stepText = recipe.timeline[0].description,
+                                accountStep={NativeAliceSignedOutStep()}) }
                     }
                     scene=="settings" || scene=="settings-search" -> SettingsContent("Пекарь", {}, {}, {}, "Мадре", {}, 12, 42, 24, {}, true, {}, true, {}, "Демонстрационная семья", FamilyBookState.SignedOut, {}, {},
                         preferences=preferences,initialSearch=if(scene=="settings-search")"увед" else "")
@@ -153,7 +158,7 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
                             "Остаться","Отмена",onConfirm={open=false},onDismiss={open=false})
                         if(open && scene=="fullscreen-photo")PaperPhotoViewer({open=false}) {BookText("Фото · локальная тестовая поверхность",18)}
                     }
-                    scene=="reading-sheet" -> { DebugTextPage(recipe,preferences);ReadingSettings(preferences,onWindow={(context as? RazvorotSceneActivity)?.captureWindow=it}){} }
+                    scene=="reading-sheet" || scene=="reading-sheet-motion-on" -> { DebugTextPage(recipe,preferences);ReadingSettings(preferences,onWindow={(context as? RazvorotSceneActivity)?.captureWindow=it}){} }
                     scene.startsWith("home-") -> Column {
                         Box(Modifier.weight(1f).safeDrawingPadding()){BookTocContent(recipes,emptyList(),null,{_,_->},{})}
                         SpineBar(0){}

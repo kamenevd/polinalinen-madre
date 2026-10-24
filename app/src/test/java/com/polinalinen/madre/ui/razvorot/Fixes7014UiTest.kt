@@ -187,6 +187,50 @@ class Fixes7014UiTest {
         rule.runOnIdle{waiting.value=true};current(3)
     }
 
+    @Test fun compactUnlinkedKeepsAllFactsAndCallbacksWithLargeText() {
+        var logins=0;var help=0
+        rule.setContent {
+            val density=androidx.compose.ui.platform.LocalDensity.current
+            CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density,2f)) {
+                RazvorotTheme(force=Atmosphere.DAWN) {PaperSheet({}) {
+                    AliceSheetContent(AliceSheetMode.UNLINKED,
+                        com.polinalinen.madre.voice.VoiceUiState(com.polinalinen.madre.voice.VoiceStatus.UNLINKED),
+                        recipeName="Рецепт уже виден на фоне",onConnect={help++},
+                        accountStep={NativeAliceSignedOutStep{browser->assertFalse(browser);logins++}})
+                }}
+            }
+        }
+        rule.onNodeWithText("Рецепт уже виден на фоне").assertDoesNotExist()
+        rule.onNodeWithText("Один раз. Потом шаги можно слушать и спрашивать голосом.").assertDoesNotExist()
+        for(n in 1..3) {
+            val step=rule.onNodeWithTag("alice-connection-step-$n").assertExists()
+            if(n==1)step.assertIsSelected() else step.assertIsNotSelected()
+        }
+        rule.onNodeWithText("тем же аккаунтом, что на Станции").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithContentDescription("Войти с Яндекс ID").performScrollTo().assertIsEnabled()
+            .performSemanticsAction(SemanticsActions.OnClick){assertTrue(it())}
+        rule.runOnIdle{assertEquals(1,logins);assertEquals(0,help)}
+        rule.onNodeWithText("Только имя, портрет и номер аккаунта. Пароль Яндекс не передаёт. Книга остаётся на телефоне.")
+            .performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("«${com.polinalinen.madre.ui.screens.AliceCopy.LAUNCH_PHRASE}»").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("В приложении Яндекс · со Станции придёт пуш. Если появился код — подтвердите его на телефоне.")
+            .performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("НЕ ВЫХОДИТ?").performScrollTo().assertIsDisplayed()
+            .performSemanticsAction(SemanticsActions.OnClick){assertTrue(it())}
+        rule.runOnIdle{assertEquals(1,help);assertEquals(1,logins)}
+        rule.onNodeWithText("Работает, пока Мадре открыта на телефоне").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Вход с Яндекс ID пока недоступен",substring=true).assertDoesNotExist()
+    }
+
+    @Test fun baselineUnlinkedFixtureIsExplicitlySignedOutWithTheRealEnabledControl() {
+        rule.setContent{RazvorotDebugScene("alice-sheet-unlinked",recipes,forceAtmosphere=Atmosphere.NIGHT)}
+        rule.onNodeWithContentDescription("Войти с Яндекс ID").assertIsEnabled().assertIsDisplayed()
+        rule.onNodeWithText("Вход с Яндекс ID пока недоступен",substring=true).assertDoesNotExist()
+        rule.onNodeWithTag("alice-connection-step-1").assertIsSelected()
+        rule.onNodeWithTag("alice-connection-step-2").assertIsNotSelected()
+        rule.onNodeWithTag("alice-connection-step-3").assertIsNotSelected()
+    }
+
     @Test fun threeAccountErrorsShowExactCopyAndRetryUsesItsRealAction() {
         val error=mutableStateOf(YandexAccountError.NETWORK)
         var attempts=0

@@ -146,7 +146,7 @@ class YandexAccountController(
     }
 
     /** Local logout is immediate; server revocation is only acknowledged after its real reply. */
-    suspend fun signOut() {
+    suspend fun signOut(onLocalAccountCleared: (VerifiedYandexProfile?) -> Unit = {}) {
         if (closed || !scope.isActive) return
         initialization.join()
         val revocation = stateLock.withLock {
@@ -157,9 +157,11 @@ class YandexAccountController(
             // Persisted profile/retry/pending (or an in-flight bind) instead requires
             // the old installation credential and a real server ACK, even when lost.
             val binding = _state.value is YandexAccountState.Binding
+            var portrait = (_state.value as? YandexAccountState.SignedIn)?.profile
             _state.value = YandexAccountState.SignedOut
             val remoteRequired = try {
                 val saved = storage.read()
+                if (portrait == null) portrait = saved.profile
                 binding || unbindPending || saved.profile != null || saved.bindingMetadataPresent || saved.foregroundRetryRequired || saved.unbindPending
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { true } // Unreadable metadata cannot prove never-bound.
@@ -168,8 +170,13 @@ class YandexAccountController(
             try { storage.clearAccount(unbindPending = remoteRequired) }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { _state.value = YandexAccountState.Error(YandexAccountError.STORAGE) }
-            sequence to remoteRequired
+            Triple(sequence, remoteRequired, portrait)
         }
+        // The attempt is already fenced and local metadata cleared. The caller
+        // never needs a separate suspending read BEFORE logout to find its cache key.
+        try { onLocalAccountCleared(revocation.third) }
+        catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) { /* Cache cleanup cannot invent or prevent a remote ACK. */ }
         if (revocation.second) revokePending(revocation.first)
     }
 

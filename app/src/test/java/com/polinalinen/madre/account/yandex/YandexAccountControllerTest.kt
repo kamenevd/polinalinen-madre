@@ -142,6 +142,27 @@ class YandexAccountControllerTest {
         cold.close()
     }
 
+    @Test fun logoutFencesLateSdkBeforePortraitCleanupAndCacheFailureCannotPreventRevoke()=runTest {
+        val storage=Storage(YandexAccountSnapshot(profile=profile,offerSeen=true));val api=Api(profile)
+        val c=YandexAccountController(backgroundScope,storage,api)
+        val attempt=requireNotNull(c.beginSignIn());c.failSignIn(attempt,YandexAccountError.YANDEX)
+        val late=token();var cleanupCalled=false
+        c.signOut { cached->
+            cleanupCalled=true
+            assertEquals(profile,cached)
+            assertEquals(YandexAccountState.SignedOut,c.state.value)
+            assertNull(storage.snapshot.profile);assertTrue(storage.snapshot.unbindPending)
+            c.submitSdkToken(attempt,late)
+            throw IOException("synthetic-private-cache-detail")
+        }
+        runCurrent()
+        assertTrue(cleanupCalled);assertTrue(late.isClosed)
+        assertEquals(listOf("unbind"),api.events)
+        assertFalse(storage.snapshot.unbindPending)
+        assertEquals(YandexAccountState.SignedOut,c.state.value)
+        assertTrue(storage.snapshot.offerSeen);c.close()
+    }
+
     @Test fun markerWriteFailureStopsBeforeTransportWithoutLeakingItsException()=runTest {
         val storage=Storage().apply{failMarker=true};val api=Api(profile)
         val c=YandexAccountController(backgroundScope,storage,api);val attempt=requireNotNull(c.beginSignIn())

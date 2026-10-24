@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.polinalinen.madre.MadreApplication
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
@@ -63,12 +64,8 @@ class YandexAccountViewModel(application: Application) : AndroidViewModel(applic
     fun signOut() {
         // Synchronous local authority fence BEFORE any cache/metadata/network suspension.
         app.disconnectVoice()
-        viewModelScope.launch {
-            val profile=(state.value as? YandexAccountState.SignedIn)?.profile ?: try { storage.read().profile }
-            catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { null }
-            clearPortraitCache(profile)
-            controller.signOut()
+        viewModelScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            controller.signOut(::clearPortraitCache)
         }
     }
 

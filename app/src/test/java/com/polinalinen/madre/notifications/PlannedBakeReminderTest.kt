@@ -46,6 +46,10 @@ class PlannedBakeReminderTest {
         assertEquals(ListenableWorker.Result.success(),worker(plan.id).doWork())
         assertEquals(before,app.activeBakeRepository.all())
         val posted=manager.activeNotifications.single{it.tag=="planned:${plan.id}"}.notification
+        assertTrue(posted.extras.getCharSequence(android.app.Notification.EXTRA_TITLE).toString().startsWith("№1 Пора ставить опару"))
+        assertEquals(android.app.Notification.VISIBILITY_PRIVATE,posted.visibility)
+        assertEquals("Мадре",posted.publicVersion.extras.getCharSequence(android.app.Notification.EXTRA_TITLE).toString())
+        assertEquals("Запланированная выпечка №1",posted.publicVersion.extras.getCharSequence(android.app.Notification.EXTRA_TEXT).toString())
         assertEquals(listOf("Начать","Через 30 мин"),posted.actions.map{it.title.toString()})
         val body=shadowOf(posted.contentIntent).savedIntent
         assertEquals(PlannedBakeRequest(plan.id,PlannedBakeAction.OPEN),PlannedBakeActions.read(app,body))
@@ -54,7 +58,9 @@ class PlannedBakeReminderTest {
         assertNull(PlannedBakeActions.read(app,start))
         assertNull(PlannedBakeActions.read(app,shadowOf(posted.actions.last().actionIntent).savedIntent))
         assertEquals(before,app.activeBakeRepository.all())
-        BookPreferences(app).use{assertEquals(listOf(plan),it.plans)}
+        // 7.0.16 backfills the number even when the reminder is the first entry after upgrade.
+        // Every other field and both capability guards above must remain unchanged.
+        BookPreferences(app).use{assertEquals(listOf(plan.copy(number=1)),it.plans)}
     }
     @Test fun plainExternalIntentsCannotStartOrSnoozeAndNeverConsumeTheRealCapability() {
         val plan=plan()

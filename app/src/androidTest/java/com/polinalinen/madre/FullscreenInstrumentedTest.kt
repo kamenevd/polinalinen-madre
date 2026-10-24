@@ -1,7 +1,7 @@
 package com.polinalinen.madre
 
 import android.view.KeyEvent
-import android.content.Intent
+import android.os.ParcelFileDescriptor
 import android.accessibilityservice.AccessibilityService
 import android.os.SystemClock
 import android.view.MotionEvent
@@ -95,13 +95,16 @@ class FullscreenInstrumentedTest {
     @Test fun fs5RecreationRebuildsTheSameScopedReaderRequest() {
         scene("reader-chrome");secondPage();hideReaderChrome()
         val before=page()
+        val activity=rule.activity
+        val task=activity.taskId
         assertTrue(InstrumentationRegistry.getInstrumentation().uiAutomation.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME))
         InstrumentationRegistry.getInstrumentation().waitForIdleSync()
-        rule.waitUntil(5_000){rule.activity.lifecycle.currentState!=Lifecycle.State.RESUMED}
-        // ActivityScenario is the instrumentation-authorized foreground driver; an app-context
-        // startActivity after HOME is a background launch on API35, not a user return.
-        rule.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
-        rule.waitUntil(5_000){rule.activity.lifecycle.currentState==Lifecycle.State.RESUMED && rule.activity.hasWindowFocus()}
+        rule.waitUntil(5_000){activity.lifecycle.currentState!=Lifecycle.State.RESUMED}
+        // Resume the SAME actual task, like selecting it in Recents. Neither an app-context
+        // background launch nor ActivityScenario.moveToState brings a HOME-stopped task forward.
+        val command=InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand("am task focus $task")
+        ParcelFileDescriptor.AutoCloseInputStream(command).bufferedReader().use{it.readText()}
+        rule.waitUntil(5_000){activity.lifecycle.currentState==Lifecycle.State.RESUMED && activity.hasWindowFocus()}
         rule.waitForIdle();hidden();assertEquals(before,page())
         rule.activityRule.scenario.recreate()
         rule.waitForIdle()

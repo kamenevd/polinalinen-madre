@@ -11,7 +11,11 @@ android {
     }
     targetProjectPath=":app"
     experimentalProperties["android.experimental.self-instrumenting"]=true
-    buildTypes.create("benchmark") { isDebuggable=true;matchingFallbacks.add("release") }
+    buildTypes.create("benchmark") {
+        // The self-instrumenting TEST APK needs a certificate too; target app keeps stable QA signing.
+        initWith(buildTypes.getByName("debug"))
+        matchingFallbacks.add("release")
+    }
     compileOptions { sourceCompatibility=JavaVersion.VERSION_17;targetCompatibility=JavaVersion.VERSION_17 }
 }
 kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }

@@ -42,6 +42,20 @@ class SettingsInputHintsTest {
         assertTrue(flags("каменевы") and InputType.TYPE_TEXT_FLAG_CAP_WORDS!=0)
         assertEquals(0,flags("abc123") and (InputType.TYPE_TEXT_FLAG_CAP_WORDS or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES))
     }
+    @Test fun fullSettingsAtDoubleFontRemainScrollableAndHapticSwitchKeepsRealPreference() {
+        val context=androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        val prefs=ReadingPreferences(context,"settings15-large").apply{chooseHaptics(true)}
+        show{
+            val density=androidx.compose.ui.platform.LocalDensity.current
+            androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density,2f)) {
+                SettingsContent("Полина",{},{},{},"Мадре",{},3,7,24,{},true,{},false,{},"Семья Каменевых",FamilyBookState.SignedOut,{},{},preferences=prefs)
+            }
+        }
+        rule.onNodeWithText(com.polinalinen.madre.BuildConfig.VERSION_NAME).performScrollTo().assertIsDisplayed()
+        rule.onNodeWithContentDescription("Тактильный отклик").performScrollTo().assertIsDisplayed().assertIsOn().performClick().assertIsOff()
+        rule.runOnIdle{assertFalse(ReadingPreferences(context,"settings15-large").haptics)}
+        rule.onNodeWithText("Попробовать отклик").performScrollTo().assertIsNotEnabled()
+    }
     @Test fun actualStarterFieldRequestsSentencesWithoutChangingStoredText() {
         show{StarterNameField("соня",{})}
         assertTrue(flags("соня") and InputType.TYPE_TEXT_FLAG_CAP_SENTENCES!=0)

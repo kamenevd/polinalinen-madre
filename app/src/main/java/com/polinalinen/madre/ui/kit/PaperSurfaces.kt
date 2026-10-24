@@ -56,8 +56,12 @@ import kotlin.random.Random
 /** Stable, consumed content insets: immersive bars can hide, the physical cutout cannot.
  * Compose consumption prevents double padding when a screen is inside the home/scaffold. */
 @OptIn(ExperimentalLayoutApi::class)
-@Composable fun Modifier.paperContentInsets():Modifier = windowInsetsPadding(
-    WindowInsets.safeDrawing.union(WindowInsets.systemBarsIgnoringVisibility).union(WindowInsets.displayCutout))
+@Composable fun Modifier.paperContentInsets(includeBottom:Boolean=true):Modifier {
+    val insets=WindowInsets.safeDrawing.union(WindowInsets.systemBarsIgnoringVisibility).union(WindowInsets.displayCutout)
+    return if(includeBottom)windowInsetsPadding(insets)
+        else windowInsetsPadding(insets.only(WindowInsetsSides.Top+WindowInsetsSides.Horizontal))
+            .consumeWindowInsets(insets.only(WindowInsetsSides.Bottom)) // sibling bottom bar owns this space
+}
 
 /** Compatibility surface for existing layouts; containers remain owned by kit. */
 @Composable fun PaperSurface(modifier: Modifier = Modifier, color: Color = LocalPaper.current.bg,

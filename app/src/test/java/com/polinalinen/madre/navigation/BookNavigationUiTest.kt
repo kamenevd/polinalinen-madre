@@ -76,7 +76,50 @@ class BookNavigationUiTest {
         rule.waitForIdle()
         val page=rule.onNodeWithTag("paper-turn").fetchSemanticsNode().config[SemanticsProperties.StateDescription]
         assertTrue(page.startsWith("Страница 2 из "))
-        assertTrue("N2: no truncated text or extra chapters: $page",page.substringAfter(" из ").toInt() in 3..5)
+        // Layout is now taller by the real ingredient title/portion block. Page count alone
+        // cannot prove isolation/completeness: walk the actual chapter and require every
+        // scaled ingredient and every complete instruction exactly once, without neighbours.
+        val count=page.substringAfter(" из ").toInt()
+        assertTrue(count>=3)
+        val recipe=recipes.single{it.id=="ciabatta"}
+        val factor=BookPreferences(app).use{it.portions(recipe.id).toDouble()}
+        val bindings=RecipeScaler.scalableBindings(recipe)
+        val expected=linkedMapOf<String,String>()
+        recipe.ingredients.forEach{(section,items)->expected[com.polinalinen.madre.utils.ingredientSectionTitle(section)]=
+            items.joinToString("\n"){RecipeScaler.scaledDisplayText(it,factor)}}
+        recipe.timeline.forEachIndexed{index,step->expected["%02d · %s · %d мин".format(index+1,step.title,step.durationMinutes)]=
+            RecipeScaler.scaledStepText(step.description,factor,bindings)}
+        if(recipe.servingTips.isNotEmpty())expected["К столу"]=recipe.servingTips.joinToString("\n"){it.text}
+        if(recipe.variations.isNotEmpty())expected["Варианты"]=recipe.variations.joinToString("\n"){it.text}
+        val header=Regex("(?m)^("+expected.keys.joinToString("|"){Regex.escape(it)}+")(?: · продолжение)?\n")
+        val actual=linkedMapOf<String,MutableList<String>>()
+        fun turn(label:String) {
+            val action=rule.onNodeWithTag("paper-turn").fetchSemanticsNode().config[SemanticsActions.CustomActions].first{it.label==label}
+            rule.runOnIdle{assertTrue(action.action())};rule.waitForIdle()
+        }
+        for(index in 2..count) {
+            val node=rule.onNodeWithTag("paper-turn").fetchSemanticsNode()
+            assertEquals("Страница $index из $count",node.config[SemanticsProperties.StateDescription])
+            val descriptions=node.config[SemanticsProperties.ContentDescription]
+            assertFalse("Neighbouring title leaked onto page $index",recipes.filter{it.id!=recipe.id}.any{it.name in descriptions})
+            val content=descriptions.first()
+            if(index==count)assertEquals("Конец главы 5. Теперь — испечь.",content)
+            else {
+                val matches=header.findAll(content).toList()
+                assertTrue("No real recipe block on page $index: $content",matches.isNotEmpty())
+                assertEquals(0,matches.first().range.first)
+                matches.forEachIndexed{i,match->actual.getOrPut(match.groupValues[1]){mutableListOf()}.add(
+                    content.substring(match.range.last+1,matches.getOrNull(i+1)?.range?.first?:content.length).trim())}
+            }
+            if(index<count)turn("Следующая страница")
+        }
+        fun normalized(value:String)=value.replace(Regex("\\s+")," ").trim()
+        assertEquals(expected.keys,actual.keys)
+        expected.forEach{(heading,body)->assertEquals("Truncated/duplicated real block: $heading",
+            normalized(body),normalized(actual.getValue(heading).joinToString(" ")))}
+        // Restore page2 via real reader actions, then retain the original exact restoration test.
+        repeat(count-2){turn("Предыдущая страница")}
+        assertEquals(page,rule.onNodeWithTag("paper-turn").fetchSemanticsNode().config[SemanticsProperties.StateDescription])
         restoration.emulateSavedInstanceStateRestore()
         rule.waitForIdle()
         assertEquals(page,rule.onNodeWithTag("paper-turn").fetchSemanticsNode().config[SemanticsProperties.StateDescription])

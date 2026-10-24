@@ -71,12 +71,14 @@ class WorkflowContractTests(unittest.TestCase):
         text=self.read(".github/workflows/quality-gates.yml")
         smoke=text.split("  instrumented-smoke:\n",1)[1].split("  required-7015-performance:\n",1)[0]
         line=next(line.strip().removeprefix('script: ') for line in smoke.splitlines() if line.strip().startswith('script: '))
-        self.assertEqual('bash scripts/run_native_acceptance.sh "${{ inputs.bake_numbers_native && \'true\' || \'false\' }}"',line)
+        self.assertEqual('bash scripts/run_native_acceptance.sh "${{ inputs.bake_numbers_native && \'true\' || \'false\' }}" "${{ inputs.exact_qa_timing && \'true\' || \'false\' }}"',line)
         line=line.replace('bash scripts/run_native_acceptance.sh','printf %s')
         for value in ['true','false']:
-            result=subprocess.run(['sh','-c',line.replace("${{ inputs.bake_numbers_native && 'true' || 'false' }}",value)],capture_output=True,text=True)
-            self.assertEqual(0,result.returncode,result.stderr)
-            self.assertEqual(value,result.stdout)
+            for exact in ['true','false']:
+                shell=line.replace("${{ inputs.bake_numbers_native && 'true' || 'false' }}",value).replace("${{ inputs.exact_qa_timing && 'true' || 'false' }}",exact)
+                result=subprocess.run(['sh','-c',shell],capture_output=True,text=True)
+                self.assertEqual(0,result.returncode,result.stderr)
+                self.assertEqual(value+exact,result.stdout)
         upload=smoke.split('name: Upload independent native group logs and exact exit codes',1)[1].split('      - name:',1)[0]
         self.assertIn('if: always()',upload)
         self.assertIn('name: native-acceptance-status',upload)

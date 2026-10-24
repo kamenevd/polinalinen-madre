@@ -4,6 +4,8 @@
 set -euo pipefail
 native="${1:?Expected explicit bake_numbers_native true or false}"
 case "$native" in true|false) ;; *) exit 2 ;; esac
+exact="${2:-false}"
+case "$exact" in true|false) ;; *) exit 2 ;; esac
 # QA now precedes the minified helper, so preserve its emulator-only serial guard
 # before the first lane can touch adb; never switch to another connected device.
 serial="$(adb get-serialno)"
@@ -24,7 +26,10 @@ run_group() {
     printf '%s\t%s\t%s\n' "$name" "${codes[0]}" "${codes[1]}" >> "$out/exit-codes.tsv"
     if (( codes[0] != 0 || codes[1] != 0 )); then result=1; fi
 }
-if [[ "$native" == true ]]; then
+if [[ "$exact" == true ]]; then
+    run_group exact-qa-timing python3 scripts/run_exact_qa_timing.py
+fi
+if [[ "$native" == true || "$exact" == true ]]; then
     # Ordinary, unmodified .qa must get its own attempt before legacy debug.
     run_group qa-runtime bash scripts/run_qa_runtime_acceptance.sh
     run_group minified-persistence python3 scripts/run_minified_plan_regression.py

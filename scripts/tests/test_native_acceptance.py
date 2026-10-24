@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class NativeAcceptanceTests(unittest.TestCase):
-    def run_coordinator(self, codes, native="true", missing=None, broken_log=False, serial="emulator-5554"):
+    def run_coordinator(self, codes, native="true", missing=None, broken_log=False, serial="emulator-5554", exact="false"):
         with tempfile.TemporaryDirectory(dir=os.environ.get("TMPDIR")) as temporary:
             root = Path(temporary)
             scripts = root / "scripts"
@@ -28,6 +28,8 @@ class NativeAcceptanceTests(unittest.TestCase):
                 ("minified-persistence", "run_minified_plan_regression.py", "py"),
                 ("legacy-debug-domain", "run_instrumented_acceptance.sh", "sh"),
             ]
+            if exact == "true":
+                lanes.insert(0, ("exact-qa-timing", "run_exact_qa_timing.py", "py"))
             for (name, filename, kind), code in zip(lanes, codes):
                 if filename == missing:
                     continue
@@ -40,7 +42,7 @@ class NativeAcceptanceTests(unittest.TestCase):
                 (scripts / filename).write_text(source)
             if broken_log:
                 (root / "performance-evidence/native-acceptance/qa-runtime.log").mkdir(parents=True)
-            result = subprocess.run(["bash", "scripts/run_native_acceptance.sh", native],
+            result = subprocess.run(["bash", "scripts/run_native_acceptance.sh", native, exact],
                                     cwd=root, env={**os.environ, "PATH": str(tools) + os.pathsep + os.environ["PATH"]},
                                     capture_output=True, text=True)
             out = root / "performance-evidence/native-acceptance"
@@ -68,6 +70,34 @@ class NativeAcceptanceTests(unittest.TestCase):
         self.assertEqual(1, result.returncode)
         self.assertEqual("group\texit_code\tlog_exit_code\nlegacy-debug-domain\t41\t0\n",
                          reports["exit-codes.tsv"])
+
+    def test_exact_first_all_sixteen_failure_combinations_keep_every_original_code(self):
+        for codes in itertools.product((0, 13), (0, 7), (0, 23), (0, 41)):
+            with self.subTest(codes=codes):
+                result, order, reports = self.run_coordinator(codes, exact="true")
+                self.assertEqual(["exact-qa-timing", "qa-runtime", "minified-persistence", "legacy-debug-domain"], order)
+                self.assertEqual(int(any(codes)), result.returncode)
+                self.assertEqual("group\texit_code\tlog_exit_code\n" + "".join(
+                    f"{name}\t{code}\t0\n" for name, code in zip(order, codes)), reports["exit-codes.tsv"])
+
+    def test_exact_alone_also_keeps_ordinary_minified_legacy(self):
+        result, order, reports = self.run_coordinator((13, 0, 0, 0), exact="true", native="false")
+        self.assertEqual(1, result.returncode)
+        self.assertEqual(["exact-qa-timing", "qa-runtime", "minified-persistence", "legacy-debug-domain"], order)
+
+    def test_exact_preparation_missing_still_runs_every_ordinary_lane(self):
+        result, order, reports = self.run_coordinator((0, 0, 0, 0), exact="true", missing="run_exact_qa_timing.py")
+        self.assertEqual(1, result.returncode)
+        self.assertEqual(["qa-runtime", "minified-persistence", "legacy-debug-domain"], order)
+        self.assertIn("exact-qa-timing\t2\t0\n", reports["exit-codes.tsv"])
+
+    def test_exact_log_failure_cannot_hide_later_group_results(self):
+        result, order, reports = self.run_coordinator((0, 7, 23, 41), exact="true", broken_log=True)
+        self.assertEqual(1, result.returncode)
+        self.assertIn("exact-qa-timing\t0\t0\n", reports["exit-codes.tsv"])
+        self.assertIn("qa-runtime\t7\t1\n", reports["exit-codes.tsv"])
+        self.assertIn("minified-persistence\t23\t0\n", reports["exit-codes.tsv"])
+        self.assertIn("legacy-debug-domain\t41\t0\n", reports["exit-codes.tsv"])
 
     def test_invalid_mode_fails_before_any_lane(self):
         result, order, reports = self.run_coordinator((0, 0, 0), native="invalid")

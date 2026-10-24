@@ -35,15 +35,20 @@ on:
         description: Reshoot full native number-stage acceptance without repeating performance measurement
         type: boolean
         default: false
+      exact_qa_timing:
+        description: Frozen issued debug15 to same-run R8 QA16 MainActivity/Oven/TOC timing before ordinary native QA
+        type: boolean
+        default: false
   schedule:
     # Takes effect only after an explicitly approved merge into default branch.
     - cron: "30 1 * * *"
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
-  group: ${{ inputs.bake_numbers_native && format('native-{0}-', github.sha) || '' }}quality-${{ github.workflow }}-${{ github.ref }}
+  group: ${{ (inputs.bake_numbers_native || inputs.exact_qa_timing) && format('native-{0}-', github.sha) || '' }}quality-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -117,7 +122,7 @@ jobs:
           python3 scripts/verify_qa_release_like.py .ci-delivery/outputs/apk/qa/app-qa.apk --mapping .ci-delivery/outputs/mapping/qa/mapping.txt > .ci-delivery/reports/qa-binary-provenance.json
           ! grep -Fq 'qa-persistence-api.pro' .ci-delivery/outputs/mapping/qa/configuration.txt
       - name: Extended visual verification (manual, nightly and RC)
-        if: (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && !inputs.fixes_7013_acceptance && !inputs.fixes_7014_acceptance && !inputs.fixes_7014_instrumented && !inputs.fixes_7015_huawei && !inputs.bake_numbers_native
+        if: (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && !inputs.fixes_7013_acceptance && !inputs.fixes_7014_acceptance && !inputs.fixes_7014_instrumented && !inputs.fixes_7015_huawei && !inputs.bake_numbers_native && !inputs.exact_qa_timing
         run: ./gradlew testDebugUnitTest verifyRoborazziDebug -Pmadre.extendedVerification=true --no-daemon --stacktrace --no-configuration-cache
       - name: FIXES frozen-head native acceptance (manual only)
         if: github.event_name == 'workflow_dispatch' && (inputs.fixes_7013_acceptance || inputs.fixes_7014_acceptance)
@@ -227,10 +232,11 @@ jobs:
     # RC release gate still requires a real success at this exact SHA.
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: ${{ inputs.exact_qa_timing && 90 || 45 }}
     env:
       MADRE_FIXES_7014_ACCEPTANCE: ${{ (inputs.fixes_7014_acceptance || inputs.fixes_7014_instrumented) && 'true' || 'false' }}
-      MADRE_FIXES_7015_ACCEPTANCE: ${{ (inputs.fixes_7015_huawei || inputs.bake_numbers_native) && 'true' || 'false' }}
+      MADRE_FIXES_7015_ACCEPTANCE: ${{ (inputs.fixes_7015_huawei || inputs.bake_numbers_native || inputs.exact_qa_timing) && 'true' || 'false' }}
+      MADRE_ISSUED15_DIR: ${{ github.workspace }}/.ci-exact/issued15
       MADRE_EXACT_QA_DIR: ${{ github.workspace }}/.ci-exact/qa
       MADRE_EXACT_QA_REGRESSION_DIR: ${{ github.workspace }}/.ci-exact/qa-regression
       MADRE_EXACT_QA_TEST_DIR: ${{ github.workspace }}/.ci-exact/qa-test
@@ -258,22 +264,22 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
       - name: Fetch immutable negative-control source
-        if: inputs.bake_numbers_native
+        if: inputs.bake_numbers_native || inputs.exact_qa_timing
         run: git fetch --no-tags origin 2880abbe51d85145c4b666d60f35153e05a02727
       - name: Download exact verified QA from this run, never rebuild a different delivery candidate
-        if: inputs.bake_numbers_native
+        if: inputs.bake_numbers_native || inputs.exact_qa_timing
         uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           name: madre-qa-release-like
           path: ${{ env.MADRE_EXACT_QA_DIR }}
       - name: Download corresponding minified QA instrumentation
-        if: inputs.bake_numbers_native
+        if: inputs.bake_numbers_native || inputs.exact_qa_timing
         uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
         with:
           name: madre-qa-regression-test
           path: ${{ env.MADRE_EXACT_QA_TEST_DIR }}
       - name: Download separately labelled test-only persistence target
-        if: inputs.bake_numbers_native
+        if: inputs.bake_numbers_native || inputs.exact_qa_timing
         uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
         with:
           name: madre-qa-regression-target
@@ -289,8 +295,24 @@ jobs:
           sdkmanager "build-tools;${MADRE_BUILD_TOOLS_VERSION}"
           ./gradlew :yandex-authsdk-330:mergeDebugAndroidTestManifest :app:assembleDebugAndroidTest --no-daemon --stacktrace --no-configuration-cache
       - name: Build immutable negative R8 control before AVD boot, not alongside emulator memory
-        if: inputs.bake_numbers_native
+        if: inputs.bake_numbers_native || inputs.exact_qa_timing
         run: python3 scripts/run_minified_plan_regression.py --prepare
+      - name: Download original issued15 bytes, never rebuild or repackage
+        if: inputs.exact_qa_timing
+        continue-on-error: true # exact lane fails closed; ordinary/minified/legacy must still run
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: madre-debug-apk
+          path: ${{ env.MADRE_ISSUED15_DIR }}
+          run-id: 40096655873
+          github-token: ${{ github.token }}
+      - name: Prepare only external timing driver and verify frozen target bytes before AVD
+        if: inputs.exact_qa_timing
+        continue-on-error: true # missing/failed preparation is a real coordinator lane failure
+        run: |
+          mkdir -p performance-evidence/exact-qa-timing
+          ./gradlew :macrobenchmark:assembleBenchmark --no-daemon --stacktrace --no-configuration-cache 2>&1 | tee performance-evidence/exact-qa-timing/driver-build.log
+          python3 scripts/run_exact_qa_timing.py --prepare 2>&1 | tee performance-evidence/exact-qa-timing/prepare.log
       - name: Run emulator smoke tests
         uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
         with:
@@ -300,7 +322,7 @@ jobs:
           profile: pixel_5
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: bash scripts/run_native_acceptance.sh "${{ inputs.bake_numbers_native && 'true' || 'false' }}"
+          script: bash scripts/run_native_acceptance.sh "${{ inputs.bake_numbers_native && 'true' || 'false' }}" "${{ inputs.exact_qa_timing && 'true' || 'false' }}"
       - name: Upload independent native group logs and exact exit codes
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -310,11 +332,19 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Upload actual non-debuggable QA runtime and owner diagnostics PNG
-        if: always() && inputs.bake_numbers_native
+        if: always() && (inputs.bake_numbers_native || inputs.exact_qa_timing)
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: qa-native-runtime
           path: performance-evidence/qa-runtime/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload exact frozen QA timing original raw, controls and checksums even on failure
+        if: always() && inputs.exact_qa_timing
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: exact-qa-timing
+          path: performance-evidence/exact-qa-timing/
           if-no-files-found: error
           retention-days: 14
       - name: Upload instrumentation reports

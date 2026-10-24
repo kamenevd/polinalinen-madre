@@ -25,6 +25,16 @@ class LockBusy(sqlite3.OperationalError):
 
 
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS yandex_bindings (
+    installation_id TEXT PRIMARY KEY REFERENCES installations(id),
+    uid TEXT NOT NULL,
+    bound_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_yandex_uid ON yandex_bindings(uid);
+CREATE TABLE IF NOT EXISTS yandex_epochs (
+    installation_id TEXT PRIMARY KEY REFERENCES installations(id),
+    epoch INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS installations (
     id TEXT PRIMARY KEY,
     credential_hash TEXT NOT NULL UNIQUE,
@@ -185,9 +195,11 @@ def init_db(db_path: str) -> None:
     try:
         conn.execute(f"PRAGMA busy_timeout={int(SQLITE_BUSY_MS)}")
         conn.execute("PRAGMA foreign_keys=ON")
+        version = conn.execute("PRAGMA user_version").fetchone()[0]
+        if version not in (0, 1, 2):
+            raise RuntimeError("unsupported voice database schema")
         conn.execute("PRAGMA journal_mode=WAL")
-        conn.executescript(SCHEMA)
-        conn.execute("PRAGMA user_version=1")
+        conn.executescript("BEGIN IMMEDIATE;\n" + SCHEMA + "\nPRAGMA user_version=2;\nCOMMIT;")
     finally:
         conn.close()
     os.chmod(path, 0o600)

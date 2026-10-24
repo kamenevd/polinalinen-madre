@@ -102,6 +102,11 @@ def installation_by_id(conn: sqlite3.Connection, installation_id: str) -> sqlite
 
 
 def _revoke_installation(conn: sqlite3.Connection, installation_id: str, now_ms: int) -> None:
+    # Prevent old codes/challenges resurrecting authority after logout/reselect.
+    conn.execute("UPDATE auth_codes SET used_at=? WHERE used_at IS NULL AND challenge_id IN "
+                 "(SELECT id FROM challenges WHERE installation_id=?)", (now_ms, installation_id))
+    conn.execute("UPDATE challenges SET consumed_at=? WHERE installation_id=? AND consumed_at IS NULL",
+                 (now_ms, installation_id))
     conn.execute(
         "UPDATE grants SET revoked_at=? WHERE installation_id=? AND revoked_at IS NULL",
         (now_ms, installation_id),

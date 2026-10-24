@@ -60,7 +60,8 @@ internal val BookRibbonHeight=44.dp
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
                 listOf(Atmosphere.DAWN,Atmosphere.DAY,Atmosphere.DUSK,Atmosphere.NIGHT).forEach { v ->
                     val colors=paperAt(v)
-                    Column(Modifier.weight(1f).background(colors.bg,RoundedCornerShape(18.dp)).border(1.dp,if(preferences.atmosphere==v)LocalPaper.current.acc else LocalPaper.current.line,RoundedCornerShape(18.dp)).then(bookAction("Атмосфера: ${v.label}"){preferences.chooseAtmosphere(v)}).padding(vertical=12.dp),horizontalAlignment=Alignment.CenterHorizontally) {
+                    val selected=preferences.atmosphere==v || preferences.atmosphere==Atmosphere.AUTO && activeAtmosphere==v
+                    Column(Modifier.weight(1f).background(colors.bg,RoundedCornerShape(18.dp)).border(if(selected)2.dp else 1.dp,if(selected)LocalPaper.current.acc else LocalPaper.current.line,RoundedCornerShape(18.dp)).then(bookAction("Атмосфера: ${v.label}"){preferences.chooseAtmosphere(v)}).padding(vertical=12.dp),horizontalAlignment=Alignment.CenterHorizontally) {
                         BookText("Aa",24,color=colors.ink)
                         Text(v.label,style = PaperType.caption,fontSize=11.sp,color=colors.ink2)
                     }
@@ -75,8 +76,7 @@ internal val BookRibbonHeight=44.dp
                 { preferences.chooseMode(ReadingMode.entries[it]) })
             Row(Modifier.fillMaxWidth().heightIn(min=58.dp),verticalAlignment=Alignment.CenterVertically) { Text("Меньше движения",Modifier.weight(1f));PaperSwitch(preferences.reducedMotion||com.polinalinen.madre.ui.kit.LocalCalmMode.current,preferences::setReduced) }
             Row(Modifier.fillMaxWidth().heightIn(min=58.dp),verticalAlignment=Alignment.CenterVertically) { Text("Тактильные отклики",Modifier.weight(1f));PaperSwitch(preferences.haptics,preferences::chooseHaptics) }
-            SmallLabel("На слабом устройстве и при выключенной системной анимации — плоский сдвиг.")
-            if(BuildConfig.DEBUG)PaperTextButton({context.startActivity(android.content.Intent().setClassName(context.packageName,"com.polinalinen.madre.ui.razvorot.RazvorotSceneActivity").putExtra("scene","paper"))},Modifier.fillMaxWidth().heightIn(min=48.dp),label="Посмотреть бумагу"){Text("Бумага")}
+            Text("На слабом устройстве и при выключенной системной анимации — плоский сдвиг.",style=PaperType.note,color=LocalPaper.current.ink2)
             Spacer(Modifier.height(24.dp))
         }
     }

@@ -10,6 +10,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.PhotoCamera
+import androidx.compose.material.icons.outlined.MenuBook
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.font.FontWeight
 
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -38,6 +42,7 @@ import com.polinalinen.madre.model.RecipeScale
 import com.polinalinen.madre.shelf.ShelfShareDecision
 import com.polinalinen.madre.shelf.ShelfSharePolicy
 import com.polinalinen.madre.ui.components.TracingPaper
+import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.kit.*
 import com.polinalinen.madre.ui.photo.PhotoAttachmentActions
 import com.polinalinen.madre.ui.photo.rememberPhotoAttachmentActions
@@ -111,7 +116,7 @@ import java.util.Locale
                 PaperNote(when(decision){
                     ShelfShareDecision.PUT_WITH_PHOTO->"Фото и запись появятся на полке семьи."
                     ShelfShareDecision.PUT_WITHOUT_PHOTO->"На полке будет запись без фотографии."
-                    else->"Запись останется только в твоей книге."
+                    else->"Запись останется только в вашей книге."
                 })
                 if(photoPath==null)PaperNote("Добавьте фото, чтобы показать кадр.")
             }
@@ -147,41 +152,50 @@ internal data class BakeFinalePageState(val name:String,val chapter:Int?,val por
                 val metadata=listOfNotNull(state.chapter?.let{"ГЛАВА %02d".format(it)},
                     state.portions?.let{"×$it СЕМЬИ"},state.minutes?.let{BookCatalog.duration(it)})
                 if(metadata.isNotEmpty())SmallLabel(metadata.joinToString(" · "),color=p.acc)
-                Text("Испе-\nчено.",style=PaperType.finale.copy(fontSize=(92f/displayScale).sp,lineHeight=(78f/displayScale).sp,letterSpacing=(-4f/displayScale).sp),
+                val titleStyle=PaperType.finale.copy(fontSize=(92f/displayScale).sp,lineHeight=(78f/displayScale).sp,letterSpacing=(-4f/displayScale).sp)
+                val heading:@Composable ()->Unit={Text("Испе-\nчено.",style=titleStyle,
                     color=p.ink,modifier=Modifier.graphicsLayer{alpha=reveal;translationY=if(reducedMotion)0f else (1-reveal)*24.dp.toPx()}
-                        .blur((if(reducedMotion)0f else (1-reveal)*5).dp).clearAndSetSemantics{contentDescription="Испечено"})
-                Text(state.name,style=PaperType.h2,color=p.ink)
-                Box(Modifier.fillMaxWidth()) {
-                    photo()
-                    state.completedAtMillis?.let{PaperBakeSeal(it,Modifier.align(Alignment.TopEnd).offset(y=(-28).dp)
-                        .graphicsLayer{alpha=stamp;scaleX=if(reducedMotion)1f else 1f+(1f-stamp)*1.2f;scaleY=scaleX})}
-                }
-                if(state.chapters.isNotEmpty()) {
-                    SmallLabel("КНИГА ИСПЕЧЕНА НА ${state.chapters.count{it}} ИЗ ${state.chapters.size}")
-                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(4.dp)) {
-                        state.chapters.forEach{done->Box(Modifier.weight(1f).height(14.dp).background(if(done)p.rib else p.line,RoundedCornerShape(3.dp)))}
+                        .blur((if(reducedMotion)0f else (1-reveal)*5).dp).clearAndSetSemantics{contentDescription="Испечено"})}
+                val seal:@Composable ()->Unit={state.completedAtMillis?.let{PaperBakeSeal(it,
+                    Modifier.graphicsLayer{alpha=stamp;scaleX=if(reducedMotion)1f else 1f+(1f-stamp)*1.2f;scaleY=scaleX})}}
+                BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    val measurer=rememberTextMeasurer()
+                    val density=LocalDensity.current
+                    val room=with(density){(maxWidth-104.dp).roundToPx()}
+                    val side=state.completedAtMillis!=null && measurer.measure("Испе-",titleStyle).size.width<=room
+                    if(side)Row(verticalAlignment=Alignment.Bottom) {
+                        Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                            heading();Text(state.name,style=PaperType.h2,color=p.ink)
+                        }
+                        seal()
+                    } else Column {
+                        heading()
+                        Row(verticalAlignment=Alignment.CenterVertically) {
+                            Text(state.name,style=PaperType.h2,color=p.ink,modifier=Modifier.weight(1f));seal()
+                        }
                     }
                 }
-                PaperCard {
+                photo()
+                HairRule()
                     Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                         val hours=state.minutes?.let{NumberFormat.getNumberInstance(Locale.forLanguageTag("ru")).apply{maximumFractionDigits=1}.format(it/60.0)}?:"—"
                         FinaleStat(hours,"часов по рецепту",Modifier.weight(1f))
                         FinaleStat(state.steps?.toString()?:"—","шагов в рецепте",Modifier.weight(1f))
                         FinaleStat(state.totalBakes.toString(),"всего в книге",Modifier.weight(1f))
                     }
-                }
+                HairRule()
                 extra()
                 Spacer(Modifier.height(12.dp))
             }
             PaperButton(finishLabel,onFinish,Modifier.fillMaxWidth().padding(horizontal=22.dp,vertical=12.dp),
-                enabled=enabled,variant=PaperButtonVariant.ACCENT)
+                enabled=enabled,variant=PaperButtonVariant.ACCENT,icon=Icons.Outlined.MenuBook)
         }
     }
 }
 
 @Composable private fun FinaleStat(value:String,label:String,modifier:Modifier) {
     Column(modifier,horizontalAlignment=Alignment.CenterHorizontally) {
-        Text(value,style=PaperType.number.copy(fontSize=34.sp),color=LocalPaper.current.ink)
+        Text(value,style=PaperType.h2.copy(fontSize=26.sp,fontWeight=FontWeight.Medium),color=LocalPaper.current.ink)
         Text(label,style=PaperType.caption,color=LocalPaper.current.ink2)
     }
 }
@@ -194,7 +208,7 @@ internal data class BakeFinalePageState(val name:String,val chapter:Int?,val por
         val file=PhotoStore.resolve(context,photo.path)
         file.isFile && file.canonicalFile.toPath().startsWith(context.filesDir.canonicalFile.toPath())
     }.getOrDefault(false)}.distinctBy{it.path}.take(4)}
-    val shape=RoundedCornerShape(16.dp)
+    val shape=RoundedCornerShape(20.dp)
     Column(verticalArrangement=Arrangement.spacedBy(6.dp)) {
     if(path!=null) {
         Box(Modifier.fillMaxWidth().height(230.dp).clip(shape)) {
@@ -207,21 +221,17 @@ internal data class BakeFinalePageState(val name:String,val chapter:Int?,val por
         PaperTextAction("Убрать фото",onRemove,enabled=enabled)
     } else {
         Column(Modifier.fillMaxWidth().heightIn(min=230.dp).clip(shape).background(p.bg2).drawBehind {
-            drawRoundRect(p.line,cornerRadius=CornerRadius(16.dp.toPx()),style=Stroke(1.dp.toPx(),pathEffect=PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(),5.dp.toPx()))))
-        }.padding(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-            Spacer(Modifier.height(54.dp))
-            Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-                PaperButton("Снять",actions.camera,Modifier.width(112.dp),enabled=enabled,variant=PaperButtonVariant.ACCENT)
-                if(ownedRecent.isNotEmpty())PaperNote("или из последних:")
-            }
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+            drawRoundRect(p.line,cornerRadius=CornerRadius(20.dp.toPx()),style=Stroke(1.dp.toPx(),pathEffect=PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(),5.dp.toPx()))))
+        }.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp,Alignment.CenterVertically),horizontalAlignment=Alignment.CenterHorizontally) {
+            PaperButton("Снять",actions.camera,Modifier.width(144.dp),enabled=enabled,variant=PaperButtonVariant.ACCENT,icon=Icons.Outlined.PhotoCamera)
+            if(ownedRecent.isNotEmpty())Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
                 ownedRecent.forEach { item->
                     AsyncImage(ImageRequest.Builder(context).data(PhotoStore.resolve(context,item.path)).size(120).build(),
                         "Недавнее фото: ${item.caption}",Modifier.size(56.dp).clip(RoundedCornerShape(10.dp))
                             .clickable(enabled=enabled,onClickLabel="Вклеить недавнее фото"){actions.recent(item.path)},contentScale=ContentScale.Crop)
                 }
-                PaperButton("Галерея",actions.gallery,Modifier.width(112.dp),enabled=enabled,variant=PaperButtonVariant.SECONDARY)
             }
+            PaperTextAction("ГАЛЕРЕЯ",actions.gallery,enabled=enabled)
         }
     }
     }
@@ -229,9 +239,7 @@ internal data class BakeFinalePageState(val name:String,val chapter:Int?,val por
 
 @Composable internal fun BakeFinaleShareChoices(decision:ShelfShareDecision,photoAvailable:Boolean,
     busy:Boolean,onDecision:(ShelfShareDecision)->Unit) {
-    FlowRow(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
-        PaperChip("С фото",decision==ShelfShareDecision.PUT_WITH_PHOTO,{onDecision(ShelfShareDecision.PUT_WITH_PHOTO)},enabled=!busy && photoAvailable)
-        PaperChip("Без фото",decision==ShelfShareDecision.PUT_WITHOUT_PHOTO,{onDecision(ShelfShareDecision.PUT_WITHOUT_PHOTO)},enabled=!busy)
-        PaperChip("Только мне",decision==ShelfShareDecision.KEEP,{onDecision(ShelfShareDecision.KEEP)},enabled=!busy)
-    }
+    val options=listOf(ShelfShareDecision.PUT_WITH_PHOTO,ShelfShareDecision.PUT_WITHOUT_PHOTO,ShelfShareDecision.KEEP)
+    PaperSegmented(listOf("С фото","Без фото","Только мне"),options.indexOf(decision),{onDecision(options[it])},
+        enabled={index->!busy && (index!=0 || photoAvailable)})
 }

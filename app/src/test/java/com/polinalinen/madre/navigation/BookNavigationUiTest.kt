@@ -142,7 +142,7 @@ class BookNavigationUiTest {
             try {
                 rule.waitUntil(10_000) {
                     // Fetch semantics first: a short-circuited route check never synchronizes the host looper.
-                    val ready=rule.onAllNodesWithText("Дальше").fetchSemanticsNodes().isNotEmpty()
+                    val ready=rule.onAllNodesWithText("Дальше →").fetchSemanticsNodes().isNotEmpty()
                     ready && nav.currentDestination?.route==MadreDestinations.BAKE
                 }
             } catch(failure:Throwable) {

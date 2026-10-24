@@ -52,7 +52,7 @@ import androidx.compose.runtime.remember
     val p=LocalPaper.current
     val paragraph=buildAnnotatedString {
         append(text)
-        Regex("\\b\\d+(?:[,.]\\d+)?\\s*(?:г|мл)\\b").findAll(text).forEach { match ->
+        Regex("\\b\\d+(?:[,.]\\d+)?(?:\\s*[–—-]\\s*\\d+(?:[,.]\\d+)?)?\\s*(?:[°º][cCсС]?|мин(?:ут[а-я]*)?|мл|кг|г)(?=\\b|\\s|[.,;]|$)").findAll(text).forEach { match ->
             addStyle(PaperType.ui.toSpanStyle().copy(fontWeight=FontWeight.Bold,color=p.ink),match.range.first,match.range.last+1)
         }
     }

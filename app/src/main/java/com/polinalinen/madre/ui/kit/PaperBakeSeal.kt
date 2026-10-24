@@ -28,13 +28,13 @@ import java.util.Locale
     val scale=LocalDensity.current.fontScale.coerceAtLeast(1f)
     Box(modifier.size(104.dp).rotate(-12f).clearAndSetSemantics{contentDescription="Испечено · $label · $weekday"},contentAlignment=Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
-            drawCircle(p.rib,radius=size.minDimension*.47f,style=Stroke(1.5.dp.toPx()))
-            drawCircle(p.rib,radius=size.minDimension*.36f,style=Stroke(.8.dp.toPx()))
+            drawCircle(p.rib,radius=size.minDimension*.47f)
+            drawCircle(Illustration.CoverLettering.copy(alpha=.7f),radius=size.minDimension*.40f,style=Stroke(.8.dp.toPx()))
         }
         Column(horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(2.dp)) {
-            Text("ИСПЕЧЕНО",style=PaperType.overline.copy(fontSize=(8f/scale).sp,lineHeight=(12f/scale).sp,letterSpacing=(1f/scale).sp),color=p.rib)
-            Text(label,style=PaperType.h2.copy(fontSize=(22f/scale).sp,lineHeight=(28f/scale).sp),color=p.rib)
-            Text(weekday,style=PaperType.note.copy(fontSize=(11f/scale).sp,lineHeight=(16f/scale).sp),color=p.rib)
+            Text("ИСПЕЧЕНО",style=PaperType.overline.copy(fontSize=(8f/scale).sp,lineHeight=(12f/scale).sp,letterSpacing=(1f/scale).sp),color=Illustration.CoverLettering)
+            Text(label,style=PaperType.h2.copy(fontSize=(22f/scale).sp,lineHeight=(28f/scale).sp),color=Illustration.CoverLettering)
+            Text(weekday,style=PaperType.note.copy(fontSize=(11f/scale).sp,lineHeight=(16f/scale).sp),color=Illustration.CoverLettering)
         }
     }
 }

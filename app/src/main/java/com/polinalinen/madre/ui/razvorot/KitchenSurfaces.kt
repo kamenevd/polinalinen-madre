@@ -62,18 +62,16 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
         val bindings=remember(session.recipe){RecipeScaler.scalableBindings(session.recipe)}
         FlowRow(Modifier.padding(vertical=12.dp),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
             listOf(-5,5,15).forEach { minutes -> PaperChip(if(minutes>0)"+$minutes мин" else "−5 мин",false,{onAdjustMinutes(minutes)},enabled=session.restoredStepValid) }
-            PaperChip("Крупно",false,{full=true})
+            PaperChip("Крупно",false,{full=true},icon=Icons.Outlined.Fullscreen)
         }
         PaperNote(com.polinalinen.madre.ui.screens.BakingTimerCopy.moodLine(session.currentStep.type==StepType.WAIT,session.isPaused,remaining))
         PaperCard(Modifier.padding(top=16.dp)) {
             PaperStepParagraph(session.trustedPortions?.takeIf { session.restoredStepValid }?.let { RecipeScaler.scaledStepText(session.currentStep.description,it.toDouble(),bindings) } ?: "Порции не сохранены — подтвердите количество для этой выпечки.")
         }
         if (session.trustedPortions == null) com.polinalinen.madre.ui.screens.UnknownPortionsConfirmation(session.id, onConfirmPortions)
-        val temperatures=Regex("(\\d{2,3})\\s*[°º]\\s*[cсCС]?").findAll(session.currentStep.description).map{it.groupValues[1]+"°"}.distinct().toList()
-        if(temperatures.isNotEmpty())Row(Modifier.padding(top=12.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)) {temperatures.forEach{Text(it,Modifier.background(p.bg2,RoundedCornerShape(16.dp)).padding(horizontal=12.dp,vertical=8.dp),style = PaperType.caption,fontWeight=FontWeight.SemiBold,color=p.ink2)}}
         session.recipe.timeline.getOrNull(session.currentStepIndex+1)?.let {
-            PaperCard(Modifier.padding(top=16.dp)) {
-                SmallLabel("ДАЛЬШЕ · ЧЕРЕЗ ${BookCatalog.duration((remaining/60).toInt())}")
+            PaperCard(Modifier.padding(top=16.dp),containerColor=p.acc2) {
+                SmallLabel("ДАЛЬШЕ · ЧЕРЕЗ ${BookCatalog.duration((remaining/60+if(remaining%60>0)1 else 0).coerceIn(0L,Int.MAX_VALUE.toLong()).toInt())}",color=p.acc)
                 BookText("${it.title} · ${it.durationMinutes} мин",19)
                 if(it.requiresButterPrep && session.currentStep.type==StepType.WAIT && remaining in 1..1800)
                     PaperNote("Скоро понадобится мягкое масло — достаньте его согреться")
@@ -83,8 +81,8 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
       }
       Column(Modifier.fillMaxWidth().padding(horizontal=22.dp,vertical=10.dp)) {
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)) {
-            PaperButton(if(session.isPaused)"Продолжить" else "Пауза",onPause,Modifier.weight(1f))
-            PaperButton(if(session.isLastStep)"Испечено" else "Дальше",onNext,Modifier.weight(1f),true, enabled = !session.isLastStep || session.trustedPortions != null)
+            PaperButton(if(session.isPaused)"Продолжить" else "Пауза",onPause,Modifier.weight(1f),variant=PaperButtonVariant.SECONDARY)
+            PaperButton(if(session.isLastStep)"Испечено" else "Дальше →",onNext,Modifier.weight(1f),true, enabled = !session.isLastStep || session.trustedPortions != null)
         }
         if (onOpenAlice != null && com.polinalinen.madre.config.FeatureFlags.ALICE) PaperAliceButton(onOpenAlice, Modifier.fillMaxWidth())
         if(com.polinalinen.madre.config.FeatureFlags.YANDEX_ID)PaperTextAction("Таймер на Станции",{stationTimer=true})

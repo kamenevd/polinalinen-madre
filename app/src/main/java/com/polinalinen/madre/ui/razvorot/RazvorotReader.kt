@@ -35,6 +35,7 @@ import com.polinalinen.madre.ui.screens.RecipeChapterContent
 import com.polinalinen.madre.ui.screens.ChapterScrollNavigation
 import com.polinalinen.madre.ui.screens.ChapterScrollState
 import com.polinalinen.madre.ui.components.bookAction
+import com.polinalinen.madre.ui.components.HairRule
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Edit

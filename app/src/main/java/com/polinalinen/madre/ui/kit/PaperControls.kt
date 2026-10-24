@@ -113,32 +113,35 @@ enum class PaperButtonVariant { PRIMARY, ACCENT, SECONDARY, TEXT }
 }
 
 @Composable fun PaperChip(label: String, selected: Boolean, onClick: () -> Unit,
-    modifier: Modifier = Modifier, enabled: Boolean = true) {
+    modifier: Modifier = Modifier, enabled: Boolean = true,icon:ImageVector?=null) {
     val p = LocalPaper.current
     Box(modifier.heightIn(min = 48.dp).selectable(selected = selected, enabled = enabled,
         role = Role.RadioButton, onClick = onClick), contentAlignment = Alignment.Center) {
         Box(Modifier.alpha(if(enabled)1f else .4f).clip(RoundedCornerShape(18.dp)).background(if (selected) p.acc2 else p.bg2)
             .padding(horizontal = 14.dp, vertical = 8.dp)) {
-            Text(label, style = PaperType.ui.copy(fontSize = 13.sp), color = if (selected) p.acc else p.mut)
+            Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(5.dp)) {
+                if(icon!=null)Icon(icon,null,Modifier.size(18.dp),tint=if(selected)p.acc else p.ink2)
+                Text(label, style = PaperType.ui.copy(fontSize = 13.sp), color = if (selected) p.acc else p.mut)
+            }
         }
     }
 }
 
 @Composable fun PaperSegmented(labels: List<String>, selectedIndex: Int, onSelect: (Int) -> Unit,
-    modifier: Modifier = Modifier, label: String? = null) {
+    modifier: Modifier = Modifier, label: String? = null,enabled:(Int)->Boolean={true}) {
     val p = LocalPaper.current
     Row(modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(p.bg2).padding(3.dp)) {
         labels.forEachIndexed { index, optionLabel ->
             Box(Modifier.weight(1f).heightIn(min = 48.dp).clip(RoundedCornerShape(22.dp))
                 .background(if (index == selectedIndex) p.ink else Color.Transparent)
-                .selectable(index == selectedIndex, role = Role.RadioButton, onClick = { onSelect(index) })
+                .selectable(index == selectedIndex,enabled=enabled(index),role = Role.RadioButton, onClick = { onSelect(index) })
                 .semantics {
                     onClick(if (label == null) optionLabel else "$label: $optionLabel", null)
                     if (label != null) contentDescription = "$label, $optionLabel"
                     stateDescription = "${index + 1} из ${labels.size}"
                 }
                 .padding(horizontal = 6.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
-                Text(optionLabel, color = if (index == selectedIndex) p.bg else p.mut,
+                Text(optionLabel, color = (if (index == selectedIndex) p.bg else p.mut).copy(alpha=if(enabled(index))1f else .4f),
                     style = PaperType.ui.copy(fontSize = 12.sp), textAlign = TextAlign.Center)
             }
         }
@@ -199,7 +202,7 @@ enum class PaperButtonVariant { PRIMARY, ACCENT, SECONDARY, TEXT }
     }
 }
 
-/** Designer refinement: a thin track and terracotta thumb, not Material's toggle. */
+/** FIXES7.0.13 canonical 52×32 track, 24dp card thumb; the accessible target remains 52×48. */
 @Composable fun PaperSwitch(checked: Boolean, onCheckedChange: ((Boolean) -> Unit)?,
     modifier: Modifier = Modifier, enabled: Boolean = true) {
     val p = LocalPaper.current
@@ -210,16 +213,9 @@ enum class PaperButtonVariant { PRIMARY, ACCENT, SECONDARY, TEXT }
             role = Role.Switch, onValueChange = onCheckedChange) else Modifier), contentAlignment = Alignment.Center) {
         Canvas(Modifier.size(52.dp, 32.dp)) {
             val alpha = if (enabled) 1f else .4f
-            if (checked) drawLine(p.rib.copy(alpha = alpha),
-                Offset(8.dp.toPx(), center.y), Offset(size.width - 8.dp.toPx(), center.y),
-                3.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
-            else drawRoundRect(p.mut.copy(alpha = alpha),
-                topLeft = Offset(5.dp.toPx(), center.y - 6.dp.toPx()),
-                size = androidx.compose.ui.geometry.Size(size.width - 10.dp.toPx(), 12.dp.toPx()),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(6.dp.toPx()),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(1.5.dp.toPx()))
-            drawCircle((if (checked) p.rib else p.card).copy(alpha = alpha), 10.dp.toPx(),
-                Offset(12.dp.toPx() + (size.width - 24.dp.toPx()) * position, center.y))
+            drawRoundRect((if(checked)p.ink else p.line).copy(alpha=alpha),
+                cornerRadius=androidx.compose.ui.geometry.CornerRadius(16.dp.toPx()))
+            drawCircle(p.card.copy(alpha=alpha),12.dp.toPx(),Offset(16.dp.toPx()+20.dp.toPx()*position,center.y))
         }
     }
 }

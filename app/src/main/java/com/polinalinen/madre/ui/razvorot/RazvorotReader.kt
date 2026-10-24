@@ -255,7 +255,7 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
             if(chrome) {
                 edgeMessage?.let { Text(it,style=PaperType.note,color=p.acc,modifier=Modifier.align(Alignment.BottomCenter)
                     .padding(start=20.dp,end=20.dp,bottom=footerHeight+8.dp).testTag("chapter-edge").semantics { liveRegion=LiveRegionMode.Polite }) }
-                Row(Modifier.align(Alignment.TopCenter).fillMaxWidth().background(p.glass)
+                Row(Modifier.align(Alignment.TopCenter).fillMaxWidth().background(p.glass).testTag("chapter-header")
                     .onSizeChanged { savedHeader=floatArrayOf(maxWidth.value,density.density,density.fontScale,with(density){it.height.toDp().value}) }
                     .windowInsetsPadding(stableInsets.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
                     .padding(horizontal=4.dp),verticalAlignment=Alignment.CenterVertically) {

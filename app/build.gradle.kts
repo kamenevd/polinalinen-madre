@@ -169,9 +169,9 @@ android {
     // MigrationTestHelper ищет схемы среди ассетов инструментального APK —
     // без этого он не сможет собрать БД старой версии и молча провалит тест.
     sourceSets {
-        getByName("benchmark") { java.srcDir("src/debug/java") }
+        getByName("benchmark") { kotlin.directories.add("src/debug/java") }
         getByName("nonMinifiedBenchmark") {
-            java.srcDir("src/debug/java")
+            kotlin.directories.add("src/debug/java")
             manifest.srcFile("src/benchmark/AndroidManifest.xml")
         }
         getByName("androidTest") {

@@ -15,7 +15,7 @@ private fun routeIntent(scene:String)=Intent().setClassName(TARGET,"com.polinali
     .putExtra("scene",scene).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
 private fun MacrobenchmarkScope.scroll() {
     val x=device.displayWidth/2;val top=device.displayHeight/4;val bottom=device.displayHeight*3/4
-    repeat(3){device.swipe(x,bottom,x,top,30);device.waitForIdle();device.swipe(x,top,x,bottom,30);device.waitForIdle()}
+    repeat(3){device.swipe(x,bottom,x,top,30);device.waitForIdle(500);device.swipe(x,top,x,bottom,30);device.waitForIdle(500)}
 }
 @RunWith(AndroidJUnit4::class)
 class ScrollBenchmarks {
@@ -23,7 +23,7 @@ class ScrollBenchmarks {
     private fun measure(route:String)=benchmark.measureRepeated(
         packageName=TARGET,metrics=listOf(FrameTimingMetric()),iterations=5,
         compilationMode=CompilationMode.None(),startupMode=StartupMode.WARM,
-        setupBlock={startActivityAndWait(routeIntent(route));device.waitForIdle()},
+        setupBlock={startActivityAndWait(routeIntent(route));device.waitForIdle(500)},
         measureBlock={scroll()})
     @Test fun tocScroll()=measure(routes[0])
     @Test fun ovenScroll()=measure(routes[1])

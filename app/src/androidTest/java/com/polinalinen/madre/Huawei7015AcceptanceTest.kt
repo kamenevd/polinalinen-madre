@@ -52,6 +52,7 @@ class Huawei7015AcceptanceTest {
         val recipes=kotlinx.coroutines.runBlocking{com.polinalinen.madre.data.repository.RecipeRepository(rule.activity).getRecipes()}
         for(recipe in recipes) {
             scene("chapter-end-edge:${recipe.id}")
+            rule.onNode(hasText(recipe.name) and hasAnyAncestor(hasTestTag("chapter-header"))).assertIsDisplayed()
             rule.onNodeWithContentDescription("Пометки этой главы").assertDoesNotExist()
             val last=page();assertTrue(last>2)
             rule.onNodeWithTag("paper-turn").performTouchInput{click(androidx.compose.ui.geometry.Offset(width*.12f,center.y))}
@@ -59,6 +60,7 @@ class Huawei7015AcceptanceTest {
             rule.onNodeWithTag("paper-turn").performTouchInput{swipe(androidx.compose.ui.geometry.Offset(width*.2f,center.y),androidx.compose.ui.geometry.Offset(width*.85f,center.y),150)}
             rule.waitUntil(5_000){page()==last-2}
             scene("chapter-title:${recipe.id}")
+            rule.onNode(hasText(recipe.name) and hasAnyAncestor(hasTestTag("chapter-header"))).assertIsDisplayed()
             assertEquals(1,page())
             rule.onNodeWithTag("paper-turn").performTouchInput{click(androidx.compose.ui.geometry.Offset(width*.12f,center.y))}
             rule.waitForIdle();assertEquals(1,page())

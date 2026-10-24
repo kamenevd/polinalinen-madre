@@ -29,7 +29,6 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -351,7 +350,11 @@ fun RecipeChapterContent(recipe: Recipe, scaleFactor: Double, textSize: Float = 
     val requested = navigation?.let { (it.pageAnchors + it.anchor).distinct() }.orEmpty()
     val currentNavigation by rememberUpdatedState(navigation)
 
-    val layoutKey = "$viewportWidth:$fontScale:$textSize:$scaleFactor"
+    // The effect key and readiness guard must use the SAME composition snapshot.
+    // Live viewportWidth may already be measured while the captured layoutKey
+    // is still unmeasured, incorrectly replacing restoration with an anchor seek.
+    val measuredWidth = viewportWidth
+    val layoutKey = "$measuredWidth:$fontScale:$textSize:$scaleFactor"
     fun top(coordinates: androidx.compose.ui.layout.LayoutCoordinates) =
         (coordinates.positionInRoot().y - viewportTop + scroll.value).toInt()
     fun block(anchor: String) = Modifier.onGloballyPositioned { anchors.block(anchor, top(it)) }
@@ -360,18 +363,12 @@ fun RecipeChapterContent(recipe: Recipe, scaleFactor: Double, textSize: Float = 
     }
     LaunchedEffect(navigation?.request, layoutKey) {
         val target = navigation ?: return@LaunchedEffect
-        if (viewportWidth == 0) return@LaunchedEffect
+        if (measuredWidth == 0) return@LaunchedEffect
         val restored = cursor.pendingRestore
         val explicitSeek = cursor.processed != target.request
-        android.util.Log.d("N2Restore", "request=${target.request} processed=${cursor.processed} pending=$restored stored=${cursor.geometry} layout=$layoutKey value=${scroll.value} max=${scroll.maxValue}")
         if (restored != null && !explicitSeek && cursor.geometry == layoutKey) {
             snapshotFlow { anchors.positions["${recipe.id}:end"] }.filterNotNull().first()
-            // Let the newly measured reader chrome/content commit before applying
-            // the saved pixels. Do not publish an intermediate viewport bookmark.
-            withFrameNanos { }
-            android.util.Log.d("N2Restore", "restore before target=$restored value=${scroll.value} max=${scroll.maxValue}")
             scroll.scrollTo(restored)
-            android.util.Log.d("N2Restore", "restore after value=${scroll.value} max=${scroll.maxValue}")
             cursor.processed = target.request
             cursor.pendingRestore = null
             return@LaunchedEffect
@@ -379,7 +376,6 @@ fun RecipeChapterContent(recipe: Recipe, scaleFactor: Double, textSize: Float = 
         if (!explicitSeek && cursor.geometry == layoutKey) return@LaunchedEffect
         val destinationAnchor = if (explicitSeek) target.seekAnchor else target.anchor
         val destination = snapshotFlow { anchors.positions[destinationAnchor] }.filterNotNull().first()
-        android.util.Log.d("N2Restore", "anchor target=$destinationAnchor destination=$destination value=${scroll.value} max=${scroll.maxValue}")
         scroll.scrollTo(destination)
         cursor.processed = target.request
         cursor.geometry = layoutKey

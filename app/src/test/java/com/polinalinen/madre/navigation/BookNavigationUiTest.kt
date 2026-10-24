@@ -282,21 +282,7 @@ class BookNavigationUiTest {
         val prefs=ReadingPreferences(app,"nav-step-scroll-${UUID.randomUUID()}")
         val restoration=StateRestorationTester(rule)
         var actualNavigation:com.polinalinen.madre.ui.screens.ChapterScrollNavigation?=null
-        val savedRegistryValues=mutableListOf<String>()
-        val restoredRegistryValues=mutableListOf<String>()
         restoration.setContent { val density=LocalDensity.current
-            val originalRegistry=requireNotNull(androidx.compose.runtime.saveable.LocalSaveableStateRegistry.current)
-            val tracingRegistry=remember(originalRegistry) {
-                object:androidx.compose.runtime.saveable.SaveableStateRegistry by originalRegistry {
-                    override fun registerProvider(key:String,valueProvider:()->Any?)=
-                        originalRegistry.registerProvider(key) {
-                            valueProvider().also{savedRegistryValues+="$key=$it"}
-                        }
-                    override fun consumeRestored(key:String):Any?=
-                        originalRegistry.consumeRestored(key).also{restoredRegistryValues+="$key=$it"}
-                }
-            }
-            CompositionLocalProvider(androidx.compose.runtime.saveable.LocalSaveableStateRegistry provides tracingRegistry) {
             CompositionLocalProvider(LocalDensity provides Density(density.density,2f)) {
                 RazvorotTheme(prefs,force=Atmosphere.NIGHT) {
                     RazvorotReader(recipes,recipe.id,prefs,{},{},{},initialStep=2,scaleFactor=2.0,
@@ -305,7 +291,6 @@ class BookNavigationUiTest {
                             com.polinalinen.madre.ui.screens.RecipeChapterContent(r,2.0,textSize=prefs.textSize,navigation=navigation)
                         })
                 }
-            }
             }
         }
         rule.waitForIdle()
@@ -317,8 +302,7 @@ class BookNavigationUiTest {
         val before=cursorDescription()
         restoration.emulateSavedInstanceStateRestore();rule.waitForIdle()
         val after=cursorDescription()
-        val placementTrace=org.robolectric.shadows.ShadowLog.getLogsForTag("N2Restore").joinToString("; "){it.msg}
-        assertEquals("Actual reader cursor before=$before after=$after saved=$savedRegistryValues restored=$restoredRegistryValues placement=$placementTrace",position,scrollOffset(),.01f)
+        assertEquals("Actual reader cursor before=$before after=$after",position,scrollOffset(),.01f)
         rule.onNodeWithText(recipe.timeline[2].title.uppercase()).assertIsDisplayed()
         rule.onNode(SemanticsMatcher("footer seeks actual title") {
             it.config.getOrNull(SemanticsActions.OnClick)?.label=="Страница 1"

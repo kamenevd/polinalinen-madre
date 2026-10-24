@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.layout.ContentScale
@@ -123,14 +124,16 @@ import androidx.compose.runtime.remember
 }
 
 @Composable fun PaperBakeCard(title: String, overline: String, image: Int, progress: Float,
-    onClick: () -> Unit, modifier: Modifier = Modifier, timer: @Composable () -> Unit) {
+    onClick: () -> Unit, modifier: Modifier = Modifier, overlineColor:Color=LocalPaper.current.mut,
+    actions:@Composable ()->Unit={},timer: @Composable () -> Unit) {
     val p = LocalPaper.current
     PaperCard(modifier.then(bookAction("Открыть выпечку: $title", onClick = onClick)),contentPadding=PaddingValues(0.dp)) {
         Row(Modifier.padding(18.dp),verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             Image(painterResource(image), null, Modifier.size(72.dp).clip(RoundedCornerShape(14.dp)), contentScale = ContentScale.Crop)
-            Column(Modifier.weight(1f)) { SmallLabel(overline); Text(title, style = PaperType.title, color = p.ink); timer() }
+            Column(Modifier.weight(1f)) { SmallLabel(overline,color=overlineColor); Text(title, style = PaperType.title, color = p.ink); timer() }
             Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, tint = p.mut)
         }
+        actions()
         PaperProgress(progress, Modifier.fillMaxWidth())
     }
 }

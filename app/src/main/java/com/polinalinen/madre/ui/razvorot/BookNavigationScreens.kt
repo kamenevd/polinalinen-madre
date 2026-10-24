@@ -122,12 +122,12 @@ import androidx.compose.ui.Alignment
         visiblePlans.forEach { (plan,recipe) -> key(plan.id) {
             val overdue=plan.startAtMillis<now
             PaperBakeCard(recipe.name,if(overdue)"ПОРА НАЧИНАТЬ · ×${plan.portions}" else "ЗАПЛАНИРОВАНО · ×${plan.portions}",
-                recipePhoto(recipe.id),0f,{onOpenPlan(plan)}) {
+                recipePhoto(recipe.id),0f,{onOpenPlan(plan)},overlineColor=if(overdue)p.rib else p.mut,
+                actions={if(overdue)Row(Modifier.fillMaxWidth().padding(horizontal=18.dp,vertical=8.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                        PaperButton("Начать",{onStartPlan(plan)},Modifier.weight(1f),variant=PaperButtonVariant.ACCENT)
+                        PaperButton("Через 30 мин",{onSnoozePlan(plan)},Modifier.weight(1f),variant=PaperButtonVariant.SECONDARY)
+                    }}) {
                 PaperNote(if(overdue)"План ждёт вас — таймер ещё не запущен" else "начнём ${relativeBookTime(plan.startAtMillis,now,clock)}")
-                if(overdue)Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                    PaperButton("Начать",{onStartPlan(plan)},Modifier.weight(1f),variant=PaperButtonVariant.ACCENT)
-                    PaperButton("Через 30 мин",{onSnoozePlan(plan)},Modifier.weight(1f),variant=PaperButtonVariant.SECONDARY)
-                }
             }
         } }
         Text("Что испечь",style=PaperType.h2,color=p.ink,modifier=Modifier.padding(top=10.dp))

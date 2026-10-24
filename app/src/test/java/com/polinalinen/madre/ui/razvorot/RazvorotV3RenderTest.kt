@@ -2,6 +2,8 @@ package com.polinalinen.madre.ui.razvorot
 
 import com.polinalinen.madre.ui.kit.*
 import android.content.Context
+import androidx.compose.ui.platform.LocalContext
+import com.polinalinen.madre.utils.PhotoStore
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.takahirom.roborazzi.*
@@ -31,6 +33,9 @@ class RazvorotV3RenderTest {
         val output=File(module,"build/outputs/roborazzi/key/$scene-${theme.captureName()}.png").absoluteFile
         output.parentFile.mkdirs()
         captureRoboImage(filePath=output.path,roborazziOptions=RoborazziOptions(taskType=RoborazziTaskType.Record)) {
+            // Assert actual ownership at the capture host too; never relax production's private-file fence.
+            val photoContext=LocalContext.current
+            check(photos.all{PhotoStore.resolve(photoContext,it.path).isFile}){"Native photo fixture belongs to a different capture owner"}
             RazvorotDebugScene(scene,recipes,theme,photos)
         }
         assertThat(output.isFile).isTrue()

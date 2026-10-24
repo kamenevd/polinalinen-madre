@@ -22,15 +22,33 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
+import coil.imageLoader
+import coil.request.ImageRequest
 
 /** Test-sandbox files from bundled recipe art, never actual user photos or Room records. */
-internal fun nativeSyntheticPhotos(context:Context):List<GalleryPhoto> = runBlocking {
-    RecipeRepository(context).getRecipes().take(4).mapIndexed { index,recipe ->
+internal fun nativeSyntheticPhotos(context:Context):List<GalleryPhoto> {
+    val photos=runBlocking { RecipeRepository(context).getRecipes().take(4).mapIndexed { index,recipe ->
         val bitmap=requireNotNull(BitmapFactory.decodeResource(context.resources,recipePhoto(recipe.id)))
         val path=try {requireNotNull(PhotoStore.commitBitmap(context,bitmap,PhotoStore.PhotoKind.BAKE,9000L+index))} finally {bitmap.recycle()}
-
         GalleryPhoto("synthetic-$index",path,1792731600000L-index,"Тестовый снимок ${index+1}")
+    } }
+    // Decode actual test-owned JPEGs, never an ImageLoader fake. A first-frame capture
+    // otherwise races Coil IO and records empty thumbnails while those files are loading.
+    val remaining=java.util.concurrent.atomic.AtomicInteger(photos.size)
+    val errors=java.util.concurrent.ConcurrentLinkedQueue<String>()
+    photos.forEach{photo->
+        context.imageLoader.enqueue(ImageRequest.Builder(context).data(PhotoStore.resolve(context,photo.path)).size(512)
+            .listener(onSuccess={_,_->remaining.decrementAndGet()},onError={_,result->
+                errors.add(result.throwable.javaClass.simpleName);remaining.decrementAndGet()
+            }).build())
     }
+    val deadline=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(10)
+    while(remaining.get()>0 && System.nanoTime()<deadline) {
+        org.robolectric.shadows.ShadowLooper.idleMainLooper()
+        Thread.sleep(5)
+    }
+    check(remaining.get()==0 && errors.isEmpty()){"Native private photo decode did not complete: pending=${remaining.get()} errors=$errors"}
+    return photos
 }
 
 /** Explicit manual-only frozen-head capture, not a PR pixel gate or live auth/device acceptance. */
@@ -41,7 +59,7 @@ internal fun nativeSyntheticPhotos(context:Context):List<GalleryPhoto> = runBloc
 class Fixes7013ExtendedRenderTest {
     @get:Rule val rule=createAndroidComposeRule<RazvorotSceneActivity>()
     @Test fun captureRequestedStatesAtOneHead() {
-        val context=ApplicationProvider.getApplicationContext<Context>()
+        val context=rule.activity
         val photos=nativeSyntheticPhotos(context)
         assertEquals(4,photos.size)
         val module=if(File("app/src/main/AndroidManifest.xml").isFile)File("app") else File(".")

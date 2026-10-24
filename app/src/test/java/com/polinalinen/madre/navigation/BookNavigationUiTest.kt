@@ -269,7 +269,11 @@ class BookNavigationUiTest {
         val bar=rule.onNodeWithTag("bake-action-bar").fetchSemanticsNode().boundsInRoot
         assertTrue("Undo overlaps measured pause/next bar",snack.bottom<bar.top)
         rule.onNodeWithText("ВЕРНУТЬ").performClick()
-        rule.waitUntil(10_000){controller.sessions.value.single().currentStepIndex==9}
+        rule.waitUntil(10_000){
+            // Drain the paused Compose/Main queue as the real Undo action resumes its coroutine.
+            rule.onAllNodesWithText("Дальше →").fetchSemanticsNodes()
+            controller.sessions.value.single().currentStepIndex==9
+        }
         assertTrue(controller.sessions.value.single().revision>oldRevision)
     }
 

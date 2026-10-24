@@ -22,7 +22,7 @@ run_scroll() {
   # No Gradle/JVM/UTP during timing or large trace transfers. Same actual source/APKs,
   # five iterations and route/foreground guards; a failed sample is never promoted to PASS.
   python3 - "$dir" "$dest" <<'PY'
-import os,pathlib,re,shutil,subprocess,sys,time
+import hashlib,json,os,pathlib,re,subprocess,sys,time
 root=pathlib.Path(sys.argv[1]);out=pathlib.Path(sys.argv[2])
 apks=list((root/'macrobenchmark/build/outputs/apk/benchmark').glob('*.apk'));assert len(apks)==1
 sdk=pathlib.Path(os.environ['ANDROID_HOME'])
@@ -39,15 +39,42 @@ suppress='EMULATOR,DEBUGGABLE' if out.name=='before-debug' else 'EMULATOR'
 command=['adb','shell','am','instrument','-w','-r','-e','class','com.polinalinen.madre.macrobenchmark.ScrollBenchmarks','-e','androidx.benchmark.suppressErrors',suppress,'-e','androidx.benchmark.output.enable','true',component]
 result=subprocess.run(command,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=1800)
 (out/'instrumentation.txt').write_text(result.stdout)
+logcat=subprocess.run(['adb','logcat','-d'],text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+(out/'actual-test-logcat.txt').write_text(logcat.stdout)
 time.sleep(2)
-for attempt in range(3):
-    # Remove only our incomplete host copy; the untouched original stays on this CI AVD.
-    if (out/'raw').exists():shutil.rmtree(out/'raw')
-    pull=subprocess.run(['adb','pull',f'/sdcard/Android/media/{package}',str(out/'raw')],text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
-    (out/f'raw-pull-{attempt}.txt').write_text(pull.stdout)
-    if pull.returncode==0:break
-    subprocess.run(['adb','wait-for-device'],timeout=30,check=True)
-else:raise RuntimeError('Actual raw trace transfer failed')
+# Large directory SYNC pulls died at varying offsets without an adb error. Stream
+# individual ORIGINAL files with the public exec-out API, then verify remote/local
+# SHA256. A partial copy is not evidence and never replaces another complete file.
+remote=f'/sdcard/Android/media/{package}/'
+listing=subprocess.check_output(['adb','shell',f'for file in {remote}*; do printf "%s\\n" "$file"; done'],text=True)
+(out/'remote-raw-index.txt').write_text(listing)
+raw=out/'raw';raw.mkdir(exist_ok=True)
+transfers=[]
+def sha(path):
+    digest=hashlib.sha256()
+    with path.open('rb') as stream:
+        for block in iter(lambda:stream.read(1024*1024),b''):digest.update(block)
+    return digest.hexdigest()
+for file in listing.splitlines():
+    file=file.strip()
+    assert file.startswith(remote)
+    name=file[len(remote):]
+    assert re.fullmatch(r'[-A-Za-z0-9_.]+',name),f'Unexpected raw file: {name}'
+    expected=subprocess.check_output(['adb','shell','sha256sum',file],text=True).split()[0]
+    assert re.fullmatch(r'[0-9a-f]{64}',expected)
+    target=raw/name
+    attempts=[]
+    for attempt in range(3):
+        with target.open('wb') as stream:
+            copy=subprocess.run(['adb','exec-out','cat',file],stdout=stream,stderr=subprocess.PIPE,timeout=300)
+        actual=sha(target)
+        attempts.append({'returncode':copy.returncode,'stderr':copy.stderr.decode(errors='replace'),'bytes':target.stat().st_size,'sha256':actual})
+        (out/'raw-transfer-index.json').write_text(json.dumps(transfers+[{'file':file,'remote_sha256':expected,'attempts':attempts}],indent=2))
+        if copy.returncode==0 and actual==expected:break
+        subprocess.run(['adb','wait-for-device'],timeout=30,check=True)
+    else:raise RuntimeError(f'Actual raw file transfer failed checksum: {file}')
+    transfers.append({'file':file,'remote_sha256':expected,'local_sha256':actual,'bytes':target.stat().st_size,'attempts':attempts})
+(out/'raw-transfer-index.json').write_text(json.dumps(transfers,indent=2))
 assert result.returncode==0 and 'OK (3 tests)' in result.stdout and 'FAILURES' not in result.stdout,'Actual three-route benchmark did not pass; inspect raw output'
 assert len(list((out/'raw').rglob('*benchmarkData.json')))==1
 assert len(list((out/'raw').rglob('*.perfetto-trace')))==15

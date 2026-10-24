@@ -55,8 +55,11 @@ class PhotoAttachmentRecentUiTest {
         // Robolectric DialogWindow before its native input/focus handoff has settled.
         rule.onNodeWithText("← Отмена").assertIsDisplayed().assertIsEnabled()
             .performSemanticsAction(SemanticsActions.OnClick){assertTrue(it())}
-        rule.waitUntil(10_000){
+        try {rule.waitUntil(10_000){
             rule.onAllNodesWithText("Рамка").fetchSemanticsNodes().isEmpty() && cancelled==1 && staging()==stagedBefore
+        }} catch(failure:Throwable) {
+            println("Synthetic cancel diagnostic: cancelled=$cancelled attached=$attached editorNodes=${rule.onAllNodesWithText("Рамка").fetchSemanticsNodes().size} stagedBefore=$stagedBefore stagedNow=${staging()} originalExists=${original.isFile}")
+            throw failure
         }
         assertEquals(0,attached)
         assertEquals(stagedBefore,staging())

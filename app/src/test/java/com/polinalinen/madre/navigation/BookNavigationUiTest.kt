@@ -235,6 +235,51 @@ class BookNavigationUiTest {
         BookPreferences(app).use{assertTrue(it.plans.isEmpty())}
     }
 
+    @Test fun delayedPlanStartSurvivesCompositionRecreationAndSerializesNotificationSnooze() {
+        val plan=PlannedBake(recipes.first().id,2,System.currentTimeMillis()-3_600_000L)
+        val snoozeIntent=BookPreferences(app).use{prefs->
+            assertTrue(prefs.putPlan(plan));prefs.visit(1)
+            com.polinalinen.madre.notifications.PlannedBakeActions.intent(app,plan,
+                com.polinalinen.madre.notifications.PlannedBakeAction.SNOOZE,prefs.notificationNonce(plan.id,plan))
+        }
+        val controller=bindRealController()
+        val pending=MutableStateFlow<com.polinalinen.madre.notifications.PlannedBakeRequest?>(null)
+        val restoration=StateRestorationTester(rule)
+        restoration.setContent{MadreNavHost(pendingPlanned=pending)}
+        rule.waitUntil(10_000){rule.onAllNodesWithText("ПОРА НАЧИНАТЬ · ×2").fetchSemanticsNodes().isNotEmpty() && controller.restoreReady.value}
+        val locked=java.util.concurrent.CountDownLatch(1)
+        val release=java.util.concurrent.CountDownLatch(1)
+        val barrier=Thread{
+            synchronized(app.activeBakeRepository.commitFence){
+                locked.countDown();check(release.await(30,java.util.concurrent.TimeUnit.SECONDS))
+            }
+        }.apply{start()}
+        assertTrue(locked.await(5,java.util.concurrent.TimeUnit.SECONDS))
+        var notificationFinishedBeforeCommit=false
+        try {
+            rule.onNodeWithText("Начать").performClick();rule.waitForIdle()
+            rule.onNodeWithText("Начать").assertIsNotEnabled()
+            assertNull(controller.sessionForPlan(plan.id))
+            restoration.emulateSavedInstanceStateRestore();rule.waitForIdle()
+            val request=requireNotNull(com.polinalinen.madre.notifications.PlannedBakeActions.read(app,snoozeIntent))
+            rule.runOnIdle{pending.value=request}
+            try {
+                rule.waitUntil(2_000){rule.onRoot().fetchSemanticsNode();pending.value==null}
+                notificationFinishedBeforeCommit=true
+            } catch(_:androidx.compose.ui.test.ComposeTimeoutException) { /* Correct: SNOOZE is waiting behind durable START. */ }
+        } finally {release.countDown();barrier.join(10_000)}
+        rule.waitUntil(10_000){rule.onRoot().fetchSemanticsNode();controller.sessionForPlan(plan.id)!=null && pending.value==null}
+        assertFalse("Notification SNOOZE escaped the retained START transaction",notificationFinishedBeforeCommit)
+        BookPreferences(app).use{assertTrue("A started bake must not leave a moved future plan",it.plans.isEmpty())}
+        assertEquals(1,controller.sessions.value.size)
+        assertEquals(1,runBlocking{app.activeBakeRepository.all()}.size)
+        assertNull(com.polinalinen.madre.notifications.PlannedBakeActions.read(app,snoozeIntent))
+        rule.runOnIdle{pending.value=com.polinalinen.madre.notifications.PlannedBakeRequest(plan.id,
+            com.polinalinen.madre.notifications.PlannedBakeAction.START)}
+        rule.waitUntil(10_000){rule.onRoot().fetchSemanticsNode();pending.value==null}
+        assertEquals(1,runBlocking{app.activeBakeRepository.all()}.size)
+    }
+
     @Test fun overdueSnoozeReadsFreshClockAndPersistsReminderWithoutCreatingABake() {
         val now=java.util.concurrent.atomic.AtomicLong(System.currentTimeMillis())
         val clock=object:java.time.Clock(){

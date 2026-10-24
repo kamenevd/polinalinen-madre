@@ -294,7 +294,11 @@ class BookNavigationUiTest {
         rule.waitUntil(10_000){rule.onAllNodesWithText("Через 30 мин").fetchSemanticsNodes().isNotEmpty()}
         now.addAndGet(20*60_000L)
         rule.onNodeWithText("Через 30 мин").performClick()
-        rule.waitUntil(10_000){BookPreferences(app).use{it.plans.singleOrNull()?.id!=plan.id}}
+        rule.waitUntil(10_000){
+            // The retained owner resumes on Main; prefs-only polling does not drain Robolectric's paused UI queue.
+            rule.onRoot().fetchSemanticsNode()
+            BookPreferences(app).use{it.plans.singleOrNull()?.id!=plan.id}
+        }
         val moved=BookPreferences(app).use{it.plans.single()}
         assertEquals(now.get()+40*60_000L,moved.startAtMillis)
         assertEquals(now.get()+30*60_000L,BakePlanning.reminderAt(moved,now.get()))

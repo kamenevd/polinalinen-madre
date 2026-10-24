@@ -43,7 +43,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ inputs.bake_numbers_native && 'native-only-' || '' }}quality-${{ github.workflow }}-${{ github.ref }}
+  group: ${{ inputs.bake_numbers_native && format('native-{0}-', github.sha) || '' }}quality-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:

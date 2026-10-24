@@ -38,8 +38,7 @@ class WorkflowContractTests(unittest.TestCase):
         text = self.read(".github/workflows/quality-gates.yml")
         smoke = text.split("  instrumented-smoke:\n", 1)[1]
         self.assertIn("name: Instrumented smoke", smoke)
-        self.assertIn("SIGNING_PRESERVE_706_V1", smoke)
-        self.assertIn("if: ${{ false }}", smoke.split("    steps:", 1)[0])
+        self.assertIn("if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'", smoke)
         quality = text.split("  android-quality:\n", 1)[1].split("  lint-report:\n", 1)[0]
         self.assertNotIn("needs:", quality)
         critical = next(line for line in quality.splitlines() if "run: ./gradlew compileDebugKotlin" in line)
@@ -56,21 +55,29 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("lintDebug", lint)
         self.assertIn("lint-reports", lint)
 
-    def test_signing_hold_keeps_real_checks_without_keys_or_apk_upload(self):
+    def test_qa_signing_is_verified_before_upload_without_a_fallback(self):
         text = self.read(".github/workflows/quality-gates.yml")
         quality = text.split("  android-quality:\n", 1)[1].split("  lint-report:\n", 1)[0]
-        self.assertIn("SIGNING_PRESERVE_706_V1", quality)
-        self.assertIn("compileDebugKotlin compileReleaseKotlin testDebugUnitTest assembleDebug", quality)
-        self.assertIn("name: madre-key-png", quality)
-        self.assertIn("name: android-quality-reports", quality)
-        self.assertNotIn("secrets.MADRE_QA_", text)
-        self.assertNotIn("restore_qa_signing.py", text)
-        self.assertNotIn("name: madre-debug-apk", text)
-        self.assertNotIn("path: app/build/outputs/apk", text)
-        self.assertNotIn("continue-on-error", quality)
+        restore = quality.index("run: python3 scripts/restore_qa_signing.py\n")
+        build = quality.index("run: ./gradlew compileDebugKotlin")
+        verify = quality.index("id: verify_qa_signature")
+        upload = quality.index("name: Upload verified debug APK first")
+        self.assertLess(restore, build)
+        self.assertLess(build, verify)
+        self.assertLess(verify, upload)
+        gate = quality[quality.index("name: Verify stable QA APK identity"):quality.index("name: Extended visual verification")]
+        self.assertNotIn("continue-on-error", gate)
+        self.assertNotIn("if:", gate)
+        self.assertIn("scripts/verify_apk_signature.py app/build/outputs/apk/debug/app-debug.apk", gate)
+        self.assertIn("if: success() && steps.verify_qa_signature.outcome == 'success'", quality[upload:])
+        self.assertIn("path: app/build/outputs/apk/debug/app-debug.apk", quality[upload:])
         self.assertIn('MADRE_BUILD_TOOLS_VERSION: "36.0.0"', quality)
         self.assertIn('sdkmanager "build-tools;${MADRE_BUILD_TOOLS_VERSION}"', quality)
+        for name in ("KEYSTORE_BASE64", "KEYSTORE_PASSWORD", "KEY_ALIAS", "KEY_PASSWORD", "SIGNING_CERT_SHA256"):
+            self.assertIn("secrets.MADRE_QA_" + name, quality)
+        self.assertIn("MADRE_YANDEX_CLIENT_ID: ${{ secrets.MADRE_YANDEX_CLIENT_ID }}", quality)
         self.assertNotIn("secrets.MADRE_KEYSTORE_", text)
+        self.assertIn("if: always()\n        run: python3 scripts/restore_qa_signing.py --cleanup", quality)
 
     def test_debug_signing_has_its_own_identity_and_keeps_qa_isolation(self):
         text = self.read("app/build.gradle.kts")

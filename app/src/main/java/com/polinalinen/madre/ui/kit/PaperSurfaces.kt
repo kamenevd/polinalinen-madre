@@ -22,6 +22,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
@@ -44,13 +45,23 @@ import kotlin.random.Random
             grains[index*2]=random.nextFloat()*size.width
             grains[index*2+1]=random.nextFloat()*size.height
         }
-        // Same deterministic circular grains, one native batch instead of 12,000 JNI draws.
-        // FloatArray/Paint live in the draw cache: no per-frame point-array allocation.
+        // Keep the exact seed/positions/radius/color. Batching alone still replays thousands of
+        // round points on RenderThread each frame; rasterize this immutable layer only once.
         val grainPaint=android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
             color=p.ink.copy(alpha=.03f).toArgb()
             strokeWidth=2*.45.dp.toPx()
             strokeCap=android.graphics.Paint.Cap.ROUND
         }
+        val width=kotlin.math.ceil(size.width.toDouble()).toInt().coerceAtLeast(1)
+        val height=kotlin.math.ceil(size.height.toDouble()).toInt().coerceAtLeast(1)
+        // At most16MB per draw node. Oversized offscreen layouts retain the allocation-safe
+        // point path; normal phone viewports reuse a single transparent bitmap, not12,000 draws.
+        val grainImage=if(width.toLong()*height<=4_000_000L) {
+            android.graphics.Bitmap.createBitmap(width,height,android.graphics.Bitmap.Config.ARGB_8888).apply {
+                density=android.graphics.Bitmap.DENSITY_NONE
+                android.graphics.Canvas(this).drawPoints(grains,grainPaint)
+            }.asImageBitmap()
+        } else null
         val glow = when (atmosphere) {
             Atmosphere.NIGHT -> p.acc.copy(alpha = .035f)
             Atmosphere.DUSK -> p.acc.copy(alpha = .08f)
@@ -61,7 +72,8 @@ import kotlin.random.Random
         onDrawBehind {
             drawRect(p.bg)
             drawRect(brush)
-            drawIntoCanvas{it.nativeCanvas.drawPoints(grains,grainPaint)}
+            if(grainImage!=null)drawImage(grainImage)
+            else drawIntoCanvas{it.nativeCanvas.drawPoints(grains,grainPaint)}
         }
     }
 }

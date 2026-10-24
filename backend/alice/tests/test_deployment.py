@@ -81,6 +81,21 @@ class DeploymentSafety(unittest.TestCase):
         self.assertEqual(self.conn.execute("PRAGMA user_version").fetchone()[0], 2)
         self.assertEqual(deployment.files([self.legacy]), baseline)
 
+    def test_schema3_rollback_keeps_latest_db_and_refuses_future_schema(self):
+        deployment.switch(self.backup, self.target, is_inactive=lambda: True)
+        self.conn.execute("UPDATE authority SET revoked=1")
+        self.conn.execute("PRAGMA user_version=999")
+        self.conn.commit()
+        with self.assertRaisesRegex(RuntimeError, "unsupported rollback schema"):
+            deployment.switch(self.backup, self.target, rollback=True, is_inactive=lambda: True)
+        self.assertEqual((self.root / "current").resolve(), self.target)
+        self.conn.execute("PRAGMA user_version=3")
+        self.conn.commit()
+        deployment.switch(self.backup, self.target, rollback=True, is_inactive=lambda: True)
+        self.assertEqual((self.root / "current").resolve(), self.old)
+        self.assertEqual(self.conn.execute("SELECT revoked FROM authority").fetchone()[0], 1)
+        self.assertEqual(self.conn.execute("PRAGMA user_version").fetchone()[0], 3)
+
     def test_active_service_refused_without_any_lifecycle_attempt(self):
         with self.assertRaisesRegex(RuntimeError, "sanctioned inactive"):
             deployment.switch(self.backup, self.target, is_inactive=lambda: False)

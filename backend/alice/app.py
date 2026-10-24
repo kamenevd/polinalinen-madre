@@ -453,6 +453,9 @@ class Handler(BaseHTTPRequestHandler):
         if path in (PHONE_PREFIX + "/yandex-bind", PHONE_PREFIX + "/yandex-unbind"):
             self._phone_yandex(app, raw, unbind=path.endswith("yandex-unbind"))
             return
+        if path == PHONE_PREFIX + "/yandex-voice-consent":
+            self._phone_yandex_consent(app, raw)
+            return
         if path == OAUTH_PREFIX + "/yandex/callback" and method == "GET":
             self._yandex_callback(app, split.query)
             return
@@ -620,7 +623,7 @@ class Handler(BaseHTTPRequestHandler):
             if not rate_allow(conn, "yandex-bind:" + inst["id"], app.now(), 600000, 20):
                 self._send_json(429, {"error": "denied"})
                 return
-            expected = yandex_store.epoch(conn, inst["id"])
+        expected = inst["authority_epoch"]
         try:
             info = app.yandex.info(token)
             uid = verified_identity(info, app.settings.yandex_client_id)
@@ -634,6 +637,23 @@ class Handler(BaseHTTPRequestHandler):
         with transaction(app.settings.db_path) as conn:
             ok = yandex_store.bind(conn, inst["id"], uid, expected, app.now())
         self._send_json(200 if ok else 409, payload if ok else {"error": "binding_changed"})
+
+    def _phone_yandex_consent(self, app: App, raw: bytes) -> None:
+        import yandex_store
+        inst = self._installation(app)
+        if inst is None:
+            self._send_json(401, {"error": "denied"})
+            return
+        body = self._json_object(raw)
+        if (body is None or set(body) != {"bake_id", "generation"}
+                or not is_uuid(body.get("bake_id")) or not is_uuid(body.get("generation"))):
+            self._send_json(400, {"error": "denied"})
+            return
+        with transaction(app.settings.db_path) as conn:
+            expires = yandex_store.record_consent(conn, inst, canon_uuid(body["bake_id"]),
+                                                  canon_uuid(body["generation"]), app.now())
+        self._send_json(200 if expires is not None else 409,
+                        {"expires_at": expires} if expires is not None else {"error": "binding_changed"})
 
     def _phone_select(self, app: App, raw: bytes) -> None:
         inst = self._installation(app)
@@ -741,6 +761,7 @@ class Handler(BaseHTTPRequestHandler):
                     installation_id=inst["id"],
                     bake_key=body["bake_key"],
                     generation=body["selection_generation"],
+                    expected_epoch=inst["authority_epoch"],
                     now_ms=app.now(),
                 )
                 if not ok:
@@ -933,7 +954,8 @@ class Handler(BaseHTTPRequestHandler):
         auth_code = new_auth_code()
         display_code, browser_token = new_display_code(), new_browser_token()
         with transaction(app.settings.db_path) as conn:
-            inst = yandex_store.eligible(conn, uid, app.now())
+            now = app.now()
+            inst = yandex_store.eligible(conn, uid, now)
             issued = None
             if inst is not None:
                 challenge = create_challenge(conn, code=display_code, client_id=checked["client_id"],
@@ -941,10 +963,14 @@ class Handler(BaseHTTPRequestHandler):
                     browser_token=browser_token, now_ms=app.now(), ttl_ms=app.settings.challenge_ttl_ms)
                 approved = approve_challenge(conn, challenge_id=challenge, code_hash=sha256_text(display_code),
                     installation_id=inst["id"], bake_key=inst["selected_bake_key"],
-                    generation=inst["selected_generation"], now_ms=app.now())
+                    generation=inst["selected_generation"], expected_epoch=inst["authority_epoch"], now_ms=now)
                 if approved:
                     issued = issue_auth_code(conn, challenge_id=challenge, browser_hash=sha256_text(browser_token),
-                        code=auth_code, now_ms=app.now(), ttl_ms=app.settings.auth_code_ttl_ms)
+                        code=auth_code, now_ms=now, ttl_ms=app.settings.auth_code_ttl_ms)
+                    if issued is not None:
+                        # Same transaction as real code issuance, not login, select,
+                        # callback opening, fallback, or a failed/ambiguous match.
+                        yandex_store.consume_authority(conn, inst, uid, challenge, now)
         if issued is None:
             self._yandex_fallback(checked, clear_cookie)
             return

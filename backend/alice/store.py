@@ -89,7 +89,10 @@ def enroll(conn: sqlite3.Connection, credential_hash: str, now_ms: int) -> str:
 
 def installation_by_hash(conn: sqlite3.Connection, credential_hash: str) -> sqlite3.Row | None:
     return conn.execute(
-        "SELECT * FROM installations WHERE credential_hash=?",
+        # One SQL snapshot: never read the epoch later than authentication.
+        "SELECT i.*, COALESCE(e.epoch,0) AS authority_epoch, y.uid AS binding_uid "
+        "FROM installations i LEFT JOIN yandex_epochs e ON e.installation_id=i.id "
+        "LEFT JOIN yandex_bindings y ON y.installation_id=i.id WHERE i.credential_hash=?",
         (credential_hash,),
     ).fetchone()
 
@@ -101,7 +104,15 @@ def installation_by_id(conn: sqlite3.Connection, installation_id: str) -> sqlite
     ).fetchone()
 
 
+def _invalidate_yandex_authority(conn: sqlite3.Connection, installation_id: str) -> None:
+    # Covers logout, disconnect AND selection A -> B -> A (not just value equality).
+    conn.execute("INSERT INTO yandex_epochs(installation_id,epoch) VALUES(?,1) "
+                 "ON CONFLICT(installation_id) DO UPDATE SET epoch=epoch+1", (installation_id,))
+    conn.execute("DELETE FROM yandex_voice_consents WHERE installation_id=?", (installation_id,))
+
+
 def _revoke_installation(conn: sqlite3.Connection, installation_id: str, now_ms: int) -> None:
+    _invalidate_yandex_authority(conn, installation_id)
     # Prevent old codes/challenges resurrecting authority after logout/reselect.
     conn.execute("UPDATE auth_codes SET used_at=? WHERE used_at IS NULL AND challenge_id IN "
                  "(SELECT id FROM challenges WHERE installation_id=?)", (now_ms, installation_id))
@@ -228,8 +239,17 @@ def approve_challenge(
     installation_id: str,
     bake_key: str,
     generation: str,
+    expected_epoch: int,
     now_ms: int,
 ) -> bool:
+    # The phone's initial auth snapshot is an optimistic fence. Check it inside
+    # this same write transaction, before attaching a previously unowned challenge.
+    inst = installation_by_id(conn, installation_id)
+    epoch = conn.execute("SELECT epoch FROM yandex_epochs WHERE installation_id=?", (installation_id,)).fetchone()
+    if (inst is None or (int(epoch[0]) if epoch else 0) != expected_epoch
+            or inst["selected_bake_key"] != canon_uuid(bake_key)
+            or inst["selected_generation"] != canon_uuid(generation)):
+        return False
     row = challenge_by_id(conn, challenge_id)
     if row is None:
         return False
@@ -333,6 +353,12 @@ def redeem_auth_code(
     if inst["selected_bake_key"] != challenge["bake_key"] or inst["selected_generation"] != challenge["selection_generation"]:
         conn.execute("UPDATE auth_codes SET used_at=? WHERE code_hash=?", (now_ms, code_hash))
         return None
+    # UID shortcut codes retain their exact authority provenance. Legacy pairing
+    # has no such row and keeps its existing semantics.
+    from yandex_store import code_authority_valid
+    if not code_authority_valid(conn, challenge, row, now_ms):
+        conn.execute("UPDATE auth_codes SET used_at=? WHERE code_hash=?", (now_ms, code_hash))
+        return None
     grant_id = new_uuid()
     family = new_uuid()
     conn.execute(
@@ -364,7 +390,10 @@ def redeem_auth_code(
 
 
 def _revoke_grant(conn: sqlite3.Connection, grant_id: str, now_ms: int) -> None:
-    conn.execute("UPDATE grants SET revoked_at=? WHERE id=? AND revoked_at IS NULL", (now_ms, grant_id))
+    cur = conn.execute("UPDATE grants SET revoked_at=? WHERE id=? AND revoked_at IS NULL", (now_ms, grant_id))
+    if cur.rowcount:
+        installation = conn.execute("SELECT installation_id FROM grants WHERE id=?", (grant_id,)).fetchone()
+        _invalidate_yandex_authority(conn, installation[0])
     conn.execute(
         "UPDATE access_tokens SET revoked_at=? WHERE grant_id=? AND revoked_at IS NULL",
         (now_ms, grant_id),

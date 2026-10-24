@@ -179,7 +179,7 @@ def switch(output, target, *, rollback=False, is_inactive=inactive):
     with sqlite3.connect(Path(meta["db"]).resolve().as_uri() + "?mode=ro", uri=True) as conn:
         if conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
             raise RuntimeError("current database corrupt; manual recovery required")
-        if conn.execute("PRAGMA user_version").fetchone()[0] not in (1, 2):
+        if conn.execute("PRAGMA user_version").fetchone()[0] not in (1, 2, 3):
             raise RuntimeError("unsupported rollback schema")
     pending = root / "current.yandex-a-pending"
     if pending.exists() or pending.is_symlink():

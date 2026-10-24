@@ -464,7 +464,7 @@ class TransportBounds(unittest.TestCase):
             with sqlite3.connect(db) as conn:
                 self.assertEqual(conn.execute("SELECT id FROM installations").fetchall(), [("old",)])
                 self.assertEqual(conn.execute("PRAGMA integrity_check").fetchone()[0], "ok")
-                self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], 2)
+                self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], 3)
                 conn.execute("PRAGMA user_version=999")
             with self.assertRaises(RuntimeError):
                 init_db(db)

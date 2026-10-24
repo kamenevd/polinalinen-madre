@@ -288,7 +288,6 @@ private fun FeedingRhythmRow(intervalHours: Int, onChange: (Int) -> Unit) {
  */
 @Composable
 private fun RemindersRow(remindersEnabled: Boolean, onRemindersEnabledChange: (Boolean) -> Unit) {
-    val colors = LocalPaper.current
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var allowed by remember { mutableStateOf(MadreNotifier(context).canPost()) }
@@ -306,12 +305,7 @@ private fun RemindersRow(remindersEnabled: Boolean, onRemindersEnabledChange: (B
     } else {
         // Переключать нечего: телефон запретил книге писать, и «вкл» здесь было
         // бы обещанием, которого книга не сдержит.
-        SettingsRow(
-            label = "Напоминания",
-            value = "не разрешены телефоном",
-            valueColor = colors.rib,
-            onClick = null,
-        )
+        PaperListRow("Напоминания",note="не разрешены телефоном",onClick=null)
         SettingsCaption(
             "книга не разбудит вас, когда закончится расстойка, не напомнит про закваску " +
                 "и не покажет ход выпечки в шторке. Таймер на экране при этом работает как прежде."

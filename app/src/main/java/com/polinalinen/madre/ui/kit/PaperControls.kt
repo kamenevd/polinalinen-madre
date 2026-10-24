@@ -179,12 +179,13 @@ enum class PaperButtonVariant { PRIMARY, ACCENT, SECONDARY, TEXT }
         })
 }
 
-@Composable fun PaperStepButton(symbol: String, label: String, enabled: Boolean = true, onClick: () -> Unit) {
+@Composable fun PaperStepButton(symbol: String, label: String, enabled: Boolean = true, onClick: () -> Unit, visibleEdge:Boolean=false) {
     val p = LocalPaper.current
     Box(Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp)
         .clickable(enabled = enabled, role = Role.Button, onClickLabel = label, onClick = onClick),
         contentAlignment = Alignment.Center) {
-        Box(Modifier.size(46.dp).clip(CircleShape).background(p.card),contentAlignment=Alignment.Center) {
+        Box(Modifier.size(46.dp).clip(CircleShape).background(p.card)
+            .then(if(visibleEdge)Modifier.border(1.dp,p.line.copy(alpha=if(enabled)1f else .4f),CircleShape) else Modifier),contentAlignment=Alignment.Center) {
             Text(symbol, color = p.ink.copy(alpha = if (enabled) 1f else .4f), style = PaperType.ui.copy(fontSize=22.sp))
         }
     }
@@ -193,12 +194,12 @@ enum class PaperButtonVariant { PRIMARY, ACCENT, SECONDARY, TEXT }
 @Composable fun PaperStepper(value: String, onMinus: () -> Unit, onPlus: () -> Unit,
     modifier: Modifier = Modifier, minusEnabled: Boolean = true, plusEnabled: Boolean = true, caption:String?=null) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        PaperStepButton("−", "Уменьшить", minusEnabled, onMinus)
+        PaperStepButton("−", "Уменьшить", minusEnabled, onMinus,visibleEdge=true)
         Row(Modifier.weight(1f),horizontalArrangement=Arrangement.Center,verticalAlignment=Alignment.Bottom) {
             Text(value, color = LocalPaper.current.ink, style = PaperType.number)
             if(caption!=null)Text(caption,color=LocalPaper.current.ink2,style=PaperType.note,modifier=Modifier.padding(start=8.dp,bottom=6.dp))
         }
-        PaperStepButton("+", "Увеличить", plusEnabled, onPlus)
+        PaperStepButton("+", "Увеличить", plusEnabled, onPlus,visibleEdge=true)
     }
 }
 

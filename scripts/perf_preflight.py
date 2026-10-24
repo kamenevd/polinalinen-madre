@@ -28,8 +28,10 @@ subprocess.run(['adb','logcat','-c'],check=True)
 launch=subprocess.run(['adb','shell','am','start','-W','-n','com.polinalinen.madre.benchmark/com.polinalinen.madre.ui.razvorot.RazvorotSceneActivity','--es','scene','toc'],text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
 (out/'preflight-launch.txt').write_text(launch.stdout)
 time.sleep(2)
+with (out/'preflight-diagnostic-not-acceptance.png').open('wb') as screenshot:
+ subprocess.run(['adb','exec-out','screencap','-p'],stdout=screenshot,check=True)
 for name,command in [('preflight-logcat.txt',['adb','logcat','-d']),('preflight-package.txt',['adb','shell','dumpsys','package','com.polinalinen.madre.benchmark']),('preflight-window.txt',['adb','shell','dumpsys','window']),('preflight-gfxinfo.txt',['adb','shell','dumpsys','gfxinfo','com.polinalinen.madre.benchmark','framestats'])]:
  r=subprocess.run(command,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT);(out/name).write_text(r.stdout)
 r=subprocess.run(['adb','shell','pidof','com.polinalinen.madre.benchmark'],text=True,capture_output=True)
 assert r.returncode==0 and r.stdout.strip(),'Actual minified benchmark process did not survive launch; inspect preflight-logcat.txt'
-print('Real non-debuggable benchmark target survives launch; PID:',r.stdout.strip())
+print('Measured target survives launch; debuggable:',debuggable,'PID:',r.stdout.strip())

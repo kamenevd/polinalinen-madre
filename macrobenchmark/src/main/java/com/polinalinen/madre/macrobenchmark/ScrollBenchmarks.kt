@@ -16,8 +16,28 @@ private val routes=listOf("toc-benchmark","oven-benchmark","chapter-benchmark-sc
 private fun routeIntent(scene:String)=Intent().setClassName(TARGET,"com.polinalinen.madre.ui.razvorot.RazvorotSceneActivity")
     .putExtra("scene",scene).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
 private fun MacrobenchmarkScope.scroll() {
+    check(device.currentPackageName==TARGET){"Target lost foreground before measurement"}
     val x=device.displayWidth/2;val top=device.displayHeight/4;val bottom=device.displayHeight*3/4
     repeat(3){device.swipe(x,bottom,x,top,30);device.waitForIdle(500);device.swipe(x,top,x,bottom,30);device.waitForIdle(500)}
+    check(device.currentPackageName==TARGET){"System/app dialog interrupted measurement; sample rejected"}
+}
+private fun MacrobenchmarkScope.awaitActualRoute(route:String,label:String) {
+    fun failureEvidence() {
+        val context=androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().context
+        val out=java.io.File(context.getExternalFilesDir(null),"route-failures").apply{mkdirs()}
+        device.dumpWindowHierarchy(java.io.File(out,"$route.xml"))
+        device.takeScreenshot(java.io.File(out,"$route.png"))
+    }
+    repeat(6) {
+        device.findObject(By.res("android:id/aerr_close"))?.let{close->
+            if(device.hasObject(By.textContains("Pixel Launcher")) || device.hasObject(By.textContains("Nexus Launcher"))) {
+                close.click();device.waitForIdle(500)
+                android.util.Log.i("MadreBenchmark","Known CI Launcher ANR closed BEFORE timing")
+            } else {failureEvidence();error("App/unknown ANR must not be hidden")}
+        }
+        if(device.wait(Until.hasObject(By.textContains(label)),1500)==true && device.currentPackageName==TARGET)return
+    }
+    failureEvidence();error("Actual benchmark route did not render: $route")
 }
 @RunWith(AndroidJUnit4::class)
 class ScrollBenchmarks {
@@ -28,7 +48,7 @@ class ScrollBenchmarks {
         setupBlock={
             startActivityAndWait(routeIntent(route));device.waitForIdle(500)
             val label=when(route){"toc-benchmark"->"Оглавление";"oven-benchmark"->"Уже печём";else->"Ингредиенты"}
-            check(device.wait(Until.hasObject(By.textContains(label)),10_000)==true){"Actual benchmark route did not render: $route"}
+            awaitActualRoute(route,label)
         },
         measureBlock={scroll()})
     @Test fun tocScroll()=measure(routes[0])

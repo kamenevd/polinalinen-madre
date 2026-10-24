@@ -24,6 +24,7 @@ run_scroll() {
   cp -R "$dir/macrobenchmark/build/outputs" "$dest/" || true
   cp -R "$dir/macrobenchmark/build/reports" "$dest/" || true
   adb logcat -d > "$dest/actual-test-logcat.txt" || true
+  adb pull /sdcard/Android/data/com.polinalinen.madre.macrobenchmark/files/route-failures "$dest/route-failures" || true
   return "$result"
 }
 if [[ -d "$RUNNER_TEMP/madre-perf-before-debug" ]]; then

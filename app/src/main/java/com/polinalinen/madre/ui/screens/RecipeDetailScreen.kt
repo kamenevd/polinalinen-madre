@@ -462,14 +462,8 @@ private fun FullRecipeSection(recipe: Recipe, scaleFactor: Double, modifier: Mod
     // назвал по имени строки: остальное — проза, и трогать её книга не берётся.
     val quantityBindings = remember(recipe) { RecipeScaler.scalableBindings(recipe) }
     Column(modifier.fillMaxWidth()) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 22.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            HairRule(Modifier.weight(1f))
-            PageLabel("Как печём", color = colors.ink, modifier = Modifier.padding(horizontal = 10.dp))
-            HairRule(Modifier.weight(1f))
-        }
+        Text("Как печём",style=PaperType.h2,color=colors.ink,
+            modifier=Modifier.padding(horizontal=22.dp,vertical=8.dp))
         Text(
             "для тех, кто печёт по-своему — без таймера, по книге",
             color = colors.ink2,style = PaperType.body,

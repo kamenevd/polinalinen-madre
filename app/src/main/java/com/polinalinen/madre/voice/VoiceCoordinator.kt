@@ -207,9 +207,9 @@ class VoiceCoordinator(private val store: VoiceIdentityStore, private val api: V
                 "code" to p.code, "bake_key" to p.bakeKey, "selection_generation" to p.generation))
             check(r.get("approved").asBoolean)
             synchronized(fence) { if (epoch == e) _state.value = _state.value.copy(preview = null,
-                message = "Разрешение подтверждено. Вернись в окно подключения навыка и закончи вход.") }
+                message = "Разрешение подтверждено. Вернитесь в окно подключения навыка и закончите вход.") }
         } catch (x: CancellationException) { throw x }
-        catch (_: Exception) { _state.value = _state.value.copy(preview = null, message = "Подключение не подтверждено. Попробуй заново.") }
+        catch (_: Exception) { _state.value = _state.value.copy(preview = null, message = "Подключение не подтверждено. Попробуйте заново.") }
     }
 
     fun retryConnection() = synchronized(fence) {

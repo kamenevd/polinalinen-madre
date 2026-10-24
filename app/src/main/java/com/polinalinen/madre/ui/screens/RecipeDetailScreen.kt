@@ -363,12 +363,15 @@ fun RecipeChapterContent(recipe: Recipe, scaleFactor: Double, textSize: Float = 
         if (viewportWidth == 0) return@LaunchedEffect
         val restored = cursor.pendingRestore
         val explicitSeek = cursor.processed != target.request
+        android.util.Log.d("N2Restore", "request=${target.request} processed=${cursor.processed} pending=$restored stored=${cursor.geometry} layout=$layoutKey value=${scroll.value} max=${scroll.maxValue}")
         if (restored != null && !explicitSeek && cursor.geometry == layoutKey) {
             snapshotFlow { anchors.positions["${recipe.id}:end"] }.filterNotNull().first()
             // Let the newly measured reader chrome/content commit before applying
             // the saved pixels. Do not publish an intermediate viewport bookmark.
             withFrameNanos { }
+            android.util.Log.d("N2Restore", "restore before target=$restored value=${scroll.value} max=${scroll.maxValue}")
             scroll.scrollTo(restored)
+            android.util.Log.d("N2Restore", "restore after value=${scroll.value} max=${scroll.maxValue}")
             cursor.processed = target.request
             cursor.pendingRestore = null
             return@LaunchedEffect
@@ -376,6 +379,7 @@ fun RecipeChapterContent(recipe: Recipe, scaleFactor: Double, textSize: Float = 
         if (!explicitSeek && cursor.geometry == layoutKey) return@LaunchedEffect
         val destinationAnchor = if (explicitSeek) target.seekAnchor else target.anchor
         val destination = snapshotFlow { anchors.positions[destinationAnchor] }.filterNotNull().first()
+        android.util.Log.d("N2Restore", "anchor target=$destinationAnchor destination=$destination value=${scroll.value} max=${scroll.maxValue}")
         scroll.scrollTo(destination)
         cursor.processed = target.request
         cursor.geometry = layoutKey

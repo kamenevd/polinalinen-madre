@@ -317,7 +317,8 @@ class BookNavigationUiTest {
         val before=cursorDescription()
         restoration.emulateSavedInstanceStateRestore();rule.waitForIdle()
         val after=cursorDescription()
-        assertEquals("Actual reader cursor before=$before after=$after saved=$savedRegistryValues restored=$restoredRegistryValues",position,scrollOffset(),.01f)
+        val placementTrace=org.robolectric.shadows.ShadowLog.getLogsForTag("N2Restore").joinToString("; "){it.msg}
+        assertEquals("Actual reader cursor before=$before after=$after saved=$savedRegistryValues restored=$restoredRegistryValues placement=$placementTrace",position,scrollOffset(),.01f)
         rule.onNodeWithText(recipe.timeline[2].title.uppercase()).assertIsDisplayed()
         rule.onNode(SemanticsMatcher("footer seeks actual title") {
             it.config.getOrNull(SemanticsActions.OnClick)?.label=="Страница 1"

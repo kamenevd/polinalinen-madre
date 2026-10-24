@@ -13,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
@@ -218,7 +219,7 @@ class PaperSnackbarState {
 
 @Composable fun PaperSnackbar(hostState: PaperSnackbarState, modifier: Modifier = Modifier) {
     val p = LocalPaper.current
-    SnackbarHost(hostState.host, modifier) { data ->
+    SnackbarHost(hostState.host, modifier.testTag("paper-snackbar")) { data ->
         Snackbar(shape = RoundedCornerShape(16.dp), containerColor = p.ink,contentColor = p.bg,
             action={data.visuals.actionLabel?.let{label->
                 PaperButton(label.uppercase(java.util.Locale.forLanguageTag("ru")),data::performAction,

@@ -30,8 +30,8 @@ class FullscreenInstrumentedTest {
         rule.runOnIdle { rule.activity.scene = name }
         rule.waitForIdle()
     }
-    private fun hidden() {
-        rule.waitUntil(5_000) {
+    private fun hidden(timeout:Long=5_000) {
+        rule.waitUntil(timeout) {
             var visible = true
             rule.activity.runOnUiThread {
                 visible = ViewCompat.getRootWindowInsets(rule.activity.window.decorView)
@@ -84,11 +84,11 @@ class FullscreenInstrumentedTest {
         rule.onNodeWithText("Как читать").assertIsDisplayed()
         InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
         rule.waitForIdle()
-        hidden()
+        hidden(300)
         for(name in listOf("fullscreen-dialog","fullscreen-photo")) {
             scene(name)
             InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
-            rule.waitForIdle();hidden()
+            rule.waitForIdle();hidden(300)
         }
     }
 

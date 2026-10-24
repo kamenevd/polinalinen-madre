@@ -129,6 +129,21 @@ class Fixes7014UiTest {
         }).assertIsDisplayed()
     }
 
+    @Test fun accountAndPairingStateSelectExactlyOneCurrentConnectionStep() {
+        val name=mutableStateOf<String?>(null)
+        val waiting=mutableStateOf(true)
+        rule.setContent{RazvorotTheme(force=Atmosphere.DAWN){
+            com.polinalinen.madre.ui.screens.AliceConnectionSteps(waiting.value,{},accountStep={},verifiedName=name.value)
+        }}
+        fun current(index:Int) {
+            for(n in 1..3)if(n==index)rule.onNodeWithTag("alice-connection-step-$n").assertIsSelected()
+                else rule.onNodeWithTag("alice-connection-step-$n").assertIsNotSelected()
+        }
+        current(1)
+        rule.runOnIdle{name.value="Тестовый пекарь";waiting.value=false};current(2)
+        rule.runOnIdle{waiting.value=true};current(3)
+    }
+
     @Test fun threeAccountErrorsShowExactCopyAndRetryUsesItsRealAction() {
         val error=mutableStateOf(YandexAccountError.NETWORK)
         var attempts=0

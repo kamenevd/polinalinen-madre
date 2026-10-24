@@ -207,7 +207,8 @@ import androidx.compose.ui.Alignment
         if (whole != null) {
             RecipeScale.yieldText(recipe, whole)?.let { PaperNote(it) }
         }
-        PaperNote("${whole?.let{RecipeScale.capacityNote(recipe,it)?.let{note->"$note "}}.orEmpty()}${RecipeScale.TIMING_NOTE}")
+        PaperNote(if(whole!=null && RecipeScale.batches(recipe,whole)>1)
+            "≈${RecipeScale.OVEN_BATCH_GRAMS} г за заход · время прежнее" else "Время этапов прежнее")
         PaperSegmented(listOf("Граммы","% пекаря"),if(percent)1 else 0,{percent=it==1})
         recipe.ingredients.forEach { (section,ingredients) ->
             SmallLabel(com.polinalinen.madre.utils.ingredientSectionTitle(section))

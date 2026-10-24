@@ -8,6 +8,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
 import com.polinalinen.madre.account.yandex.*
 import com.polinalinen.madre.ui.kit.*
@@ -51,7 +54,7 @@ import com.polinalinen.madre.ui.kit.*
 @Composable private fun AliceConnectionStep(number:Int,title:String,done:Boolean=false,current:Boolean=false,
     content:@Composable ColumnScope.()->Unit) {
     val p=LocalPaper.current
-    Row(Modifier.fillMaxWidth().padding(top=8.dp),horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+    Row(Modifier.fillMaxWidth().padding(top=8.dp).testTag("alice-connection-step-$number").semantics{selected=current},horizontalArrangement=Arrangement.spacedBy(12.dp)) {
         Box(Modifier.size(28.dp).background(if(done)p.sage2 else if(current)p.acc else p.bg2,CircleShape),
             contentAlignment=Alignment.Center) {
             Text(if(done)"✓" else number.toString(),style=PaperType.ui,color=if(done)p.sage else if(current)p.card else p.ink2)

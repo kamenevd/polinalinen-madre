@@ -29,10 +29,19 @@ class WorkflowContractTests(unittest.TestCase):
             "20 key native frames",
             "verifyRoborazziDebug",
             "assembleDebug",
-            "connectedDebugAndroidTest",
+            "bash scripts/run_instrumented_acceptance.sh",
             "retention-days:",
         ):
             self.assertIn(required, text)
+        # The pinned emulator action executes each input line in its own shell.
+        # Follow the exact invoked helper, not a decoy command in a YAML comment.
+        script = self.read("scripts/run_instrumented_acceptance.sh")
+        self.assertRegex(script, r"(?m)^\s*\./gradlew connectedDebugAndroidTest ")
+        self.assertIn("./gradlew :app:connectedDebugAndroidTest", script)
+        self.assertIn("com.polinalinen.madre.FullscreenInstrumentedTest,com.polinalinen.madre.NavigationSmokeTest", script)
+        self.assertIn('|| result=$?', script)
+        self.assertIn('exit "$result"', script)
+        self.assertIn("adb shell cmd overlay enable com.android.internal.display.cutout.emulation.tall", script)
 
     def test_pr_keeps_protected_smoke_name_but_skips_native_work(self):
         text = self.read(".github/workflows/quality-gates.yml")

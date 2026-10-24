@@ -19,6 +19,10 @@ on:
         description: Capture FIXES7.0.14 states and execute fullscreen/navigation on a real CI cutout emulator
         type: boolean
         default: false
+      fixes_7014_instrumented:
+        description: Run requested fullscreen/navigation cutout tests without a full native acceptance render
+        type: boolean
+        default: false
   schedule:
     # Takes effect only after an explicitly approved merge into default branch.
     - cron: "30 1 * * *"
@@ -81,7 +85,7 @@ jobs:
         id: verify_qa_signature
         run: python3 scripts/verify_apk_signature.py app/build/outputs/apk/debug/app-debug.apk
       - name: Extended visual verification (manual, nightly and RC)
-        if: (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && !inputs.fixes_7013_acceptance && !inputs.fixes_7014_acceptance
+        if: (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && !inputs.fixes_7013_acceptance && !inputs.fixes_7014_acceptance && !inputs.fixes_7014_instrumented
         run: ./gradlew testDebugUnitTest verifyRoborazziDebug -Pmadre.extendedVerification=true --no-daemon --stacktrace --no-configuration-cache
       - name: FIXES frozen-head native acceptance (manual only)
         if: github.event_name == 'workflow_dispatch' && (inputs.fixes_7013_acceptance || inputs.fixes_7014_acceptance)
@@ -160,6 +164,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
+      MADRE_FIXES_7014_ACCEPTANCE: ${{ (inputs.fixes_7014_acceptance || inputs.fixes_7014_instrumented) && 'true' || 'false' }}
       QA_KEYSTORE_PASSWORD: ${{ secrets.MADRE_QA_KEYSTORE_PASSWORD }}
       QA_KEY_ALIAS: ${{ secrets.MADRE_QA_KEY_ALIAS }}
       QA_KEY_PASSWORD: ${{ secrets.MADRE_QA_KEY_PASSWORD }}
@@ -192,7 +197,7 @@ jobs:
         run: |
           python3 -c 'import os,re; assert re.fullmatch(r"[0-9a-fA-F]{32}", os.environ.get("MADRE_YANDEX_CLIENT_ID", "")), "Approved Yandex client id is required for instrumentation"'
           sdkmanager "build-tools;${MADRE_BUILD_TOOLS_VERSION}"
-          ./gradlew :yandex-authsdk-330:processDebugAndroidTestManifest :app:assembleDebugAndroidTest --no-daemon --stacktrace --no-configuration-cache
+          ./gradlew :yandex-authsdk-330:mergeDebugAndroidTestManifest :app:assembleDebugAndroidTest --no-daemon --stacktrace --no-configuration-cache
       - name: Run emulator smoke tests
         uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
         with:
@@ -202,24 +207,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
-            adb shell wm size 412x915
-            adb shell wm density 160
-            adb shell wm size
-            adb shell wm density
-            adb shell settings put secure immersive_mode_confirmations confirmed
-            mkdir -p screenshots/cutout
-            adb shell cmd overlay enable com.android.internal.display.cutout.emulation.tall
-            adb shell cmd overlay list > screenshots/cutout/overlay-list.txt
-            adb shell dumpsys display > screenshots/cutout/display-before.txt
-            if [ "${{ inputs.fixes_7014_acceptance }}" = "true" ]; then
-              ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.polinalinen.madre.FullscreenInstrumentedTest,com.polinalinen.madre.NavigationSmokeTest --no-daemon --stacktrace --no-configuration-cache
-            else
-              ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace --no-configuration-cache
-            fi
-            mkdir -p screenshots
-            adb pull /sdcard/googletest/test_outputfiles/screenshots screenshots/ || true
-            adb pull /sdcard/Android/data/com.polinalinen.madre.qa/files/fs-evidence screenshots/cutout/
-            adb shell dumpsys window > screenshots/cutout/window-after.txt
+            bash scripts/run_instrumented_acceptance.sh
       - name: Upload instrumentation reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

@@ -212,6 +212,67 @@ class BookNavigationUiTest {
         restoration.emulateSavedInstanceStateRestore();rule.waitForIdle()
         assertEquals(MadreDestinations.HOME,nav.currentDestination?.route)
     }
+    @Test fun overdueStartButtonOwnsTheActualBakeAndRemovesOnlyItsPlan() {
+        val recipe=recipes.first()
+        val plan=PlannedBake(recipe.id,2,System.currentTimeMillis()-3_600_000L)
+        BookPreferences(app).use{assertTrue(it.putPlan(plan));it.visit(1)}
+        val controller=bindRealController()
+        lateinit var nav:NavHostController
+        rule.setContent{nav=rememberNavController();MadreNavHost(nav)}
+        rule.waitUntil(10_000){rule.onAllNodesWithText("ПОРА НАЧИНАТЬ · ×2").fetchSemanticsNodes().isNotEmpty()}
+        assertTrue(runBlocking{app.activeBakeRepository.all()}.isEmpty())
+        rule.onNodeWithText("Начать").performClick()
+        rule.waitUntil(10_000){rule.onAllNodesWithText("Крупно").fetchSemanticsNodes().isNotEmpty()}
+        assertEquals(MadreDestinations.BAKE,nav.currentDestination?.route)
+        val session=controller.sessions.value.single()
+        assertEquals(recipe.id,session.recipe.id);assertEquals(2,session.trustedPortions)
+        assertEquals(UUID.nameUUIDFromBytes("planned-bake:${plan.id}".toByteArray(Charsets.UTF_8)).toString(),session.bakeKey)
+        assertSame(session,controller.sessionForPlan(plan.id))
+        assertEquals(session.bakeKey,runBlocking{app.activeBakeRepository.all()}.single().bakeKey)
+        BookPreferences(app).use{assertTrue(it.plans.isEmpty())}
+    }
+
+    @Test fun overdueSnoozeReadsFreshClockAndPersistsReminderWithoutCreatingABake() {
+        val now=java.util.concurrent.atomic.AtomicLong(System.currentTimeMillis())
+        val clock=object:java.time.Clock(){
+            override fun getZone()=java.time.ZoneId.of("Europe/Moscow")
+            override fun withZone(zone:java.time.ZoneId)=java.time.Clock.fixed(instant(),zone)
+            override fun instant()=java.time.Instant.ofEpochMilli(now.get())
+        }
+        val plan=PlannedBake(recipes.first().id,2,now.get()-3_600_000L)
+        BookPreferences(app).use{assertTrue(it.putPlan(plan));it.visit(1)}
+        bindRealController()
+        rule.setContent{CompositionLocalProvider(com.polinalinen.madre.ui.razvorot.LocalBookClock provides clock){MadreNavHost()}}
+        rule.waitUntil(10_000){rule.onAllNodesWithText("Через 30 мин").fetchSemanticsNodes().isNotEmpty()}
+        now.addAndGet(20*60_000L)
+        rule.onNodeWithText("Через 30 мин").performClick()
+        rule.waitUntil(10_000){BookPreferences(app).use{it.plans.singleOrNull()?.id!=plan.id}}
+        val moved=BookPreferences(app).use{it.plans.single()}
+        assertEquals(now.get()+40*60_000L,moved.startAtMillis)
+        assertEquals(now.get()+30*60_000L,BakePlanning.reminderAt(moved,now.get()))
+        assertEquals(plan.recipeId,moved.recipeId);assertEquals(plan.portions,moved.portions)
+        assertTrue(runBlocking{app.activeBakeRepository.all()}.isEmpty())
+    }
+
+    @Test fun actualAdvanceUndoFloatsAboveTheMeasuredActionBarAndKeepsTheRealRevision() {
+        val recipe=recipes.first()
+        val fixture=BakingSession.start(9101L,recipe,2.0).copy(currentStepIndex=9,recipeRevision=app.recipeRepository.revision)
+        runBlocking{app.activeBakeRepository.commit(fixture.id,null,fixture.activeSnapshot())}
+        val controller=bindRealController()
+        val requested=MutableStateFlow<Long?>(fixture.id)
+        rule.setContent{MadreNavHost(pendingSessionId=requested)}
+        rule.waitUntil(10_000){rule.onAllNodesWithText("Дальше →").fetchSemanticsNodes().isNotEmpty()}
+        rule.onNodeWithText("Дальше →").performClick()
+        rule.onNodeWithText("Шаг 11 · Остывание").assertIsDisplayed()
+        val oldRevision=controller.sessions.value.single().revision
+        val snack=rule.onNodeWithTag("paper-snackbar").fetchSemanticsNode().boundsInRoot
+        val bar=rule.onNodeWithTag("bake-action-bar").fetchSemanticsNode().boundsInRoot
+        assertTrue("Undo overlaps measured pause/next bar",snack.bottom<bar.top)
+        rule.onNodeWithText("ВЕРНУТЬ").performClick()
+        rule.waitUntil(10_000){controller.sessions.value.single().currentStepIndex==9}
+        assertTrue(controller.sessions.value.single().revision>oldRevision)
+    }
+
     @Test fun plannedNotificationOpensOvenAndPauseKeepsItsSection() {
         val recipe=runBlocking{app.recipeRepository.getRecipes()}.first()
         val plan=PlannedBake(recipe.id,2,System.currentTimeMillis()+3_600_000L)

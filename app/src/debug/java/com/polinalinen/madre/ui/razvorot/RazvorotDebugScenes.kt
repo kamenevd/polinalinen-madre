@@ -86,7 +86,7 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
                         val active=remember(recipe){BakingSession.start(7,recipe)}
                         AlicePage(com.polinalinen.madre.voice.VoiceUiState(
                             com.polinalinen.madre.voice.VoiceStatus.WAITING_LINK, active.bakeKey),
-                            listOf(active),{},{},{},{},{},yandexSignedIn=true)
+                            listOf(active),{},{},{},{},{},yandexSignedIn=true,verifiedName="Пекарь")
                     }
                     scene=="yandex-offer" -> {
                         // Exact production offer, synthetic SignedOut state; no SDK launch or backend.

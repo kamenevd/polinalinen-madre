@@ -54,7 +54,7 @@ class Fixes7013ExtendedRenderTest {
             add("alice-sheet-unlinked" to Atmosphere.NIGHT);add("alice-yandex-consent" to Atmosphere.NIGHT)
             for(scene in listOf("toc-search","toc-search-flour","toc-empty","chapter-end-edge","chapter-active","sheet-calc","sheet-calc-flour","sheet-calc-pct",
                 "sheet-start-now","oven-empty","oven-planned","oven-overdue","bake-two-chips","bake-more-steps","bake-undo-snack","bake-fulltimer",
-                "bake-finale-photo","bake-finale-noaccount","yandex-offer-busy","yandex-offer-error-network","yandex-offer-error-yandex","yandex-offer-error-server","yandex-offer-offline",
+                "bake-finale-photo","bake-finale-noaccount","yandex-offer-busy","yandex-offer-error","yandex-offer-error-network","yandex-offer-error-yandex","yandex-offer-error-server","yandex-offer-offline",
                 "settings-account-out","settings-account-in","account-sheet","signout-dialog","station-timer","toc-greeting"))add(scene to Atmosphere.DAWN)
             for(scene in listOf("alice-connect-0","alice-connect-1","alice-connect-2"))for(theme in listOf(Atmosphere.DAWN,Atmosphere.NIGHT))add(scene to theme)
             add("settings-in" to Atmosphere.NIGHT);add("alice-linked" to Atmosphere.NIGHT)

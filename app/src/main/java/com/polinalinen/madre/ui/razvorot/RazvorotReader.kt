@@ -58,6 +58,12 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
     val setFactor: (Double) -> Unit = { value -> onScaleFactor?.invoke(value) ?: preferences.choosePortions(value.toFloat()) }
     var anchor by rememberSaveable(recipeId) { mutableStateOf("$recipeId:title") }
     var seekActive by rememberSaveable(recipeId,initialStep,initialPage) { mutableStateOf(initialStep != null || initialPage >= 0) }
+    // Own saved viewport/intent beside the route, outside BoxWithConstraints'
+    // transient subcomposition. A passive bookmark is not a new seek request.
+    var page by rememberSaveable(recipeId) { mutableIntStateOf(0) }
+    var scrollRequest by rememberSaveable(recipeId) { mutableLongStateOf(0L) }
+    var seekAnchor by rememberSaveable(recipeId) { mutableStateOf("$recipeId:title") }
+    val scrollCursor = rememberSaveable(recipeId, saver=ChapterScrollState.Saver) { ChapterScrollState() }
     val p = LocalPaper.current
     Immersive(barsRevealed = chrome)
     val stableInsets = WindowInsets.systemBarsIgnoringVisibility.union(WindowInsets.displayCutout)
@@ -129,14 +135,12 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
                 }
             }
         }
-        var page by rememberSaveable(recipeId) { mutableIntStateOf(0) }
-        var scrollRequest by rememberSaveable(recipeId) { mutableLongStateOf(0L) }
-        val scrollCursor = rememberSaveable(recipeId, saver=ChapterScrollState.Saver) { ChapterScrollState() }
         LaunchedEffect(leaves) {
             if (leaves.isEmpty()) return@LaunchedEffect
             if (seekActive && initialPage >= 0) {
                 page = initialPage.coerceIn(0, leaves.lastIndex)
                 anchor = leaves[page].anchor
+                seekAnchor = anchor
                 scrollRequest++
                 seekActive = false
                 return@LaunchedEffect
@@ -151,11 +155,12 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
                 val targetRecipe=recipes.first{it.id==recipeId}
                 anchor=initialStep?.takeIf { it in targetRecipe.timeline.indices }?.let { "$recipeId:${targetRecipe.ingredients.size+it}:0" }
                     ?:leaves.getOrNull(page)?.anchor?:anchor
+                seekAnchor=anchor
                 scrollRequest++
             }
             seekActive=false
         }
-        fun move(index:Int) { page=index.coerceIn(0,(leaves.size-1).coerceAtLeast(0));leaves.getOrNull(page)?.let { anchor=it.anchor };scrollRequest++; if(leaves.getOrNull(page)?.end==true)chrome=true }
+        fun move(index:Int) { page=index.coerceIn(0,(leaves.size-1).coerceAtLeast(0));leaves.getOrNull(page)?.let { anchor=it.anchor;seekAnchor=it.anchor };scrollRequest++; if(leaves.getOrNull(page)?.end==true)chrome=true }
         val currentPage by rememberUpdatedState(page)
         val pageCallback by rememberUpdatedState(onPageChanged)
         val hasPages by rememberUpdatedState(leaves.isNotEmpty())
@@ -167,7 +172,7 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
         if(current!=null && recipe!=null) {
             if(preferences.mode==ReadingMode.SCROLL || density.fontScale>1.3f || annotations) {
                 Box(Modifier.fillMaxSize().padding(top=headerHeight,bottom=footerHeight)) {
-                    val navigation=ChapterScrollNavigation(anchor,scrollRequest,leaves.map{it.anchor},scrollCursor) { visible ->
+                    val navigation=ChapterScrollNavigation(anchor,scrollRequest,leaves.map{it.anchor},scrollCursor,seekAnchor) { visible ->
                         leaves.indexOfFirst{it.anchor==visible}.takeIf{it>=0}?.let{page=it;anchor=visible}
                     }
                     if(scrollContent!=null)scrollContent(recipe,navigation)

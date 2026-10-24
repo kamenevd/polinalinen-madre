@@ -29,6 +29,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -361,15 +362,20 @@ fun RecipeChapterContent(recipe: Recipe, scaleFactor: Double, textSize: Float = 
         val target = navigation ?: return@LaunchedEffect
         if (viewportWidth == 0) return@LaunchedEffect
         val restored = cursor.pendingRestore
-        if (restored != null && cursor.geometry == layoutKey) {
+        val explicitSeek = cursor.processed != target.request
+        if (restored != null && !explicitSeek && cursor.geometry == layoutKey) {
             snapshotFlow { anchors.positions["${recipe.id}:end"] }.filterNotNull().first()
+            // Let the newly measured reader chrome/content commit before applying
+            // the saved pixels. Do not publish an intermediate viewport bookmark.
+            withFrameNanos { }
             scroll.scrollTo(restored)
             cursor.processed = target.request
             cursor.pendingRestore = null
             return@LaunchedEffect
         }
-        if (cursor.processed == target.request && cursor.geometry == layoutKey) return@LaunchedEffect
-        val destination = snapshotFlow { anchors.positions[target.anchor] }.filterNotNull().first()
+        if (!explicitSeek && cursor.geometry == layoutKey) return@LaunchedEffect
+        val destinationAnchor = if (explicitSeek) target.seekAnchor else target.anchor
+        val destination = snapshotFlow { anchors.positions[destinationAnchor] }.filterNotNull().first()
         scroll.scrollTo(destination)
         cursor.processed = target.request
         cursor.geometry = layoutKey
@@ -378,7 +384,7 @@ fun RecipeChapterContent(recipe: Recipe, scaleFactor: Double, textSize: Float = 
     LaunchedEffect(scroll, anchors) {
         snapshotFlow {
             val current = currentNavigation
-            if (current == null || current.request != cursor.processed || cursor.geometry != layoutKey) null
+            if (current == null || cursor.pendingRestore != null || current.request != cursor.processed || cursor.geometry != layoutKey) null
             else if (scroll.maxValue > 0 && scroll.value == scroll.maxValue) current.pageAnchors.lastOrNull()
             else current.pageAnchors.mapNotNull { anchor -> anchors.positions[anchor]?.let { anchor to it } }
                 .filter { it.second <= scroll.value + 1 }.maxByOrNull { it.second }?.first

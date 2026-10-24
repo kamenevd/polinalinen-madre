@@ -15,6 +15,8 @@ data class ChapterScrollNavigation(
     val request: Long,
     val pageAnchors: List<String>,
     val cursor: ChapterScrollState,
+    // The last deliberate seek, never overwritten by a passive viewport bookmark.
+    val seekAnchor: String,
     val onAnchorChanged: (String) -> Unit,
 )
 

@@ -298,9 +298,10 @@ class BookNavigationUiTest {
         fun scrollOffset()=rule.onNodeWithTag("reader-scroll").fetchSemanticsNode()
             .config[SemanticsProperties.VerticalScrollAxisRange].value()
         val position=scrollOffset();assertTrue(position>0f)
-        val before="${actualNavigation?.request}/${actualNavigation?.cursor?.processed}/${actualNavigation?.cursor?.geometry}/${actualNavigation?.anchor}"
+        fun cursorDescription()="${actualNavigation?.request}/${actualNavigation?.cursor?.processed}/${actualNavigation?.cursor?.geometry}/${actualNavigation?.anchor}/seek=${actualNavigation?.seekAnchor}/max=${actualNavigation?.cursor?.scroll?.maxValue}/pending=${actualNavigation?.cursor?.pendingRestore}"
+        val before=cursorDescription()
         restoration.emulateSavedInstanceStateRestore();rule.waitForIdle()
-        val after="${actualNavigation?.request}/${actualNavigation?.cursor?.processed}/${actualNavigation?.cursor?.geometry}/${actualNavigation?.anchor}"
+        val after=cursorDescription()
         assertEquals("Actual reader cursor before=$before after=$after",position,scrollOffset(),.01f)
         rule.onNodeWithText(recipe.timeline[2].title.uppercase()).assertIsDisplayed()
         rule.onNode(SemanticsMatcher("footer seeks actual title") {

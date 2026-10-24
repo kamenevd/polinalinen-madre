@@ -8,6 +8,7 @@ import com.polinalinen.madre.ui.kit.RazvorotTheme as MadreTheme
 import com.polinalinen.madre.voice.*
 import org.junit.Rule
 import org.junit.Test
+import org.junit.Assert.*
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
@@ -32,5 +33,36 @@ class AlicePageTest {
         render(VoiceUiState(VoiceStatus.REVOKE_PENDING))
         rule.onNodeWithText("Телефон на связи · выпечка доступна Алисе").assertDoesNotExist()
         rule.onNodeWithText("Повторить отзыв доступа").performScrollTo().assertHasClickAction()
+    }
+    @Test fun signedInScreenOpeningAndBakeChoiceAreNotConsentOnlyWarningButtonIs() {
+        val actions = mutableListOf<String>()
+        rule.setContent { MadreTheme { AlicePage(VoiceUiState(), listOf(bake), {},
+            { actions += "legacy-select" }, {}, {}, {}, yandexSignedIn = true,
+            onYandexConnect = { actions += it }) } }
+        rule.waitForIdle()
+        assertTrue(actions.isEmpty())
+        rule.onNodeWithText("Подключить Алису").assertDoesNotExist()
+        rule.onNodeWithText("Выпечка").performScrollTo().performClick()
+        rule.waitForIdle()
+        assertTrue(actions.isEmpty())
+        rule.onNodeWithText(AliceCopy.READ_CONTROL_WARNING).performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText(AliceCopy.SHARED_WARNING).performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Подключить Алису").performScrollTo().performClick()
+        assertEquals(listOf(bake.bakeKey), actions)
+        rule.onNodeWithText("Телефон на связи · выпечка доступна Алисе").assertDoesNotExist()
+    }
+    @Test fun restoredSelectionAndExpiredConsentNeedAnotherVisibleTapNotAnAutomaticRequest() {
+        var actions = 0
+        rule.setContent { MadreTheme { AlicePage(VoiceUiState(VoiceStatus.WAITING_LINK,
+            selectedBake = bake.bakeKey, yandexConsentExpiresAt = 1L), listOf(bake), {}, {}, {}, {}, {},
+            yandexSignedIn = true, onYandexConnect = { actions++ }) } }
+        rule.waitForIdle()
+        assertEquals(0, actions)
+        rule.onNodeWithText("Время подключения истекло. Для новой попытки нажми «Подключить Алису».")
+            .performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText(AliceCopy.READ_CONTROL_WARNING).performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText(AliceCopy.SHARED_WARNING).performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Подключить Алису").performScrollTo().performClick()
+        assertEquals(1, actions)
     }
 }

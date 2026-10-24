@@ -15,7 +15,7 @@ class HttpsYandexAccountApi internal constructor(
     client: OkHttpClient,
     private val wallClock: () -> Long,
     private val unbindCredential: suspend () -> String = installationCredential,
-) : YandexAccountApi {
+) : YandexAccountApi, YandexVoiceConsentApi {
     constructor(installationCredential: suspend () -> String, unbindCredential: suspend () -> String) : this(
         installationCredential, OkHttpClient(), System::currentTimeMillis, unbindCredential)
 
@@ -69,8 +69,32 @@ class HttpsYandexAccountApi internal constructor(
         }
     }
 
+    override suspend fun prepareVoiceConsent(credential: String, bakeId: String, generation: String): Long = safeRequest {
+        // Deliberately do not call either credential provider: this action cannot create/enroll an installation.
+        require(credential.matches(Regex("[A-Za-z0-9_-]{43}")))
+        require(java.util.UUID.fromString(bakeId).toString() == bakeId)
+        require(java.util.UUID.fromString(generation).toString() == generation)
+        val payload = JsonObject().apply {
+            addProperty("bake_id", bakeId)
+            addProperty("generation", generation)
+        }
+        execute(request("yandex-voice-consent", credential, payload.toString())).use { response ->
+            withContext(Dispatchers.IO) {
+                if (response.code != 200) throw YandexAccountFailure(YandexAccountError.SERVER)
+                val json = requireNotNull(Gson().fromJson(readBounded(response), JsonObject::class.java))
+                require(json.keySet() == setOf("expires_at"))
+                val expiry = requireNotNull(json.getAsJsonPrimitive("expires_at"))
+                require(expiry.isNumber && expiry.asString.matches(Regex("[0-9]{1,18}")))
+                val expiresAt = expiry.asLong
+                // Server TTL is 300 s; allow only the existing four-second clock tolerance.
+                require(expiresAt > wallClock() && expiresAt <= wallClock() + 304_000L)
+                expiresAt
+            }
+        }
+    }
+
     private fun request(path: String, credential: String, json: String): Request {
-        require(path == "yandex-bind" || path == "yandex-unbind")
+        require(path in setOf("yandex-bind", "yandex-unbind", "yandex-voice-consent"))
         require(json.toByteArray(Charsets.UTF_8).size <= MAX_RESPONSE_BYTES)
         return Request.Builder().url("https://kdnfx.space/alice/madre/voice/phone/$path")
             .header("Authorization", "Installation $credential")

@@ -77,6 +77,13 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
             Immersive(enabled = (scene.startsWith("reader-") && scene != "reader-chrome") || scene.startsWith("curl-") || scene.startsWith("gles2-curl-") || scene.startsWith("fulltimer-") || scene == "bake" || scene == "reading-sheet")
             Box(Modifier.fillMaxSize().background(LocalPaper.current.bg).testTag("scene-$scene").semantics{stateDescription="${debug.renderer}:${debug.renderedFrames}:${debug.cachedPages}:${debug.reason}"}) {
                 when {
+                    scene=="alice-yandex-consent" -> {
+                        // Actual production page, synthetic selected bake/signed-in boundary; no account/network effects.
+                        val active=remember(recipe){BakingSession.start(7,recipe)}
+                        AlicePage(com.polinalinen.madre.voice.VoiceUiState(
+                            com.polinalinen.madre.voice.VoiceStatus.WAITING_LINK, active.bakeKey),
+                            listOf(active),{},{},{},{},{},yandexSignedIn=true)
+                    }
                     scene=="yandex-offer" -> {
                         // Exact production offer, synthetic SignedOut state; no SDK launch or backend.
                         com.polinalinen.madre.account.yandex.YandexOfferContent(

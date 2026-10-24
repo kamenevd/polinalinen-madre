@@ -61,6 +61,14 @@ class YandexAccountViewModel(application: Application) : AndroidViewModel(applic
         }
     }
 
+    /** Called only by the visible warning's button, never by login/bind/SDK callbacks. */
+    suspend fun connectAliceFromExplicitTap(bakeKey: String) {
+        val signedIn = state.value as? YandexAccountState.SignedIn ?: return
+        app.voiceCoordinator.prepareYandexFromExplicitTap(bakeKey) {
+            (state.value as? YandexAccountState.SignedIn)?.profile === signedIn.profile
+        }
+    }
+
     fun signOut() {
         // Synchronous local authority fence BEFORE any cache/metadata/network suspension.
         app.disconnectVoice()

@@ -148,6 +148,10 @@ private fun accountErrorCopy(kind:YandexAccountError)=when(kind) {
         else "Шаг 1 · войдите с Яндекс ID, чтобы Алиса могла узнать ваш аккаунт")
     YandexAccountPanel(state,pending,owner.signIn,onOpenSettings,owner.model::retryPendingUnbind)
     PaperNote("Вход в аккаунт не означает, что навык уже связан. Подтверждение на телефоне остаётся доступным.")
+    if (state is YandexAccountState.SignedIn) {
+        PaperNote(com.polinalinen.madre.ui.screens.AliceCopy.READ_CONTROL_WARNING)
+        PaperNote(com.polinalinen.madre.ui.screens.AliceCopy.SHARED_WARNING)
+    }
 }
 
 /** Works without account/voice linking. It does not send a command or invent a Station name. */

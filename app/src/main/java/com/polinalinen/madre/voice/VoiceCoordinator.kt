@@ -2,6 +2,7 @@ package com.polinalinen.madre.voice
 
 import com.google.gson.Gson
 import com.google.gson.JsonObject
+import com.polinalinen.madre.account.yandex.YandexVoiceConsentApi
 import com.polinalinen.madre.model.BakingClock
 import com.polinalinen.madre.model.BakingSession
 import com.polinalinen.madre.data.db.entities.VoiceCommandReceiptEntity
@@ -23,12 +24,14 @@ interface VoiceController {
 
 enum class VoiceStatus { UNLINKED, LOADING, WAITING_LINK, CONNECTED, OFFLINE, REVOKE_PENDING, ERROR }
 data class VoiceUiState(val status: VoiceStatus = VoiceStatus.UNLINKED, val selectedBake: String? = null,
-    val message: String? = null, val preview: PairPreview? = null, val phoneRequired: Boolean = false)
+    val message: String? = null, val preview: PairPreview? = null, val phoneRequired: Boolean = false,
+    val yandexConsentExpiresAt: Long? = null)
 data class PairPreview(val challengeId: String, val code: String, val expiresAt: Long, val bakeKey: String,
     val generation: String)
 
 /** Transport/consent only. The controller remains the sole state writer. */
-class VoiceCoordinator(private val store: VoiceIdentityStore, private val api: VoiceApi, private val fence: Any) {
+class VoiceCoordinator(private val store: VoiceIdentityStore, private val api: VoiceApi, private val fence: Any,
+    private val yandexConsent: YandexVoiceConsentApi? = null) {
     private val actions = Mutex()
     @Volatile private var controller: VoiceController? = null
     @Volatile private var identity: VoiceIdentity? = null
@@ -68,34 +71,84 @@ class VoiceCoordinator(private val store: VoiceIdentityStore, private val api: V
 
     /** Explicit on-phone action; never called on restore, from a webhook or merely opening the screen. */
     suspend fun select(bakeKey: String) = actions.withLock {
-        val c = controller ?: return@withLock
-        val selected = c.voiceSessions().find { it.bakeKey == bakeKey && !it.isCompleted } ?: return@withLock
+        selectLocked(bakeKey)
+        Unit
+    }
+
+    private suspend fun selectLocked(bakeKey: String, allowEnrollment: Boolean = true,
+        accountStillSignedIn: () -> Boolean = { true }): Boolean {
+        val c = controller ?: return false
+        val selected = c.voiceSessions().find { it.bakeKey == bakeKey && !it.isCompleted } ?: return false
         if (selected.recipeRevision != c.voiceRecipeRevision() || selected.trustedPortions == null || !selected.restoredStepValid) {
             _state.value = _state.value.copy(message = "Для этой старой выпечки голосовое управление недоступно. Таймер на телефоне работает.")
-            return@withLock
+            return false
         }
         val before = synchronized(fence) { epoch++; epoch }
-        _state.value = _state.value.copy(status = VoiceStatus.LOADING, preview = null, message = null)
+        _state.value = _state.value.copy(status = VoiceStatus.LOADING, preview = null, message = null, yandexConsentExpiresAt = null)
+        fun current() = epoch == before && controller === c && accountStillSignedIn()
         try {
-            val existing = identity ?: withContext(Dispatchers.IO) { store.readOrCreate() }
+            val existing = identity ?: withContext(Dispatchers.IO) {
+                if (allowEnrollment) store.readOrCreate() else requireNotNull(store.read())
+            }
             // Old consent is invalidated locally BEFORE the first network operation.
             val disabled = existing.copy(bakeKey = null, generation = null, revokePending = true)
-            synchronized(fence) { identity = disabled }
-            withContext(Dispatchers.IO) { store.write(disabled) }
-            api.post("enroll", existing.credential, mapOf("credential" to existing.credential))
+            withContext(Dispatchers.IO) {
+                synchronized(fence) { check(current()); store.write(disabled); identity = disabled }
+            }
+            if (allowEnrollment) api.post("enroll", existing.credential, mapOf("credential" to existing.credential))
+            check(current())
             check(api.post("disconnect", existing.credential).get("revoked")?.asBoolean == true)
+            check(current())
             val chosen = existing.copy(bakeKey = bakeKey, generation = UUID.randomUUID().toString(), revokePending = false)
             check(api.post("select", chosen.credential, mapOf("bake_key" to bakeKey, "selection_generation" to chosen.generation)).get("selected")?.asBoolean == true)
             withContext(Dispatchers.IO) {
                 synchronized(fence) {
-                    check(epoch == before && controller === c)
+                    check(current())
                     store.write(chosen)
                     identity = chosen; connection = UUID.randomUUID().toString()
                     _state.value = VoiceUiState(VoiceStatus.WAITING_LINK, bakeKey)
                 }
             }
+            return true
         } catch (e: CancellationException) { throw e }
-        catch (_: Exception) { _state.value = VoiceUiState(VoiceStatus.ERROR, message = "Не удалось выбрать выпечку. Проверь интернет и попробуй снова.") }
+        catch (_: Exception) {
+            synchronized(fence) {
+                if (epoch == before) _state.value = VoiceUiState(VoiceStatus.ERROR, message = "Не удалось выбрать выпечку. Проверь интернет и попробуй снова.")
+            }
+            return false
+        }
+    }
+
+    /** Fresh warning + deliberate tap only. No saved job, automatic retry or grant/CONNECTED synthesis. */
+    suspend fun prepareYandexFromExplicitTap(bakeKey: String, accountStillSignedIn: () -> Boolean) {
+        val consentApi = yandexConsent ?: return
+        // Drop overlapping taps rather than queue a second consent action behind the first one.
+        if (!actions.tryLock()) return
+        try {
+            if (!accountStillSignedIn()) return
+            if (!selectLocked(bakeKey, allowEnrollment = false, accountStillSignedIn)) return
+            val chosen = identity ?: return
+            val generation = chosen.generation ?: return
+            val e = epoch
+            fun current() = epoch == e && identity == chosen && !chosen.revokePending && accountStillSignedIn()
+            try {
+                synchronized(fence) {
+                    check(current())
+                    _state.value = _state.value.copy(status = VoiceStatus.LOADING)
+                }
+                val expiresAt = consentApi.prepareVoiceConsent(chosen.credential, bakeKey, generation)
+                synchronized(fence) {
+                    if (current()) _state.value = VoiceUiState(VoiceStatus.WAITING_LINK, bakeKey,
+                        yandexConsentExpiresAt = expiresAt)
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) {
+                synchronized(fence) {
+                    if (current()) _state.value = VoiceUiState(VoiceStatus.WAITING_LINK, bakeKey,
+                        message = "Не удалось подготовить подключение. Проверь интернет и нажми «Подключить Алису» снова.")
+                }
+            }
+        } finally { actions.unlock() }
     }
 
     /** Synchronous in-memory fence: a sign-out/disconnect wins against any not-yet-committed command. */
@@ -162,7 +215,8 @@ class VoiceCoordinator(private val store: VoiceIdentityStore, private val api: V
     fun retryConnection() = synchronized(fence) {
         epoch++
         connection = UUID.randomUUID().toString()
-        if (_state.value.selectedBake != null) _state.value = _state.value.copy(status = VoiceStatus.OFFLINE, message = null)
+        if (_state.value.selectedBake != null) _state.value = _state.value.copy(status = VoiceStatus.OFFLINE,
+            message = null, yandexConsentExpiresAt = null)
     }
 
     fun dismissPairPreview() = synchronized(fence) { _state.value = _state.value.copy(preview = null) }

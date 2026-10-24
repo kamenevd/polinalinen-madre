@@ -14,11 +14,15 @@ import com.polinalinen.madre.model.BakingSession
 import com.polinalinen.madre.ui.components.*
 import com.polinalinen.madre.voice.*
 import com.polinalinen.madre.viewmodel.BakingViewModel
+import com.polinalinen.madre.account.yandex.LocalYandexAccountUi
+import com.polinalinen.madre.account.yandex.YandexAccountState
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** Published skill identity is pinned at delivery; not a fictional connection indicator. */
 object AliceCopy {
     const val SKILL_NAME = "Голос закваски"
+    const val READ_CONTROL_WARNING = "Алиса сможет читать текущий шаг выбранной выпечки и управлять её таймером."
     const val SHARED_WARNING = "Любой рядом с общей колонкой сможет узнать ход и управлять только выбранной выпечкой. Другие выпечки, дневник, полка и фото не передаются."
     const val AVAILABILITY = "Нужны интернет и работающая книга на телефоне. Если Android остановит книгу, команды не выполнятся. Открой Мадре снова; старые команды не повторятся."
 }
@@ -28,24 +32,35 @@ fun AliceScreen(viewModel: BakingViewModel, coordinator: VoiceCoordinator, onBac
     val state by coordinator.state.collectAsState()
     val sessions by viewModel.sessions.collectAsState()
     val scope = rememberCoroutineScope()
+    val account = LocalYandexAccountUi.current
+    val accountState = account?.model?.state?.collectAsState()?.value
     LaunchedEffect(coordinator) { coordinator.load() }
     AlicePage(state, sessions.filterNot { it.isCompleted }, onBack,
         onSelect = { scope.launch { coordinator.select(it) } },
         onPreview = { scope.launch { coordinator.previewPair(it) } },
         onApprove = { scope.launch { coordinator.approvePair() } },
         onDisconnect = { coordinator.revokeLocally(); scope.launch { coordinator.disconnect() } },
+        yandexSignedIn = accountState is YandexAccountState.SignedIn,
+        onYandexConnect = { key -> scope.launch { account?.model?.connectAliceFromExplicitTap(key) } },
     )
 }
 
 @Composable
 internal fun AlicePage(state: VoiceUiState, sessions: List<BakingSession>, onBack: () -> Unit,
-    onSelect: (String) -> Unit, onPreview: (String) -> Unit, onApprove: () -> Unit, onDisconnect: () -> Unit) {
+    onSelect: (String) -> Unit, onPreview: (String) -> Unit, onApprove: () -> Unit, onDisconnect: () -> Unit,
+    yandexSignedIn: Boolean = false, onYandexConnect: (String) -> Unit = {}) {
     val colors = LocalPaper.current
     var candidateKey by remember { mutableStateOf<String?>(null) }
     var code by remember { mutableStateOf("") } // pairing code is never saved in instance state/history
     val candidate = sessions.find { it.bakeKey == candidateKey }
     val selected = sessions.find { it.bakeKey == state.selectedBake }
     val busy = state.status == VoiceStatus.LOADING
+    val expiry = state.yandexConsentExpiresAt
+    var consentReady by remember(expiry) { mutableStateOf(expiry != null && expiry > System.currentTimeMillis()) }
+    LaunchedEffect(expiry) {
+        if (expiry != null) { delay((expiry - System.currentTimeMillis()).coerceAtLeast(0L)); consentReady = false }
+        // Expiry only changes the visible explanation. It never creates or retries consent.
+    }
     PaperSurface(color = colors.bg, modifier = Modifier.fillMaxSize()) {
         Column(Modifier.imePadding().verticalScroll(rememberScrollState())
             .padding(horizontal = 22.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -77,17 +92,30 @@ internal fun AlicePage(state: VoiceUiState, sessions: List<BakingSession>, onBac
                             candidateKey = sessions[(index + 1) % sessions.size].bakeKey
                         })
                     candidate?.let { Text("Шаг: ${it.currentStep.title}", color = colors.ink2,style = PaperType.body) }
+                    if (yandexSignedIn) Text(AliceCopy.READ_CONTROL_WARNING, color = colors.ink,style = PaperType.body)
                     Text(AliceCopy.SHARED_WARNING, color = colors.ink2,style = PaperType.body)
                     if (candidate != null && !busy) {
-                        PaperButton("Разрешить для этой выпечки", onClick = { onSelect(candidate.bakeKey) })
+                        if (yandexSignedIn) PaperButton("Подключить Алису", onClick = { onYandexConnect(candidate.bakeKey) })
+                        else PaperButton("Разрешить для этой выпечки", onClick = { onSelect(candidate.bakeKey) })
                     } else if (!busy) {
                         Text("Сначала выбери выпечку в строке выше.", color = colors.ink2,style = PaperType.body)
                     }
                 }
             }
             if (state.selectedBake != null && state.status != VoiceStatus.CONNECTED) {
+                if (yandexSignedIn) {
+                    if (consentReady) {
+                        PaperNote("Подключение подготовлено на пять минут. Это ещё не связь с Алисой.")
+                    } else {
+                        Text(AliceCopy.READ_CONTROL_WARNING, color = colors.ink,style = PaperType.body)
+                        Text(AliceCopy.SHARED_WARNING, color = colors.ink2,style = PaperType.body)
+                        PaperButton("Подключить Алису", onClick = { onYandexConnect(state.selectedBake) }, enabled = !busy)
+                        if (expiry != null) PaperNote("Время подключения истекло. Для новой попытки нажми «Подключить Алису».")
+                    }
+                }
                 Text("2. Свяжи аккаунт Алисы", color = colors.ink,style = PaperType.body, fontSize = 19.sp)
-                Text("Скажи: «Алиса, запусти навык ${AliceCopy.SKILL_NAME}», затем «подключить аккаунт». Открой предложенное окно входа в приложении Яндекса и введи показанный код здесь — не произноси его колонке.", color = colors.ink2,style = PaperType.body)
+                Text(if (yandexSignedIn) "Скажи: «Алиса, запусти навык ${AliceCopy.SKILL_NAME}», затем «подключить аккаунт». В приложении Яндекса нажми «Авторизоваться» и войди тем же аккаунтом. Если появится код, введи его здесь и подтверди доступ — не произноси код колонке."
+                    else "Скажи: «Алиса, запусти навык ${AliceCopy.SKILL_NAME}», затем «подключить аккаунт». Открой предложенное окно входа в приложении Яндекса и введи показанный код здесь — не произноси его колонке.", color = colors.ink2,style = PaperType.body)
                 Text("Это доступ к одной выпечке, не вход в семейную полку. Почта и пароль Мадре не нужны.", color = colors.ink2,style = PaperType.body)
                 PaperField(code, onValueChange = { if (it.length <= 10) code = it.uppercase(java.util.Locale.ROOT) },
                     label = "Код из окна подключения", modifier = Modifier.fillMaxWidth())

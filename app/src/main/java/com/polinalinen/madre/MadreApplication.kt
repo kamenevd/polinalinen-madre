@@ -59,17 +59,18 @@ class MadreApplication : Application() {
     val voiceCoordinator: com.polinalinen.madre.voice.VoiceCoordinator by lazy {
         com.polinalinen.madre.voice.VoiceCoordinator(
             voiceIdentityStore,
-            com.polinalinen.madre.voice.HttpsVoiceApi(), activeBakeRepository.commitFence,
+            com.polinalinen.madre.voice.HttpsVoiceApi(), activeBakeRepository.commitFence, yandexTransport,
         )
     }
     val yandexAccountStorage: com.polinalinen.madre.account.yandex.YandexAccountStorage by lazy {
         com.polinalinen.madre.account.yandex.YandexAccountPrefs(this)
     }
-    val yandexAccountApi: com.polinalinen.madre.account.yandex.YandexAccountApi by lazy {
+    private val yandexTransport: com.polinalinen.madre.account.yandex.HttpsYandexAccountApi by lazy {
         val installation=com.polinalinen.madre.account.yandex.YandexInstallationAccess(
             voiceIdentityStore,com.polinalinen.madre.voice.HttpsVoiceApi())
         com.polinalinen.madre.account.yandex.HttpsYandexAccountApi(installation::forBind,installation::forUnbind)
     }
+    val yandexAccountApi: com.polinalinen.madre.account.yandex.YandexAccountApi get() = yandexTransport
     fun disconnectVoice() {
         voiceCoordinator.revokeLocally()
         appScope.launch { voiceCoordinator.disconnect() }

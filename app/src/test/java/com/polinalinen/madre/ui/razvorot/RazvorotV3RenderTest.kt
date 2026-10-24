@@ -53,5 +53,5 @@ class RazvorotV3RenderTest {
     @Test fun starterGrowing()=render("starter-growing", listOf(Atmosphere.DAWN))
     @Test fun shelf()=render("shelf", listOf(Atmosphere.DAWN))
     @Test fun aliceUnlinked()=render("alice-sheet-unlinked", listOf(Atmosphere.NIGHT))
-    @Test fun curlNight()=render("curl-mid-night", listOf(Atmosphere.NIGHT))
+    @Test fun explicitYandexVoiceConsent()=render("alice-yandex-consent", listOf(Atmosphere.NIGHT))
 }

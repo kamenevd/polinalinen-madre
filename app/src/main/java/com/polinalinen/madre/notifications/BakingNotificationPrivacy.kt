@@ -14,7 +14,7 @@ internal fun NotificationCompat.Builder.bakingLockScreenPrivacy(
         .setSmallIcon(R.drawable.ic_notification_bread)
         .setContentTitle("Мадре")
         .setContentText(if(plannedNumber!=null && plannedNumber in 1..9)"Запланированная выпечка №$plannedNumber" else publicBakeNumbers(numbers))
-        .setVisibility(Notification.VISIBILITY_PUBLIC)
+        .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
         .build())
     return this
 }

@@ -1,0 +1,63 @@
+{
+  "upstream": "com.yandex.android:authsdk:3.3.0",
+  "source_url": "https://repo1.maven.org/maven2/com/yandex/android/authsdk/3.3.0/authsdk-3.3.0-sources.jar",
+  "source_sha256": "3f731e1a48d3488a2daf15dea70d8c039122af4613465735e8a1203801bb35c5",
+  "aar_sha256": "0bc058b7c4856965b89d36c4379b7261346fb55513f44262a1f9485fb6a03556",
+  "license": "Apache-2.0 (published3.3.0 POM and upstream notice)",
+  "license_urls": {
+    "LICENSE.txt": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+    "UPSTREAM-NOTICE.txt": "https://raw.githubusercontent.com/yandexmobile/yandex-login-sdk-android/master/LICENSE.txt"
+  },
+  "original_files": {
+    "src/main/java/com/yandex/authsdk/internal/domesticroots/webview/WebViewSslErrorHandler.java": "462edccdf42c9c499d004712b9e1c9cb71f79ab53e58f5e8da7c34a8a12992f4",
+    "src/main/java/com/yandex/authsdk/BuildConfig.java": "ddeffb29d27e73e320d170c3e55b6483fd45983ca1f2f2f73e3dd3b136668982",
+    "src/main/java/com/yandex/authsdk/YandexAuthException.kt": "51e5ab875cb70973ed1a157368c874ebedc448d04853d0446176a32a84285e50",
+    "src/main/java/com/yandex/authsdk/YandexAuthLoginOptions.kt": "5e5ea07ec9567d7231322248b02b22c33dc77df11ade1d4841916686c3889f15",
+    "src/main/java/com/yandex/authsdk/YandexAuthOptions.kt": "d79a3c809aa1ee61c1845959bd9f764367872308d5d91740be1e01a277860a28",
+    "src/main/java/com/yandex/authsdk/YandexAuthResult.kt": "d880e67b01f7797e9b0700a5b9220817b1786ea03d0d8f89b24c4c0ba3826f43",
+    "src/main/java/com/yandex/authsdk/YandexAuthSdk.kt": "f8ddd1fb08b36457c381b22f1be72b8ed4948937da8f670874b5f2fddc46566e",
+    "src/main/java/com/yandex/authsdk/YandexAuthSdkContract.kt": "4a4d45a15613ffa4f5a9b6c10700d6a16b25aba1c60b9c819f7b55e226ced54d",
+    "src/main/java/com/yandex/authsdk/YandexAuthSdkImpl.kt": "946524467a6745cf7aa96e41d652e391cd19259563cb36eb1362a06561d7ea8f",
+    "src/main/java/com/yandex/authsdk/YandexAuthToken.kt": "5e2419a94f58bde252a4c164f7ff18a14baabdced03c00ede7f487677e21cd28",
+    "src/main/java/com/yandex/authsdk/internal/AuthSdkActivity.kt": "91881f89f3b94c8997f8b6ea521c1616b9d702d6c4554dbfbe8bcdcb06ca3219",
+    "src/main/java/com/yandex/authsdk/internal/ChromeTabDataActivity.kt": "ef0ed55f37ec8a2460a6b381c400d896b9d445b1370ae0467ec551516c0685fa",
+    "src/main/java/com/yandex/authsdk/internal/ChromeTabLoginActivity.kt": "3d4dff84d2af2f4ab8b8062f35e94363b85bd9e72ae4b7243b146bff31aebcb5",
+    "src/main/java/com/yandex/authsdk/internal/CompatUtils.kt": "b77a95d8404f6739bc4e2707ac7bcbdbc80ff634b17cca298e8c50b41c7b13b1",
+    "src/main/java/com/yandex/authsdk/internal/Components.kt": "18bfd8697aef78ea14cb71a27b75aa430d87324bad1ad9d83ca164db3cd6487a",
+    "src/main/java/com/yandex/authsdk/internal/Constants.kt": "8f29174d05c77868d0edb8ce1f0d18f160e1d3bb2079b001fe0d4fa0c4a967ea",
+    "src/main/java/com/yandex/authsdk/internal/ExternalLoginHandler.kt": "df0aafe56cd5321201bcde15fbc0d731c550f98957b614e4919cf3b46746d0b9",
+    "src/main/java/com/yandex/authsdk/internal/HostUtil.kt": "f4823c411de529614ccf818cd843be5963ef1ecb984f3ba51faa4a03cd115cba",
+    "src/main/java/com/yandex/authsdk/internal/JwtRequest.kt": "1058e55dff1cc860273a773ed53eed62fbcf6867f5c38501951a3cdb77376460",
+    "src/main/java/com/yandex/authsdk/internal/Logger.kt": "178f1cea4e1555a72b556deaa4055fc2641ab16b4b23dc5916585f48603abedd",
+    "src/main/java/com/yandex/authsdk/internal/LoginSslErrorHandler.kt": "be01bf1efd011066808ca4da994f320ad9de0330b61e29b12e59df48554d3b98",
+    "src/main/java/com/yandex/authsdk/internal/Origins.kt": "93dc5957eabe6b5d0cbac96e42b6bf9c6ed74cc682334c4825236cb5a833e4a3",
+    "src/main/java/com/yandex/authsdk/internal/PackageManagerHelper.kt": "1d4004cec32574e406053309b6dd7777223eac39daab255b2f76242f2eee6b99",
+    "src/main/java/com/yandex/authsdk/internal/PreferencesHelper.kt": "aa39069fa05025b5f08a29eb381821021c3dcda9e5ea7b5dc7ae0f34cc8c2f53",
+    "src/main/java/com/yandex/authsdk/internal/UrlCreator.kt": "79c80663e756a837b28430f85027345bf69b520888a362bd323310374004515e",
+    "src/main/java/com/yandex/authsdk/internal/WebViewLoginActivity.kt": "8f05a51aeba0a11ea3954597025ebbf160731978df50608aaa7d95e4f24b0b41",
+    "src/main/java/com/yandex/authsdk/internal/WebViewSslErrorHandlerFactory.kt": "7e24a2f0d9f80fe5e0f85a8c0bba18d44bbd9c49b839b46d821575827f418b33",
+    "src/main/java/com/yandex/authsdk/internal/YandexAuthSdkParams.kt": "a6f750f2f00a57bbaeb12d802789d6bd0088e2a57a79d5cef9ceb5c8a2c368bc",
+    "src/main/java/com/yandex/authsdk/internal/strategy/ChromeTabLoginStrategy.kt": "8fcf041ed85ecc75bc48bc2d27c8c42747ff2342aef9e5ae17e0bd28c6724e51",
+    "src/main/java/com/yandex/authsdk/internal/strategy/LoginStrategy.kt": "aafa3270e521165f13f53ff43bcb89bafb8ddb514ee7591d22b44f223541aebf",
+    "src/main/java/com/yandex/authsdk/internal/strategy/LoginStrategyResolver.kt": "5fa996ebd6668ba13d12bda000b3cef229472884b217e9c79e0ff77c91197ca5",
+    "src/main/java/com/yandex/authsdk/internal/strategy/LoginType.kt": "5a8ada84cbff9c72c8e8fe3f134a683633ef53ad8dda9ca73ee8197acd5b0536",
+    "src/main/java/com/yandex/authsdk/internal/strategy/NativeLoginStrategy.kt": "052615c9a5b700da3975e6c7b0e3748c7076a5f2d3cfbf74088de01b9bcfb6bf",
+    "src/main/java/com/yandex/authsdk/internal/strategy/WebViewLoginStrategy.kt": "dda29b1a0e75c0a3a03bf571abd405942857d65589e6d5fd7ffd66728f40bbf5",
+    "src/main/AndroidManifest.xml": "d2a3feb659e6dd5d6aabdbf610248937435a004febfac1e9f7999050ec2d73c8",
+    "src/main/res/values/values.xml": "d0eb3391a989548356e7498546ff44da74d333040a1007719f4ebee1545129b6"
+  },
+  "modified_files": {
+    "src/main/java/com/yandex/authsdk/internal/AuthSdkActivity.kt": {
+      "original": "91881f89f3b94c8997f8b6ea521c1616b9d702d6c4554dbfbe8bcdcb06ca3219",
+      "corrected": "9badcd34c676d252286ceead58be7aa15a7366c1f4e12e425eed036c76f49ee7",
+      "reason": "Always-active REAL SDK strategy registry; initialize loginType before registration. No stripping/suppression of inherited save state or result parsing."
+    },
+    "src/main/AndroidManifest.xml": {
+      "original": "d2a3feb659e6dd5d6aabdbf610248937435a004febfac1e9f7999050ec2d73c8",
+      "corrected": "1dca1b4215c54187c3603d353c7c281ee3e2fb66d9387efe81ba0eab1b7539ba",
+      "reason": "AGP9 namespace is set in library build config; manifest component names/redirects/permissions unchanged."
+    }
+  },
+  "public_api_changes": false,
+  "gms_added": false
+}

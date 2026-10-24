@@ -169,7 +169,10 @@ ksp {
 val verifyDeliveryVersion = tasks.register<Exec>("verifyDeliveryVersion") {
     commandLine("python3", rootProject.file("scripts/version_contract.py"))
 }
-tasks.matching { it.name == "preBuild" }.configureEach { dependsOn(verifyDeliveryVersion) }
+val verifyYandexSdkSource = tasks.register<Exec>("verifyYandexSdkSource") {
+    commandLine("python3", rootProject.file("scripts/verify_yandex_sdk_source.py"))
+}
+tasks.matching { it.name == "preBuild" }.configureEach { dependsOn(verifyDeliveryVersion, verifyYandexSdkSource) }
 
 val verifyReleaseSigning = tasks.register<Exec>("verifyReleaseSigning") {
     commandLine("python3", rootProject.file("scripts/check_release_signing.py"))
@@ -184,6 +187,11 @@ roborazzi {
 }
 
 configurations.all {
+    // Exact3.3.0 upstream source, with one transparent internal custody correction.
+    // No alternate SDK/API/version or stripping of registry saved-state checks.
+    resolutionStrategy.dependencySubstitution {
+        substitute(module("com.yandex.android:authsdk:3.3.0")).using(project(":yandex-authsdk-330"))
+    }
     // Cycle 16: Room 2.8.4 транзитивно фиксирует kotlinx-serialization-core
     // на 1.7.3 через {strictly}, а json подтягивается 1.8.1 — на устройстве
     // это AbstractMethodError в MigrationTestHelper. Выравниваем на 1.8.1.

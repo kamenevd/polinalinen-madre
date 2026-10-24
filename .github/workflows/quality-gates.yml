@@ -92,7 +92,9 @@ jobs:
           QA_SIGNING_CERT_SHA256: ${{ secrets.MADRE_QA_SIGNING_CERT_SHA256 }}
         run: python3 scripts/restore_qa_signing.py
       - name: Compile, domain tests, style boundary, 20 key native frames and QA APK
-        run: ./gradlew compileDebugKotlin compileReleaseKotlin testDebugUnitTest assembleDebug assembleQa assembleQaAndroidTest -Pmadre.qaRegression=true --no-daemon --stacktrace --no-configuration-cache
+        run: ./gradlew compileDebugKotlin compileReleaseKotlin testDebugUnitTest assembleDebug assembleQa --no-daemon --stacktrace --no-configuration-cache
+      - name: Build minified QA instrumentation separately without displacing debug domain and render tests
+        run: ./gradlew :app:assembleQa :app:assembleQaAndroidTest -Pmadre.qaRegression=true --no-daemon --stacktrace --no-configuration-cache
       - name: Verify stable QA APK identity before any APK upload
         id: verify_qa_signature
         run: python3 scripts/verify_apk_signature.py app/build/outputs/apk/debug/app-debug.apk
@@ -331,11 +333,11 @@ jobs:
           QA_KEYSTORE_BASE64: ${{ secrets.MADRE_QA_KEYSTORE_BASE64 }}
           QA_SIGNING_CERT_SHA256: ${{ secrets.MADRE_QA_SIGNING_CERT_SHA256 }}
         run: python3 scripts/restore_qa_signing.py
-      - name: Prepare immutable15 debug and release-like controls with benchmark-only overlays
+      - name: Prepare immutable15 release-like control with benchmark-only overlays
         run: |
           sdkmanager "build-tools;36.0.0"
           python3 scripts/prepare_perf_baseline.py "$RUNNER_TEMP/madre-perf-before"
-          MADRE_BASE_DEBUG=true python3 scripts/prepare_perf_baseline.py "$RUNNER_TEMP/madre-perf-before-debug"
+
       - name: Enable KVM for controlled CI AVD
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules

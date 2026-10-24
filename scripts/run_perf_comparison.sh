@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Single emulator runner command. Required15 measurement, NOT a Huawei hardware claim.
+# Paired fresh15/16 R8 measurements. Separate debug-mode controls already have their own raw run.
 set -euo pipefail
 root="$PWD"
 before="$RUNNER_TEMP/madre-perf-before"
@@ -33,9 +33,7 @@ fi
 run_scroll "$before" "$out/before"
 if [[ "${MADRE_PERF_COMPARE:-false}" == "true" ]]; then
   run_scroll "$root" "$out/after"
-  # Generate un-obfuscated real ART rules from the same15 production journeys.
-  # Timing itself above remains R8 release-like for BOTH14 and15.
-  ./gradlew :app:assembleNonMinifiedBenchmark --no-daemon --stacktrace --no-configuration-cache
-  adb install -r app/build/outputs/apk/nonMinifiedBenchmark/app-nonMinifiedBenchmark.apk
-  python3 scripts/generate_perf_profile.py "$out/profile"
+  # Both timed targets remain R8 with their genuine packed ART assets. CompilationMode.None
+  # intentionally measures without claiming profile installation. The exact QA runtime lane
+  # separately installs/verifies its packaged profile; no profile or R8 is disabled in the APK.
 fi

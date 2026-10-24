@@ -57,6 +57,8 @@ class MadreApplication : Application() {
     // Cycle 15: незавершённые выпечки — их читает BakeRestoreWorker после
     // перезагрузки телефона, поэтому репозиторий нужен и без единого экрана.
     val activeBakeRepository: ActiveBakeRepository by lazy { ActiveBakeRepository(database) }
+    /** One operation lane across every retained controller/Activity in this process. */
+    internal val plannedBakeOperationGate=kotlinx.coroutines.sync.Mutex()
     val voiceIdentityStore: com.polinalinen.madre.voice.VoiceIdentityStore by lazy {
         com.polinalinen.madre.voice.VoiceIdentityStore(getSharedPreferences("madre_voice", MODE_PRIVATE), KeystoreTokenCipher())
     }

@@ -157,6 +157,41 @@ class BakeNavigationUndoTest {
             com.polinalinen.madre.notifications.BootRestorePlanner.uniqueWorkName(id)).get()
         assertTrue(work.any{it.state==androidx.work.WorkInfo.State.ENQUEUED})
     }
+    @Test fun retainedPlanOwnerConsumesAfterCallerCancellationAndRejectsQueuedSnoozeAndSheetEdit()=runBlocking {
+        withTimeout(10_000){while(!vm.restoreReady.value){mainDispatcher.scheduler.runCurrent();delay(1)}}
+        val plan=com.polinalinen.madre.navigation.PlannedBake(vm.recipes.value.first().id,2,System.currentTimeMillis()-3_600_000L)
+        com.polinalinen.madre.navigation.BookPreferences(app).use{assertTrue(it.putPlan(plan))}
+        val owner=vm.plannedBakes
+        val locked=java.util.concurrent.CountDownLatch(1);val release=java.util.concurrent.CountDownLatch(1)
+        val barrier=Thread{synchronized(app.activeBakeRepository.commitFence){
+            locked.countDown();check(release.await(30,java.util.concurrent.TimeUnit.SECONDS))
+        }}.apply{start()}
+        assertTrue(locked.await(5,java.util.concurrent.TimeUnit.SECONDS))
+        val oldComposition=CoroutineScope(SupervisorJob()+Dispatchers.Main)
+        try {
+            oldComposition.async{owner.start(plan.id,expected=plan)}
+            withTimeout(10_000){while(!owner.busy.value){mainDispatcher.scheduler.runCurrent();delay(1)}}
+            assertNull(vm.sessionForPlan(plan.id))
+            oldComposition.cancel()
+            assertSame(owner,vm.plannedBakes)
+            val clock=java.time.Clock.systemUTC()
+            val snooze=async{owner.snooze(plan.id,clock)}
+            val replacement=plan.copy(startAtMillis=clock.millis()+7_200_000L)
+            val sheetEdit=async{runCatching{owner.save(replacement,clock,replacingId=plan.id,expected=plan)}}
+            yield();assertFalse(snooze.isCompleted);assertFalse(sheetEdit.isCompleted)
+            release.countDown();barrier.join(10_000)
+            assertNull(withTimeout(10_000){snooze.await()})
+            assertTrue(withTimeout(10_000){sheetEdit.await()}.isFailure)
+            val session=vm.sessionForPlan(plan.id)!!
+            assertEquals(session.id,owner.start(plan.id))
+            assertNull(owner.snooze(plan.id,clock))
+            assertEquals(1,vm.sessions.value.size)
+            assertEquals(1,app.activeBakeRepository.all().size)
+            com.polinalinen.madre.navigation.BookPreferences(app).use{assertTrue(it.snapshotPlans().isEmpty())}
+            assertTrue(history.recordCalls.isEmpty());assertTrue(sync.calls.isEmpty())
+        } finally {release.countDown();barrier.join(10_000);oldComposition.cancel()}
+    }
+
     @Test fun plannedStartIsIdempotentAcrossARealControllerRecreation()=runBlocking {
         val recipe=app.recipeRepository.getRecipes().first()
         val planId="${recipe.id}:${System.currentTimeMillis()}"

@@ -37,9 +37,10 @@ class PlannedBakeScheduler(private val context: Context) {
             .setInputData(workDataOf(PlannedBakeReminderWorker.KEY_PLAN_ID to plan.id)).build()
         return WorkManager.getInstance(context).enqueueUniqueWork(uniqueName(plan.id),ExistingWorkPolicy.REPLACE,request)
     }
-    fun cancel(id: String) {
-        WorkManager.getInstance(context).cancelUniqueWork(uniqueName(id))
+    fun cancel(id: String):androidx.work.Operation {
+        val operation=WorkManager.getInstance(context).cancelUniqueWork(uniqueName(id))
         MadreNotifier(context).cancelPlannedBake(id)
+        return operation
     }
     /** Closes process death between private-plan commit and durable WorkManager enqueue. */
     fun restoreMissing(plans: List<PlannedBake>) {

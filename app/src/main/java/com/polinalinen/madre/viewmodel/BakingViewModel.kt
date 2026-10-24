@@ -80,6 +80,13 @@ class BakingViewModel @JvmOverloads constructor(
     private val recipeRepository = madreApp.recipeRepository
     private val activeBakeRepository = madreApp.activeBakeRepository
     private val transitionGate = Mutex()
+    private val plannedBakesOwner=lazy {
+        com.polinalinen.madre.navigation.PlannedBakeOwner(madreApp,viewModelScope,madreApp.plannedBakeOperationGate,
+            awaitReady={sessionIdsReady.await()},sessionForPlan={sessionForPlan(it)?.id},startBake={plan,portions->
+                _recipes.value.firstOrNull{it.id==plan.recipeId}?.let{startPlannedBake(it,portions.toDouble(),plan.id)}
+            })
+    }
+    val plannedBakes get()=plannedBakesOwner.value
     @Volatile private var controllerLive = true
     private val _mutationError = MutableStateFlow<String?>(null)
     val mutationError: StateFlow<String?> = _mutationError.asStateFlow()
@@ -290,8 +297,8 @@ class BakingViewModel @JvmOverloads constructor(
     /** A timer is opened only after the snapshot is durably created. */
     suspend fun startBaking(recipe: Recipe, scaleFactor: Double): Long? = startBakingInternal(recipe, scaleFactor, false)
     suspend fun startBakingWithUndo(recipe: Recipe, scaleFactor: Double): Long? = startBakingInternal(recipe, scaleFactor, true)
-    /** VM-owned write survives Activity recreation; deterministic bake identity fences replayed plan actions. */
-    suspend fun startPlannedBake(recipe: Recipe, scaleFactor: Double, planId: String): Long? = viewModelScope.async {
+    /** Durable primitive. All production card/sheet/notification entries use plannedBakes transactions. */
+    internal suspend fun startPlannedBake(recipe: Recipe, scaleFactor: Double, planId: String): Long? = viewModelScope.async {
         startBakingInternal(recipe,scaleFactor,true,plannedBakeKey(planId))
     }.await()
     fun sessionForPlan(planId: String): BakingSession? = _sessions.value.firstOrNull{it.bakeKey==plannedBakeKey(planId)}
@@ -903,6 +910,7 @@ class BakingViewModel @JvmOverloads constructor(
         timerJobs.clear()
         abandonJobs.values.forEach { it.cancel() }
         abandonJobs.clear()
+        if(plannedBakesOwner.isInitialized())plannedBakesOwner.value.close()
         // Часы книги остановились — значит, обновлять строку хода выпечки
         // больше некому. Оставить её висеть с застывшими цифрами было бы
         // ровно тем обманом, ради которого и заводился сервис.

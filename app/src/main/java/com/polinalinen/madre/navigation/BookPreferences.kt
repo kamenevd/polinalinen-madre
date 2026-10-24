@@ -62,6 +62,9 @@ class BookPreferences(context: Context, namespace: String = "madre_prefs") : Aut
     fun savePortions(recipeId: String, value: Int) {
         prefs.edit().putInt("chapter_portions_$recipeId", value.coerceIn(1, 5)).apply()
     }
+    /** Transactions read committed prefs, not an Activity listener's possibly queued presentation state. */
+    fun currentPlan(id:String):PlannedBake? = synchronized(PLANS_LOCK){readPlans().firstOrNull{it.id==id}}
+    fun snapshotPlans():List<PlannedBake> = synchronized(PLANS_LOCK){readPlans()}
     fun putPlan(plan: PlannedBake, replacingId: String? = null): Boolean = synchronized(PLANS_LOCK) {
         require(plan.portions in 1..5 && plan.startAtMillis > 0 && plan.recipeId.isNotBlank())
         val previous=readPlans()

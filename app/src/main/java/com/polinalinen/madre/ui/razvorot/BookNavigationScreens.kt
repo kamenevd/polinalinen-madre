@@ -2,6 +2,8 @@ package com.polinalinen.madre.ui.razvorot
 
 import android.os.SystemClock
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -39,8 +41,9 @@ import androidx.compose.ui.Alignment
     val account=com.polinalinen.madre.account.yandex.LocalYandexAccountUi.current
     val accountState=account?.model?.state?.collectAsState()?.value
     val profile=profileOverride ?: (accountState as? com.polinalinen.madre.account.yandex.YandexAccountState.SignedIn)?.profile
-    Column(modifier.fillMaxSize().testTag(Home.LIST_TAG).verticalScroll(rememberScrollState()).padding(horizontal = 22.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    LazyColumn(modifier.fillMaxSize().testTag(Home.LIST_TAG),contentPadding=PaddingValues(horizontal=22.dp)) {
+      item(key="toc-header",contentType="header") {
+       Column(Modifier.padding(bottom=8.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             SmallLabel("${LocalAtmosphere.current.label} · КНИГА СЕМЬИ", Modifier.weight(1f).padding(top = 18.dp))
             PaperTextButton(onAa,label="Как читать") { BookText("Aa",21) }
@@ -67,11 +70,13 @@ import androidx.compose.ui.Alignment
         PaperSearchField(query,{query=it},Modifier.heightIn(min=52.dp),
             label="Рецепт или ингредиент",iconSize=24.dp,inputModifier=Modifier.testTag("toc-search"))
         PaperChipRow(CatalogFilter.entries.map { if(it==CatalogFilter.ALL)"${it.label} ${recipes.size}" else it.label }, filter.ordinal, { filter = CatalogFilter.entries[it] })
-        if (rows.isEmpty()) {
+       }
+      }
+        if (rows.isEmpty()) item(key="toc-empty",contentType="empty") { Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
             BookText("Такой главы нет", 24)
             PaperNote("Попробуйте другое название или ингредиент.")
             PaperTextAction("Показать все главы", { query = ""; filter = CatalogFilter.ALL })
-        } else Column { rows.forEach { match ->
+        } } else items(rows,key={"recipe:${it.recipe.id}"},contentType={"recipe"}) { match -> Column {
             val recipe = match.recipe
             val active = sessions.firstOrNull { it.recipe.id == recipe.id && !it.isCompleted }
             PaperTocRow(match.chapter + 1, recipe.name, BookCatalog.shortTotalTime(RecipeScale.totalMinutes(recipe, 1)),
@@ -81,8 +86,9 @@ import androidx.compose.ui.Alignment
                 activeLabel = active?.let { "В печи · шаг ${it.currentStepIndex + 1} из ${recipe.timeline.size}" }, query = query,
                 spokenTime=com.polinalinen.madre.notifications.BakingProgress.spokenRemaining(RecipeScale.totalMinutes(recipe,1)*60L))
         } }
-        PaperNote("— тираж: одна семья · печатается с любовью —")
-        Spacer(Modifier.height(22.dp))
+        item(key="toc-colophon",contentType="footer") { Column(Modifier.padding(top=8.dp,bottom=30.dp)) {
+            PaperNote("— тираж: одна семья · печатается с любовью —")
+        } }
     }
 }
 
@@ -100,26 +106,29 @@ import androidx.compose.ui.Alignment
         when (filter) { 1 -> com.polinalinen.madre.navigation.BakePlanning.options(minutes,now,clock.zone).first().available
             2 -> minutes <= 180; 3 -> minutes >= 480; else -> true }
     } }
-    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp),
+    val visiblePlans=remember(plans,recipes){plans.mapNotNull{plan->recipes.firstOrNull{it.id==plan.recipeId}?.let{plan to it}}}
+    val count=sessions.size+visiblePlans.size+pendingFinished.size
+    val recipePairs=remember(rows){rows.chunked(2)}
+    LazyColumn(modifier.fillMaxSize(),contentPadding=PaddingValues(horizontal=22.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)) {
+      item(key="oven-header",contentType="header") { Column(verticalArrangement=Arrangement.spacedBy(14.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             SmallLabel("ПЕЧЬ · ${java.time.Instant.ofEpochMilli(now).atZone(clock.zone).format(java.time.format.DateTimeFormatter.ofPattern("EEEE, d MMMM",Locale.forLanguageTag("ru")))}",Modifier.weight(1f).padding(top=16.dp))
             PaperTextButton(onAa,label="Как читать") { BookText("Aa",21) }
         }
-        val visiblePlans=plans.mapNotNull{plan->recipes.firstOrNull{it.id==plan.recipeId}?.let{plan to it}}
-        val count=sessions.size+visiblePlans.size+pendingFinished.size
         if(count>0)PaperCountHeading("Уже печём",count) else Text("Уже печём",style=PaperType.display,color=p.ink)
+      } }
         if (count>0) {
-            sessions.forEach { session -> key(session.id) { ActiveBookBake(session) { onOpenSession(session.id) } } }
+            items(sessions,key={"session:${it.id}"},contentType={"active-bake"}) { session -> ActiveBookBake(session) { onOpenSession(session.id) } }
         } else {
-            PaperNote("Сейчас ничего не печётся. Выберите главу ниже — запуск в одно касание.")
+            item(key="oven-empty",contentType="empty") { PaperNote("Сейчас ничего не печётся. Выберите главу ниже — запуск в одно касание.") }
         }
-        pendingFinished.forEach { (id,completion) -> PaperCard(Modifier.fillMaxWidth()) {
+        items(pendingFinished,key={"finished:${it.first}"},contentType={"finished-bake"}) { (id,completion) -> PaperCard(Modifier.fillMaxWidth()) {
             SmallLabel("ИСПЕЧЕНО · ВПИШИТЕ В КНИГУ",color=p.rib)
             Text(completion.recipeName,style=PaperType.title,color=p.ink)
             PaperTextAction("Вписать в книгу",{onOpenSession(id)})
         } }
-        visiblePlans.forEach { (plan,recipe) -> key(plan.id) {
+        items(visiblePlans,key={"plan:${it.first.id}"},contentType={"planned-bake"}) { (plan,recipe) ->
             val overdue=plan.startAtMillis<now
             PaperBakeCard(recipe.name,if(overdue)"ПОРА НАЧИНАТЬ · ×${plan.portions}" else "ЗАПЛАНИРОВАНО · ×${plan.portions}",
                 recipePhoto(recipe.id),0f,{onOpenPlan(plan)},overlineColor=if(overdue)p.rib else p.mut,
@@ -129,21 +138,23 @@ import androidx.compose.ui.Alignment
                     }}) {
                 PaperNote(if(overdue)"План ждёт вас — таймер ещё не запущен" else "начнём ${relativeBookTime(plan.startAtMillis,now,clock)}")
             }
-        } }
+        }
+      item(key="oven-choices",contentType="filters") { Column(verticalArrangement=Arrangement.spacedBy(14.dp)) {
         Text("Что испечь",style=PaperType.h2,color=p.ink,modifier=Modifier.padding(top=10.dp))
         Text("▶ — сразу, тап — с настройкой",style=PaperType.note,color=p.ink2)
         PaperChipRow(choices, filter, { filter = it })
-        if (rows.isEmpty()) PaperNote("Таких рецептов в книге пока нет. Выберите другое время.")
-        rows.chunked(2).forEach { pair ->
+      } }
+        if (rows.isEmpty()) item(key="recipes-empty",contentType="empty") { PaperNote("Таких рецептов в книге пока нет. Выберите другое время.") }
+        items(recipePairs,key={pair->"recipes:"+pair.joinToString(":"){it.id}},contentType={"recipe-pair"}) { pair ->
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                pair.forEach { recipe -> PaperRecipeTile(recipes.indexOf(recipe) + 1, recipe.name, recipePhoto(recipe.id),
+                pair.forEach { recipe -> key(recipe.id) { PaperRecipeTile(recipes.indexOf(recipe) + 1, recipe.name, recipePhoto(recipe.id),
                     "${BookCatalog.shortTotalTime(RecipeScale.totalMinutes(recipe,1))} · руками ${BookCatalog.duration(recipe.timeline.filter{it.type==StepType.ACTION}.sumOf{it.durationMinutes})}",
                     "готово ${relativeBookTime(Math.addExact(now,RecipeScale.totalMinutes(recipe,1)*60_000L),now,clock)}",
-                    { onConfigure(recipe) }, { onQuickStart(recipe) }, Modifier.weight(1f)) }
+                    { onConfigure(recipe) }, { onQuickStart(recipe) }, Modifier.weight(1f)) } }
                 if (pair.size == 1) Spacer(Modifier.weight(1f))
             }
         }
-        Spacer(Modifier.height(22.dp))
+        item(key="oven-bottom",contentType="footer") { Spacer(Modifier.height(22.dp)) }
     }
 }
 

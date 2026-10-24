@@ -1,7 +1,7 @@
 package com.polinalinen.madre.ui.kit
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -21,7 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
+import coil.compose.AsyncImage
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
@@ -129,7 +129,8 @@ import androidx.compose.runtime.remember
     val p = LocalPaper.current
     PaperCard(modifier.then(bookAction("Открыть выпечку: $title", onClick = onClick)),contentPadding=PaddingValues(0.dp)) {
         Row(Modifier.padding(18.dp),verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Image(painterResource(image), null, Modifier.size(72.dp).clip(RoundedCornerShape(14.dp)), contentScale = ContentScale.Crop)
+            // Decode against the actual cell constraints, not the full bundled photograph.
+            AsyncImage(image, null, Modifier.size(72.dp).clip(RoundedCornerShape(14.dp)), contentScale = ContentScale.Crop)
             Column(Modifier.weight(1f)) { SmallLabel(overline,color=overlineColor); Text(title, style = PaperType.title, color = p.ink); timer() }
             Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, tint = p.mut)
         }
@@ -144,7 +145,7 @@ import androidx.compose.runtime.remember
     val startGate=remember { TapGate() }
     Column(modifier.then(bookAction("Настроить выпечку: $title", onClick = onConfigure))) {
         Box(Modifier.fillMaxWidth().height(132.dp).clip(RoundedCornerShape(16.dp))) {
-            Image(painterResource(image), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            AsyncImage(image, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             BookText("%02d".format(number), 30, Modifier.align(Alignment.TopStart).padding(12.dp), color = Illustration.CoverLettering, weight = FontWeight.ExtraLight)
             PaperIconButton({if(startGate.accept(System.currentTimeMillis()))onStart()}, Modifier.align(Alignment.BottomEnd).padding(6.dp).clip(RoundedCornerShape(24.dp)).background(p.glass),
                 label = "Испечь $title сейчас") { Icon(Icons.Outlined.PlayArrow, "Испечь $title сейчас") }

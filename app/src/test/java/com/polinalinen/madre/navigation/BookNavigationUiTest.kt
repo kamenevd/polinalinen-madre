@@ -86,6 +86,28 @@ class BookNavigationUiTest {
         rule.onNodeWithTag("toc-search").assert(SemanticsMatcher.expectValue(SemanticsProperties.EditableText,AnnotatedString("Чиабатта")))
         assertEquals("ciabatta",BookPreferences(app).use{it.bookmark?.recipeId})
     }
+    @Test fun chapterOpenedFromOvenReturnsToTocAndItsOwnStartSheetDoesNotDuplicateChapter() {
+        BookPreferences(app).use{it.visit(1)}
+        lateinit var nav:NavHostController
+        rule.setContent{nav=rememberNavController();MadreNavHost(nav)}
+        val recipe=recipes.first()
+        rule.waitUntil(10_000){rule.onAllNodesWithText("Что испечь",substring=true).fetchSemanticsNodes().isNotEmpty()}
+        rule.onNode(SemanticsMatcher("configure actual oven tile"){
+            it.config.getOrNull(SemanticsActions.OnClick)?.label=="Настроить выпечку: ${recipe.name}"
+        }).performScrollTo().performClick()
+        rule.onNodeWithText("Открыть главу").performClick();rule.waitForIdle()
+        assertEquals(MadreDestinations.CHAPTER,nav.currentDestination?.route)
+        val entry=nav.currentBackStackEntry
+        rule.onNodeWithContentDescription("Испечь ко времени").performClick()
+        rule.onNodeWithText("Открыть главу").performClick();rule.waitForIdle()
+        assertSame(entry,nav.currentBackStackEntry)
+        rule.activityRule.scenario.onActivity{it.onBackPressedDispatcher.onBackPressed()}
+        rule.waitForIdle()
+        assertEquals(MadreDestinations.HOME,nav.currentDestination?.route)
+        assertEquals(0,nav.currentBackStackEntry?.savedStateHandle?.get<Int>("home_section"))
+        rule.onNodeWithTag("toc-search").assertIsDisplayed()
+    }
+
     @Test fun chapterPlusUpdatesActualIngredientWithoutTurningThePage() {
         val recipe=recipes.single{it.id=="home_bread"}
         val ingredient=recipe.ingredients.values.flatten().first{it.scalable&&it.refType==null&&it.amount>0}

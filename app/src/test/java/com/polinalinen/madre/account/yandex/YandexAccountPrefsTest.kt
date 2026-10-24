@@ -58,6 +58,30 @@ class YandexAccountPrefsTest {
         } finally {scope.cancel();scope.coroutineContext.job.join()}
     }
 
+    @Test fun sdkErrorLocalDisconnectDoesNotLeaveAPermanentMarkerAfterActualColdFileReopen()=runTest {
+        val file=File(temporary.root,"fresh-sdk-error.preferences_pb")
+        var owner=CoroutineScope(SupervisorJob()+Dispatchers.IO)
+        var unbinds=0
+        val api=object:YandexAccountApi {
+            override suspend fun bind(token:YandexLoginToken)=error("No bearer submitted")
+            override suspend fun unbind(){unbinds++;throw YandexAccountFailure(YandexAccountError.SERVER)}
+        }
+        var controller:YandexAccountController?=null
+        try {
+            var prefs=YandexAccountPrefs(PreferenceDataStoreFactory.create(scope=owner,produceFile={file}))
+            prefs.markOfferSeen()
+            val first=YandexAccountController(owner,prefs,api);controller=first
+            first.failSignIn(requireNotNull(first.beginSignIn()),YandexAccountError.YANDEX)
+            first.signOut();assertFalse(prefs.read().unbindPending);assertEquals(0,unbinds)
+            first.close();owner.cancel();owner.coroutineContext.job.join()
+            owner=CoroutineScope(SupervisorJob()+Dispatchers.IO)
+            prefs=YandexAccountPrefs(PreferenceDataStoreFactory.create(scope=owner,produceFile={file}))
+            val cold=YandexAccountController(owner,prefs,api);controller=cold
+            assertNotNull(cold.beginSignIn());assertFalse(prefs.read().unbindPending)
+            assertTrue(prefs.read().offerSeen);assertEquals(0,unbinds)
+        } finally {controller?.close();owner.cancel();owner.coroutineContext.job.join()}
+    }
+
     @Test fun malformedMetadataIsNeverPromotedToSignedIn()=runTest {
         val scope=CoroutineScope(SupervisorJob()+Dispatchers.IO)
         try {
@@ -71,6 +95,18 @@ class YandexAccountPrefsTest {
             }
             assertNull(prefs.read().profile)
             assertTrue(prefs.read().offerSeen)
+            assertTrue(prefs.read().bindingMetadataPresent)
+            var unbinds=0
+            val api=object:YandexAccountApi {
+                override suspend fun bind(token:YandexLoginToken)=error("No login requested")
+                override suspend fun unbind(){unbinds++;throw YandexAccountFailure(YandexAccountError.SERVER)}
+            }
+            val controller=YandexAccountController(scope,prefs,api)
+            try {
+                controller.signOut()
+                assertEquals(1,unbinds);assertTrue(prefs.read().unbindPending)
+                assertNull(controller.beginSignIn())
+            } finally {controller.close()}
         } finally {scope.cancel();scope.coroutineContext.job.join()}
     }
 }

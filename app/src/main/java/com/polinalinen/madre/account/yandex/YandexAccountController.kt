@@ -149,17 +149,28 @@ class YandexAccountController(
     suspend fun signOut() {
         if (closed || !scope.isActive) return
         initialization.join()
-        val generation = stateLock.withLock {
+        val revocation = stateLock.withLock {
             ++sequence
             signInTimeout?.cancel()
-            unbindPending = true
+            // A failed SDK launch has never submitted a bearer or enrolled/bound this
+            // account. Clearing that local attempt is NOT a remote revocation ACK.
+            // Persisted profile/retry/pending (or an in-flight bind) instead requires
+            // the old installation credential and a real server ACK, even when lost.
+            val binding = _state.value is YandexAccountState.Binding
             _state.value = YandexAccountState.SignedOut
-            try { storage.clearAccount(unbindPending = true) }
+            val remoteRequired = try {
+                val saved = storage.read()
+                binding || unbindPending || saved.profile != null || saved.bindingMetadataPresent || saved.foregroundRetryRequired || saved.unbindPending
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { true } // Unreadable metadata cannot prove never-bound.
+            unbindPending = remoteRequired
+            previousState = YandexAccountState.SignedOut
+            try { storage.clearAccount(unbindPending = remoteRequired) }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { _state.value = YandexAccountState.Error(YandexAccountError.STORAGE) }
-            sequence
+            sequence to remoteRequired
         }
-        revokePending(generation)
+        if (revocation.second) revokePending(revocation.first)
     }
 
     suspend fun retryPendingUnbind() {

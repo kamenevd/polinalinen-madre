@@ -45,6 +45,20 @@ class YandexAccountControllerTest {
         c.close()
     }
 
+    @Test fun freshSdkErrorDisconnectIsLocalAndColdRestartCanSignInWithoutInventingRemoteAck()=runTest {
+        val storage=Storage();val api=Api(profile)
+        api.unbinding={error("Never-bound installation must not call remote unbind")}
+        val c=YandexAccountController(backgroundScope,storage,api)
+        val attempt=requireNotNull(c.beginSignIn());c.failSignIn(attempt,YandexAccountError.YANDEX)
+        c.signOut()
+        assertEquals(YandexAccountState.SignedOut,c.state.value)
+        assertFalse(storage.snapshot.unbindPending);assertTrue(api.events.isEmpty())
+        assertNotNull(c.beginSignIn());c.close()
+        val cold=YandexAccountController(backgroundScope,storage,api);runCurrent()
+        assertFalse(cold.pendingUnbind.value);assertNotNull(cold.beginSignIn())
+        assertTrue(api.events.isEmpty());cold.close()
+    }
+
     @Test fun browserRetryFencesLateNativeTokenAndOnlyServerResponseSignsIn()=runTest {
         val storage=Storage();val api=Api(profile);val c=YandexAccountController(backgroundScope,storage,api)
         val old=requireNotNull(c.beginSignIn());val current=requireNotNull(c.beginSignIn(browser=true))

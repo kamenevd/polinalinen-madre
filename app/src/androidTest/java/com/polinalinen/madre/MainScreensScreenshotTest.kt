@@ -173,12 +173,11 @@ class MainScreensScreenshotTest {
         return MessageDigest.getInstance("SHA-256").digest(bytes).joinToString(""){"%02x".format(it)}
     }
     @Test fun actualNavigationAndNativeSceneMatrix() {
-        select("home-dawn");val home=capture("01-home")
-        // The second shot is an actual click, navigation and idle, NOT another home shot.
-        rule.onNodeWithTag("book-cover").performClick()
-        rule.onNodeWithText("ОГЛАВЛЕНИЕ").assertIsDisplayed()
-        rule.waitForIdle();val toc=capture("02-table-of-contents")
-        assertThat(toc).isNotEqualTo(home)
+        select("home-dawn");val toc=capture("01-table-of-contents")
+        rule.onNodeWithTag("book-cover").assertDoesNotExist()
+        rule.onNodeWithTag("toc-search").performTextReplacement("Чиабатта")
+        rule.waitForIdle();val searched=capture("02-toc-search")
+        assertThat(searched).isNotEqualTo(toc)
         select("reader-title-dawn");capture("03-first-chapter")
         select("reader-title-last-night");capture("04-last-chapter-night")
         select("curl-top");capture("05-reader-curl")

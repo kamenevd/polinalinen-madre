@@ -136,6 +136,16 @@ fun MadreNavHost(
         navController.popBackStack(MadreDestinations.HOME,inclusive=false)
         bookPreferences.visit(section)
     }
+    fun openChapter(id:String,page:Int=-1,step:Int=-1) {
+        navController.getBackStackEntry(MadreDestinations.HOME).savedStateHandle["home_section"]=0
+        val current=navController.currentBackStackEntry
+        if(current?.destination?.route==MadreDestinations.CHAPTER &&
+            current.arguments?.getString("recipeId")==id && page<0 && step<0)return
+        navController.navigate(MadreDestinations.chapter(id,page=page,step=step)) {
+            popUpTo(MadreDestinations.HOME){inclusive=false}
+            launchSingleTop=true
+        }
+    }
     val sourdoughViewModel: SourdoughViewModel = viewModel()
     val shelfViewModel: ShelfViewModel = viewModel()
     val familyBookViewModel: FamilyBookViewModel = viewModel()
@@ -358,13 +368,13 @@ fun MadreNavHost(
                     initialSection = homeSection,
                     onSectionChanged = {section->activeSection=section;it.savedStateHandle["home_section"]=section;bookPreferences.visit(section)},
                     bookPreferences = bookPreferences,
-                    onOpenChapter = {id,page->navController.navigate(MadreDestinations.chapter(id,page=page))},
+                    onOpenChapter = {id,page->openChapter(id,page=page)},
                     onStartRecipe = {recipe->navigationScope.launch { bakingViewModel.startBakingWithUndo(recipe,bookPreferences.portions(recipe.id).toDouble())?.let{id->navController.navigate(MadreDestinations.bake(id.toString()))} }},
                     onConfigureRecipe = {recipe->openStart(recipe.id)},
                     onConfigurePlan = {plan->openStart(plan.recipeId,1,plan.id)},
                     onOpenShelf = { navController.navigate(MadreDestinations.SHELF) },
-                    onContinueReading = { session -> navController.navigate(MadreDestinations.chapter(session.recipe.id,step=session.currentStepIndex)) },
-                    onOpenRecipe = { id -> navController.navigate(MadreDestinations.chapter(id)) },
+                    onContinueReading = { session -> openChapter(session.recipe.id,step=session.currentStepIndex) },
+                    onOpenRecipe = { id -> openChapter(id) },
                     onOpenTimer = { id -> navController.navigate(MadreDestinations.bake(id.toString())) },
                     onFeed = enterFeedingForm,
                     onDiary = { navController.navigate(MadreDestinations.STARTER_DETAIL) },
@@ -383,7 +393,7 @@ fun MadreNavHost(
                 val changeFactor:(Double)->Unit={value->factor=value;if(value in 1.0..5.0 && value==value.toInt().toDouble())bookPreferences.savePortions(recipeId,value.toInt())}
                 ChapterEntry(recipeId,readingPreferences.reducedMotion || calmMode) {
                 RazvorotReader(recipesForStats, recipeId, readingPreferences,
-                    onBack = { navController.popBackStack() },
+                    onBack = { showHome(0) },
                     onBake = { recipe -> navigationScope.launch { bakingViewModel.startBakingWithUndo(recipe, factor)?.let { id -> navController.navigate(MadreDestinations.bake(id.toString())) } } },
                     onCalculator = { calculator=true },
                     activeSessions = sessions,
@@ -424,9 +434,7 @@ fun MadreNavHost(
                     onBack = { navController.popBackStack() },
                     onComplete = {},
                     viewModel = bakingViewModel,
-                    onOpenChapter={ bake->navController.navigate(MadreDestinations.chapter(bake.recipe.id,step=bake.currentStepIndex)) {
-                        popUpTo(MadreDestinations.HOME){inclusive=false}
-                    } },
+                    onOpenChapter={ bake->openChapter(bake.recipe.id,step=bake.currentStepIndex) },
                     onSwitchSession={id->navController.navigate(MadreDestinations.bake(id.toString())) {
                         popUpTo(MadreDestinations.BAKE){inclusive=true}
                     } },
@@ -576,7 +584,7 @@ fun MadreNavHost(
                             planError="Не удалось завершить действие. План сохранён."
                         } finally {planSaving=false}
                     }
-                },onDismiss={startRecipeId=null},onChapter={startRecipeId=null;navController.navigate(MadreDestinations.chapter(id))},
+                },onDismiss={startRecipeId=null},onChapter={startRecipeId=null;openChapter(id)},
                     initialMode=startMode,existingPlan=editing,busy=planSaving,error=planError,onPlan={portions,start->
                         planSaving=true;planError=null
                         navigationScope.launch {

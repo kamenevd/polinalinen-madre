@@ -46,4 +46,6 @@ data class YandexAccountSnapshot(
     val offerSeen: Boolean = false,
     val foregroundRetryRequired: Boolean = false,
     val unbindPending: Boolean = false,
+    // Invalid profile fields still cannot prove that the installation was never bound.
+    val bindingMetadataPresent: Boolean = false,
 )

@@ -34,7 +34,8 @@ class YandexAccountPrefs internal constructor(private val store: DataStore<Prefe
             )
         }.getOrNull()
         return YandexAccountSnapshot(profile, p[OFFER_SEEN] ?: false,
-            p[RETRY_REQUIRED] ?: false, p[UNBIND_PENDING] ?: false)
+            p[RETRY_REQUIRED] ?: false, p[UNBIND_PENDING] ?: false,
+            p.asMap().keys.any { it.name.startsWith(PREFIX) && it.name !in setOf(OFFER_SEEN.name, RETRY_REQUIRED.name, UNBIND_PENDING.name) })
     }
 
     override suspend fun markOfferSeen() = update { this[OFFER_SEEN] = true }

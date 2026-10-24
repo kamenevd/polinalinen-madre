@@ -42,6 +42,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
+      QA_KEYSTORE_PASSWORD: ${{ secrets.MADRE_QA_KEYSTORE_PASSWORD }}
+      QA_KEY_ALIAS: ${{ secrets.MADRE_QA_KEY_ALIAS }}
+      QA_KEY_PASSWORD: ${{ secrets.MADRE_QA_KEY_PASSWORD }}
+      MADRE_SIGNING_CERT_SHA256: "9ACA5F5F57F301EC8359AD670ECEB6387156132007C07FF36A31266326468258"
+      MADRE_YANDEX_CLIENT_ID: ${{ secrets.MADRE_YANDEX_CLIENT_ID }}
       MADRE_BUILD_TOOLS_VERSION: "36.0.0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -55,11 +60,18 @@ jobs:
       - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
       - name: Install pinned QA verification tools
         run: sdkmanager "build-tools;${MADRE_BUILD_TOOLS_VERSION}"
-      # SIGNING_PRESERVE_706_V1: no new QA key, no APK delivery until the
-      # original 7.0.6 identity is available. Compile/tests/PNG continue.
-      # No signing inputs means an unsigned checks-only build, not a fallback key.
-      - name: Compile, domain tests, style boundary, 20 key native frames and unsigned checks-only APK
+      # Current parent authority: stable QA identity approved from7.0.8 onward.
+      # Production signing remains separate; no ephemeral delivery fallback.
+      - name: Restore private stable QA signing
+        env:
+          QA_KEYSTORE_BASE64: ${{ secrets.MADRE_QA_KEYSTORE_BASE64 }}
+          QA_SIGNING_CERT_SHA256: ${{ secrets.MADRE_QA_SIGNING_CERT_SHA256 }}
+        run: python3 scripts/restore_qa_signing.py
+      - name: Compile, domain tests, style boundary, 20 key native frames and QA APK
         run: ./gradlew compileDebugKotlin compileReleaseKotlin testDebugUnitTest assembleDebug --no-daemon --stacktrace --no-configuration-cache
+      - name: Verify stable QA APK identity before any APK upload
+        id: verify_qa_signature
+        run: python3 scripts/verify_apk_signature.py app/build/outputs/apk/debug/app-debug.apk
       - name: Extended visual verification (manual, nightly and RC)
         if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
         run: ./gradlew testDebugUnitTest verifyRoborazziDebug -Pmadre.extendedVerification=true --no-daemon --stacktrace --no-configuration-cache
@@ -67,6 +79,14 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && inputs.capture_baseline
         run: python3 scripts/capture_style_baseline.py
 
+      - name: Upload verified debug APK first
+        if: success() && steps.verify_qa_signature.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: madre-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
       - name: Upload key native PNG
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -86,6 +106,10 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+
+      - name: Remove private QA keystore
+        if: always()
+        run: python3 scripts/restore_qa_signing.py --cleanup
 
   lint-report:
     name: Lint (report only)
@@ -118,12 +142,16 @@ jobs:
     name: Instrumented smoke
     # Keep the protected check name; PR/push is SKIPPED, not a passed smoke.
     # RC release gate still requires a real success at this exact SHA.
-    # SIGNING_PRESERVE_706_V1: an unsigned candidate cannot be installed for smoke.
-    # Restoring this optional job requires the original identity, not a new key.
-    if: ${{ false }}
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 35
-
+    env:
+      QA_KEYSTORE_PASSWORD: ${{ secrets.MADRE_QA_KEYSTORE_PASSWORD }}
+      QA_KEY_ALIAS: ${{ secrets.MADRE_QA_KEY_ALIAS }}
+      QA_KEY_PASSWORD: ${{ secrets.MADRE_QA_KEY_PASSWORD }}
+      MADRE_SIGNING_CERT_SHA256: "9ACA5F5F57F301EC8359AD670ECEB6387156132007C07FF36A31266326468258"
+      MADRE_YANDEX_CLIENT_ID: ${{ secrets.MADRE_YANDEX_CLIENT_ID }}
+      MADRE_BUILD_TOOLS_VERSION: "36.0.0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
@@ -141,6 +169,11 @@ jobs:
             | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+      - name: Restore private stable QA signing for instrumentation
+        env:
+          QA_KEYSTORE_BASE64: ${{ secrets.MADRE_QA_KEYSTORE_BASE64 }}
+          QA_SIGNING_CERT_SHA256: ${{ secrets.MADRE_QA_SIGNING_CERT_SHA256 }}
+        run: python3 scripts/restore_qa_signing.py
       - name: Run emulator smoke tests
         uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
         with:
@@ -178,3 +211,6 @@ jobs:
             app/build/outputs/connected_android_test_additional_output/
           if-no-files-found: error
           retention-days: 14
+      - name: Remove private QA keystore after instrumentation
+        if: always()
+        run: python3 scripts/restore_qa_signing.py --cleanup

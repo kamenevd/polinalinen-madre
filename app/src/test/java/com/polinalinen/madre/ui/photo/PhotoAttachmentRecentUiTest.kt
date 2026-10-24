@@ -51,6 +51,10 @@ class PhotoAttachmentRecentUiTest {
         assertEquals(1,staged.size)
         assertNotEquals(original.absolutePath,staged.single())
         assertArrayEquals(before,File(staged.single()).readBytes())
+        // Editor chrome is composed before its native IO decoder finishes. This case
+        // cancels a ready shared editor, not a still-running Robolectric file decoder.
+        rule.waitUntil(10_000){rule.onAllNodesWithContentDescription("Фотокарточка, как она ляжет в книгу").fetchSemanticsNodes().isNotEmpty()}
+        rule.onNodeWithContentDescription("Фотокарточка, как она ляжет в книгу").assertIsDisplayed()
         // Invoke the real exposed action, not a touch injected into a newly-created
         // Robolectric DialogWindow before its native input/focus handoff has settled.
         rule.onNodeWithText("← Отмена").assertIsDisplayed().assertIsEnabled()
@@ -58,7 +62,7 @@ class PhotoAttachmentRecentUiTest {
         try {rule.waitUntil(10_000){
             rule.onAllNodesWithText("Рамка").fetchSemanticsNodes().isEmpty() && cancelled==1 && staging()==stagedBefore
         }} catch(failure:Throwable) {
-            println("Synthetic cancel diagnostic: cancelled=$cancelled attached=$attached editorNodes=${rule.onAllNodesWithText("Рамка").fetchSemanticsNodes().size} stagedBefore=$stagedBefore stagedNow=${staging()} originalExists=${original.isFile}")
+            println("Synthetic cancel diagnostic: cancelled=$cancelled attached=$attached editorNodes=${rule.onAllNodesWithText("Рамка").fetchSemanticsNodes().size} stagedBefore=$stagedBefore stagedCopy=$staged stagedNow=${staging()} originalExists=${original.isFile}")
             throw failure
         }
         assertEquals(0,attached)

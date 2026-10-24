@@ -359,11 +359,21 @@ fun RecipeChapterContent(recipe: Recipe, scaleFactor: Double, textSize: Float = 
     }
     LaunchedEffect(navigation?.request, layoutKey) {
         val target = navigation ?: return@LaunchedEffect
-        if (viewportWidth == 0 || (cursor.processed == target.request && cursor.geometry == layoutKey)) return@LaunchedEffect
+        if (viewportWidth == 0) return@LaunchedEffect
+        val restored = cursor.pendingRestore
+        if (restored != null && cursor.geometry == layoutKey) {
+            snapshotFlow { anchors.positions["${recipe.id}:end"] }.filterNotNull().first()
+            scroll.scrollTo(restored)
+            cursor.processed = target.request
+            cursor.pendingRestore = null
+            return@LaunchedEffect
+        }
+        if (cursor.processed == target.request && cursor.geometry == layoutKey) return@LaunchedEffect
         val destination = snapshotFlow { anchors.positions[target.anchor] }.filterNotNull().first()
         scroll.scrollTo(destination)
         cursor.processed = target.request
         cursor.geometry = layoutKey
+        cursor.pendingRestore = null
     }
     LaunchedEffect(scroll, anchors) {
         snapshotFlow {

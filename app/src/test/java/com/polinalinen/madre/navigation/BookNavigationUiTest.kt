@@ -281,10 +281,15 @@ class BookNavigationUiTest {
         val recipe=recipes.single{it.id=="ciabatta"}
         val prefs=ReadingPreferences(app,"nav-step-scroll-${UUID.randomUUID()}")
         val restoration=StateRestorationTester(rule)
+        var actualNavigation:com.polinalinen.madre.ui.screens.ChapterScrollNavigation?=null
         restoration.setContent { val density=LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(density.density,2f)) {
                 RazvorotTheme(prefs,force=Atmosphere.NIGHT) {
-                    RazvorotReader(recipes,recipe.id,prefs,{},{},{},initialStep=2,scaleFactor=2.0)
+                    RazvorotReader(recipes,recipe.id,prefs,{},{},{},initialStep=2,scaleFactor=2.0,
+                        scrollContent={r,navigation->
+                            SideEffect{actualNavigation=navigation}
+                            com.polinalinen.madre.ui.screens.RecipeChapterContent(r,2.0,textSize=prefs.textSize,navigation=navigation)
+                        })
                 }
             }
         }
@@ -293,8 +298,10 @@ class BookNavigationUiTest {
         fun scrollOffset()=rule.onNodeWithTag("reader-scroll").fetchSemanticsNode()
             .config[SemanticsProperties.VerticalScrollAxisRange].value()
         val position=scrollOffset();assertTrue(position>0f)
+        val before="${actualNavigation?.request}/${actualNavigation?.cursor?.processed}/${actualNavigation?.cursor?.geometry}/${actualNavigation?.anchor}"
         restoration.emulateSavedInstanceStateRestore();rule.waitForIdle()
-        assertEquals(position,scrollOffset(),.01f)
+        val after="${actualNavigation?.request}/${actualNavigation?.cursor?.processed}/${actualNavigation?.cursor?.geometry}/${actualNavigation?.anchor}"
+        assertEquals("Actual reader cursor before=$before after=$after",position,scrollOffset(),.01f)
         rule.onNodeWithText(recipe.timeline[2].title.uppercase()).assertIsDisplayed()
         rule.onNode(SemanticsMatcher("footer seeks actual title") {
             it.config.getOrNull(SemanticsActions.OnClick)?.label=="Страница 1"

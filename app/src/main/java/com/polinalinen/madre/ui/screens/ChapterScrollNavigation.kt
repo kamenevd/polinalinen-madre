@@ -23,9 +23,12 @@ class ChapterScrollState(offset: Int = 0, request: Long = Long.MIN_VALUE, layout
     val scroll = ScrollState(offset)
     var processed by mutableLongStateOf(request)
     var geometry by mutableStateOf(layout)
+    // A transient first measure may clamp ScrollState before the whole chapter's
+    // layout is ready. Keep the saved offset until that real layout can accept it.
+    var pendingRestore by mutableStateOf(offset.takeIf { request != Long.MIN_VALUE })
     companion object {
         val Saver = listSaver<ChapterScrollState, Any>(
-            save = { listOf(it.scroll.value, it.processed, it.geometry.orEmpty()) },
+            save = { listOf(it.pendingRestore ?: it.scroll.value, it.processed, it.geometry.orEmpty()) },
             restore = { ChapterScrollState(it[0] as Int, it[1] as Long, (it[2] as String).ifEmpty { null }) },
         )
     }

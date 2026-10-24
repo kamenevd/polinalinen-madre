@@ -5,13 +5,11 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.os.Bundle;
-import androidx.test.ext.junit.runners.AndroidJUnit4;
-import androidx.test.platform.app.InstrumentationRegistry;
+
 import com.polinalinen.madre.navigation.BookPreferences;
 import com.polinalinen.madre.navigation.PlannedBake;
 import org.json.JSONArray;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
@@ -27,14 +25,11 @@ import static org.junit.Assert.*;
  * Java/JDK/Android assertions deliberately do not call optimized-away app Kotlin/Gson APIs.
  * Write and restart execute in separate target app processes controlled by the host.
  */
-@RunWith(AndroidJUnit4.class)
 public class MinifiedPlanRegressionTest {
     private static final String NAMESPACE="qa_minified_plan_regression";
 
-    @Test public void legacyPlansAndFailedReads() throws Exception {
-        Instrumentation instrumentation=InstrumentationRegistry.getInstrumentation();
+    public static void verify(Instrumentation instrumentation,Bundle args) throws Exception {
         Context context=instrumentation.getTargetContext();
-        Bundle args=InstrumentationRegistry.getArguments();
         boolean negative="true".equals(args.getString("negative"));
         String phase=args.getString("phase");
         assertNotNull(phase);

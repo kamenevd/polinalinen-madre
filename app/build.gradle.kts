@@ -74,7 +74,7 @@ android {
         versionCode = 52
         versionName = "7.0.16"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = if (qaRegression) "com.polinalinen.madre.MinifiedPlanInstrumentation" else "androidx.test.runner.AndroidJUnitRunner"
         if (qaRegression) testProguardFile("qa-test-rules.pro")
 
         // Cycle 11: PocketBase переехал из домашней сети в production и виден

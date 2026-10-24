@@ -89,11 +89,11 @@ for label, apk, test, mapping, source in [
         result = subprocess.run(['adb', 'shell', 'am', 'instrument', '-w', '-r',
             '-e', 'class', 'com.polinalinen.madre.MinifiedPlanRegressionTest',
             '-e', 'negative', 'true' if label == 'negative-before' else 'false', '-e', 'phase', phase,
-            PACKAGE + '.test/androidx.test.runner.AndroidJUnitRunner'], text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            PACKAGE + '.test/com.polinalinen.madre.MinifiedPlanInstrumentation'], text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         (destination / f'{phase}-instrumentation.txt').write_text(result.stdout)
         logcat=subprocess.run(['adb','logcat','-d','-t','2000'],text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
         (destination / f'{phase}-logcat.txt').write_text(logcat.stdout)
-        assert result.returncode == 0 and 'OK (1 test)' in result.stdout and 'FAILURES' not in result.stdout, f'{label}/{phase} actual instrumentation failed; inspect raw output'
+        assert result.returncode == 0 and 'INSTRUMENTATION_RESULT: minifiedPersistence=PASS' in result.stdout and 'INSTRUMENTATION_CODE: -1' in result.stdout and 'minifiedPersistence=FAIL' not in result.stdout, f'{label}/{phase} actual instrumentation failed; inspect raw output'
     run(['adb', 'pull', f'/sdcard/Android/data/{PACKAGE}/files/minified-plan-regression', str(destination / 'raw')])
     assert all((destination / 'raw' / f'{phase}-prefs.json').is_file() for phase in ('write', 'restart'))
     print(label, 'actual minified write/restart PASS', sha(apk))

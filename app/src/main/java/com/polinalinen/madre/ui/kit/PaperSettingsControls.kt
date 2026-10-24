@@ -40,7 +40,8 @@ import androidx.compose.ui.unit.dp
                     inner()
                 }
             })
-        if (value.isNotEmpty()) PaperIconButton({ onValueChange("") }, label = "Очистить поиск") {
+        if (value.isNotEmpty()) PaperIconButton({ onValueChange("") },
+            modifier = Modifier.semantics { contentDescription = "Очистить поиск" }, label = "Очистить поиск") {
             Icon(Icons.Outlined.Close, null, Modifier.size(20.dp), tint = p.ink2)
         }
     }

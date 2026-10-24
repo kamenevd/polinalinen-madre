@@ -33,10 +33,15 @@ class HttpsYandexAccountApi internal constructor(
             withContext(Dispatchers.IO) {
                 val body = readBounded(r)
                 if (r.code != 200) {
-                    val foreign = r.code == 403 && runCatching {
-                        Gson().fromJson(body, JsonObject::class.java)?.get("error")?.asString == "foreign_client"
-                    }.getOrDefault(false)
-                    throw YandexAccountFailure(if (foreign) YandexAccountError.FOREIGN_CLIENT else YandexAccountError.SERVER)
+                    val code = runCatching {
+                        Gson().fromJson(body, JsonObject::class.java)?.get("error")?.asString
+                    }.getOrNull()
+                    val kind = when {
+                        r.code == 403 && code == "foreign_client" -> YandexAccountError.FOREIGN_CLIENT
+                        r.code == 502 && code == "yandex_unavailable" -> YandexAccountError.YANDEX
+                        else -> YandexAccountError.SERVER
+                    }
+                    throw YandexAccountFailure(kind)
                 }
                 val json = requireNotNull(Gson().fromJson(body, JsonObject::class.java))
                 fun text(name: String): String? = json.get(name)?.takeUnless { it.isJsonNull }?.asString

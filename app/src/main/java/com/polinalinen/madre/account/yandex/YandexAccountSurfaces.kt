@@ -134,7 +134,7 @@ private const val PRIVACY="Мадре получит только имя, пор
 private fun accountErrorCopy(kind:YandexAccountError)=when(kind) {
     YandexAccountError.NETWORK->"Нет связи. Войти можно позже — книга, таймеры и закваска работают и так."
     YandexAccountError.YANDEX->"Яндекс ID не ответил. Попробуйте ещё раз — книга работает и без входа."
-    YandexAccountError.SERVER->"Вход в Яндекс прошёл, но сервер Мадре не ответил. Повторите вход в приложении, когда появится связь."
+    YandexAccountError.SERVER->"Не удалось завершить вход в Мадре. Повторите вход в приложении, когда появится связь."
     YandexAccountError.FOREIGN_CLIENT->"Яндекс ID не подтвердил вход для Мадре. Повторите попытку."
     YandexAccountError.STORAGE->"Не удалось сохранить настройки входа. Не закрывайте приложение и повторите попытку."
 }

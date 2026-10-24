@@ -53,6 +53,24 @@ class HttpsYandexAccountApiTest {
         }
     }
 
+    @Test fun yandexOutageIsClassifiedWithoutClaimingSuccessfulVerification()=runBlocking {
+        listOf(
+            Triple(502,"yandex_unavailable",YandexAccountError.YANDEX),
+            Triple(503,"yandex_unavailable",YandexAccountError.SERVER),
+            Triple(502,"unknown_failure",YandexAccountError.SERVER),
+        ).forEach { (status,code,expected)->
+            val http=client(status,"""{"error":"$code","private":"synthetic-private-detail"}""")
+            val token=YandexLoginToken.takeSdkResult("SYNTHETIC_TEST_ONLY_BEARER")
+            try {
+                val failure=runCatching{HttpsYandexAccountApi({credential},http,{1000L}).bind(token)}
+                    .exceptionOrNull() as? YandexAccountFailure ?: error("Expected classified failure")
+                assertEquals(expected,failure.kind)
+                assertFalse(failure.toString().contains("synthetic-private-detail"))
+                assertFalse(failure.toString().contains("SYNTHETIC_TEST_ONLY_BEARER"))
+            } finally {token.close();http.dispatcher.executorService.shutdown()}
+        }
+    }
+
     @Test fun onlyExactNoContentAcknowledgesUnbindAndItCarriesNoLoginBearer()=runBlocking {
         listOf(204,200,202,302).forEach { status->
             val http=client(status,""){r->

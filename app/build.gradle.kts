@@ -23,7 +23,8 @@ val hasAnyReleaseSigning = releaseSigningInputs.any { !it.isNullOrBlank() }
 val yandexClientId = providers.environmentVariable("MADRE_YANDEX_CLIENT_ID").orElse("").get()
 // Explicit source gate: changed only after the controller confirms backend readiness and QA enablement.
 // No environment variable, CI default or Gradle property can silently opt the build in.
-val qaYandexActivationApproved = false
+// Parent verified PR62 deployment and explicitly authorized QA enablement on 2026-10-24.
+val qaYandexActivationApproved = true
 require(yandexClientId.isEmpty() || yandexClientId.matches(Regex("[0-9a-fA-F]{32}"))) {
     "Invalid public Yandex client id"
 }

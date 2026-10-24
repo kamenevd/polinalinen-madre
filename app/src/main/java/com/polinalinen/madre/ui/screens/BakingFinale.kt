@@ -71,13 +71,8 @@ import java.util.Locale
     val finishing by viewModel.finishing.collectAsState()
     val counts by viewModel.bakeCounts.collectAsState()
     val busy=sessionId!=null && sessionId in finishing
-    var decision by rememberSaveable(sessionId){mutableStateOf(ShelfShareDecision.KEEP)}
-    var decisionTouched by rememberSaveable(sessionId){mutableStateOf(false)}
-    LaunchedEffect(sharingAvailable,photoPath) {
-        if(!sharingAvailable)decision=ShelfShareDecision.KEEP
-        else if(!decisionTouched)decision=if(photoPath==null)ShelfShareDecision.PUT_WITHOUT_PHOTO else ShelfShareDecision.PUT_WITH_PHOTO
-        else if(photoPath==null && decision==ShelfShareDecision.PUT_WITH_PHOTO)decision=ShelfShareDecision.PUT_WITHOUT_PHOTO
-    }
+    val selection=rememberFinaleShareSelection(sessionId,sharingAvailable,photoPath!=null)
+    val decision=selection.decision
     fun back() {
         if(busy)return
         if(onBack!=null)onBack()
@@ -112,12 +107,7 @@ import java.util.Locale
             if(note!=null)PaperNote(note)
             if(sharingAvailable && (session!=null || completion!=null)) {
                 SmallLabel(familyName?.takeIf{it.isNotBlank()}?.let{"На полку «$it»"}?:"На полку")
-                BakeFinaleShareChoices(decision,photoPath!=null,busy){decisionTouched=true;decision=it}
-                PaperNote(when(decision){
-                    ShelfShareDecision.PUT_WITH_PHOTO->"Фото и запись появятся на полке семьи."
-                    ShelfShareDecision.PUT_WITHOUT_PHOTO->"На полке будет запись без фотографии."
-                    else->"Запись останется только в вашей книге."
-                })
+                BakeFinaleShareChoices(decision,photoPath!=null,busy,selection.choose)
                 if(photoPath==null)PaperNote("Добавьте фото, чтобы показать кадр.")
             }
         })
@@ -221,7 +211,10 @@ internal data class BakeFinalePageState(val name:String,val chapter:Int?,val por
         PaperTextAction("Убрать фото",onRemove,enabled=enabled)
     } else {
         Column(Modifier.fillMaxWidth().heightIn(min=230.dp).clip(shape).background(p.bg2).drawBehind {
-            drawRoundRect(p.line,cornerRadius=CornerRadius(20.dp.toPx()),style=Stroke(1.dp.toPx(),pathEffect=PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(),5.dp.toPx()))))
+            val inset=.5.dp.toPx()
+            drawRoundRect(p.line,topLeft=androidx.compose.ui.geometry.Offset(inset,inset),
+                size=androidx.compose.ui.geometry.Size(size.width-2*inset,size.height-2*inset),cornerRadius=CornerRadius(20.dp.toPx()-inset),
+                style=Stroke(1.dp.toPx(),pathEffect=PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(),5.dp.toPx()))))
         }.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp,Alignment.CenterVertically),horizontalAlignment=Alignment.CenterHorizontally) {
             PaperButton("Снять",actions.camera,Modifier.width(144.dp),enabled=enabled,variant=PaperButtonVariant.ACCENT,icon=Icons.Outlined.PhotoCamera)
             if(ownedRecent.isNotEmpty())Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
@@ -237,9 +230,25 @@ internal data class BakeFinalePageState(val name:String,val chapter:Int?,val por
     }
 }
 
+internal class FinaleShareSelection(val decision:ShelfShareDecision,val choose:(ShelfShareDecision)->Unit)
+
+/** One saved explicit choice shared by production and fixtures. No photo update can publish anything. */
+@Composable internal fun rememberFinaleShareSelection(key:Any?,sharingAvailable:Boolean,photoAvailable:Boolean):FinaleShareSelection {
+    var explicit by rememberSaveable(key){mutableStateOf<ShelfShareDecision?>(null)}
+    val requested=explicit ?: if(photoAvailable)ShelfShareDecision.PUT_WITH_PHOTO else ShelfShareDecision.PUT_WITHOUT_PHOTO
+    val effective=if(!sharingAvailable)ShelfShareDecision.KEEP
+        else if(!photoAvailable && requested==ShelfShareDecision.PUT_WITH_PHOTO)ShelfShareDecision.PUT_WITHOUT_PHOTO else requested
+    return FinaleShareSelection(effective){explicit=it}
+}
+
 @Composable internal fun BakeFinaleShareChoices(decision:ShelfShareDecision,photoAvailable:Boolean,
     busy:Boolean,onDecision:(ShelfShareDecision)->Unit) {
     val options=listOf(ShelfShareDecision.PUT_WITH_PHOTO,ShelfShareDecision.PUT_WITHOUT_PHOTO,ShelfShareDecision.KEEP)
     PaperSegmented(listOf("С фото","Без фото","Только мне"),options.indexOf(decision),{onDecision(options[it])},
         enabled={index->!busy && (index!=0 || photoAvailable)})
+    PaperNote(when(decision) {
+        ShelfShareDecision.PUT_WITH_PHOTO->"Полка увидит фото и запись"
+        ShelfShareDecision.PUT_WITHOUT_PHOTO->"Полка увидит запись без фото"
+        ShelfShareDecision.KEEP->"Запись увидите только вы"
+    })
 }

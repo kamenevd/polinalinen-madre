@@ -19,9 +19,9 @@ import com.polinalinen.madre.voice.*
 /** Screenshot state boundaries ONLY: no account owner, SDK, coordinator, Room or network.
  * CONNECTED below is an explicitly synthetic rendering input, never live acceptance. */
 internal val FixesNativeScenes=setOf("settings-account-out","settings-account-in","settings-in",
-    "account-sheet","signout-dialog","toc-greeting","oven-empty","oven-planned","bake-two-chips",
+    "account-sheet","signout-dialog","toc-greeting","oven-empty","oven-planned","oven-overdue","bake-two-chips",
     "bake-undo-snack","bake-fulltimer","bake-finale-photo","bake-finale-noaccount","sheet-start-now",
-    "yandex-offer-busy","yandex-offer-error","yandex-offer-offline","alice-connect-0","alice-connect-1",
+    "yandex-offer-busy","yandex-offer-error","yandex-offer-offline","yandex-offer-error-network","yandex-offer-error-yandex","yandex-offer-error-server","alice-connect-0","alice-connect-1",
     "alice-connect-2","alice-linked","station-timer")
 
 internal fun syntheticNativeBake(recipe:Recipe,id:Long=7):BakingSession {
@@ -39,7 +39,8 @@ internal fun syntheticNativeBake(recipe:Recipe,id:Long=7):BakingSession {
     when {
         scene.startsWith("yandex-offer-")->YandexOfferContent(when(scene) {
             "yandex-offer-busy"->YandexAccountState.SigningIn(1,false)
-            "yandex-offer-offline"->YandexAccountState.Error(YandexAccountError.NETWORK)
+            "yandex-offer-offline","yandex-offer-error-network"->YandexAccountState.Error(YandexAccountError.NETWORK)
+            "yandex-offer-error-yandex"->YandexAccountState.Error(YandexAccountError.YANDEX)
             else->YandexAccountState.Error(YandexAccountError.SERVER)
         },false,{},{},{})
         scene.startsWith("settings-account-") || scene in setOf("settings-in","account-sheet","signout-dialog")-> {
@@ -53,9 +54,10 @@ internal fun syntheticNativeBake(recipe:Recipe,id:Long=7):BakingSession {
             Box(Modifier.weight(1f).safeDrawingPadding()){BookTocContent(recipes,emptyList(),null,{_,_->},{},profileOverride=profile)}
             SpineBar(0){}
         }
-        scene=="oven-empty" || scene=="oven-planned"->Column {
+        scene=="oven-empty" || scene=="oven-planned" || scene=="oven-overdue"->Column {
             val clock=LocalBookClock.current
-            val plans=if(scene=="oven-planned")listOf(PlannedBake(recipe.id,2,clock.millis()+3_600_000L)) else emptyList()
+            val plans=if(scene=="oven-empty")emptyList() else listOf(PlannedBake(recipe.id,2,
+                clock.millis()+if(scene=="oven-overdue")-3_600_000L else 3_600_000L))
             Box(Modifier.weight(1f).safeDrawingPadding()){BookOvenContent(recipes,emptyList(),plans,{},{},{},{},{})}
             SpineBar(1){}
         }
@@ -70,10 +72,14 @@ internal fun syntheticNativeBake(recipe:Recipe,id:Long=7):BakingSession {
         scene=="bake-fulltimer"->FullTimer(bake,1661L){}
         scene=="bake-undo-snack"->{
             val snackbar=remember{PaperSnackbarState()}
-            LaunchedEffect(Unit){snackbar.showSnackbar("Шаг ${bake.currentStepIndex+1} · ${bake.currentStep.title}","Вернуть",indefinite=true)}
+            val next=remember(bake){bake.advance(BakingClock.elapsed(),BakingClock.wallClock())}
+            val actions=remember{mutableStateOf(0.dp)}
+            LaunchedEffect(Unit){snackbar.showSnackbar("Шаг ${next.currentStepIndex+1} · ${next.currentStep.title}","ВЕРНУТЬ",indefinite=true)}
+            CompositionLocalProvider(LocalBakeActionBarHeight provides actions) {
             Box(Modifier.fillMaxSize()) {
-                BakingPaper(bake,1661L,{},{},{},{},onOpenAlice={})
-                PaperSnackbar(snackbar,Modifier.align(Alignment.BottomCenter).padding(horizontal=12.dp,vertical=88.dp))
+                BakingPaper(next,next.currentStep.durationMinutes*60L,{},{},{},{},onOpenAlice={})
+                PaperSnackbar(snackbar,Modifier.align(Alignment.BottomCenter).padding(horizontal=12.dp).padding(bottom=actions.value+12.dp))
+            }
             }
         }
         scene.startsWith("bake-finale-")->NativeFinaleFixture(recipe,recipes,scene,photos)
@@ -83,7 +89,7 @@ internal fun syntheticNativeBake(recipe:Recipe,id:Long=7):BakingSession {
             PaperSheet({}){AliceSheetContent(if(linked)AliceSheetMode.LISTENING else AliceSheetMode.UNLINKED,
                 VoiceUiState(if(linked)VoiceStatus.CONNECTED else if(scene=="alice-connect-1")VoiceStatus.WAITING_LINK else VoiceStatus.UNLINKED,
                     selectedBake=if(linked)bake.bakeKey else null),recipeName=recipe.name,
-                accountStep={YandexAccountPanel(YandexAccountState.SignedOut,false,{},{},{})},
+                accountStep={YandexAccountPanel(if(scene=="alice-connect-0")YandexAccountState.SignedOut else YandexAccountState.SignedIn(profile),false,{},{},{})},
                 verifiedName=if(scene=="alice-connect-0")null else profile.displayName)}
         }
         scene=="station-timer"->{
@@ -96,17 +102,17 @@ internal fun syntheticNativeBake(recipe:Recipe,id:Long=7):BakingSession {
 /** Real photo-slot/share controls; only the renderer supplies synthetic private images. */
 @Composable internal fun NativeFinaleFixture(recipe:Recipe,recipes:List<Recipe>,scene:String,photos:List<GalleryPhoto>) {
     val selected=if(scene=="bake-finale-photo")photos.firstOrNull()?.path else null
-    var decision by remember{mutableStateOf(ShelfShareDecision.PUT_WITHOUT_PHOTO)}
+    val selection=rememberFinaleShareSelection(scene,scene!="bake-finale-noaccount",selected!=null)
     BakeFinalePage(BakeFinalePageState(recipe.name,1,2,RecipeScale.totalMinutes(recipe,2),recipe.timeline.size,
         1792731600000L,recipes.map{it.id==recipe.id},1),{},{},
         photo={BakeFinalePhoto(selected,photos,PhotoAttachmentActions({},{},{},{}),true,{})},
         extra={if(scene!="bake-finale-noaccount") {
             SmallLabel("НА ПОЛКУ «ТЕСТОВАЯ ПОЛКА»")
             BakeFinaleShareChoices(
-                decision=decision,
+                decision=selection.decision,
                 photoAvailable=selected!=null,
                 busy=false,
-                onDecision={decision=it},
+                onDecision=selection.choose,
             )
         }})
 }

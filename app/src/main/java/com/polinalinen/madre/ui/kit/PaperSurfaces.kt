@@ -104,12 +104,14 @@ import kotlin.random.Random
 
 @Composable fun PaperListRow(title: String, modifier: Modifier = Modifier, note: String? = null,
     value: String? = null, valueColor: Color = LocalPaper.current.acc,
-    onClick: (() -> Unit)? = null, repeatable: Boolean = false, trailing: (@Composable () -> Unit)? = null) {
+    onClick: (() -> Unit)? = null, repeatable: Boolean = false, trailing: (@Composable () -> Unit)? = null,
+    leading: (@Composable () -> Unit)? = null) {
     val p = LocalPaper.current
     Row(modifier.fillMaxWidth().heightIn(min = 64.dp)
         .then(if (onClick != null) com.polinalinen.madre.ui.components.bookAction("$title: ${value.orEmpty()}", repeatable = repeatable, onClick = onClick) else Modifier)
         .drawBehind { drawLine(p.line, Offset(0f, size.height), Offset(size.width, size.height), 1.dp.toPx()) }
         .padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        if(leading!=null) { leading();Spacer(Modifier.width(14.dp)) }
         Column(Modifier.weight(1f)) {
             Text(title, color = p.ink, style = PaperType.title)
             if (note != null) Text(note, color = p.mut, style = PaperType.note, modifier = Modifier.padding(top = 4.dp))
@@ -206,6 +208,8 @@ import kotlin.random.Random
 }
 
 /** Navigation owns messages; kit owns their presentation and platform state. */
+val LocalBakeActionBarHeight = staticCompositionLocalOf<MutableState<androidx.compose.ui.unit.Dp>?>{null}
+
 class PaperSnackbarState {
     internal val host = SnackbarHostState()
     suspend fun showSnackbar(message: String, actionLabel: String? = null, indefinite: Boolean = false): Boolean =
@@ -215,7 +219,10 @@ class PaperSnackbarState {
 @Composable fun PaperSnackbar(hostState: PaperSnackbarState, modifier: Modifier = Modifier) {
     val p = LocalPaper.current
     SnackbarHost(hostState.host, modifier) { data ->
-        Snackbar(data, shape = RoundedCornerShape(16.dp), containerColor = p.ink,
-            contentColor = p.bg, actionColor = p.acc, dismissActionContentColor = p.bg)
+        Snackbar(shape = RoundedCornerShape(16.dp), containerColor = p.ink,contentColor = p.bg,
+            action={data.visuals.actionLabel?.let{label->
+                PaperButton(label.uppercase(java.util.Locale.forLanguageTag("ru")),data::performAction,
+                    Modifier.widthIn(max=130.dp),variant=PaperButtonVariant.TEXT)
+            }}) {Text(data.visuals.message,style=PaperType.body,color=p.bg)}
     }
 }

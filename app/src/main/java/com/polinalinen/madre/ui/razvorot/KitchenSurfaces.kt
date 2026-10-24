@@ -19,6 +19,8 @@ import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onSizeChanged
 
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
@@ -40,6 +42,10 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
     var full by rememberSaveable { mutableStateOf(false) }
     var stationTimer by rememberSaveable(session.id) { mutableStateOf(false) }
     if(full) { FullTimer(session,remaining){full=false};return }
+    val actionBarHeight=LocalBakeActionBarHeight.current
+    val density=LocalDensity.current
+    val bottomInset=WindowInsets.systemBarsIgnoringVisibility.union(WindowInsets.displayCutout).getBottom(density)
+    DisposableEffect(actionBarHeight){onDispose{actionBarHeight?.value=0.dp}}
     val p=LocalPaper.current
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBarsIgnoringVisibility.union(WindowInsets.displayCutout))) {
         Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
@@ -79,7 +85,8 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
         }
         Spacer(Modifier.height(16.dp))
       }
-      Column(Modifier.fillMaxWidth().padding(horizontal=22.dp,vertical=10.dp)) {
+      Column(Modifier.fillMaxWidth().onSizeChanged{actionBarHeight?.value=with(density){(it.height+bottomInset).toDp()}}
+          .padding(horizontal=22.dp,vertical=10.dp).testTag("bake-action-bar")) {
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)) {
             PaperButton(if(session.isPaused)"Продолжить" else "Пауза",onPause,Modifier.weight(1f),variant=PaperButtonVariant.SECONDARY)
             PaperButton(if(session.isLastStep)"Испечено" else "Дальше →",onNext,Modifier.weight(1f),true, enabled = !session.isLastStep || session.trustedPortions != null)
@@ -124,7 +131,7 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
         }
         BookText(when(phase){GrowthPhase.EMPTY->"Первое кормление — начало дневника.";GrowthPhase.LAG->"Набираюсь сил после кормления.";GrowthPhase.GROWING->"Время расти. Скоро можно печь.";GrowthPhase.PEAK->"По времени кормления — пора проверить закваску.";else->"Пора проверить, не нужно ли кормление."},22,Modifier.padding(top=14.dp),italic=true)
         SmallLabel(hours?.let{"ПОСЛЕ КОРМЛЕНИЯ · %.1f Ч".format(it)}?:"КОРМЛЕНИЙ ПОКА НЕТ",Modifier.padding(top=20.dp))
-        Row(Modifier.fillMaxWidth().padding(vertical=20.dp),horizontalArrangement=Arrangement.spacedBy(12.dp)) {PaperButton("Покормить",onFeed,Modifier.weight(1f),true);PaperButton("Дневник",onDiary,Modifier.weight(1f))}
+        Row(Modifier.fillMaxWidth().padding(vertical=20.dp),horizontalArrangement=Arrangement.spacedBy(12.dp)) {PaperButton("Покормить",onFeed,Modifier.weight(1f),true);PaperButton("Дневник",onDiary,Modifier.weight(1f),variant=PaperButtonVariant.SECONDARY)}
     }
 }
 internal fun starterCycleLevel(hours:Float?,peak:Float,cycle:Float):Float {

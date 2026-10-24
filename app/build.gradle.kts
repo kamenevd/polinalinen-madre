@@ -21,6 +21,9 @@ val hasCompleteReleaseSigning = releaseSigningInputs.all { !it.isNullOrBlank() }
 val hasAnyReleaseSigning = releaseSigningInputs.any { !it.isNullOrBlank() }
 // Public OAuth client id only. Never read a client secret or signing material here.
 val yandexClientId = providers.environmentVariable("MADRE_YANDEX_CLIENT_ID").orElse("").get()
+// Explicit source gate: changed only after the controller confirms backend readiness and QA enablement.
+// No environment variable, CI default or Gradle property can silently opt the build in.
+val qaYandexActivationApproved = false
 require(yandexClientId.isEmpty() || yandexClientId.matches(Regex("[0-9a-fA-F]{32}"))) {
     "Invalid public Yandex client id"
 }
@@ -64,8 +67,8 @@ android {
         minSdk = 26
         targetSdk = 35
         // versionCode is monotonic over the latest published release; release_cycle.py enforces it.
-        versionCode = 49
-        versionName = "7.0.13"
+        versionCode = 50
+        versionName = "7.0.14"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -99,12 +102,14 @@ android {
 
     buildTypes {
         debug {
+            buildConfigField("boolean", "YANDEX_ID", qaYandexActivationApproved.toString())
             applicationIdSuffix = ".qa"
             // Missing QA inputs produce an unsigned build, rejected by the mandatory CI verifier.
             signingConfig = signingConfigs.findByName("qa")
             resValue("string", "app_name", "Мадре QA")
         }
         release {
+            buildConfigField("boolean", "YANDEX_ID", "false")
             isMinifyEnabled = true
             isShrinkResources = true
             signingConfigs.findByName("release")?.let { signingConfig = it }

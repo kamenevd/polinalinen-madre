@@ -91,6 +91,7 @@ fun MadreNavHost(
     val readingPreferences = rememberReadingPreferences()
     val bakingViewModel: BakingViewModel = viewModel()
     val bookPreferences = remember(context) { BookPreferences(context) }
+    val bookClock=LocalBookClock.current
     val initialHomeSection = remember { bookPreferences.initialTab() }
     var activeSection by rememberSaveable { mutableStateOf(initialHomeSection) }
     val currentEntry by navController.currentBackStackEntryAsState()
@@ -105,6 +106,7 @@ fun MadreNavHost(
         }
     }
     val navSnackbar = remember { PaperSnackbarState() }
+    val bakeActionBarHeight=remember{mutableStateOf(0.dp)}
     val restoreReady by bakingViewModel.restoreReady.collectAsState()
     var startupHandled by rememberSaveable { mutableStateOf(false) }
     var startRecipeId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -159,7 +161,7 @@ fun MadreNavHost(
         startMode=mode;editingPlanId=planId;planError=null;startRecipeId=id;startFromOven=fromOven
     }
     suspend fun storePlan(plan:PlannedBake,replacingId:String?=null) = withContext(NonCancellable+Dispatchers.IO) {
-        check(plan.startAtMillis>=System.currentTimeMillis()) { "Start time has passed" }
+        check(plan.startAtMillis>=bookClock.millis()) { "Start time has passed" }
         check(bookPreferences.putPlan(plan,replacingId)) { "Plan was not persisted" }
         if(replacingId!=null && replacingId!=plan.id)planScheduler.cancel(replacingId)
         planScheduler.schedule(plan).result.get()
@@ -237,7 +239,7 @@ fun MadreNavHost(
                             } else navigationScope.launch{navSnackbar.showSnackbar("Не удалось начать выпечку. План сохранён.")}
                         }
                         com.polinalinen.madre.notifications.PlannedBakeAction.SNOOZE->{
-                            storePlan(BakePlanning.snooze(plan,System.currentTimeMillis()),plan.id)
+                            storePlan(BakePlanning.snooze(plan,bookClock.millis()),plan.id)
                             navigationScope.launch{navSnackbar.showSnackbar("Напомним через 30 минут")}
                         }
                     }
@@ -354,7 +356,8 @@ fun MadreNavHost(
         ((System.currentTimeMillis() - oldest.timestampMillis) / 86_400_000L).toInt() + 1
     } ?: 1
 
-    CompositionLocalProvider(LocalCalmMode provides calmMode, LocalBookDisplaySettings provides displaySettings) {
+    CompositionLocalProvider(LocalCalmMode provides calmMode, LocalBookDisplaySettings provides displaySettings,
+        LocalBakeActionBarHeight provides bakeActionBarHeight) {
         RazvorotTheme(readingPreferences) {
         Box(Modifier.fillMaxSize()) {
         NavHost(navController = navController, startDestination = MadreDestinations.HOME) {
@@ -374,6 +377,32 @@ fun MadreNavHost(
                     onStartRecipe = {recipe->navigationScope.launch { bakingViewModel.startBakingWithUndo(recipe,bookPreferences.portions(recipe.id).toDouble())?.let{id->navController.navigate(MadreDestinations.bake(id.toString()))} }},
                     onConfigureRecipe = {recipe->openStart(recipe.id)},
                     onConfigurePlan = {plan->openStart(plan.recipeId,1,plan.id)},
+                    onStartPlan = {requested->navigationScope.launch {
+                        val current=bookPreferences.plans.firstOrNull{it==requested}
+                        val recipe=current?.let{plan->recipesForStats.firstOrNull{it.id==plan.recipeId}}
+                        try {
+                            val sid=if(current!=null && recipe!=null)bakingViewModel.startPlannedBake(recipe,current.portions.toDouble(),current.id)
+                                else bakingViewModel.sessionForPlan(requested.id)?.id
+                            if(sid!=null) {
+                                removePlan(requested.id)
+                                navController.navigate(MadreDestinations.bake(sid.toString())){launchSingleTop=true}
+                            } else navSnackbar.showSnackbar("Не удалось начать выпечку. План сохранён.")
+                        } catch(e:Exception) {
+                            if(e is kotlinx.coroutines.CancellationException)throw e
+                            navSnackbar.showSnackbar("Не удалось завершить действие. План сохранён.")
+                        }
+                    } },
+                    onSnoozePlan = {requested->navigationScope.launch {
+                        try {
+                            bookPreferences.plans.firstOrNull{it==requested}?.let{current->
+                                storePlan(BakePlanning.snooze(current,bookClock.millis()),current.id)
+                                navSnackbar.showSnackbar("Напомним через 30 минут")
+                            }
+                        } catch(e:Exception) {
+                            if(e is kotlinx.coroutines.CancellationException)throw e
+                            navSnackbar.showSnackbar("Не удалось перенести напоминание. Проверьте план.")
+                        }
+                    } },
                     onOpenShelf = { navController.navigate(MadreDestinations.SHELF) },
                     onContinueReading = { session -> openChapter(session.recipe.id,step=session.currentStepIndex) },
                     onOpenRecipe = { id -> openChapter(id) },
@@ -572,7 +601,8 @@ fun MadreNavHost(
                 )
             }
         }
-            PaperSnackbar(navSnackbar,Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(horizontal=12.dp,vertical=80.dp))
+            PaperSnackbar(navSnackbar,Modifier.align(Alignment.BottomCenter).padding(horizontal=12.dp)
+                .padding(bottom=if(bakeActionBarHeight.value>0.dp)bakeActionBarHeight.value+12.dp else 80.dp))
         }
             startRecipeId?.let { id->recipesForStats.firstOrNull{it.id==id}?.let { recipe->
                 val editing=bookPreferences.plans.firstOrNull{it.id==editingPlanId}

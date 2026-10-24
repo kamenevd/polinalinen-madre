@@ -90,7 +90,7 @@ import androidx.compose.ui.Alignment
     onOpenSession: (Long) -> Unit, onConfigure: (Recipe) -> Unit, onQuickStart: (Recipe) -> Unit,
     onOpenPlan: (PlannedBake) -> Unit, onSettings: () -> Unit, modifier: Modifier = Modifier,
     onAa: () -> Unit = {}, pendingFinished: List<Pair<Long,BakingViewModel.BakeCompletion>> = emptyList(),
-    clock:Clock=LocalBookClock.current) {
+    clock:Clock=LocalBookClock.current,onStartPlan:(PlannedBake)->Unit={},onSnoozePlan:(PlannedBake)->Unit={}) {
     var filter by rememberSaveable { mutableIntStateOf(0) }
     val p = LocalPaper.current
     val now=rememberBookNow(clock)
@@ -106,29 +106,30 @@ import androidx.compose.ui.Alignment
             SmallLabel("ПЕЧЬ · ${java.time.Instant.ofEpochMilli(now).atZone(clock.zone).format(java.time.format.DateTimeFormatter.ofPattern("EEEE, d MMMM",Locale.forLanguageTag("ru")))}",Modifier.weight(1f).padding(top=16.dp))
             PaperTextButton(onAa,label="Как читать") { BookText("Aa",21) }
         }
-        PaperCountHeading("Уже печём",sessions.count{!it.isCompleted})
-        if (sessions.isNotEmpty()) {
-
+        val visiblePlans=plans.mapNotNull{plan->recipes.firstOrNull{it.id==plan.recipeId}?.let{plan to it}}
+        val count=sessions.size+visiblePlans.size+pendingFinished.size
+        if(count>0)PaperCountHeading("Уже печём",count) else Text("Уже печём",style=PaperType.display,color=p.ink)
+        if (count>0) {
             sessions.forEach { session -> key(session.id) { ActiveBookBake(session) { onOpenSession(session.id) } } }
         } else {
-            SmallLabel("ПОКА НИЧЕГО НЕ ПЕЧЁМ")
-            PaperNote("Выберите рецепт ниже — и поставим опару.")
+            PaperNote("Сейчас ничего не печётся. Выберите главу ниже — запуск в одно касание.")
         }
         pendingFinished.forEach { (id,completion) -> PaperCard(Modifier.fillMaxWidth()) {
             SmallLabel("ИСПЕЧЕНО · ВПИШИТЕ В КНИГУ",color=p.rib)
             Text(completion.recipeName,style=PaperType.title,color=p.ink)
             PaperTextAction("Вписать в книгу",{onOpenSession(id)})
         } }
-        if (plans.isNotEmpty()) {
-            SmallLabel("ЗАПЛАНИРОВАНО")
-            plans.forEach { plan -> recipes.firstOrNull { it.id == plan.recipeId }?.let { recipe ->
-                PaperCard(Modifier.fillMaxWidth()) {
-                    Text(recipe.name, style = PaperType.title, color = p.ink)
-                    PaperNote("×${plan.portions} · ${SimpleDateFormat("d MMM, HH:mm", Locale.forLanguageTag("ru")).format(Date(plan.startAtMillis))}")
-                    PaperTextAction("Открыть план", { onOpenPlan(plan) })
+        visiblePlans.forEach { (plan,recipe) -> key(plan.id) {
+            val overdue=plan.startAtMillis<now
+            PaperBakeCard(recipe.name,if(overdue)"ПОРА НАЧИНАТЬ · ×${plan.portions}" else "ЗАПЛАНИРОВАНО · ×${plan.portions}",
+                recipePhoto(recipe.id),0f,{onOpenPlan(plan)}) {
+                PaperNote(if(overdue)"План ждёт вас — таймер ещё не запущен" else "начнём ${relativeBookTime(plan.startAtMillis,now,clock)}")
+                if(overdue)Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                    PaperButton("Начать",{onStartPlan(plan)},Modifier.weight(1f),variant=PaperButtonVariant.ACCENT)
+                    PaperButton("Через 30 мин",{onSnoozePlan(plan)},Modifier.weight(1f),variant=PaperButtonVariant.SECONDARY)
                 }
-            } }
-        }
+            }
+        } }
         Text("Что испечь",style=PaperType.h2,color=p.ink,modifier=Modifier.padding(top=10.dp))
         Text("▶ — сразу, тап — с настройкой",style=PaperType.note,color=p.ink2)
         PaperChipRow(choices, filter, { filter = it })
@@ -205,16 +206,15 @@ import androidx.compose.ui.Alignment
         PaperNote("×${BookCatalog.number(factor)} · веса во всей главе пересчитаны")
         if (whole != null) {
             RecipeScale.yieldText(recipe, whole)?.let { PaperNote(it) }
-            RecipeScale.capacityNote(recipe, whole)?.let { PaperNote(it) }
         }
-        PaperNote(RecipeScale.TIMING_NOTE)
+        PaperNote("${whole?.let{RecipeScale.capacityNote(recipe,it)?.let{note->"$note "}}.orEmpty()}${RecipeScale.TIMING_NOTE}")
         PaperSegmented(listOf("Граммы","% пекаря"),if(percent)1 else 0,{percent=it==1})
         recipe.ingredients.forEach { (section,ingredients) ->
             SmallLabel(com.polinalinen.madre.utils.ingredientSectionTitle(section))
             ingredients.forEach { ingredient ->
                 if(percent && ingredient.refType==null && ingredient.gramsValue()>0)
                     PaperIngredientLine(ingredient.name,"${BookCatalog.number(RecipeScaler.bakerPercentage(ingredient,recipe),1)} %")
-                else PaperNote(RecipeScaler.scaledDisplayText(ingredient,factor))
+                else ingredientDisplayParts(RecipeScaler.scaledDisplayText(ingredient,factor)).let{(name,amount)->PaperIngredientLine(name,amount)}
             }
         }
         if(percent) {

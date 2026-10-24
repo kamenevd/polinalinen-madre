@@ -39,6 +39,8 @@ import com.polinalinen.madre.ui.components.bookAction
     bookPreferences:BookPreferences?=null,onOpenChapter:((String,Int)->Unit)?=null,
     onStartRecipe:((Recipe)->Unit)?=null,onConfigureRecipe:((Recipe)->Unit)?=null,
     onConfigurePlan:((com.polinalinen.madre.navigation.PlannedBake)->Unit)?=null,
+    onStartPlan:(com.polinalinen.madre.navigation.PlannedBake)->Unit={},
+    onSnoozePlan:(com.polinalinen.madre.navigation.PlannedBake)->Unit={},
 ) {
     val account=com.polinalinen.madre.account.yandex.LocalYandexAccountUi.current
     if(account!=null) {
@@ -71,7 +73,8 @@ import com.polinalinen.madre.ui.components.bookAction
                         {recipe->onConfigureRecipe?.invoke(recipe)?:onOpenRecipe(recipe.id)},
                         {recipe->onStartRecipe?.invoke(recipe)?:onOpenRecipe(recipe.id)},
                         {plan->onConfigurePlan?.invoke(plan)?:recipes.firstOrNull{it.id==plan.recipeId}?.let{onConfigureRecipe?.invoke(it)}},
-                        onSettings,onAa={settings=true},pendingFinished=completions.filterKeys{id->sessions.none{it.id==id}}.toList())
+                        onSettings,onAa={settings=true},pendingFinished=completions.filterKeys{id->sessions.none{it.id==id}}.toList(),
+                        onStartPlan=onStartPlan,onSnoozePlan=onSnoozePlan)
                 }
                 2 -> StarterPaper(starterName,day,phase,lastFeedingMillis?.let{com.polinalinen.madre.sourdough.hoursSinceFeeding(it)},hydration,onFeed,onDiary,{settings=true},intervalHours)
                 3 -> shelf()

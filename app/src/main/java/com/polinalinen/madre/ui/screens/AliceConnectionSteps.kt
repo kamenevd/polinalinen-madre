@@ -24,24 +24,25 @@ import com.polinalinen.madre.ui.kit.*
     val profile = (account as? YandexAccountState.SignedIn)?.profile
     val name = profile?.displayName?.ifBlank { profile.login } ?: verifiedName
     Text("Один раз. Потом шаги можно слушать и спрашивать голосом.",style=PaperType.note,color=p.ink2)
-    AliceConnectionStep(1,if(name!=null) "Вы вошли · $name" else "Войдите с Яндекс ID",done=name!=null,current=name==null) {
+    val current=if(name==null)1 else if(waiting)3 else 2
+    AliceConnectionStep(1,if(name!=null) "Вы вошли · $name" else "Войдите с Яндекс ID",done=name!=null,current=current==1) {
         if(name==null) Text("тем же аккаунтом, что на Станции",style=PaperType.note,color=p.ink2)
         if(name==null) {
             if(accountStep!=null) accountStep() else YandexAliceAccountStep(onHelp)
         }
     }
-    AliceConnectionStep(2,"Скажите Алисе",current=name!=null && !waiting) {
+    AliceConnectionStep(2,"Скажите Алисе",done=current==3,current=current==2) {
         SmallLabel("НА СТАНЦИИ ИЛИ В ПРИЛОЖЕНИИ ЯНДЕКС",color=p.ink2)
         Box(Modifier.fillMaxWidth().background(p.bg2,RoundedCornerShape(12.dp)).padding(12.dp)) {
-            Text(AliceCopy.LAUNCH_PHRASE,style=PaperType.body,color=p.ink)
+            Text("«${AliceCopy.LAUNCH_PHRASE}»",style=PaperType.body.copy(fontStyle=androidx.compose.ui.text.font.FontStyle.Italic),color=p.ink)
         }
     }
-    AliceConnectionStep(3,"Нажмите «Авторизоваться»",current=waiting) {
+    AliceConnectionStep(3,"Нажмите «Авторизоваться»",current=current==3) {
         Text("в приложении Яндекс (со Станции придёт пуш). Войдите тем же аккаунтом. Если появился код — подтвердите его на телефоне.",
             style=PaperType.note,color=p.ink2)
     }
     Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(10.dp)) {
-        if(waiting) { PaperProgress(); Text("Ждём подтверждения подключения",style=PaperType.note,color=p.ink2,modifier=Modifier.weight(1f)) }
+        if(current==3) { PaperProgress(); Text("Ждём подтверждения подключения",style=PaperType.note,color=p.ink2,modifier=Modifier.weight(1f)) }
         else Spacer(Modifier.weight(1f))
         PaperTextAction("НЕ ВЫХОДИТ?",onHelp)
     }

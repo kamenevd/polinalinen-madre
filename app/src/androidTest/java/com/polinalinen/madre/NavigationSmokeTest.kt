@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -77,6 +78,13 @@ class NavigationSmokeTest {
      * прочитаны, тапать не по чему.
      */
     private fun awaitTableOfContents() {
+        // A fresh QA install may show the optional offer. Decline it, never launch SDK/auth.
+        rule.waitUntil(TIMEOUT_MS) {
+            rule.onAllNodesWithText("ПРОДОЛЖИТЬ БЕЗ ВХОДА").fetchSemanticsNodes().isNotEmpty() ||
+                rule.onAllNodesWithTag(Home.LIST_TAG).fetchSemanticsNodes().isNotEmpty()
+        }
+        if(rule.onAllNodesWithText("ПРОДОЛЖИТЬ БЕЗ ВХОДА").fetchSemanticsNodes().isNotEmpty())
+            rule.onNodeWithText("ПРОДОЛЖИТЬ БЕЗ ВХОДА").performClick()
         rule.waitUntil(TIMEOUT_MS) {
             rule.onAllNodesWithTag(Home.LIST_TAG).fetchSemanticsNodes().isNotEmpty() &&
                 recipes.isNotEmpty() &&

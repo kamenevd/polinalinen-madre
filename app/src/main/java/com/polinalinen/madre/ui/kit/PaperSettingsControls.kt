@@ -18,6 +18,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
@@ -29,7 +31,7 @@ import androidx.compose.ui.unit.Dp
     val p = LocalPaper.current
     var focused by remember { mutableStateOf(false) }
     Row(modifier.fillMaxWidth().heightIn(min = 48.dp).background(p.bg2, RoundedCornerShape(14.dp))
-        .border(if (focused) 2.dp else 1.dp, if (focused) p.acc else p.line, RoundedCornerShape(14.dp)),
+        .drawBehind { if(focused)drawLine(p.acc,Offset(0f,size.height-1.dp.toPx()),Offset(size.width,size.height-1.dp.toPx()),2.dp.toPx()) },
         verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Outlined.Search, null, Modifier.padding(start = 14.dp).size(iconSize), tint = p.ink2)
         BasicTextField(value, onValueChange, singleLine = true, textStyle = PaperType.body.copy(color = p.ink),

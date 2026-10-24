@@ -6,6 +6,11 @@ plugins {
 group = "com.yandex.android"
 version = "3.3.0"
 
+val yandexClientId = providers.environmentVariable("MADRE_YANDEX_CLIENT_ID").orElse("").get()
+require(yandexClientId.isEmpty() || yandexClientId.matches(Regex("[0-9a-fA-F]{32}"))) {
+    "Invalid public Yandex client id"
+}
+
 // Exact published3.3.0 sources, with the narrowly documented custody correction.
 // No publishing task/repository is configured; this is a local security source build.
 android {
@@ -17,6 +22,9 @@ android {
     compileSdk = 34
     defaultConfig {
         minSdk = 21
+        // Library androidTest merges its own main manifest independently of the consuming app.
+        // The same approved CI input is inherited by both library variants and their test APKs.
+        manifestPlaceholders["YANDEX_CLIENT_ID"] = yandexClientId.ifEmpty { "disabled-madre-id" }
     }
     buildFeatures {
         // Preserve the published SDK BuildConfig.java unchanged.

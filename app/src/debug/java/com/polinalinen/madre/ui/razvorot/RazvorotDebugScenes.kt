@@ -8,6 +8,7 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
@@ -145,6 +146,13 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
                     scene.startsWith("reader-text") -> DebugTextPage(recipe,preferences)
                     scene.startsWith("curl-") || scene.startsWith("gles2-curl-") -> DebugCurl(recipe,scene)
                     scene=="reader-chrome" -> RazvorotReader(recipes,recipe.id,preferences,{},{},{})
+                    scene=="fullscreen-dialog" || scene=="fullscreen-photo" -> {
+                        RazvorotReader(recipes,recipe.id,preferences,{},{},{},initialChrome=false)
+                        var open by rememberSaveable{mutableStateOf(true)}
+                        if(open && scene=="fullscreen-dialog")PaperConfirmDialog("Бросить выпечку?","Проверка настоящего окна, без изменения данных.",
+                            "Остаться","Отмена",onConfirm={open=false},onDismiss={open=false})
+                        if(open && scene=="fullscreen-photo")PaperPhotoViewer({open=false}) {BookText("Фото · локальная тестовая поверхность",18)}
+                    }
                     scene=="reading-sheet" -> { DebugTextPage(recipe,preferences);ReadingSettings(preferences,onWindow={(context as? RazvorotSceneActivity)?.captureWindow=it}){} }
                     scene.startsWith("home-") -> Column {
                         Box(Modifier.weight(1f).safeDrawingPadding()){BookTocContent(recipes,emptyList(),null,{_,_->},{})}

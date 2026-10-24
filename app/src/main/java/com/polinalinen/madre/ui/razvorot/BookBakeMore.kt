@@ -36,7 +36,7 @@ import kotlinx.coroutines.delay
                 trailing={PaperSwitch(keepScreenOn,onKeepScreenOn)})
             SmallLabel("ВСЕ ШАГИ · ТОЛЬКО ПРОСМОТР")
             session.recipe.timeline.forEachIndexed { index,step ->
-                PaperListRow("${index+1}. ${step.title}",note="${step.durationMinutes} мин",value=if(index==session.currentStepIndex)"Сейчас" else null)
+                PaperListRow("${index+1}. ${step.title}",note=BookCatalog.duration(step.durationMinutes),value=if(index==session.currentStepIndex)"Сейчас" else null)
             }
             PaperTextAction("Бросить выпечку",{onDismiss();onAbandon()},destructive=true)
             PaperNote("8 секунд, чтобы вернуть. До этого таймер продолжает идти, клякса не появляется.")

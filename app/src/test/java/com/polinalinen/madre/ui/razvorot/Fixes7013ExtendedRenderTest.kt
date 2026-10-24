@@ -45,31 +45,32 @@ class Fixes7013ExtendedRenderTest {
         val photos=nativeSyntheticPhotos(context)
         assertEquals(4,photos.size)
         val module=if(File("app/src/main/AndroidManifest.xml").isFile)File("app") else File(".")
-        val directory=File(module,"build/outputs/roborazzi/fixes-7013").apply{mkdirs()}
+        val directory=File(module,"build/outputs/roborazzi/fixes-7014").apply{mkdirs()}
         val cases=buildList<Pair<String,Atmosphere>> {
             // The original 20 frames, captured by the same actual-window compositor as the extras.
             for(scene in listOf("chapter-title","toc","oven","start-later","starter-growing","shelf"))add(scene to Atmosphere.DAWN)
             for(scene in listOf("chapter-ingr","bake","bake-finale","yandex-offer"))for(theme in listOf(Atmosphere.DAWN,Atmosphere.NIGHT))add(scene to theme)
             for(theme in listOf(Atmosphere.DAWN,Atmosphere.DAY,Atmosphere.DUSK,Atmosphere.NIGHT))add("reading-sheet" to theme)
             add("alice-sheet-unlinked" to Atmosphere.NIGHT);add("alice-yandex-consent" to Atmosphere.NIGHT)
-            for(scene in listOf("toc-search","toc-empty","chapter-end-edge","chapter-active","sheet-calc","sheet-calc-flour","sheet-calc-pct",
-                "sheet-start-now","oven-empty","oven-planned","bake-two-chips","bake-more-steps","bake-undo-snack","bake-fulltimer",
-                "bake-finale-photo","bake-finale-noaccount","yandex-offer-busy","yandex-offer-error","yandex-offer-offline",
+            for(scene in listOf("toc-search","toc-search-flour","toc-empty","chapter-end-edge","chapter-active","sheet-calc","sheet-calc-flour","sheet-calc-pct",
+                "sheet-start-now","oven-empty","oven-planned","oven-overdue","bake-two-chips","bake-more-steps","bake-undo-snack","bake-fulltimer",
+                "bake-finale-photo","bake-finale-noaccount","yandex-offer-busy","yandex-offer-error-network","yandex-offer-error-yandex","yandex-offer-error-server","yandex-offer-offline",
                 "settings-account-out","settings-account-in","account-sheet","signout-dialog","station-timer","toc-greeting"))add(scene to Atmosphere.DAWN)
             for(scene in listOf("alice-connect-0","alice-connect-1","alice-connect-2"))for(theme in listOf(Atmosphere.DAWN,Atmosphere.NIGHT))add(scene to theme)
             add("settings-in" to Atmosphere.NIGHT);add("alice-linked" to Atmosphere.NIGHT)
         }
         val failures=mutableListOf<String>()
         for((name,theme) in cases)try {
-            val scene=when(name){"toc-search","toc-empty"->"toc";"sheet-calc-flour","sheet-calc-pct"->"sheet-calc";"bake-more-steps"->"bake-more";else->name}
+            val scene=when(name){"toc-search","toc-search-flour","toc-empty"->"toc";"sheet-calc-flour","sheet-calc-pct"->"sheet-calc";"bake-more-steps"->"bake-more";else->name}
             // Dispose each previous modal and its saved UI state before opening the next scene.
             rule.activityRule.scenario.onActivity{it.scene="fixture-reset-$name";it.atmosphere=theme;it.recentPhotos=photos}
             rule.waitForIdle()
             rule.activityRule.scenario.onActivity{it.scene=scene}
             rule.waitForIdle()
             when(name) {
-                "toc-search"->rule.onNodeWithTag("toc-search").performTextInput("мука")
-                "toc-empty"->rule.onNodeWithTag("toc-search").performTextInput("неттакогорецепта")
+                "toc-search"->rule.onNodeWithTag("toc-search").performTextInput("рж")
+                "toc-search-flour"->rule.onNodeWithTag("toc-search").performTextInput("мука")
+                "toc-empty"->rule.onNodeWithTag("toc-search").performTextInput("зефир")
                 "sheet-calc-flour"->rule.onNodeWithText("По муке").performClick()
                 "sheet-calc-pct"->rule.onNodeWithText("% пекаря").performScrollTo().performClick()
                 "chapter-end-edge"->{
@@ -86,7 +87,7 @@ class Fixes7013ExtendedRenderTest {
             assertEquals("$name width",412,bitmap.width);assertEquals("$name height",915,bitmap.height)
             bitmap.recycle()
         } catch(failure:Throwable) {failures.add("$name/${theme.captureName()}: ${failure::class.simpleName}: ${failure.message}")}
-        File(directory,"README.txt").writeText("FIXES7.0.13 native Android/Compose window-composite render; 412x915, mdpi, API35.\n"+
+        File(directory,"README.txt").writeText("FIXES7.0.14 native Android/Compose window-composite render; 412x915, mdpi, API35.\n"+
             "All profile/voice/photo/bake states are explicit synthetic fixtures. No SDK login, backend grant, Station or physical-device acceptance.\n"+
             "Clock: 2026-10-24T13:40:00Z Europe/Moscow. Missing states fail the capture; no screenshot rescaling/cropping.\n"+
             "Requested ${cases.size} frames; failures ${failures.size}.\n"+failures.joinToString("\n"))

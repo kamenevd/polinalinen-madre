@@ -81,7 +81,7 @@ internal fun aliceSheetMode(state: VoiceUiState): AliceSheetMode = when {
                 com.polinalinen.madre.ui.screens.AliceConnectionSteps(
                     waiting=state.status==VoiceStatus.WAITING_LINK || state.status==VoiceStatus.LOADING,
                     onHelp=onConnect,accountStep=accountStep,verifiedName=verifiedName)
-                PaperTextAction("ВЫБРАТЬ ВЫПЕЧКУ И РАЗРЕШИТЬ ДОСТУП",onConnect)
+
             }
             AliceSheetMode.CONFIRM -> {
                 Text(AliceCopy.SHARED_WARNING, color = p.ink2, style = PaperType.body)
@@ -111,7 +111,7 @@ internal fun aliceSheetMode(state: VoiceUiState): AliceSheetMode = when {
                 PaperChip("Что дальше?", false, onNext)
             }
         }
-        Text(AliceCopy.AVAILABILITY, color = p.mut, style = PaperType.note)
+        Text(if(mode==AliceSheetMode.UNLINKED)"Работает, пока Мадре открыта на телефоне" else AliceCopy.AVAILABILITY, color = p.mut, style = PaperType.note)
         Spacer(Modifier.height(12.dp))
     }
 }

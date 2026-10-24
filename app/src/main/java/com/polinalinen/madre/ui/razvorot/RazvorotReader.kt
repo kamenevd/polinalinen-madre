@@ -45,6 +45,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 
 internal data class ReadingLeaf(val chapter: Int, val title: Boolean = false, val lines: List<Pair<String,String>> = emptyList(), val anchor: String = "title", val blocks: List<String> = emptyList(), val end: Boolean = false)
 
@@ -53,9 +54,9 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
     initialPage: Int = -1, onPageChanged: (Int) -> Unit = {}, scaleFactor: Double? = null,
     onScaleFactor: ((Double) -> Unit)? = null, onSchedule: ((Recipe) -> Unit)? = null,
     onOpenAlice: (() -> Unit)? = null, scrollContent: (@Composable (Recipe, ChapterScrollNavigation) -> Unit)? = null,
-    onBookmarkChanged: ((com.polinalinen.madre.navigation.BookBookmark)->Unit)? = null) {
+    onBookmarkChanged: ((com.polinalinen.madre.navigation.BookBookmark)->Unit)? = null,initialChrome:Boolean=true) {
     var settings by remember { mutableStateOf(false) }
-    var chrome by rememberSaveable { mutableStateOf(true) }
+    var chrome by rememberSaveable { mutableStateOf(initialChrome) }
     var annotations by rememberSaveable(recipeId) { mutableStateOf(false) }
     var edgeMessage by remember { mutableStateOf<String?>(null) }
     val factor = scaleFactor ?: preferences.portions.toDouble()
@@ -254,19 +255,27 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
                     Column(Modifier.weight(1f)) { SmallLabel("ГЛАВА %02d ИЗ %02d".format(current.chapter+1,recipes.size));BookText(recipe.name,17) }
                     PaperIconButton({annotations=!annotations},label="Пометки этой главы") { Icon(Icons.Outlined.Edit,"Пометки этой главы") }
 
-                    PaperTextButton({settings=true},label="Как читать") { BookText("Aa",21) }
+                    PaperTextButton({settings=true;chrome=false},label="Как читать") { BookText("Aa",21) }
                 }
                 Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(p.bg)
                     .onSizeChanged { footerHeight=with(density){it.height.toDp()} }
                     .windowInsetsPadding(stableInsets.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal))
                     .padding(horizontal=20.dp,vertical=8.dp)) {
 
-                    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-                        SmallLabel(if(current.title)"Титул главы" else if(current.end)"Последняя страница главы" else "Стр. ${page+1} из ${leaves.size}",Modifier.width(128.dp))
-                        Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.Center) {
-                        leaves.forEachIndexed { index,_ -> Box(Modifier.size(48.dp).then(bookAction("Страница ${index+1}"){move(index)}),contentAlignment=Alignment.Center) {
-                            Box(Modifier.size(if(index==page)18.dp else 6.dp,6.dp).background(if(index==page)p.rib else p.line,androidx.compose.foundation.shape.CircleShape))
-                        } }
+                    Column(Modifier.fillMaxWidth(),horizontalAlignment=Alignment.CenterHorizontally) {
+                        SmallLabel("Стр. ${page+1} из ${leaves.size}")
+                        BoxWithConstraints(Modifier.fillMaxWidth()) {
+                            val dotsScroll=rememberScrollState()
+                            val viewport=with(density){maxWidth.roundToPx()}
+                            val target=with(density){48.dp.roundToPx()}
+                            LaunchedEffect(page,viewport,dotsScroll.maxValue) {
+                                dotsScroll.scrollTo((page*target-viewport/2+target/2).coerceIn(0,dotsScroll.maxValue))
+                            }
+                            Row(Modifier.fillMaxWidth().horizontalScroll(dotsScroll),horizontalArrangement=Arrangement.Center) {
+                                leaves.forEachIndexed { index,_ -> Box(Modifier.size(48.dp).then(bookAction("Страница ${index+1}"){move(index)}).semantics{selected=index==page},contentAlignment=Alignment.Center) {
+                                    Box(Modifier.size(if(index==page)18.dp else 6.dp,6.dp).background(if(index==page)p.rib else p.line,androidx.compose.foundation.shape.CircleShape))
+                                } }
+                            }
                         }
                     }
                     val active=activeSessions.firstOrNull{it.recipe.id==recipe.id}
@@ -288,7 +297,7 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
         } else Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) {
             if(recipes.isEmpty())PaperProgress() else PaperEmpty("Такой главы в книге нет","Вернитесь к оглавлению") { PaperButton("В оглавление",onBack) }
         }
-        if(settings)ReadingSettings(preferences){settings=false;chrome=true}
+        if(settings)ReadingSettings(preferences){settings=false}
     }
 }
 @Composable internal fun TitleLeaf(recipe: Recipe, chapter: Int, count:Int) {

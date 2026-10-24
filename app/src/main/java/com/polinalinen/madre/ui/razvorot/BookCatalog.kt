@@ -19,6 +19,20 @@ object BookCatalog {
     private val bread = setOf("home_bread", "family_bread", "ciabatta", "focaccia")
     private val breakfast = setOf("waffles", "pancakes")
     private fun normalized(value: String) = value.lowercase(Locale.forLanguageTag("ru")).replace('ё', 'е')
+    // Small local search normalization; recipe copy remains untouched.
+    private fun stem(word:String):String {
+        if(word.length<4)return word
+        val ending=listOf("иями","ями","ами","ого","ему","ому","ыми","ими","ой","ый","ий","ая","яя","ое","ее","ую","юю","ов","ев","ей","ам","ям","ах","ях","ом","ем","а","я","ы","и","у","ю","е","о")
+            .firstOrNull{word.endsWith(it) && word.length-it.length>=3}
+        return if(ending==null)word else word.dropLast(ending.length)
+    }
+    private fun tokens(value:String)=Regex("[а-яa-z0-9]+").findAll(normalized(value)).map{stem(it.value)}.toList()
+    private fun matches(value:String,query:String):Boolean {
+        if(normalized(value).contains(query))return true
+        val wanted=tokens(query)
+        val actual=tokens(value)
+        return wanted.isNotEmpty() && wanted.all{q->actual.any{it.startsWith(q)}}
+    }
     fun category(recipe: Recipe) = when (recipe.id) {
         in bread -> CatalogFilter.BREAD
         in breakfast -> CatalogFilter.BREAKFAST
@@ -31,8 +45,8 @@ object BookCatalog {
         return recipes.mapIndexedNotNull { index, recipe ->
             if (filter == CatalogFilter.ACTIVE && recipe.id !in active) return@mapIndexedNotNull null
             if (filter !in setOf(CatalogFilter.ALL, CatalogFilter.ACTIVE) && category(recipe) != filter) return@mapIndexedNotNull null
-            if (needle.isEmpty() || normalized(recipe.name).contains(needle)) CatalogMatch(recipe, index)
-            else recipe.ingredients.values.flatten().firstOrNull { normalized(it.name).contains(needle) }
+            if (needle.isEmpty() || matches(recipe.name,needle)) CatalogMatch(recipe, index)
+            else recipe.ingredients.values.flatten().firstOrNull { matches(it.name,needle) }
                 ?.let { CatalogMatch(recipe, index, it.name) }
         }
     }

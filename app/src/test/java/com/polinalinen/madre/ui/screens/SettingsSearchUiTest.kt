@@ -83,7 +83,11 @@ class SettingsSearchUiTest {
         rule.setContent { RazvorotTheme { SettingsScreen("Полина", {}, {}) } }
         rule.onNodeWithContentDescription("Не гасить экран").performScrollTo().assertIsDisplayed().assertIsOn().performClick()
         try {
-            rule.waitUntil(10_000) { !app.bookDisplaySettings.value.keepScreenOn }
+            rule.waitUntil(10_000) {
+                // Also drain Android's main queue, where the actual ViewModel starts its Room write.
+                rule.onNodeWithContentDescription("Не гасить экран").fetchSemanticsNode()
+                !app.bookDisplaySettings.value.keepScreenOn
+            }
         } catch (failure: androidx.compose.ui.test.ComposeTimeoutException) {
             val persisted = kotlinx.coroutines.runBlocking {
                 app.familySettingsRepository.observeBookDisplaySettings().first()
@@ -92,7 +96,10 @@ class SettingsSearchUiTest {
         }
         rule.onNodeWithContentDescription("Не гасить экран").assertIsOff()
         rule.onNodeWithContentDescription("Ход выпечки на экране блокировки").performScrollTo().assertIsOff().performClick()
-        rule.waitUntil(10_000) { app.bookDisplaySettings.value.lockScreenProgress }
+        rule.waitUntil(10_000) {
+            rule.onNodeWithContentDescription("Ход выпечки на экране блокировки").fetchSemanticsNode()
+            app.bookDisplaySettings.value.lockScreenProgress
+        }
         rule.onNodeWithContentDescription("Ход выпечки на экране блокировки").assertIsOn()
         kotlinx.coroutines.runBlocking {
             val restored = com.polinalinen.madre.data.repository.FamilySettingsRepository(app.database)

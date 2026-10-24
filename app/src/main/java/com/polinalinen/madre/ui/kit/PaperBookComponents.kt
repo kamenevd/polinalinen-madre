@@ -24,8 +24,12 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.polinalinen.madre.ui.components.bookAction
@@ -33,10 +37,11 @@ import com.polinalinen.madre.ui.components.TapGate
 import androidx.compose.runtime.remember
 
 @Composable fun PaperCountHeading(title: String, count: Int) {
-    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.Bottom) {
-        BookText(title,40,Modifier.weight(1f),weight=FontWeight.Normal)
-        BookText(count.toString(),44,italic=true,color=LocalPaper.current.acc,weight=FontWeight.Normal)
-    }
+    val p=LocalPaper.current
+    Text(buildAnnotatedString {
+        append("$title ")
+        withStyle(SpanStyle(color=p.acc,fontStyle=FontStyle.Italic)){append(count.toString())}
+    },style=PaperType.display.copy(fontWeight=FontWeight.Normal),color=p.ink)
 }
 
 @Composable fun PaperNote(text: String, modifier: Modifier = Modifier) {
@@ -60,37 +65,40 @@ import androidx.compose.runtime.remember
     }
 }
 
-@Composable fun PaperIngredientLine(name: String, amount: String) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text(name, Modifier.weight(1f), style = PaperType.ui, color = LocalPaper.current.ink)
-        Text(amount, style = PaperType.ui, color = LocalPaper.current.acc)
-    }
+@Composable fun PaperIngredientLine(name: String, amount: String, modifier:Modifier=Modifier,
+    textSize:Float=16f,nameModifier:Modifier=Modifier,amountModifier:Modifier=Modifier,
+    onNameLayout:(TextLayoutResult)->Unit={},onAmountLayout:(TextLayoutResult)->Unit={}) {
+    val p=LocalPaper.current
+    val nameStyle=PaperType.body.copy(fontSize=textSize.sp,lineHeight=(textSize*25f/16f).sp)
+    if(amount.isEmpty())Text(name,nameModifier.then(modifier),style=nameStyle,color=p.ink2,onTextLayout=onNameLayout)
+    else PaperLeaderLine(modifier.padding(vertical=2.dp),name={
+        Text(name,nameModifier,style=nameStyle,color=p.ink2,onTextLayout=onNameLayout)
+    },value={
+        Text(amount,amountModifier,style=PaperType.ui.copy(fontWeight=FontWeight.Bold),color=p.acc,onTextLayout=onAmountLayout)
+    })
 }
 
 @Composable fun PaperTocRow(number: Int, title: String, time: String, note: String,
     onClick: () -> Unit, modifier: Modifier = Modifier, activeLabel: String? = null, query: String = "", spokenTime:String=time) {
     val p = LocalPaper.current
     val label = "Глава $number, $title, $spokenTime"
-    Row(modifier.fillMaxWidth().heightIn(min = 84.dp).then(bookAction(label, onClick = onClick))
+    Row(modifier.fillMaxWidth().heightIn(min = 68.dp).then(bookAction(label, onClick = onClick))
         .semantics(mergeDescendants = true) { contentDescription = label }
-        .padding(vertical = 14.dp), verticalAlignment = Alignment.Top) {
+        .padding(vertical = 6.dp), verticalAlignment = Alignment.Top) {
         BookText("%02d".format(number), 30, Modifier.width(48.dp), color = p.mut, weight = FontWeight.ExtraLight)
         Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.Bottom) {
+            PaperLeaderLine(name={
                 val highlighted = buildAnnotatedString {
                     append(title)
                     val start = title.indexOf(query.trim(), ignoreCase = true)
                     if (query.isNotBlank() && start >= 0) addStyle(SpanStyle(background = p.acc2), start, start + query.trim().length)
                 }
-                Text(highlighted, color = p.ink, style = PaperType.title.copy(fontSize = 19.sp), modifier = Modifier.weight(1f, fill = false))
-                Canvas(Modifier.weight(1f).height(12.dp).padding(horizontal = 5.dp)) {
-                    drawLine(p.line, Offset(0f, size.height - 2.dp.toPx()), Offset(size.width, size.height - 2.dp.toPx()),
-                        1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(2.dp.toPx(), 4.dp.toPx())))
-                }
+                Text(highlighted, color = p.ink, style = PaperType.title.copy(fontSize = 19.sp),maxLines=1,overflow=TextOverflow.Ellipsis)
+            },value={
                 Text(time, style = PaperType.ui.copy(fontSize = 14.sp), color = p.ink2)
-            }
-            Text(note, color = p.mut, style = PaperType.note, modifier = Modifier.padding(top = 5.dp))
-            if (activeLabel != null) SmallLabel(activeLabel, Modifier.padding(top = 7.dp), color = p.acc)
+            })
+            Text(note, color = p.ink2, style = PaperType.note.copy(fontSize=14.sp,lineHeight=18.sp),maxLines=2,overflow=TextOverflow.Ellipsis,modifier = Modifier.padding(top = 3.dp))
+            if (activeLabel != null) SmallLabel(activeLabel, Modifier.padding(top = 3.dp), color = p.acc)
         }
         if (activeLabel != null) Canvas(Modifier.padding(start = 9.dp).size(9.dp, 40.dp)) {
             drawPath(Path().apply { moveTo(0f, 0f); lineTo(size.width, 0f); lineTo(size.width, size.height)
@@ -105,7 +113,11 @@ import androidx.compose.runtime.remember
     Row(modifier.heightIn(min = 50.dp).clip(RoundedCornerShape(25.dp)).background(LocalPaper.current.bg2),
         verticalAlignment = Alignment.CenterVertically) {
         PaperStepButton("−", "Уменьшить порции", minusEnabled, onMinus)
-        PaperTextAction(value, onValue, Modifier.widthIn(min = 46.dp))
+        Column(Modifier.widthIn(min=46.dp).heightIn(min=48.dp).then(bookAction("На сколько печём",repeatable=true,onClick=onValue)),
+            horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.Center) {
+            Text(value,style=PaperType.ui.copy(fontSize=18.sp),color=LocalPaper.current.ink)
+            Text("семьи",style=PaperType.caption,color=LocalPaper.current.ink2)
+        }
         PaperStepButton("+", "Увеличить порции", plusEnabled, onPlus)
     }
 }
@@ -113,13 +125,13 @@ import androidx.compose.runtime.remember
 @Composable fun PaperBakeCard(title: String, overline: String, image: Int, progress: Float,
     onClick: () -> Unit, modifier: Modifier = Modifier, timer: @Composable () -> Unit) {
     val p = LocalPaper.current
-    PaperCard(modifier.then(bookAction("Открыть выпечку: $title", onClick = onClick))) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+    PaperCard(modifier.then(bookAction("Открыть выпечку: $title", onClick = onClick)),contentPadding=PaddingValues(0.dp)) {
+        Row(Modifier.padding(18.dp),verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             Image(painterResource(image), null, Modifier.size(72.dp).clip(RoundedCornerShape(14.dp)), contentScale = ContentScale.Crop)
             Column(Modifier.weight(1f)) { SmallLabel(overline); Text(title, style = PaperType.title, color = p.ink); timer() }
             Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, tint = p.mut)
         }
-        PaperProgress(progress, Modifier.fillMaxWidth().padding(top = 12.dp))
+        PaperProgress(progress, Modifier.fillMaxWidth())
     }
 }
 

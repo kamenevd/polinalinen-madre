@@ -72,7 +72,8 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
     val night=scene.endsWith("night")
     val recipe=recipes.firstOrNull()?:return
     val density=LocalDensity.current
-    CompositionLocalProvider(LocalPaperDebug provides debug,com.polinalinen.madre.ui.kit.LocalCalmMode provides false,LocalDensity provides Density(density.density,if(scene=="shelf-large")1.3f else density.fontScale)) {
+    val clock=remember{java.time.Clock.fixed(java.time.Instant.parse("2026-10-24T13:40:00Z"),java.time.ZoneId.of("Europe/Moscow"))}
+    CompositionLocalProvider(LocalBookClock provides clock,LocalPaperDebug provides debug,com.polinalinen.madre.ui.kit.LocalCalmMode provides false,LocalDensity provides Density(density.density,if(scene=="shelf-large")1.3f else density.fontScale)) {
         RazvorotTheme(preferences,force=forceAtmosphere ?: if(night)Atmosphere.NIGHT else Atmosphere.DAWN) {
             Immersive(enabled = (scene.startsWith("reader-") && scene != "reader-chrome") || scene.startsWith("curl-") || scene.startsWith("gles2-curl-") || scene.startsWith("fulltimer-") || scene == "bake" || scene == "reading-sheet")
             Box(Modifier.fillMaxSize().background(LocalPaper.current.bg).testTag("scene-$scene").semantics{stateDescription="${debug.renderer}:${debug.renderedFrames}:${debug.cachedPages}:${debug.reason}"}) {
@@ -91,7 +92,7 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
                     }
                     scene=="toc" || scene=="catalog" -> Column {
                         Box(Modifier.weight(1f).safeDrawingPadding()) { BookTocContent(recipes,emptyList(),
-                            com.polinalinen.madre.navigation.BookBookmark(recipe.id,1),{_,_->},{},onAa={}) }
+                            com.polinalinen.madre.navigation.BookBookmark(recipe.id,1,"Ингредиенты"),{_,_->},{},onAa={}) }
                         SpineBar(0){}
                     }
                     scene=="oven" -> Column {
@@ -103,8 +104,13 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
                     }
                     scene.startsWith("chapter-") -> {
                         val selected=if(scene=="chapter-title")recipes.getOrNull(4)?:recipe else recipe
-                        RazvorotReader(recipes,selected.id,preferences,{},{},{},initialPage=if(scene=="chapter-ingr")1 else -1,
-                            scaleFactor=2.0,onScaleFactor={},onOpenAlice={})
+                        var start by remember{mutableStateOf(false)}
+                        var quantities by remember{mutableStateOf(false)}
+                        var factor by remember{mutableStateOf(2.0)}
+                        RazvorotReader(recipes,selected.id,preferences,{},{},{quantities=true},initialPage=if(scene=="chapter-ingr")1 else -1,
+                            scaleFactor=factor,onScaleFactor={factor=it},onOpenAlice={},onSchedule={start=true})
+                        if(start)BookStartSheet(selected,factor.toInt(),{},{start=false},onPlan={_,_->},initialMode=1)
+                        if(quantities)BookPortionsSheet(selected,factor,{factor=it},{quantities=false})
                     }
                     scene=="sheet-calc" -> {
                         RazvorotReader(recipes,recipe.id,preferences,{},{},{},initialPage=1,scaleFactor=2.0,onOpenAlice={})
@@ -120,11 +126,10 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
                     scene=="photo-viewer" -> PaperPhotoViewer({}) { BookText("Фото · локальная тестовая поверхность", 18) }
                     scene.startsWith("alice-sheet-") -> {
                         val mode = runCatching { AliceSheetMode.valueOf(scene.removePrefix("alice-sheet-").uppercase()) }.getOrDefault(AliceSheetMode.UNLINKED)
-                        CompositionLocalProvider(LocalPaper provides NightPaper) {
+                        BakingPaper(BakingSession(7,recipe,9,0L,0L,scaleFactor=2.0),1661L,{},{},{},{},onOpenAlice={})
                             PaperSheet({}) { AliceSheetContent(mode, com.polinalinen.madre.voice.VoiceUiState(
                                 if (mode == AliceSheetMode.OFFLINE) com.polinalinen.madre.voice.VoiceStatus.OFFLINE else com.polinalinen.madre.voice.VoiceStatus.UNLINKED),
-                                recipeName = "Демонстрационная выпечка", stepText = recipe.timeline[0].description) }
-                        }
+                                recipeName = recipe.name, stepText = recipe.timeline[0].description) }
                     }
                     scene=="settings" || scene=="settings-search" -> SettingsContent("Пекарь", {}, {}, {}, "Мадре", {}, 12, 42, 24, {}, true, {}, true, {}, "Демонстрационная семья", FamilyBookState.SignedOut, {}, {},
                         preferences=preferences,initialSearch=if(scene=="settings-search")"увед" else "")
@@ -148,13 +153,9 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
                     scene=="spine" -> Box(Modifier.fillMaxSize(),contentAlignment=Alignment.BottomCenter){SpineBar(2){}}
                     scene=="bake" -> BakingPaper(BakingSession(7,recipe,9,0L,0L,scaleFactor=2.0),1661L,{},{},{},{},onOpenAlice={})
                     scene=="start-later" -> {
-                        // Explicit screenshot-only date, not a real user plan or a scheduled Worker.
-                        val zone=java.time.ZoneId.systemDefault()
-                        val day=java.time.LocalDate.of(2026,10,23)
-                        val now=day.atTime(10,0).atZone(zone).toInstant().toEpochMilli()
+                        // Same injected clock as the oven header; no Worker and no pre-existing arbitrary ready time.
                         BookOvenContent(recipes,emptyList(),emptyList(),{},{},{},{},{})
-                        BookStartSheet(recipe,2,{},{},onPlan={_,_->},initialMode=1,
-                            existingPlan=com.polinalinen.madre.navigation.PlannedBake(recipe.id,2,day.atTime(20,0).atZone(zone).toInstant().toEpochMilli()),nowMillis=now)
+                        BookStartSheet(recipe,2,{},{},onPlan={_,_->},initialMode=1,onChapter={})
                     }
                     scene=="bake-more" -> {
                         val bake=remember(recipe){BakingSession(7,recipe,9,0L,0L,scaleFactor=2.0)}

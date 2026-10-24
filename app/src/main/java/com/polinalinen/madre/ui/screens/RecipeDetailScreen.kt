@@ -95,6 +95,7 @@ fun RecipeDetailScreen(
     scaleFactorOverride: Double? = null,
     textSize: Float = 16f,
     chapterScrollNavigation: ChapterScrollNavigation? = null,
+    onPortions: (() -> Unit)? = null,
 ) {
     val startScope = androidx.compose.runtime.rememberCoroutineScope()
     val mutationError by viewModel.mutationError.collectAsState()
@@ -139,7 +140,7 @@ fun RecipeDetailScreen(
     }
 
     if (embedded) {
-        RecipeChapterContent(recipe, scaleFactor, textSize, onOpenAlice, chapterScrollNavigation)
+        RecipeChapterContent(recipe, scaleFactor, textSize, onOpenAlice, chapterScrollNavigation,onPortions)
         return
     }
 
@@ -339,7 +340,7 @@ private fun MissingRecipePage(loading: Boolean, onBack: () -> Unit) {
 /** Same chapter renderer in scroll/large-type mode; no second navigation or start button. */
 @Composable
 fun RecipeChapterContent(recipe: Recipe, scaleFactor: Double, textSize: Float = 16f,
-    onOpenAlice: (() -> Unit)? = null, navigation: ChapterScrollNavigation? = null) {
+    onOpenAlice: (() -> Unit)? = null, navigation: ChapterScrollNavigation? = null,onPortions:(()->Unit)?=null) {
     val colors = LocalPaper.current
     val cursor = navigation?.cursor ?: rememberSaveable(recipe.id,saver=ChapterScrollState.Saver) { ChapterScrollState() }
     val scroll = cursor.scroll
@@ -397,6 +398,8 @@ fun RecipeChapterContent(recipe: Recipe, scaleFactor: Double, textSize: Float = 
     Column(Modifier.fillMaxSize().verticalScroll(scroll).testTag("reader-scroll").padding(bottom=24.dp)) {
         BookText(recipe.name, 30, Modifier.padding(22.dp).then(block("${recipe.id}:title")))
         PaperNote(recipe.description, Modifier.padding(horizontal = 22.dp))
+        Text("Ингредиенты",style=PaperType.h2,color=colors.ink,modifier=Modifier.padding(horizontal=22.dp,vertical=12.dp))
+        PaperPortionSummary("×${com.polinalinen.madre.ui.razvorot.BookCatalog.number(scaleFactor)}",onPortions,Modifier.padding(horizontal=22.dp))
         recipe.ingredients.entries.forEachIndexed { bi, (section, ingredients) ->
             SmallLabel(ingredientSectionTitle(section), Modifier.padding(horizontal = 22.dp, vertical = 14.dp)
                 .then(block("${recipe.id}:$bi:0")))
@@ -406,10 +409,14 @@ fun RecipeChapterContent(recipe: Recipe, scaleFactor: Double, textSize: Float = 
             lines.forEachIndexed { index,line ->
                 val fragments=chapterFragmentCharacters(recipe.id,bi,whole,requested,start,line.length)
                 val key="ingredient-$bi-$index"
-                Text(line, color = colors.ink2,
-                    style = PaperType.body.copy(fontSize = textSize.sp, lineHeight = (textSize * 25f / 16f).sp),
-                    modifier = Modifier.padding(horizontal = 22.dp, vertical = 5.dp).then(textPosition(key,fragments)),
-                    onTextLayout={anchors.textLayout(key,it,fragments)})
+                val (name,amount)=com.polinalinen.madre.ui.razvorot.ingredientDisplayParts(line)
+                val prefix=if(amount.isEmpty())0 else amount.length+1
+                val nameFragments=fragments.filterValues{it>=prefix}.mapValues{it.value-prefix}
+                val amountFragments=fragments.filterValues{it<amount.length}
+                PaperIngredientLine(name,amount,Modifier.padding(horizontal=22.dp,vertical=5.dp),textSize,
+                    nameModifier=textPosition("$key-name",nameFragments),amountModifier=textPosition("$key-amount",amountFragments),
+                    onNameLayout={anchors.textLayout("$key-name",it,nameFragments)},
+                    onAmountLayout={anchors.textLayout("$key-amount",it,amountFragments)})
                 start+=line.length+1
             }
         }
@@ -460,7 +467,7 @@ private fun FullRecipeSection(recipe: Recipe, scaleFactor: Double, modifier: Mod
             verticalAlignment = Alignment.CenterVertically,
         ) {
             HairRule(Modifier.weight(1f))
-            PageLabel("Рецепт целиком", color = colors.ink, modifier = Modifier.padding(horizontal = 10.dp))
+            PageLabel("Как печём", color = colors.ink, modifier = Modifier.padding(horizontal = 10.dp))
             HairRule(Modifier.weight(1f))
         }
         Text(

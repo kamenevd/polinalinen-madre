@@ -27,6 +27,8 @@ import java.util.Locale
 import kotlin.math.roundToInt
 import com.polinalinen.madre.viewmodel.BakingViewModel
 import com.polinalinen.madre.ui.screens.Home
+import java.time.Clock
+import androidx.compose.ui.Alignment
 
 @Composable fun BookTocContent(recipes: List<Recipe>, sessions: List<BakingSession>, bookmark: BookBookmark?,
     onChapter: (String, Int) -> Unit, onSettings: () -> Unit, modifier: Modifier = Modifier, onAa: () -> Unit = {}) {
@@ -37,7 +39,7 @@ import com.polinalinen.madre.ui.screens.Home
     val accountState=account?.model?.state?.collectAsState()?.value
     val profile=(accountState as? com.polinalinen.madre.account.yandex.YandexAccountState.SignedIn)?.profile
     Column(modifier.fillMaxSize().testTag(Home.LIST_TAG).verticalScroll(rememberScrollState()).padding(horizontal = 22.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             SmallLabel("${LocalAtmosphere.current.label} · КНИГА СЕМЬИ", Modifier.weight(1f).padding(top = 18.dp))
             PaperTextButton(onAa,label="Как читать") { BookText("Aa",21) }
@@ -45,7 +47,7 @@ import com.polinalinen.madre.ui.screens.Home
                 if(profile!=null)YandexAccountPortrait(profile,30.dp) else Icon(Icons.Outlined.Settings, null)
             }
         }
-        SmallLabel("КНИГА РЕЦЕПТОВ · ${recipes.size} ГЛАВ")
+
         BookText("Оглавление", 44, weight=androidx.compose.ui.text.font.FontWeight.Normal)
         val greeting=when(LocalAtmosphere.current) {
             Atmosphere.DAWN->"Доброе утро";Atmosphere.DAY->"Добрый день";Atmosphere.DUSK->"Добрый вечер"
@@ -54,28 +56,30 @@ import com.polinalinen.madre.ui.screens.Home
         PaperNote(if(profile==null)"Мадре — книга рецептов на закваске · ${recipes.size} глав"
             else "$greeting, ${profile.displayName.ifBlank{profile.login}}.")
         bookmark?.let { saved -> recipes.firstOrNull { it.id == saved.recipeId }?.let { recipe ->
-            PaperCard(Modifier.fillMaxWidth()) {
-                SmallLabel("ЗАКЛАДКА")
-                Text(recipe.name, style = PaperType.title, color = LocalPaper.current.ink)
-                PaperTextAction("Продолжить · стр. ${saved.page + 1}", { onChapter(saved.recipeId, saved.page) })
+            val step=saved.step?.takeIf{it in recipe.timeline.indices}
+            val position=if(saved.section!=null)"«${saved.section}»${step?.let{" · шаг ${it+1}"}.orEmpty()}"
+                else "Страница ${saved.page+1}"
+            PaperBookmarkCard(recipe.name,recipePhoto(recipe.id),saved.page+1,"$position — там, где вы остановились") {
+                onChapter(saved.recipeId,saved.page)
             }
         } }
-        PaperField(query, { query = it }, label = "Найти рецепт или ингредиент", placeholder = "Например, рж",
-            modifier = Modifier.testTag("toc-search"))
+        PaperSearchField(query,{query=it},Modifier.heightIn(min=52.dp),
+            label="Рецепт или ингредиент",iconSize=24.dp,inputModifier=Modifier.testTag("toc-search"))
         PaperChipRow(CatalogFilter.entries.map { if(it==CatalogFilter.ALL)"${it.label} ${recipes.size}" else it.label }, filter.ordinal, { filter = CatalogFilter.entries[it] })
         if (rows.isEmpty()) {
             BookText("Такой главы нет", 24)
             PaperNote("Попробуйте другое название или ингредиент.")
             PaperTextAction("Показать все главы", { query = ""; filter = CatalogFilter.ALL })
-        } else rows.forEach { match ->
+        } else Column { rows.forEach { match ->
             val recipe = match.recipe
             val active = sessions.firstOrNull { it.recipe.id == recipe.id && !it.isCompleted }
-            PaperTocRow(match.chapter + 1, recipe.name, BookCatalog.duration(RecipeScale.totalMinutes(recipe, 1)),
-                match.ingredient?.let { "есть: $it" } ?: difficultyLabel(recipe.difficulty),
+            PaperTocRow(match.chapter + 1, recipe.name, BookCatalog.shortTotalTime(RecipeScale.totalMinutes(recipe, 1)),
+                match.ingredient?.let { "есть: $it · ${difficultyLabel(recipe.difficulty)}" }
+                    ?: "${recipe.description.trimEnd('.')} · ${difficultyLabel(recipe.difficulty)}",
                 { onChapter(recipe.id, -1) }, modifier=Modifier.testTag(Home.chapterRowTag(recipe.id)),
                 activeLabel = active?.let { "В печи · шаг ${it.currentStepIndex + 1} из ${recipe.timeline.size}" }, query = query,
                 spokenTime=com.polinalinen.madre.notifications.BakingProgress.spokenRemaining(RecipeScale.totalMinutes(recipe,1)*60L))
-        }
+        } }
         PaperNote("— тираж: одна семья · печатается с любовью —")
         Spacer(Modifier.height(22.dp))
     }
@@ -84,24 +88,26 @@ import com.polinalinen.madre.ui.screens.Home
 @Composable fun BookOvenContent(recipes: List<Recipe>, sessions: List<BakingSession>, plans: List<PlannedBake>,
     onOpenSession: (Long) -> Unit, onConfigure: (Recipe) -> Unit, onQuickStart: (Recipe) -> Unit,
     onOpenPlan: (PlannedBake) -> Unit, onSettings: () -> Unit, modifier: Modifier = Modifier,
-    onAa: () -> Unit = {}, pendingFinished: List<Pair<Long,BakingViewModel.BakeCompletion>> = emptyList()) {
+    onAa: () -> Unit = {}, pendingFinished: List<Pair<Long,BakingViewModel.BakeCompletion>> = emptyList(),
+    clock:Clock=LocalBookClock.current) {
     var filter by rememberSaveable { mutableIntStateOf(0) }
     val p = LocalPaper.current
-    val choices = listOf("Все", "К ужину", "До 3 часов", "Ночью")
-    val rows = remember(recipes, filter) { recipes.filter { recipe ->
+    val now=rememberBookNow(clock)
+    val choices = listOf("Все", "Успеть к ужину", "До 3 часов", "С вечера — к утру")
+    val rows = remember(recipes, filter,now,clock) { recipes.filter { recipe ->
         val minutes = RecipeScale.totalMinutes(recipe, 1)
-        when (filter) { 1 -> minutes <= 150; 2 -> minutes <= 180; 3 -> minutes >= 480; else -> true }
+        when (filter) { 1 -> com.polinalinen.madre.navigation.BakePlanning.options(minutes,now,clock.zone).first().available
+            2 -> minutes <= 180; 3 -> minutes >= 480; else -> true }
     } }
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            SmallLabel("ПЕЧЬ · ${SimpleDateFormat("EEEE, d MMMM",Locale.forLanguageTag("ru")).format(Date())}",Modifier.weight(1f).padding(top=16.dp))
+            SmallLabel("ПЕЧЬ · ${java.time.Instant.ofEpochMilli(now).atZone(clock.zone).format(java.time.format.DateTimeFormatter.ofPattern("EEEE, d MMMM",Locale.forLanguageTag("ru")))}",Modifier.weight(1f).padding(top=16.dp))
             PaperTextButton(onAa,label="Как читать") { BookText("Aa",21) }
         }
         PaperCountHeading("Уже печём",sessions.count{!it.isCompleted})
         if (sessions.isNotEmpty()) {
-            val activeCount=sessions.count{!it.isCompleted}
-            if(activeCount>0)SmallLabel("УЖЕ ПЕЧЁМ · $activeCount")
+
             sessions.forEach { session -> key(session.id) { ActiveBookBake(session) { onOpenSession(session.id) } } }
         } else {
             SmallLabel("ПОКА НИЧЕГО НЕ ПЕЧЁМ")
@@ -122,13 +128,15 @@ import com.polinalinen.madre.ui.screens.Home
                 }
             } }
         }
-        SmallLabel("ЧТО ИСПЕЧЬ", Modifier.padding(top = 10.dp))
+        Text("Что испечь",style=PaperType.h2,color=p.ink,modifier=Modifier.padding(top=10.dp))
+        Text("▶ — сразу, тап — с настройкой",style=PaperType.note,color=p.ink2)
         PaperChipRow(choices, filter, { filter = it })
         if (rows.isEmpty()) PaperNote("Таких рецептов в книге пока нет. Выберите другое время.")
         rows.chunked(2).forEach { pair ->
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 pair.forEach { recipe -> PaperRecipeTile(recipes.indexOf(recipe) + 1, recipe.name, recipePhoto(recipe.id),
-                    BookCatalog.duration(RecipeScale.totalMinutes(recipe, 1)), "${recipe.timeline.size} шагов",
+                    "${BookCatalog.shortTotalTime(RecipeScale.totalMinutes(recipe,1))} · руками ${BookCatalog.duration(recipe.timeline.filter{it.type==StepType.ACTION}.sumOf{it.durationMinutes})}",
+                    "готово ${relativeBookTime(Math.addExact(now,RecipeScale.totalMinutes(recipe,1)*60_000L),now,clock)}",
                     { onConfigure(recipe) }, { onQuickStart(recipe) }, Modifier.weight(1f)) }
                 if (pair.size == 1) Spacer(Modifier.weight(1f))
             }
@@ -151,8 +159,11 @@ import com.polinalinen.madre.ui.screens.Home
         recipePhoto(session.recipe.id), session.progress, onClick) {
         if (session.isCompleted) PaperNote("Результат ждёт в этой выпечке")
         else {
-            TimerNumber(timerDigits(remaining), progress, 30.sp, 0.sp, LocalPaper.current.ink)
-            if (session.isPaused) PaperNote("Пауза")
+            Row(verticalAlignment=Alignment.Bottom,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                TimerNumber(timerDigits(remaining), progress, 30.sp, 0.sp, LocalPaper.current.ink)
+                Text(if(session.isPaused)"пауза" else if(step.type==StepType.WAIT)"ждём" else "руками",
+                    style=PaperType.caption,color=LocalPaper.current.ink2,modifier=Modifier.padding(bottom=4.dp))
+            }
         }
     }
 }

@@ -58,7 +58,7 @@ class AlicePageTest {
             yandexSignedIn = true, onYandexConnect = { actions++ }) } }
         rule.waitForIdle()
         assertEquals(0, actions)
-        rule.onNodeWithText("Время подключения истекло. Для новой попытки нажми «Подключить Алису».")
+        rule.onNodeWithText("Время подключения истекло. Для новой попытки нажмите «Подключить Алису».")
             .performScrollTo().assertIsDisplayed()
         rule.onNodeWithText(AliceCopy.READ_CONTROL_WARNING).performScrollTo().assertIsDisplayed()
         rule.onNodeWithText(AliceCopy.SHARED_WARNING).performScrollTo().assertIsDisplayed()

@@ -86,11 +86,12 @@ import kotlin.random.Random
     }
 }
 
-@Composable fun PaperCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+@Composable fun PaperCard(modifier: Modifier = Modifier, containerColor:Color=LocalPaper.current.card,
+    contentPadding:PaddingValues=PaddingValues(18.dp),content: @Composable ColumnScope.() -> Unit) {
     val p = LocalPaper.current
     Column(modifier.fillMaxWidth().drawBehind {
         drawRoundRect(p.line, topLeft = Offset(0f, 1.dp.toPx()), cornerRadius = CornerRadius(20.dp.toPx()))
-    }.clip(RoundedCornerShape(20.dp)).background(p.card).padding(18.dp), content = content)
+    }.clip(RoundedCornerShape(20.dp)).background(containerColor).padding(contentPadding), content = content)
 }
 
 @Composable fun PaperSection(overline: String, modifier: Modifier = Modifier,

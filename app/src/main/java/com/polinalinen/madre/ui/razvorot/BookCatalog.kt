@@ -42,4 +42,6 @@ object BookCatalog {
         minutes % 60 == 30 -> "${minutes / 60},5 ч"
         else -> "${minutes / 60} ч ${minutes % 60} мин"
     }
+    fun shortTotalTime(minutes:Int):String = if(minutes<180)duration(minutes)
+        else "${number(Math.round(minutes/30.0)/2.0,1)} ч"
 }

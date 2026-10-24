@@ -234,7 +234,7 @@ internal fun chapterTurnDirection(x: Float, dx: Float, dy: Float, width: Float):
                     if (!change.pressed) {
                         released = true
                         if (started) settle(false, tracker.calculateVelocity().x / density / 1000f)
-                        else if (!ignored && change.uptimeMillis - down.uptimeMillis < 350L) {
+                        else if (!ignored && !change.isConsumed && change.uptimeMillis - down.uptimeMillis < 350L) {
                             val dir = if (start.x >= width * (1f-Curl.EDGE)) 1 else 0
                             if (dir == 0) latestCenter() else if (page + dir in 0 until count) {
                                 val g = PaperFold.anchored(width, height, start.y, if (dir > 0) 24f else 2f * width - 30f, 0f)

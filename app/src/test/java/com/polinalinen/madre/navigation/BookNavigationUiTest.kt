@@ -96,11 +96,13 @@ class BookNavigationUiTest {
         }
         rule.waitUntil(10_000){rule.onAllNodes(configure).fetchSemanticsNodes().isNotEmpty()}
         rule.onNode(configure).performScrollTo().performClick()
-        rule.onNodeWithText("Открыть главу").performClick();rule.waitForIdle()
+        rule.onNodeWithText("ОТКРЫТЬ ГЛАВУ").performClick();rule.waitForIdle()
         assertEquals(MadreDestinations.CHAPTER,nav.currentDestination?.route)
         val entry=nav.currentBackStackEntry
         rule.onNodeWithContentDescription("Испечь ко времени").performClick()
-        rule.onNodeWithText("Открыть главу").performClick();rule.waitForIdle()
+        rule.onNodeWithText("Ко времени").assertIsSelected()
+        rule.onNodeWithText("ОТКРЫТЬ ГЛАВУ").assertDoesNotExist()
+        androidx.test.espresso.Espresso.pressBack();rule.waitForIdle()
         assertSame(entry,nav.currentBackStackEntry)
         rule.activityRule.scenario.onActivity{it.onBackPressedDispatcher.onBackPressed()}
         rule.waitForIdle()

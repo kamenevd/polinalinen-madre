@@ -21,18 +21,19 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 
 /** One real editable search field, a separate labelled clear action and a 48dp accessible target. */
 @Composable fun PaperSearchField(value: String, onValueChange: (String) -> Unit,
-    modifier: Modifier = Modifier, label: String = "Найти настройку") {
+    modifier: Modifier = Modifier, label: String = "Найти настройку",iconSize:Dp=20.dp,inputModifier:Modifier=Modifier) {
     val p = LocalPaper.current
     var focused by remember { mutableStateOf(false) }
     Row(modifier.fillMaxWidth().heightIn(min = 48.dp).background(p.bg2, RoundedCornerShape(14.dp))
         .border(if (focused) 2.dp else 1.dp, if (focused) p.acc else p.line, RoundedCornerShape(14.dp)),
         verticalAlignment = Alignment.CenterVertically) {
-        Icon(Icons.Outlined.Search, null, Modifier.padding(start = 14.dp).size(20.dp), tint = p.ink2)
+        Icon(Icons.Outlined.Search, null, Modifier.padding(start = 14.dp).size(iconSize), tint = p.ink2)
         BasicTextField(value, onValueChange, singleLine = true, textStyle = PaperType.body.copy(color = p.ink),
-            cursorBrush = SolidColor(p.acc), modifier = Modifier.weight(1f).padding(horizontal = 10.dp, vertical = 12.dp)
+            cursorBrush = SolidColor(p.acc), modifier = inputModifier.weight(1f).padding(horizontal = 10.dp, vertical = 12.dp)
                 .onFocusChanged { focused = it.isFocused }.semantics { contentDescription = label },
             decorationBox = { inner ->
                 Box {

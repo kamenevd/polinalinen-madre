@@ -9,7 +9,7 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 
 /** Navigation-only state. Existing family/notes/Room keys are never replaced. */
-data class BookBookmark(val recipeId: String, val page: Int) {
+data class BookBookmark(val recipeId: String, val page: Int, val section:String?=null, val step:Int?=null) {
     fun encode() = "$recipeId:$page"
     companion object {
         fun decode(value: String?): BookBookmark? {
@@ -33,12 +33,12 @@ object BookStartup {
 class BookPreferences(context: Context, namespace: String = "madre_prefs") : AutoCloseable {
     private val prefs = context.getSharedPreferences(namespace, Context.MODE_PRIVATE)
     private val gson = Gson()
-    var bookmark by mutableStateOf(BookBookmark.decode(prefs.getString("bookmark", null)))
+    var bookmark by mutableStateOf(readBookmark())
         private set
     var plans by mutableStateOf(readPlans())
         private set
     private val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-        if (key == "bookmark") bookmark = BookBookmark.decode(prefs.getString(key, null))
+        if (key == "bookmark" || key?.startsWith("bookmark_")==true) bookmark = readBookmark()
         if (key == "planned_bakes") plans = readPlans()
     }
     init { prefs.registerOnSharedPreferenceChangeListener(listener) }
@@ -49,7 +49,14 @@ class BookPreferences(context: Context, namespace: String = "madre_prefs") : Aut
     }
     fun saveBookmark(value: BookBookmark) {
         bookmark = value
-        prefs.edit().putString("bookmark", value.encode()).apply()
+        // Keep the historical recipeId:page wire value for downgrade; details are optional and keyed to that exact position.
+        prefs.edit().putString("bookmark", value.encode()).putString("bookmark_detail_key",value.encode())
+            .putString("bookmark_section",value.section).putInt("bookmark_step",value.step?:-1).apply()
+    }
+    private fun readBookmark():BookBookmark? {
+        val saved=BookBookmark.decode(prefs.getString("bookmark",null))?:return null
+        return if(prefs.getString("bookmark_detail_key",null)==saved.encode())saved.copy(
+            section=prefs.getString("bookmark_section",null),step=prefs.getInt("bookmark_step",-1).takeIf{it>=0}) else saved
     }
     fun portions(recipeId: String) = prefs.getInt("chapter_portions_$recipeId", 2).coerceIn(1, 5)
     fun savePortions(recipeId: String, value: Int) {

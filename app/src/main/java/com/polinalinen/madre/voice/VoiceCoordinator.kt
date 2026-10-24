@@ -113,7 +113,7 @@ class VoiceCoordinator(private val store: VoiceIdentityStore, private val api: V
         } catch (e: CancellationException) { throw e }
         catch (_: Exception) {
             synchronized(fence) {
-                if (epoch == before) _state.value = VoiceUiState(VoiceStatus.ERROR, message = "Не удалось выбрать выпечку. Проверь интернет и попробуй снова.")
+                if (epoch == before) _state.value = VoiceUiState(VoiceStatus.ERROR, message = "Не удалось выбрать выпечку. Проверьте интернет и попробуйте снова.")
             }
             return false
         }
@@ -145,7 +145,7 @@ class VoiceCoordinator(private val store: VoiceIdentityStore, private val api: V
             catch (_: Exception) {
                 synchronized(fence) {
                     if (current()) _state.value = VoiceUiState(VoiceStatus.WAITING_LINK, bakeKey,
-                        message = "Не удалось подготовить подключение. Проверь интернет и нажми «Подключить Алису» снова.")
+                        message = "Не удалось подготовить подключение. Проверьте интернет и нажмите «Подключить Алису» снова.")
                 }
             }
         } finally { actions.unlock() }
@@ -157,7 +157,7 @@ class VoiceCoordinator(private val store: VoiceIdentityStore, private val api: V
         identity = identity?.copy(bakeKey = null, generation = null, revokePending = true)
         _state.value = VoiceUiState(VoiceStatus.REVOKE_PENDING)
         if (runCatching { store.revoke() }.isFailure) {
-            _state.value = VoiceUiState(VoiceStatus.ERROR, message = "Не удалось сохранить отключение. Не закрывай книгу; повтори отключение.")
+            _state.value = VoiceUiState(VoiceStatus.ERROR, message = "Не удалось сохранить отключение. Не закрывайте книгу; повторите отключение.")
         }
     }
 
@@ -179,7 +179,7 @@ class VoiceCoordinator(private val store: VoiceIdentityStore, private val api: V
             synchronized(fence) { identity = revoked; _state.value = VoiceUiState() }
         } catch (e: CancellationException) { throw e }
         catch (_: Exception) { _state.value = VoiceUiState(VoiceStatus.REVOKE_PENDING,
-            message = "На телефоне отключено. Отзыв доступа на сервере ещё не подтверждён; повтори с интернетом.") }
+            message = "На телефоне отключено. Отзыв доступа на сервере ещё не подтверждён; повторите с интернетом.") }
     }
 
     suspend fun previewPair(code: String) = actions.withLock {
@@ -194,7 +194,7 @@ class VoiceCoordinator(private val store: VoiceIdentityStore, private val api: V
                 selected.bakeKey, selected.generation)
             synchronized(fence) { if (epoch == e) _state.value = _state.value.copy(preview = preview, message = null) }
         } catch (e: CancellationException) { throw e }
-        catch (_: Exception) { _state.value = _state.value.copy(preview = null, message = "Код неверен, истёк или нет связи. Открой подключение навыка заново.") }
+        catch (_: Exception) { _state.value = _state.value.copy(preview = null, message = "Код неверен, истёк или нет связи. Откройте подключение навыка заново.") }
     }
 
     suspend fun approvePair() = actions.withLock {

@@ -2,7 +2,9 @@ package com.polinalinen.madre.ui.screens
 
 import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.activity.ComponentActivity
+import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.polinalinen.madre.MadreApplication
@@ -10,6 +12,7 @@ import com.polinalinen.madre.account.FamilyBookState
 import com.polinalinen.madre.ui.kit.*
 import org.junit.Assert.*
 import org.junit.Rule
+import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Shadows.shadowOf
@@ -22,7 +25,8 @@ import kotlinx.coroutines.flow.first
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "ru-w360dp-h640dp-xhdpi", application = MadreApplication::class)
 class SettingsSearchUiTest {
-    @get:Rule val rule = createComposeRule()
+    @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
+    @After fun clearControllers() { rule.activity.viewModelStore.clear() }
     private val app get() = ApplicationProvider.getApplicationContext<MadreApplication>()
     private fun content(preferences: ReadingPreferences, onInterval: (Int) -> Unit = {}) {
         rule.setContent { RazvorotTheme(preferences) {
@@ -80,7 +84,17 @@ class SettingsSearchUiTest {
             intent.getStringExtra(android.provider.Settings.EXTRA_CHANNEL_ID))
     }
     @Test fun actualSettingsSwitchesPersistThroughTheSharedApplicationRoomFlow() {
-        rule.setContent { RazvorotTheme { SettingsScreen("Полина", {}, {}) } }
+        lateinit var settings:com.polinalinen.madre.viewmodel.FamilySettingsViewModel
+        lateinit var books:com.polinalinen.madre.viewmodel.FamilyBookViewModel
+        rule.activityRule.scenario.onActivity { activity ->
+            assertSame(app,activity.application)
+            val provider=ViewModelProvider(activity,ViewModelProvider.AndroidViewModelFactory(app))
+            settings=provider[com.polinalinen.madre.viewmodel.FamilySettingsViewModel::class.java]
+            books=provider[com.polinalinen.madre.viewmodel.FamilyBookViewModel::class.java]
+        }
+        assertSame(app,settings.getApplication<MadreApplication>())
+        assertSame(app.bookDisplaySettings,settings.bookDisplaySettings)
+        rule.setContent { RazvorotTheme { SettingsScreen("Полина", {}, {},familySettingsViewModel=settings,familyBookViewModel=books) } }
         rule.onNodeWithContentDescription("Не гасить экран").performScrollTo().assertIsDisplayed().assertIsOn().performClick()
         try {
             rule.waitUntil(10_000) {

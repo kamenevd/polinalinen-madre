@@ -27,7 +27,7 @@ class YandexAccountSurfacesTest {
             YandexOfferContent(YandexAccountState.SignedOut,false,{logins++},{skipped++},{})
         }}
         rule.onNodeWithContentDescription("Войти с Яндекс ID").assertIsDisplayed()
-        rule.onNodeWithText("Продолжить без входа").assertIsDisplayed().performClick()
+        rule.onNodeWithText("ПРОДОЛЖИТЬ БЕЗ ВХОДА").assertIsDisplayed().performClick()
         rule.runOnIdle{assertEquals(1,skipped);assertEquals(0,logins)}
     }
 

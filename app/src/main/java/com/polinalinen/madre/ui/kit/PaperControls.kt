@@ -24,8 +24,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.focus.onFocusChanged
@@ -49,6 +51,7 @@ enum class PaperButtonVariant { PRIMARY, ACCENT, SECONDARY, TEXT }
     primary: Boolean? = null,
     enabled: Boolean = true, caption: String? = null, repeatable: Boolean = false,
     variant: PaperButtonVariant = PaperButtonVariant.PRIMARY,
+    icon: ImageVector? = null,
 ) {
     val p = LocalPaper.current
     val gate = remember(repeatable) { if (repeatable) null else TapGate() }
@@ -76,10 +79,13 @@ enum class PaperButtonVariant { PRIMARY, ACCENT, SECONDARY, TEXT }
                 role = Role.Button, onClickLabel = label) {
                 if (repeatable || gate?.accept(System.currentTimeMillis()) == true) onClick()
             }.padding(horizontal = 20.dp, vertical = 14.dp), contentAlignment = Alignment.Center) {
-            Text(label, color = foreground.copy(alpha = if (enabled) 1f else .4f),
+            Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+            if(icon!=null)Icon(icon,null,Modifier.size(20.dp),tint=foreground.copy(alpha=if(enabled)1f else .4f))
+            Text(label, modifier=Modifier.weight(1f,fill=false),color = foreground.copy(alpha = if (enabled) 1f else .4f),
                 style = if (actualVariant == PaperButtonVariant.TEXT) PaperType.ui.copy(fontSize = 13.sp, letterSpacing = 1.2.sp)
                     else PaperType.ui.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
                 textAlign = TextAlign.Center)
+            }
         }
         if (caption != null) Text(caption, color = p.mut, style = PaperType.note,
             modifier = Modifier.padding(top = 8.dp))
@@ -111,7 +117,7 @@ enum class PaperButtonVariant { PRIMARY, ACCENT, SECONDARY, TEXT }
     val p = LocalPaper.current
     Box(modifier.heightIn(min = 48.dp).selectable(selected = selected, enabled = enabled,
         role = Role.RadioButton, onClick = onClick), contentAlignment = Alignment.Center) {
-        Box(Modifier.clip(RoundedCornerShape(18.dp)).background(if (selected) p.acc2 else p.bg2)
+        Box(Modifier.alpha(if(enabled)1f else .4f).clip(RoundedCornerShape(18.dp)).background(if (selected) p.acc2 else p.bg2)
             .padding(horizontal = 14.dp, vertical = 8.dp)) {
             Text(label, style = PaperType.ui.copy(fontSize = 13.sp), color = if (selected) p.acc else p.mut)
         }
@@ -172,18 +178,23 @@ enum class PaperButtonVariant { PRIMARY, ACCENT, SECONDARY, TEXT }
 
 @Composable fun PaperStepButton(symbol: String, label: String, enabled: Boolean = true, onClick: () -> Unit) {
     val p = LocalPaper.current
-    Box(Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp).clip(CircleShape)
-        .background(p.card).clickable(enabled = enabled, role = Role.Button, onClickLabel = label, onClick = onClick),
+    Box(Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+        .clickable(enabled = enabled, role = Role.Button, onClickLabel = label, onClick = onClick),
         contentAlignment = Alignment.Center) {
-        Text(symbol, color = p.ink.copy(alpha = if (enabled) 1f else .4f), style = PaperType.ui)
+        Box(Modifier.size(46.dp).clip(CircleShape).background(p.card),contentAlignment=Alignment.Center) {
+            Text(symbol, color = p.ink.copy(alpha = if (enabled) 1f else .4f), style = PaperType.ui.copy(fontSize=22.sp))
+        }
     }
 }
 
 @Composable fun PaperStepper(value: String, onMinus: () -> Unit, onPlus: () -> Unit,
-    modifier: Modifier = Modifier, minusEnabled: Boolean = true, plusEnabled: Boolean = true) {
+    modifier: Modifier = Modifier, minusEnabled: Boolean = true, plusEnabled: Boolean = true, caption:String?=null) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(value, color = LocalPaper.current.ink, style = PaperType.number, modifier = Modifier.weight(1f))
         PaperStepButton("−", "Уменьшить", minusEnabled, onMinus)
+        Row(Modifier.weight(1f),horizontalArrangement=Arrangement.Center,verticalAlignment=Alignment.Bottom) {
+            Text(value, color = LocalPaper.current.ink, style = PaperType.number)
+            if(caption!=null)Text(caption,color=LocalPaper.current.ink2,style=PaperType.note,modifier=Modifier.padding(start=8.dp,bottom=6.dp))
+        }
         PaperStepButton("+", "Увеличить", plusEnabled, onPlus)
     }
 }

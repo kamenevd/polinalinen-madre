@@ -41,21 +41,15 @@ internal fun aliceSheetMode(state: VoiceUiState): AliceSheetMode = when {
     val text = selected?.let { bake -> bake.trustedPortions?.let { portions ->
         RecipeScaler.scaledStepText(bake.currentStep.description, portions.toDouble(), RecipeScaler.scalableBindings(bake.recipe))
     } }
-    CompositionLocalProvider(LocalPaper provides NightPaper) {
     PaperSheet(onDismiss) {
-        AliceSheetContent(mode, state, selected?.recipe?.name, if (localRead) answer else text,
+        AliceSheetContent(mode, state, selected?.recipe?.name ?: sessions.filterNot{it.isCompleted}.singleOrNull()?.recipe?.name, if (localRead) answer else text,
             onConnect = onOpenSettings, onRetry = { localRead = false; coordinator.retryConnection() },
             onRead = { answer = text; localRead = true },
             onRemaining = { answer = "Осталось: ${timerDigits(remaining)}"; localRead = true },
             onNext = { answer = selected?.let { it.recipe.timeline.getOrNull(it.currentStepIndex + 1)?.description ?: "Последний шаг · завершение на телефоне" }; localRead = true },
             paused = selected?.isPaused == true, onPause = { selected?.let { viewModel.togglePause(it.id) } },
             onApprove = { scope.launch { coordinator.approvePair() } }, onReject = coordinator::dismissPairPreview,
-            accountStep = if(com.polinalinen.madre.account.yandex.LocalYandexAccountUi.current!=null) ({
-                CompositionLocalProvider(LocalAtmosphere provides Atmosphere.NIGHT) {
-                    com.polinalinen.madre.account.yandex.YandexAliceAccountStep(onOpenSettings)
-                }
-            }) else null)
-    }
+            accountStep = { com.polinalinen.madre.account.yandex.YandexAliceAccountStep(onOpenSettings) },hasActiveBakes=sessions.any{!it.isCompleted})
     }
 }
 
@@ -66,13 +60,13 @@ internal fun aliceSheetMode(state: VoiceUiState): AliceSheetMode = when {
     onConnect: () -> Unit = {}, onRetry: () -> Unit = {}, onRead: () -> Unit = {},
     onRemaining: () -> Unit = {}, onNext: () -> Unit = {}, paused: Boolean = false,
     onPause: () -> Unit = {}, onApprove: () -> Unit = {}, onReject: () -> Unit = {},
-    accountStep: (@Composable () -> Unit)? = null) {
+    accountStep: (@Composable () -> Unit)? = null,hasActiveBakes:Boolean=recipeName!=null) {
     val p = LocalPaper.current
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        SmallLabel("АЛИСА · ${AliceCopy.SKILL_NAME}", color = p.acc)
+        SmallLabel("АЛИСА", color = p.acc)
         BookText(when (mode) {
-            AliceSheetMode.UNLINKED -> "Не подключено"
+            AliceSheetMode.UNLINKED -> "Подключить Алису"
             AliceSheetMode.LISTENING -> "Телефон на связи"
             AliceSheetMode.READING -> "Шаг на телефоне"
             AliceSheetMode.CONFIRM -> "Разрешить доступ?"
@@ -80,12 +74,14 @@ internal fun aliceSheetMode(state: VoiceUiState): AliceSheetMode = when {
             AliceSheetMode.PHONE_REQUIRED -> "На телефоне"
         }, 28)
         if (recipeName != null) Text(recipeName, color = p.ink, style = PaperType.title)
+        else Text(if(hasActiveBakes)"Выберите выпечку" else "Сейчас ничего не печётся",color=p.ink2,style=PaperType.note)
         state.message?.let { Text(it, color = p.error, style = PaperType.note) }
         when (mode) {
             AliceSheetMode.UNLINKED -> {
-                accountStep?.invoke()
-                Text("Выберите выпечку и явно разрешите доступ. Ничего не подключается автоматически.", color = p.ink2, style = PaperType.body)
-                PaperButton(label = "Подключить Алису", onClick = onConnect, variant = PaperButtonVariant.ACCENT)
+                com.polinalinen.madre.ui.screens.AliceConnectionSteps(
+                    waiting=state.status==VoiceStatus.WAITING_LINK || state.status==VoiceStatus.LOADING,
+                    onHelp=onConnect,accountStep=accountStep)
+                PaperTextAction("ВЫБРАТЬ ВЫПЕЧКУ И РАЗРЕШИТЬ ДОСТУП",onConnect)
             }
             AliceSheetMode.CONFIRM -> {
                 Text(AliceCopy.SHARED_WARNING, color = p.ink2, style = PaperType.body)
@@ -104,7 +100,7 @@ internal fun aliceSheetMode(state: VoiceUiState): AliceSheetMode = when {
                 Text(stepText.orEmpty().take(shown), color = p.ink2, style = PaperType.body)
                 Text("Это текст выбранного шага на телефоне, не подтверждение речи колонки.", color = p.mut, style = PaperType.note)
             }
-            AliceSheetMode.LISTENING -> Text("Откройте навык «Голос закваски» на колонке. Статус телефона не означает, что колонка сейчас слушает.", color = p.ink2, style = PaperType.body)
+            AliceSheetMode.LISTENING -> Text("Откройте навык «${AliceCopy.SKILL_NAME}» на колонке. Статус телефона не означает, что колонка сейчас слушает.", color = p.ink2, style = PaperType.body)
         }
         if (state.status == VoiceStatus.CONNECTED) {
             Text("Эти кнопки показывают шаг и управляют выпечкой на телефоне.", color = p.mut, style = PaperType.note)

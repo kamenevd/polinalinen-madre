@@ -109,6 +109,7 @@ fun MadreNavHost(
     var startupHandled by rememberSaveable { mutableStateOf(false) }
     var startRecipeId by rememberSaveable { mutableStateOf<String?>(null) }
     var startMode by rememberSaveable { mutableStateOf(0) }
+    var startFromOven by rememberSaveable { mutableStateOf(true) }
     var editingPlanId by rememberSaveable { mutableStateOf<String?>(null) }
     var planSaving by remember { mutableStateOf(false) }
     var planError by remember { mutableStateOf<String?>(null) }
@@ -154,8 +155,8 @@ fun MadreNavHost(
     val navigationScope = rememberCoroutineScope()
     var aliceSheet by remember { mutableStateOf(false) }
     val planScheduler=remember(context){com.polinalinen.madre.notifications.PlannedBakeScheduler(context.applicationContext)}
-    fun openStart(id:String, mode:Int=0, planId:String?=null) {
-        startMode=mode;editingPlanId=planId;planError=null;startRecipeId=id
+    fun openStart(id:String, mode:Int=0, planId:String?=null,fromOven:Boolean=true) {
+        startMode=mode;editingPlanId=planId;planError=null;startRecipeId=id;startFromOven=fromOven
     }
     suspend fun storePlan(plan:PlannedBake,replacingId:String?=null) = withContext(NonCancellable+Dispatchers.IO) {
         check(plan.startAtMillis>=System.currentTimeMillis()) { "Start time has passed" }
@@ -401,11 +402,11 @@ fun MadreNavHost(
                     onContinueBake = { id -> navController.navigate(MadreDestinations.bake(id.toString())) },
                     initialStep=backStackEntry.arguments?.getInt("step")?.takeIf{it>=0},
                     initialPage=backStackEntry.arguments?.getInt("page")?:-1,
-                    onPageChanged={page->bookPreferences.saveBookmark(BookBookmark(recipeId,page))},
+                    onBookmarkChanged=bookPreferences::saveBookmark,
                     scaleFactor=factor,onScaleFactor=changeFactor,onOpenAlice={aliceSheet=true},
-                    onSchedule={recipe->openStart(recipe.id,1)},
+                    onSchedule={recipe->openStart(recipe.id,1,fromOven=false)},
                     scrollContent={ _,scrollNavigation->RecipeDetailScreen(recipeId,{showHome(0)},{},bakingViewModel,onOpenAlice={aliceSheet=true},
-                        embedded=true,scaleFactorOverride=factor,textSize=readingPreferences.textSize,chapterScrollNavigation=scrollNavigation) },
+                        embedded=true,scaleFactorOverride=factor,textSize=readingPreferences.textSize,chapterScrollNavigation=scrollNavigation,onPortions={calculator=true}) },
                 )
                 }
                 if(calculator)recipesForStats.firstOrNull{it.id==recipeId}?.let { recipe->BookPortionsSheet(recipe,factor,changeFactor){calculator=false} }
@@ -591,7 +592,7 @@ fun MadreNavHost(
                             planError="Не удалось завершить действие. План сохранён."
                         } finally {planSaving=false}
                     }
-                },onDismiss={startRecipeId=null},onChapter={startRecipeId=null;openChapter(id)},
+                },onDismiss={startRecipeId=null},onChapter=if(startFromOven)({startRecipeId=null;openChapter(id)}) else null,
                     initialMode=startMode,existingPlan=editing,busy=planSaving,error=planError,onPlan={portions,start->
                         planSaving=true;planError=null
                         navigationScope.launch {

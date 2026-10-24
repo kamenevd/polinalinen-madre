@@ -1482,6 +1482,15 @@ class HttpFixture(unittest.TestCase):
         self.assertIn("Сохранённого ответа", expired_speech["response"]["text"])
 
     def test_f6_waiters_reclaimed_and_wakeup_still_delivers(self) -> None:
+        def assert_server_cleanup() -> None:
+            # Reading the response body finishes the client, not the handler's
+            # finally block. Await the real server-side cleanup, still bounded
+            # below the request deadline; never substitute a mocked waiter count.
+            deadline = time.monotonic() + 1.0
+            while any(self.app.waiters.sizes().values()) and time.monotonic() < deadline:
+                time.sleep(0.005)
+            self.assertEqual(self.app.waiters.sizes(), {"poll": 0, "ack": 0})
+
         credential, _installation = self.enroll()
         bake, generation = self.select(credential)
         connection = uid()
@@ -1497,7 +1506,8 @@ class HttpFixture(unittest.TestCase):
         time.sleep(0.15)
         self.assertGreaterEqual(self.app.waiters.sizes()["poll"], 1)
         worker.join(timeout=4)
-        self.assertEqual(self.app.waiters.sizes()["poll"], 0)
+        self.assertFalse(worker.is_alive())
+        assert_server_cleanup()
 
         access, bake, generation = self._link(credential)
         connection = uid()
@@ -1522,7 +1532,8 @@ class HttpFixture(unittest.TestCase):
         self.assertEqual(speech["response"]["text"], "Телефон применил команду.")
         self.assertLess(seen["elapsed"], self.app.settings.poll_wait_s)
         self.assertEqual(seen["command"]["operation"], "PAUSE")
-        self.assertEqual(self.app.waiters.sizes(), {"poll": 0, "ack": 0})
+        self.assertFalse(worker.is_alive())
+        assert_server_cleanup()
 
     def test_readonly_state_does_not_mint(self) -> None:
         credential, _installation = self.enroll()

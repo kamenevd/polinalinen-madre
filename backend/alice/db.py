@@ -25,6 +25,36 @@ class LockBusy(sqlite3.OperationalError):
 
 
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS yandex_bindings (
+    installation_id TEXT PRIMARY KEY REFERENCES installations(id),
+    uid TEXT NOT NULL,
+    bound_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_yandex_uid ON yandex_bindings(uid);
+CREATE TABLE IF NOT EXISTS yandex_epochs (
+    installation_id TEXT PRIMARY KEY REFERENCES installations(id),
+    epoch INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS yandex_voice_consents (
+    installation_id TEXT PRIMARY KEY REFERENCES installations(id) ON DELETE CASCADE,
+    uid TEXT NOT NULL,
+    epoch INTEGER NOT NULL,
+    bake_key TEXT NOT NULL,
+    generation TEXT NOT NULL,
+    scope TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL,
+    consumed_at INTEGER
+);
+CREATE TABLE IF NOT EXISTS yandex_code_authority (
+    challenge_id TEXT PRIMARY KEY REFERENCES challenges(id) ON DELETE CASCADE,
+    installation_id TEXT NOT NULL REFERENCES installations(id) ON DELETE CASCADE,
+    uid TEXT NOT NULL,
+    epoch INTEGER NOT NULL,
+    scope TEXT NOT NULL,
+    consent_expires_at INTEGER,
+    source_grant_id TEXT
+);
 CREATE TABLE IF NOT EXISTS installations (
     id TEXT PRIMARY KEY,
     credential_hash TEXT NOT NULL UNIQUE,
@@ -185,9 +215,20 @@ def init_db(db_path: str) -> None:
     try:
         conn.execute(f"PRAGMA busy_timeout={int(SQLITE_BUSY_MS)}")
         conn.execute("PRAGMA foreign_keys=ON")
+        version = conn.execute("PRAGMA user_version").fetchone()[0]
+        if version not in (0, 1, 2, 3):
+            raise RuntimeError("unsupported voice database schema")
         conn.execute("PRAGMA journal_mode=WAL")
-        conn.executescript(SCHEMA)
-        conn.execute("PRAGMA user_version=1")
+        # A rolled-back executable ignores new evidence and resets user_version.
+        # Its disconnect/reselection cannot advance our epoch. On re-upgrade,
+        # never revive pre-rollback phone consent or pending UID shortcut codes.
+        upgrade_fence = """
+DELETE FROM yandex_voice_consents;
+UPDATE auth_codes SET used_at=COALESCE(used_at,0)
+    WHERE challenge_id IN (SELECT challenge_id FROM yandex_code_authority);
+UPDATE yandex_epochs SET epoch=epoch+1;
+""" if version < 3 else ""
+        conn.executescript("BEGIN IMMEDIATE;\n" + SCHEMA + upgrade_fence + "\nPRAGMA user_version=3;\nCOMMIT;")
     finally:
         conn.close()
     os.chmod(path, 0o600)

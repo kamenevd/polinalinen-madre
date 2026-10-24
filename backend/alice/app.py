@@ -10,7 +10,9 @@ import time
 import weakref
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
-from urllib.parse import parse_qs, quote, urlsplit
+from urllib.parse import parse_qs, quote, urlsplit, urlencode
+from yandex_identity import (YandexClient, PendingStates, ForeignClient, YandexUnavailable,
+                             CALLBACK, valid_token, verified_identity, uid_hash, profile_response)
 
 from config import (
     EXACT_REDIRECT,
@@ -188,6 +190,8 @@ class App:
         self.clock = clock or Clock()
         self.boot_id = new_csrf()
         self.waiters = Waiters()
+        self.yandex = YandexClient(settings)
+        self.yandex_states = PendingStates()
         self.slots = threading.BoundedSemaphore(settings.max_inflight)
         with transaction(settings.db_path) as conn:
             startup_invalidate(conn)
@@ -415,7 +419,7 @@ class Handler(BaseHTTPRequestHandler):
             body = b"" if method == "HEAD" else b'{"ok":true}'
             self._send(200, body)
             return
-        if method != "POST" and not (method == "GET" and path in (OAUTH_PREFIX + "/authorize", OAUTH_PREFIX + "/challenge")):
+        if method != "POST" and not (method == "GET" and path in (OAUTH_PREFIX + "/authorize", OAUTH_PREFIX + "/challenge", OAUTH_PREFIX + "/yandex/callback")):
             self._send(405, b'{"ok":false,"error":"denied"}')
             return
         if path.startswith(PHONE_PREFIX) and split.query:
@@ -445,6 +449,15 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == PHONE_PREFIX + "/enroll":
             self._phone_enroll(app, raw)
+            return
+        if path in (PHONE_PREFIX + "/yandex-bind", PHONE_PREFIX + "/yandex-unbind"):
+            self._phone_yandex(app, raw, unbind=path.endswith("yandex-unbind"))
+            return
+        if path == PHONE_PREFIX + "/yandex-voice-consent":
+            self._phone_yandex_consent(app, raw)
+            return
+        if path == OAUTH_PREFIX + "/yandex/callback" and method == "GET":
+            self._yandex_callback(app, split.query)
             return
         if path == PHONE_PREFIX + "/select":
             self._phone_select(app, raw)
@@ -584,6 +597,64 @@ class Handler(BaseHTTPRequestHandler):
             installation_id = enroll(conn, digest, app.now())
         self._send_json(200, {"installation_id": installation_id})
 
+    def _phone_yandex(self, app: App, raw: bytes, unbind: bool) -> None:
+        import yandex_store
+        inst = self._installation(app)
+        if inst is None:
+            self._send_json(401, {"error": "denied"})
+            return
+        body = self._json_object(raw)
+        if body is None or set(body) != (set() if unbind else {"yandex_token"}):
+            self._send_json(400, {"error": "denied"})
+            return
+        if unbind:
+            with transaction(app.settings.db_path) as conn:
+                yandex_store.unbind(conn, inst["id"], app.now())
+            self._send(204, b"")
+            return
+        token = body.get("yandex_token")
+        if not valid_token(token):
+            self._send_json(400, {"error": "denied"})
+            return
+        if not app.settings.yandex_configured():
+            self._send_json(503, {"error": "yandex_unavailable"})
+            return
+        with transaction(app.settings.db_path) as conn:
+            if not rate_allow(conn, "yandex-bind:" + inst["id"], app.now(), 600000, 20):
+                self._send_json(429, {"error": "denied"})
+                return
+        expected = inst["authority_epoch"]
+        try:
+            info = app.yandex.info(token)
+            uid = verified_identity(info, app.settings.yandex_client_id)
+            payload = profile_response(info, uid_hash(uid, app.settings.yandex_uid_salt))
+        except ForeignClient:
+            self._send_json(403, {"error": "foreign_client"})
+            return
+        except YandexUnavailable:
+            self._send_json(502, {"error": "yandex_unavailable"})
+            return
+        with transaction(app.settings.db_path) as conn:
+            ok = yandex_store.bind(conn, inst["id"], uid, expected, app.now())
+        self._send_json(200 if ok else 409, payload if ok else {"error": "binding_changed"})
+
+    def _phone_yandex_consent(self, app: App, raw: bytes) -> None:
+        import yandex_store
+        inst = self._installation(app)
+        if inst is None:
+            self._send_json(401, {"error": "denied"})
+            return
+        body = self._json_object(raw)
+        if (body is None or set(body) != {"bake_id", "generation"}
+                or not is_uuid(body.get("bake_id")) or not is_uuid(body.get("generation"))):
+            self._send_json(400, {"error": "denied"})
+            return
+        with transaction(app.settings.db_path) as conn:
+            expires = yandex_store.record_consent(conn, inst, canon_uuid(body["bake_id"]),
+                                                  canon_uuid(body["generation"]), app.now())
+        self._send_json(200 if expires is not None else 409,
+                        {"expires_at": expires} if expires is not None else {"error": "binding_changed"})
+
     def _phone_select(self, app: App, raw: bytes) -> None:
         inst = self._installation(app)
         if inst is None:
@@ -690,6 +761,7 @@ class Handler(BaseHTTPRequestHandler):
                     installation_id=inst["id"],
                     bake_key=body["bake_key"],
                     generation=body["selection_generation"],
+                    expected_epoch=inst["authority_epoch"],
                     now_ms=app.now(),
                 )
                 if not ok:
@@ -844,11 +916,94 @@ class Handler(BaseHTTPRequestHandler):
             app.waiters.wake_ack(canon_uuid(body["command_id"]))
         self._send_json(200, {"accepted": accepted})
 
+    def _yandex_callback(self, app: App, query: str) -> None:
+        import yandex_store
+        if not app.settings.yandex_match_configured():
+            self._send_json(400, {"error": "denied"})
+            return
+        params = parse_qs(query, keep_blank_values=True)
+        state = one_param(params, "state")
+        browser = parse_cookies(self.headers.get("Cookie")).get("madre_yandex", "")
+        pending = app.yandex_states.consume(state, browser, app.now()) if state else None
+        if pending is None:
+            self._send_json(400, {"error": "denied"})
+            return
+        _expires, _browser, verifier, checked = pending
+        checked = validate_oauth_params({k: [v] for k, v in checked.items()}, app.settings)
+        if checked is None:
+            self._send_json(400, {"error": "denied"})
+            return
+        clear_cookie = ("Set-Cookie", self._cookie("madre_yandex", "") + "; Max-Age=0")
+        if set(params) == {"state", "error"} and one_param(params, "error"):
+            self._yandex_fallback(checked, clear_cookie)
+            return
+        code = one_param(params, "code")
+        if set(params) != {"state", "code"} or not valid_token(code) or not app.yandex_states.claim_code(code, app.now()):
+            self._send_json(400, {"error": "denied"})
+            return
+        try:
+            token = app.yandex.exchange(code, verifier)
+            info = app.yandex.info(token)
+            uid = verified_identity(info, app.settings.yandex_client_id)
+        except ForeignClient:
+            self._send_json(403, {"error": "foreign_client"}, [clear_cookie])
+            return
+        except YandexUnavailable:
+            self._send_json(502, {"error": "yandex_unavailable"}, [clear_cookie])
+            return
+        auth_code = new_auth_code()
+        display_code, browser_token = new_display_code(), new_browser_token()
+        with transaction(app.settings.db_path) as conn:
+            now = app.now()
+            inst = yandex_store.eligible(conn, uid, now)
+            issued = None
+            if inst is not None:
+                challenge = create_challenge(conn, code=display_code, client_id=checked["client_id"],
+                    redirect_uri=checked["redirect_uri"], scope=checked["scope"], state=checked["state"],
+                    browser_token=browser_token, now_ms=app.now(), ttl_ms=app.settings.challenge_ttl_ms)
+                approved = approve_challenge(conn, challenge_id=challenge, code_hash=sha256_text(display_code),
+                    installation_id=inst["id"], bake_key=inst["selected_bake_key"],
+                    generation=inst["selected_generation"], expected_epoch=inst["authority_epoch"], now_ms=now)
+                if approved:
+                    issued = issue_auth_code(conn, challenge_id=challenge, browser_hash=sha256_text(browser_token),
+                        code=auth_code, now_ms=now, ttl_ms=app.settings.auth_code_ttl_ms)
+                    if issued is not None:
+                        # Same transaction as real code issuance, not login, select,
+                        # callback opening, fallback, or a failed/ambiguous match.
+                        yandex_store.consume_authority(conn, inst, uid, challenge, now)
+        if issued is None:
+            self._yandex_fallback(checked, clear_cookie)
+            return
+        LOG.info("match=uid uid_hash=%s", uid_hash(uid, app.settings.yandex_uid_salt))
+        location = build_redirect(issued["redirect_uri"], auth_code, issued["state"], issued["client_id"], issued["scope"])
+        self._send(303, b"", extra=[("Location", location), clear_cookie])
+
+    def _yandex_fallback(self, checked, clear_cookie) -> None:
+        csrf = new_csrf()
+        self._send(200, _start_page(checked, csrf), "text/html; charset=utf-8",
+                   [clear_cookie, ("Set-Cookie", self._cookie(CSRF_COOKIE, csrf))])
+
     def _oauth_get(self, app: App, query: str) -> None:
         params = parse_qs(query, keep_blank_values=True)
         checked = validate_oauth_params(params, app.settings)
         if checked is None:
             self._send(400, _HTML_REJECTED, "text/html; charset=utf-8")
+            return
+        if app.settings.yandex_match_configured():
+            with transaction(app.settings.db_path) as conn:
+                allowed = rate_allow(conn, "yandex-oauth:" + self._peer(), app.now(),
+                                     app.settings.oauth_window_ms, app.settings.oauth_limit)
+            pending = app.yandex_states.create(checked, app.now()) if allowed else None
+            if pending is None:
+                self._send_json(429, {"error": "denied"})
+                return
+            state, browser, challenge = pending
+            location = "https://oauth.yandex.ru/authorize?" + urlencode({
+                "response_type": "code", "client_id": app.settings.yandex_client_id,
+                "redirect_uri": CALLBACK, "state": state,
+                "code_challenge": challenge, "code_challenge_method": "S256"})
+            self._send(302, b"", extra=[("Location", location),
+                       ("Set-Cookie", self._cookie("madre_yandex", browser))])
             return
         csrf = new_csrf()
         page = _start_page(checked, csrf)

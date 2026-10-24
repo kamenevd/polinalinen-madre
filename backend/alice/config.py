@@ -87,6 +87,16 @@ class Settings:
     pair_fail_limit: int = 8
     pair_window_ms: int = 600_000
     max_inflight: int = 32
+    yandex_client_id: str = ""
+    yandex_client_secret: str = ""
+    yandex_uid_salt: str = ""
+    yandex_match: bool = False
+
+    def yandex_configured(self) -> bool:
+        return bool(self.yandex_client_id) and len(self.yandex_uid_salt) >= 32
+
+    def yandex_match_configured(self) -> bool:
+        return self.yandex_match and self.yandex_configured() and bool(self.yandex_client_secret)
 
     def oauth_configured(self) -> bool:
         return bool(self.oauth_client_id) and bool(self.oauth_client_secret)
@@ -109,6 +119,10 @@ def settings_from_env() -> Settings:
         oauth_client_id=os.environ.get("MADRE_ALICE_OAUTH_CLIENT_ID", ""),
         oauth_client_secret=os.environ.get("MADRE_ALICE_OAUTH_CLIENT_SECRET", ""),
         static_auth=os.environ.get("MADRE_ALICE_AUTH", ""),
+        yandex_client_id=os.environ.get("MADRE_YANDEX_CLIENT_ID", ""),
+        yandex_client_secret=os.environ.get("MADRE_YANDEX_CLIENT_SECRET", ""),
+        yandex_uid_salt=os.environ.get("MADRE_YANDEX_UID_SALT", ""),
+        yandex_match=os.environ.get("YANDEX_MATCH", "0") == "1",
         host=host,
         port=port,
     )

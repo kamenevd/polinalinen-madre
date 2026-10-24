@@ -170,6 +170,12 @@ fun MadreNavHost(
         check(bookPreferences.removePlan(id)) { "Plan was not removed" }
         planScheduler.cancel(id)
     }
+    fun launchPlanAction(block:suspend ()->Unit) {
+        // A second UI action cannot snooze the same plan while its durable START is in flight.
+        if(planSaving)return
+        planSaving=true
+        navigationScope.launch {try{block()}finally{planSaving=false}}
+    }
     LaunchedEffect(bookPreferences) {
         try { withContext(NonCancellable+Dispatchers.IO){planScheduler.restoreMissing(bookPreferences.plans)} }
         catch(e:Exception) {
@@ -377,7 +383,8 @@ fun MadreNavHost(
                     onStartRecipe = {recipe->navigationScope.launch { bakingViewModel.startBakingWithUndo(recipe,bookPreferences.portions(recipe.id).toDouble())?.let{id->navController.navigate(MadreDestinations.bake(id.toString()))} }},
                     onConfigureRecipe = {recipe->openStart(recipe.id)},
                     onConfigurePlan = {plan->openStart(plan.recipeId,1,plan.id)},
-                    onStartPlan = {requested->navigationScope.launch {
+                    plansBusy=planSaving,
+                    onStartPlan = {requested->launchPlanAction {
                         val current=bookPreferences.plans.firstOrNull{it==requested}
                         val recipe=current?.let{plan->recipesForStats.firstOrNull{it.id==plan.recipeId}}
                         try {
@@ -392,11 +399,14 @@ fun MadreNavHost(
                             navSnackbar.showSnackbar("Не удалось завершить действие. План сохранён.")
                         }
                     } },
-                    onSnoozePlan = {requested->navigationScope.launch {
+                    onSnoozePlan = {requested->launchPlanAction {
                         try {
                             bookPreferences.plans.firstOrNull{it==requested}?.let{current->
-                                storePlan(BakePlanning.snooze(current,bookClock.millis()),current.id)
-                                navSnackbar.showSnackbar("Напомним через 30 минут")
+                                if(bakingViewModel.sessionForPlan(current.id)!=null)removePlan(current.id)
+                                else {
+                                    storePlan(BakePlanning.snooze(current,bookClock.millis()),current.id)
+                                    navigationScope.launch{navSnackbar.showSnackbar("Напомним через 30 минут")}
+                                }
                             }
                         } catch(e:Exception) {
                             if(e is kotlinx.coroutines.CancellationException)throw e

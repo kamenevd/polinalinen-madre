@@ -90,7 +90,7 @@ import androidx.compose.ui.Alignment
     onOpenSession: (Long) -> Unit, onConfigure: (Recipe) -> Unit, onQuickStart: (Recipe) -> Unit,
     onOpenPlan: (PlannedBake) -> Unit, onSettings: () -> Unit, modifier: Modifier = Modifier,
     onAa: () -> Unit = {}, pendingFinished: List<Pair<Long,BakingViewModel.BakeCompletion>> = emptyList(),
-    clock:Clock=LocalBookClock.current,onStartPlan:(PlannedBake)->Unit={},onSnoozePlan:(PlannedBake)->Unit={}) {
+    clock:Clock=LocalBookClock.current,onStartPlan:(PlannedBake)->Unit={},onSnoozePlan:(PlannedBake)->Unit={},plansBusy:Boolean=false) {
     var filter by rememberSaveable { mutableIntStateOf(0) }
     val p = LocalPaper.current
     val now=rememberBookNow(clock)
@@ -124,8 +124,8 @@ import androidx.compose.ui.Alignment
             PaperBakeCard(recipe.name,if(overdue)"ПОРА НАЧИНАТЬ · ×${plan.portions}" else "ЗАПЛАНИРОВАНО · ×${plan.portions}",
                 recipePhoto(recipe.id),0f,{onOpenPlan(plan)},overlineColor=if(overdue)p.rib else p.mut,
                 actions={if(overdue)Row(Modifier.fillMaxWidth().padding(horizontal=18.dp,vertical=8.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                        PaperButton("Начать",{onStartPlan(plan)},Modifier.weight(1f),variant=PaperButtonVariant.ACCENT)
-                        PaperButton("Через 30 мин",{onSnoozePlan(plan)},Modifier.weight(1f),variant=PaperButtonVariant.SECONDARY)
+                        PaperButton("Начать",{onStartPlan(plan)},Modifier.weight(1f),enabled=!plansBusy,variant=PaperButtonVariant.ACCENT)
+                        PaperButton("Через 30 мин",{onSnoozePlan(plan)},Modifier.weight(1f),enabled=!plansBusy,variant=PaperButtonVariant.SECONDARY)
                     }}) {
                 PaperNote(if(overdue)"План ждёт вас — таймер ещё не запущен" else "начнём ${relativeBookTime(plan.startAtMillis,now,clock)}")
             }

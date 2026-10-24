@@ -263,6 +263,8 @@ class BookNavigationUiTest {
         rule.setContent{MadreNavHost(pendingSessionId=requested)}
         rule.waitUntil(10_000){rule.onAllNodesWithText("Дальше →").fetchSemanticsNodes().isNotEmpty()}
         rule.onNodeWithText("Дальше →").performClick()
+        // ADVANCE publishes only after asynchronous Room commit, never synchronously with the tap.
+        rule.waitUntil(10_000){rule.onNodeWithText("Шаг 11 · Остывание").isDisplayed()}
         rule.onNodeWithText("Шаг 11 · Остывание").assertIsDisplayed()
         val oldRevision=controller.sessions.value.single().revision
         val snack=rule.onNodeWithTag("paper-snackbar").fetchSemanticsNode().boundsInRoot

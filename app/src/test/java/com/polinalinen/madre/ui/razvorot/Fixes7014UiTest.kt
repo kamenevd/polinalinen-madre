@@ -88,6 +88,22 @@ class Fixes7014UiTest {
         rule.onNodeWithText("Начать").performClick();assertEquals(plan,started)
     }
 
+    @Test fun inFlightPlanActionsAreActuallyDisabledUntilTheMutationFinishes() {
+        val busy=mutableStateOf(true)
+        var calls=0
+        val plan=PlannedBake(recipes.first().id,2,clock.millis()-3_600_000L)
+        rule.setContent{RazvorotTheme(force=Atmosphere.DAWN){
+            BookOvenContent(recipes,emptyList(),listOf(plan),{},{},{},{},{},clock=clock,
+                onStartPlan={calls++},onSnoozePlan={calls++},plansBusy=busy.value)
+        }}
+        rule.onNodeWithText("Начать").assertIsNotEnabled()
+        rule.onNodeWithText("Через 30 мин").assertIsNotEnabled()
+        assertEquals(0,calls)
+        rule.runOnIdle{busy.value=false}
+        rule.onNodeWithText("Через 30 мин").assertIsEnabled().performClick()
+        rule.runOnIdle{assertEquals(1,calls)}
+    }
+
     @Test fun photoDefaultTracksAvailabilityButExplicitPrivacyChoiceSurvivesRestoreAndPhotoUpdates() {
         val photo=mutableStateOf(false)
         val sharing=mutableStateOf(true)
@@ -124,9 +140,12 @@ class Fixes7014UiTest {
         val count=state.substringAfter(" из ").toInt()
         assertEquals("Страница $count из $count",state)
         assertEquals(6,count)
-        for(index in 1..count)rule.onNode(SemanticsMatcher("page $index target"){
-            it.config.getOrNull(SemanticsActions.OnClick)?.label=="Страница $index"
-        }).assertIsDisplayed()
+        for(index in 1..count) {
+            val target=rule.onNode(SemanticsMatcher("page $index target"){
+                it.config.getOrNull(SemanticsActions.OnClick)?.label=="Страница $index"
+            }).assertIsDisplayed()
+            if(index==count)target.assertIsSelected() else target.assertIsNotSelected()
+        }
     }
 
     @Test fun accountAndPairingStateSelectExactlyOneCurrentConnectionStep() {

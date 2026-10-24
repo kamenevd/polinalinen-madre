@@ -37,8 +37,8 @@ internal class PaperMotion(val direction: Int, val x0: Float, val y0: Float, var
 
 /** NAV arbitrates gestures; the established curl geometry is unchanged. */
 internal fun chapterTurnDirection(x: Float, dx: Float, dy: Float, width: Float): Int {
-    if (x < width * (1f - Curl.EDGE)) return 0
-    val origin = if (dx > 0f) (width - x).coerceIn(24f, max(24f, width * Curl.EDGE)) else x
+    // Backward swipes work across the page; forward gestures retain the approved right edge.
+    val origin = if (dx > 0f) 24f else x
     return Curl.direction(origin, dx, dy, width)
 }
 
@@ -99,8 +99,10 @@ internal fun chapterTurnDirection(x: Float, dx: Float, dy: Float, width: Float):
             if (android.os.Build.VERSION.SDK_INT >= 29) {
                 val center = view.height / 2
                 val half = minOf((100f * density).roundToInt(), view.height / 2)
-                view.systemGestureExclusionRects = listOf(android.graphics.Rect(
-                    (view.width-(24f*density).roundToInt()).coerceAtLeast(0), (center-half).coerceAtLeast(0), view.width, center+half))
+                val edge=(24f*density).roundToInt().coerceAtMost(view.width)
+                view.systemGestureExclusionRects = listOf(
+                    android.graphics.Rect(0,(center-half).coerceAtLeast(0),edge,center+half),
+                    android.graphics.Rect(view.width-edge,(center-half).coerceAtLeast(0),view.width,center+half))
             }
         }
         val listener = android.view.View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> update() }
@@ -170,14 +172,14 @@ internal fun chapterTurnDirection(x: Float, dx: Float, dy: Float, width: Float):
             }
             if (complete) {
                 latestPage((page + m.direction).coerceIn(0, count - 1))
-                if (preferences.haptics) view.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+                performPaperHaptic(context,view,PaperHaptic.PAGE,preferences.haptics)
             }
             glView?.submit(null); motion = null; fold = null
         }
     }
     fun edge(direction: Int) {
         latestEdge(direction)
-        if(preferences.haptics)view.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+        performPaperHaptic(context,view,PaperHaptic.PAGE,preferences.haptics)
         scope.launch {
             for(target in listOf(-direction*12f,0f)) {
                 val spring=PaperSpring(edgeOffset,0f,target,Curl.K_CANCEL,Curl.Z_CANCEL)
@@ -235,7 +237,7 @@ internal fun chapterTurnDirection(x: Float, dx: Float, dy: Float, width: Float):
                         released = true
                         if (started) settle(false, tracker.calculateVelocity().x / density / 1000f)
                         else if (!ignored && !change.isConsumed && change.uptimeMillis - down.uptimeMillis < 350L) {
-                            val dir = if (start.x >= width * (1f-Curl.EDGE)) 1 else 0
+                            val dir = when {start.x<=width*Curl.EDGE -> -1;start.x>=width*(1f-Curl.EDGE)->1;else->0}
                             if (dir == 0) latestCenter() else if (page + dir in 0 until count) {
                                 val g = PaperFold.anchored(width, height, start.y, if (dir > 0) 24f else 2f * width - 30f, 0f)
                                 latestStart()

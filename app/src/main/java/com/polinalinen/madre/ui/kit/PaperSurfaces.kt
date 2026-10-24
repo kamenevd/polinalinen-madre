@@ -53,11 +53,16 @@ import kotlin.random.Random
     }
 }
 
+/** Stable, consumed content insets: immersive bars can hide, the physical cutout cannot.
+ * Compose consumption prevents double padding when a screen is inside the home/scaffold. */
+@Composable fun Modifier.paperContentInsets():Modifier = windowInsetsPadding(
+    WindowInsets.safeDrawing.union(WindowInsets.systemBarsIgnoringVisibility).union(WindowInsets.displayCutout))
+
 /** Compatibility surface for existing layouts; containers remain owned by kit. */
 @Composable fun PaperSurface(modifier: Modifier = Modifier, color: Color = LocalPaper.current.bg,
     shape: Shape = androidx.compose.ui.graphics.RectangleShape, content: @Composable () -> Unit) {
     val p = LocalPaper.current
-    Box(modifier.then(if (color == p.bg) Modifier.paperBackground().safeDrawingPadding() else Modifier.background(color, shape))) {
+    Box(modifier.then(if (color == p.bg) Modifier.paperBackground().paperContentInsets() else Modifier.background(color, shape))) {
         content()
     }
 }
@@ -66,9 +71,9 @@ import kotlin.random.Random
     header: @Composable () -> Unit = {}, bottom: @Composable () -> Unit = {},
     contentPadding: PaddingValues = PaddingValues(horizontal = 22.dp, vertical = 16.dp),
     content: LazyListScope.() -> Unit) {
-    Column(modifier.fillMaxSize().paperBackground().safeDrawingPadding().imePadding()) {
+    Column(modifier.fillMaxSize().paperBackground().paperContentInsets().imePadding()) {
         header()
-        LazyColumn(Modifier.weight(1f), contentPadding = contentPadding, content = content)
+        LazyColumn(Modifier.weight(1f).testTag("paper-list"), contentPadding = contentPadding, content = content)
         bottom()
     }
 }

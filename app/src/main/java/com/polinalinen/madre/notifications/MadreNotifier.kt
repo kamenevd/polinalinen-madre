@@ -60,6 +60,12 @@ class MadreNotifier(private val context: Context) {
      * уведомление, и ничего считать для этого не нужно.
      */
     fun postBakingNotification(sessionId: Long, key: String, title: String, text: String) {
+        // The existing durable notification ledger admits each step deadline once.
+        // Do not double a user-enabled notification-channel vibration.
+        ensureChannel(CHANNEL_BAKING,"Выпечка")
+        if(key.startsWith("step-done-") && context.getSystemService(NotificationManager::class.java)
+                ?.getNotificationChannel(CHANNEL_BAKING)?.shouldVibrate()!=true)
+            com.polinalinen.madre.ui.kit.performPaperHaptic(context,kind=com.polinalinen.madre.ui.kit.PaperHaptic.TIMER)
         post(
             channelId = CHANNEL_BAKING,
             channelName = "Выпечка",

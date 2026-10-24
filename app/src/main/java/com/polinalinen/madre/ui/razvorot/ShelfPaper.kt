@@ -68,7 +68,7 @@ internal fun bookWord(n:Int)=when {
     val p=LocalPaper.current
     val context=LocalContext.current
     val spines=members.ifEmpty{listOf(FamilyShelf.localMember("вы"))}
-    LazyColumn(Modifier.fillMaxSize().background(p.bg).testTag(FamilyShelf.LIST_TAG),contentPadding=PaddingValues(horizontal=22.dp,vertical=8.dp)) {
+    LazyColumn(Modifier.fillMaxSize().background(p.bg).paperContentInsets().testTag(FamilyShelf.LIST_TAG),contentPadding=PaddingValues(horizontal=22.dp,vertical=8.dp)) {
         item(key="shelf-overview") { Column {
             BookHeader("ПОЛКА СЕМЬИ",onAa=onSettings)
             BookText("${ledger.size} ${bakeWord(ledger.size)},",40)

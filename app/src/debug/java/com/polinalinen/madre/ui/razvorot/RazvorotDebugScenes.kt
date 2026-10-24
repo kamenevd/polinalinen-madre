@@ -71,6 +71,7 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
         ReadingPreferences(context,"razvorot_fixture").apply{
             setSize(if(scene.endsWith("22"))22f else 16f)
             if(scene=="reading-sheet-motion-on")setReduced(true)
+            if(scene=="chapter-benchmark-scroll")chooseMode(ReadingMode.SCROLL)
         }
     }
     val debug=remember{PaperDebugState()}
@@ -109,11 +110,12 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
                         SpineBar(1){}
                     }
                     scene.startsWith("chapter-") -> {
-                        val selected=if(scene=="chapter-title")recipes.getOrNull(4)?:recipe else recipe
+                        val selected=recipes.firstOrNull{it.id==scene.substringAfter(':',"")}
+                            ?:if(scene=="chapter-title")recipes.getOrNull(4)?:recipe else recipe
                         var start by remember{mutableStateOf(false)}
                         var quantities by remember{mutableStateOf(false)}
                         var factor by remember{mutableStateOf(2.0)}
-                        RazvorotReader(recipes,selected.id,preferences,{},{},{quantities=true},initialPage=when(scene){"chapter-ingr"->1;"chapter-end-edge"->Int.MAX_VALUE;else->-1},
+                        RazvorotReader(recipes,selected.id,preferences,{},{},{quantities=true},initialPage=when{scene=="chapter-ingr"->1;scene.startsWith("chapter-end-edge")->Int.MAX_VALUE;else->-1},
                             scaleFactor=factor,onScaleFactor={factor=it},onOpenAlice={},onSchedule={start=true},
                             activeSessions=if(scene=="chapter-active")listOf(remember(selected){syntheticNativeBake(selected)}) else emptyList(),onContinueBake={})
                         if(start)BookStartSheet(selected,factor.toInt(),{},{start=false},onPlan={_,_->},initialMode=1)

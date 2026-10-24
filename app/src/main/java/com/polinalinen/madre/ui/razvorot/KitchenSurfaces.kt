@@ -117,7 +117,7 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
     val p=LocalPaper.current
     // Returning to this overview starts at its jar, not the old below-fold CTA.
     val scroll=remember { ScrollState(0) }
-    Column(Modifier.fillMaxSize().testTag("starter-phase-${phase.name}").verticalScroll(scroll).padding(horizontal=22.dp)) {
+    Column(Modifier.fillMaxSize().paperContentInsets().testTag("starter-phase-${phase.name}").verticalScroll(scroll).padding(horizontal=22.dp)) {
         BookHeader("ЗАКВАСКА · ДЕНЬ $day",onAa=onSettings)
         BookText(name,42);BookText("живая",42,italic=true,color=p.acc)
         SmallLabel("ЛЕВИТО МАДРЕ · ГИДРАТАЦИЯ ${hydration?.let{"$it%"}?:"—"}",Modifier.padding(top=8.dp))

@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application") version "9.3.1" apply false
     id("com.android.library") version "9.3.1" apply false
+    id("com.android.test") version "9.3.1" apply false
     // С AGP 9 Kotlin встроен в сам AGP, но тянет за собой KGP 2.2.10.
     // Объявление здесь (без apply) поднимает KGP на classpath сборки до 2.4.10 —
     // именно его и использует встроенная поддержка Kotlin.

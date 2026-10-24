@@ -23,6 +23,14 @@ on:
         description: Run requested fullscreen/navigation cutout tests without a full native acceptance render
         type: boolean
         default: false
+      fixes_7015_huawei:
+        description: Required owner15 cutout/back-gesture and controlled release-like profiling
+        type: boolean
+        default: false
+      perf_compare:
+        description: Compare immutable14 functional baseline with current15 on the same CI AVD and generate real ART profile
+        type: boolean
+        default: false
   schedule:
     # Takes effect only after an explicitly approved merge into default branch.
     - cron: "30 1 * * *"
@@ -88,7 +96,7 @@ jobs:
         id: verify_qa_account_gate
         run: python3 scripts/verify_apk_account_gate.py app/build/outputs/apk/debug/app-debug.apk > app/build/reports/apk-account-gate.json
       - name: Extended visual verification (manual, nightly and RC)
-        if: (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && !inputs.fixes_7013_acceptance && !inputs.fixes_7014_acceptance && !inputs.fixes_7014_instrumented
+        if: (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && !inputs.fixes_7013_acceptance && !inputs.fixes_7014_acceptance && !inputs.fixes_7014_instrumented && !inputs.fixes_7015_huawei
         run: ./gradlew testDebugUnitTest verifyRoborazziDebug -Pmadre.extendedVerification=true --no-daemon --stacktrace --no-configuration-cache
       - name: FIXES frozen-head native acceptance (manual only)
         if: github.event_name == 'workflow_dispatch' && (inputs.fixes_7013_acceptance || inputs.fixes_7014_acceptance)
@@ -168,6 +176,7 @@ jobs:
     timeout-minutes: 35
     env:
       MADRE_FIXES_7014_ACCEPTANCE: ${{ (inputs.fixes_7014_acceptance || inputs.fixes_7014_instrumented) && 'true' || 'false' }}
+      MADRE_FIXES_7015_ACCEPTANCE: ${{ inputs.fixes_7015_huawei && 'true' || 'false' }}
       QA_KEYSTORE_PASSWORD: ${{ secrets.MADRE_QA_KEYSTORE_PASSWORD }}
       QA_KEY_ALIAS: ${{ secrets.MADRE_QA_KEY_ALIAS }}
       QA_KEY_PASSWORD: ${{ secrets.MADRE_QA_KEY_PASSWORD }}
@@ -233,5 +242,62 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Remove private QA keystore after instrumentation
+        if: always()
+        run: python3 scripts/restore_qa_signing.py --cleanup
+
+  required-7015-performance:
+    name: Required15 release-like performance
+    if: github.event_name == 'workflow_dispatch' && inputs.fixes_7015_huawei
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      QA_KEYSTORE_PASSWORD: ${{ secrets.MADRE_QA_KEYSTORE_PASSWORD }}
+      QA_KEY_ALIAS: ${{ secrets.MADRE_QA_KEY_ALIAS }}
+      QA_KEY_PASSWORD: ${{ secrets.MADRE_QA_KEY_PASSWORD }}
+      MADRE_YANDEX_CLIENT_ID: ${{ secrets.MADRE_YANDEX_CLIENT_ID }}
+      MADRE_PERF_COMPARE: ${{ inputs.perf_compare && 'true' || 'false' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699
+        with:
+          packages: platform-tools
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+      - name: Restore same QA key for isolated measurement APKs only
+        env:
+          QA_KEYSTORE_BASE64: ${{ secrets.MADRE_QA_KEYSTORE_BASE64 }}
+          QA_SIGNING_CERT_SHA256: ${{ secrets.MADRE_QA_SIGNING_CERT_SHA256 }}
+        run: python3 scripts/restore_qa_signing.py
+      - name: Prepare immutable14 functional source with benchmark-only overlay
+        run: python3 scripts/prepare_perf_baseline.py "$RUNNER_TEMP/madre-perf-before"
+      - name: Enable KVM for controlled CI AVD
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Measure BEFORE and controlled AFTER with raw Perfetto traces
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash scripts/run_perf_comparison.sh
+      - name: Upload real metrics traces profiles and exact controls even on failure
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: required15-performance
+          path: performance-evidence/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Remove private QA key
         if: always()
         run: python3 scripts/restore_qa_signing.py --cleanup

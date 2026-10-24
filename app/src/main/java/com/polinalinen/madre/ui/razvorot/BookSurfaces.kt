@@ -75,7 +75,8 @@ internal val BookRibbonHeight=44.dp
             PaperSegmented(ReadingMode.entries.map { it.label }, ReadingMode.entries.indexOf(preferences.mode),
                 { preferences.chooseMode(ReadingMode.entries[it]) })
             Row(Modifier.fillMaxWidth().heightIn(min=58.dp),verticalAlignment=Alignment.CenterVertically) { Text("Меньше движения",Modifier.weight(1f));PaperSwitch(preferences.reducedMotion||com.polinalinen.madre.ui.kit.LocalCalmMode.current,preferences::setReduced) }
-            Row(Modifier.fillMaxWidth().heightIn(min=58.dp),verticalAlignment=Alignment.CenterVertically) { Text("Тактильные отклики",Modifier.weight(1f));PaperSwitch(preferences.haptics,preferences::chooseHaptics) }
+            Row(Modifier.fillMaxWidth().heightIn(min=56.dp),verticalAlignment=Alignment.CenterVertically) { Text("Тактильный отклик",Modifier.weight(1f));PaperSwitch(preferences.haptics,preferences::chooseHaptics) }
+            PaperButton("Попробовать отклик",{performPaperHaptic(context,view,enabled=preferences.haptics)},enabled=preferences.haptics,haptic=false,variant=PaperButtonVariant.TEXT)
             Text("На слабом устройстве и при выключенной системной анимации — плоский сдвиг.",style=PaperType.note,color=LocalPaper.current.ink2)
             Spacer(Modifier.height(24.dp))
         }

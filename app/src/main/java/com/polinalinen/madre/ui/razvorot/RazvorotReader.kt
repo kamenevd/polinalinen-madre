@@ -215,7 +215,7 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
         val current=leaves.getOrNull(page)
         val recipe=recipes.firstOrNull { it.id == recipeId }
         if(current!=null && recipe!=null) {
-            if(preferences.mode==ReadingMode.SCROLL || density.fontScale>1.3f || annotations) {
+            if(preferences.mode==ReadingMode.SCROLL || density.fontScale>1.3f || (com.polinalinen.madre.config.FeatureFlags.RECIPE_EDIT && annotations)) {
                 Box(Modifier.fillMaxSize().padding(top=headerHeight,bottom=footerHeight)) {
                     val navigation=ChapterScrollNavigation(anchor,scrollRequest,leaves.map{it.anchor},scrollCursor,seekAnchor) { visible ->
                         leaves.indexOfFirst{it.anchor==visible}.takeIf{it>=0}?.let{page=it;anchor=visible}
@@ -261,7 +261,8 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
                     .padding(horizontal=4.dp),verticalAlignment=Alignment.CenterVertically) {
                     PaperIconButton(onBack,label="В оглавление") { Icon(Icons.AutoMirrored.Outlined.ArrowBack,"В оглавление") }
                     Column(Modifier.weight(1f)) { SmallLabel("ГЛАВА %02d ИЗ %02d".format(current.chapter+1,recipes.size));BookText(recipe.name,17) }
-                    PaperIconButton({annotations=!annotations},label="Пометки этой главы") { Icon(Icons.Outlined.Edit,"Пометки этой главы") }
+                    if(com.polinalinen.madre.config.FeatureFlags.RECIPE_EDIT)
+                        PaperIconButton({if(com.polinalinen.madre.config.FeatureFlags.RECIPE_EDIT)annotations=!annotations},label="Пометки этой главы") { Icon(Icons.Outlined.Edit,"Пометки этой главы") }
 
                     PaperTextButton({settings=true;chrome=false},label="Как читать") { BookText("Aa",21) }
                 }

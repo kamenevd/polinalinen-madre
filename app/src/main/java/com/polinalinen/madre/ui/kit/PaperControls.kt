@@ -52,8 +52,10 @@ enum class PaperButtonVariant { PRIMARY, ACCENT, SECONDARY, TEXT }
     enabled: Boolean = true, caption: String? = null, repeatable: Boolean = false,
     variant: PaperButtonVariant = PaperButtonVariant.PRIMARY,
     icon: ImageVector? = null,
+    haptic: Boolean = true,
 ) {
     val p = LocalPaper.current
+    val view=androidx.compose.ui.platform.LocalView.current
     val gate = remember(repeatable) { if (repeatable) null else TapGate() }
     val interactions = remember { MutableInteractionSource() }
     val pressed by interactions.collectIsPressedAsState()
@@ -77,7 +79,10 @@ enum class PaperButtonVariant { PRIMARY, ACCENT, SECONDARY, TEXT }
             .background(background.copy(alpha = if (enabled) 1f else .4f))
             .clickable(interactionSource = interactions, indication = null, enabled = enabled,
                 role = Role.Button, onClickLabel = label) {
-                if (repeatable || gate?.accept(System.currentTimeMillis()) == true) onClick()
+                if (repeatable || gate?.accept(System.currentTimeMillis()) == true) {
+                    if(haptic)performPaperHaptic(view.context,view)
+                    onClick()
+                }
             }.padding(horizontal = 20.dp, vertical = 14.dp), contentAlignment = Alignment.Center) {
             Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(6.dp)) {
             if(icon!=null)Icon(icon,null,Modifier.size(20.dp),tint=foreground.copy(alpha=if(enabled)1f else .4f))
@@ -107,7 +112,8 @@ enum class PaperButtonVariant { PRIMARY, ACCENT, SECONDARY, TEXT }
 @Composable fun PaperIconButton(onClick: () -> Unit, modifier: Modifier = Modifier,
     enabled: Boolean = true, label: String, content: @Composable () -> Unit) {
     val p = LocalPaper.current
-    IconButton(onClick, modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp).semantics { onClick(label, null) }, enabled,
+    val view=androidx.compose.ui.platform.LocalView.current
+    IconButton({performPaperHaptic(view.context,view);onClick()}, modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp).semantics { onClick(label, null) }, enabled,
         colors = IconButtonDefaults.iconButtonColors(contentColor = p.ink,
             disabledContentColor = p.ink.copy(alpha = .4f)), content = content)
 }
@@ -207,11 +213,12 @@ enum class PaperButtonVariant { PRIMARY, ACCENT, SECONDARY, TEXT }
 @Composable fun PaperSwitch(checked: Boolean, onCheckedChange: ((Boolean) -> Unit)?,
     modifier: Modifier = Modifier, enabled: Boolean = true) {
     val p = LocalPaper.current
+    val view=androidx.compose.ui.platform.LocalView.current
     val position by animateFloatAsState(if (checked) 1f else 0f, tween(180), label = "paper-switch")
     val active = enabled && onCheckedChange != null
     Box(modifier.sizeIn(minWidth = 52.dp, minHeight = 48.dp)
         .then(if (onCheckedChange != null) Modifier.toggleable(checked, enabled = active,
-            role = Role.Switch, onValueChange = onCheckedChange) else Modifier), contentAlignment = Alignment.Center) {
+            role = Role.Switch, onValueChange = {onCheckedChange(it);performPaperHaptic(view.context,view)}) else Modifier), contentAlignment = Alignment.Center) {
         Canvas(Modifier.size(52.dp, 32.dp)) {
             val alpha = if (enabled) 1f else .4f
             drawRoundRect((if(checked)p.ink else p.bg2).copy(alpha=alpha),

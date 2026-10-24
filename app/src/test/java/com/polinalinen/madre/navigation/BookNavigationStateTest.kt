@@ -64,8 +64,9 @@ class BookNavigationStateTest {
         assertEquals("64,8",BookCatalog.number(water/flour*100,1))
         assertEquals(4,BookCatalog.search(recipes,"",CatalogFilter.BREAD).size)
     }
-    @Test fun systemBackOwnsLeftEdgeAndBothTurnsStartOnRightWithoutChangingPhysics() {
-        assertEquals(0,chapterTurnDirection(25f,40f,0f,412f))
+    @Test fun backwardSwipeWorksAcrossPageAndForwardStillNeedsRightEdge() {
+        assertEquals(-1,chapterTurnDirection(25f,40f,0f,412f))
+        assertEquals(-1,chapterTurnDirection(200f,40f,0f,412f))
         assertEquals(0,chapterTurnDirection(200f,-40f,0f,412f))
         assertEquals(1,chapterTurnDirection(400f,-40f,0f,412f))
         assertEquals(-1,chapterTurnDirection(400f,40f,0f,412f))

@@ -121,6 +121,21 @@ android {
         }
     }
 
+    // Opt-in CI measurement only: release code/R8, never a delivered QA/production package.
+    buildTypes.create("benchmark") {
+        initWith(buildTypes.getByName("release"))
+        applicationIdSuffix=".benchmark"
+        isDebuggable=false
+        signingConfig=signingConfigs.findByName("qa")
+        matchingFallbacks.add("release")
+    }
+    buildTypes.create("nonMinifiedBenchmark") {
+        initWith(buildTypes.getByName("benchmark"))
+        isMinifyEnabled=false
+        isShrinkResources=false
+        matchingFallbacks.add("release")
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -154,6 +169,11 @@ android {
     // MigrationTestHelper ищет схемы среди ассетов инструментального APK —
     // без этого он не сможет собрать БД старой версии и молча провалит тест.
     sourceSets {
+        getByName("benchmark") { java.srcDir("src/debug/java") }
+        getByName("nonMinifiedBenchmark") {
+            java.srcDir("src/debug/java")
+            manifest.srcFile("src/benchmark/AndroidManifest.xml")
+        }
         getByName("androidTest") {
             assets.srcDirs(files("$projectDir/schemas"))
         }
@@ -221,6 +241,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.1")
     implementation("androidx.lifecycle:lifecycle-service:2.8.1")
     implementation("androidx.activity:activity-compose:1.9.0")
+    implementation("androidx.profileinstaller:profileinstaller:1.4.1")
 
     // Compose UI
     implementation("androidx.compose.ui:ui")

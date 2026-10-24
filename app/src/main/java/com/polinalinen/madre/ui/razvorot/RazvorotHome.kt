@@ -63,7 +63,7 @@ import com.polinalinen.madre.ui.components.bookAction
     val visibleSessions=sessions.filterNot{pendingAbandons.containsKey(it.id)}
     BackHandler(enabled=section!=0){section=0;onSectionChanged(0)}
     Column(Modifier.fillMaxSize().paperBackground()) {
-        Box(Modifier.weight(1f).safeDrawingPadding()) {
+        Box(Modifier.weight(1f).paperContentInsets()) {
           tabStates.SaveableStateProvider(section) {
             when(section) {
                 0 -> BookTocContent(recipes,visibleSessions,bookPreferences?.bookmark,

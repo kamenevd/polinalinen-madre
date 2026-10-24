@@ -36,14 +36,25 @@ class PaperTurnGestureTest {
         } }
         rule.waitForIdle()
     }
-    @Test fun textAndVerticalDragsAreInert() {
+    @Test fun verticalDragsAndForwardDragsFromTextAreInertButBackwardWorks() {
         show()
         rule.onNodeWithTag("paper-test").performTouchInput{swipe(Offset(width*.95f,height*.2f),Offset(width*.95f,height*.8f),400)}
         rule.waitForIdle();assertThat(page).isEqualTo(1)
         rule.onNodeWithTag("paper-test").performTouchInput{swipe(center,Offset(width*.05f,center.y),400)}
         rule.waitForIdle();assertThat(page).isEqualTo(1)
         rule.onNodeWithTag("paper-test").performTouchInput{swipe(Offset(width*.12f,center.y),Offset(width*.85f,center.y),150)}
-        rule.waitForIdle();assertThat(page).isEqualTo(1) // the left edge belongs to system Back
+        rule.waitUntil(3000){page==0};assertThat(page).isEqualTo(0)
+    }
+    @Test fun leftTapMovesBackFromEndAndFirstPageClampsWithoutWrapping() {
+        page=2;show()
+        rule.onNodeWithTag("paper-test").performTouchInput{click(Offset(width*.12f,center.y))}
+        rule.waitUntil(3000){page==1}
+        rule.onNodeWithTag("paper-test").performTouchInput{click(Offset(width*.12f,center.y))}
+        rule.waitUntil(3000){page==0}
+        rule.onNodeWithTag("paper-test").performTouchInput{click(Offset(width*.12f,center.y))}
+        rule.waitForIdle();assertThat(page).isEqualTo(0)
+        rule.onNodeWithTag("paper-test").performTouchInput{swipeRight(durationMillis=150)}
+        rule.waitForIdle();assertThat(page).isEqualTo(0)
     }
     @Test fun forwardAndBackwardFlickUseRealWidget() {
         show()

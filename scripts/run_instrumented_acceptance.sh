@@ -15,7 +15,11 @@ adb shell cmd overlay list > screenshots/cutout/overlay-list.txt
 adb shell dumpsys display > screenshots/cutout/display-before.txt
 
 result=0
-if [[ "${MADRE_FIXES_7014_ACCEPTANCE:-false}" == "true" ]]; then
+if [[ "${MADRE_FIXES_7015_ACCEPTANCE:-false}" == "true" ]]; then
+    ./gradlew :app:connectedDebugAndroidTest \
+        -Pandroid.testInstrumentationRunnerArguments.class=com.polinalinen.madre.Huawei7015AcceptanceTest \
+        --no-daemon --stacktrace --no-configuration-cache || result=$?
+elif [[ "${MADRE_FIXES_7014_ACCEPTANCE:-false}" == "true" ]]; then
     ./gradlew :app:connectedDebugAndroidTest \
         -Pandroid.testInstrumentationRunnerArguments.class=com.polinalinen.madre.FullscreenInstrumentedTest,com.polinalinen.madre.NavigationSmokeTest \
         --no-daemon --stacktrace --no-configuration-cache || result=$?
@@ -24,11 +28,15 @@ else
 fi
 # Preserve genuine failing-test evidence too; never turn a test failure into success.
 if ! adb pull /sdcard/googletest/test_outputfiles/screenshots screenshots/; then
-    if [[ "${MADRE_FIXES_7014_ACCEPTANCE:-false}" == "true" && "$result" == 0 ]]; then result=1; fi
+    if [[ ( "${MADRE_FIXES_7014_ACCEPTANCE:-false}" == "true" || "${MADRE_FIXES_7015_ACCEPTANCE:-false}" == "true" ) && "$result" == 0 ]]; then result=1; fi
 fi
 if [[ "${MADRE_FIXES_7014_ACCEPTANCE:-false}" == "true" ]]; then
     test -s screenshots/screenshots/fs-evidence/fs6-insets.txt || result=1
     test -s screenshots/screenshots/fs-evidence/fs6-after.png || result=1
 fi
 adb shell dumpsys window > screenshots/cutout/window-after.txt || true
+if [[ "${MADRE_FIXES_7015_ACCEPTANCE:-false}" == "true" ]]; then
+    test -s screenshots/screenshots/huawei15/cutout-shelf-night.png || result=1
+    test -s screenshots/screenshots/huawei15/shelf-night-insets.txt || result=1
+fi
 exit "$result"

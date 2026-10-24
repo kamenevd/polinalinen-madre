@@ -210,7 +210,7 @@ class SettingsIaUiTest {
         nodes.forEach { node ->
             val label = node.config.getOrNull(SemanticsActions.OnClick)?.label.orEmpty()
             val expected = when {
-                label in setOf("Спокойный режим", "Напоминания", "Не гасить экран", "Ход выпечки на экране блокировки") -> Role.Switch
+                label in setOf("Спокойный режим", "Напоминания", "Не гасить экран", "Ход выпечки на экране блокировки", "Тактильный отклик") -> Role.Switch
                 label.startsWith("Ритм кормления:") || label.startsWith("Как читать рецепт:") || label.startsWith("Тема:") -> Role.RadioButton
                 else -> Role.Button
             }

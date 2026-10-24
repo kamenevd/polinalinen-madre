@@ -33,7 +33,13 @@ class StyleAuditRegressionTest {
             val allowed=listOf(p.bg,p.bg2,p.card,p.ink,p.ink2,p.mut,p.line,p.acc,p.acc2,p.ribbon,p.sage,p.sage2,p.error,Color.Black,Color.White).map{it.value.toLong()}
             val getters=ColorScheme::class.java.methods.filter{it.name.startsWith("get")&&it.parameterCount==0&&it.returnType==java.lang.Long.TYPE}
             assertThat(getters.size).isAtLeast(35)
-            getters.forEach{g->assertWithMessage(g.name).that(g.invoke(scheme) as Long).isIn(allowed)}
+            getters.forEach{g->
+                val actual=g.invoke(scheme) as Long
+                // New owner15 night contract forbids elevation tint; no other role gains an exception.
+                if(p==NightPaper && g.name.startsWith("getSurfaceTint"))
+                    assertWithMessage(g.name).that(actual).isEqualTo(Color.Transparent.value.toLong())
+                else assertWithMessage(g.name).that(actual).isIn(allowed)
+            }
             assertThat(scheme.onSurfaceVariant).isEqualTo(p.mut)
             assertThat(scheme.outline).isEqualTo(p.line)
             assertThat(scheme.secondary).isEqualTo(p.acc)

@@ -97,10 +97,11 @@ class FullscreenInstrumentedTest {
         val before=page()
         assertTrue(InstrumentationRegistry.getInstrumentation().uiAutomation.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME))
         InstrumentationRegistry.getInstrumentation().waitForIdleSync()
-        val context=InstrumentationRegistry.getInstrumentation().targetContext
-        context.startActivity(Intent(context,RazvorotSceneActivity::class.java)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
-        rule.waitUntil(5_000){rule.activity.lifecycle.currentState==Lifecycle.State.RESUMED}
+        rule.waitUntil(5_000){rule.activity.lifecycle.currentState!=Lifecycle.State.RESUMED}
+        // ActivityScenario is the instrumentation-authorized foreground driver; an app-context
+        // startActivity after HOME is a background launch on API35, not a user return.
+        rule.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
+        rule.waitUntil(5_000){rule.activity.lifecycle.currentState==Lifecycle.State.RESUMED && rule.activity.hasWindowFocus()}
         rule.waitForIdle();hidden();assertEquals(before,page())
         rule.activityRule.scenario.recreate()
         rule.waitForIdle()
@@ -111,6 +112,7 @@ class FullscreenInstrumentedTest {
 
     @Test fun fs6RealTopEdgeSwipeShowsTransientBarsThenRehidesWithoutChangingPage() {
         scene("reader-chrome");secondPage();hideReaderChrome()
+        verifyRealCutout("fs6")
         val beforePage=page()
         val beforeBounds=rule.onNodeWithTag("paper-turn").fetchSemanticsNode().boundsInRoot
         val before=shot("fs6-before")

@@ -3,12 +3,14 @@
 # splits its `script` input into independent `sh -c` lines (no multiline if/trap scope).
 set -euo pipefail
 mkdir -p screenshots/cutout
-adb shell wm size 412x915
-adb shell wm density 160
+# Keep this emulator's physical profile/density. The separate JVM key PNGs remain
+# 412x915; forced logical sizes on the generic320x640 AVD did not expose a cutout.
 adb shell wm size
 adb shell wm density
 adb shell settings put secure immersive_mode_confirmations confirmed
 adb shell cmd overlay enable com.android.internal.display.cutout.emulation.tall
+adb shell cmd overlay set-priority com.android.internal.display.cutout.emulation.tall highest
+adb shell cmd overlay lookup android android:string/config_mainBuiltInDisplayCutout > screenshots/cutout/resolved-path.txt
 adb shell cmd overlay list > screenshots/cutout/overlay-list.txt
 adb shell dumpsys display > screenshots/cutout/display-before.txt
 

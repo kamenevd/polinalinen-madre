@@ -81,10 +81,13 @@ class NavigationSmokeTest {
         // A fresh QA install may show the optional offer. Decline it, never launch SDK/auth.
         rule.waitUntil(TIMEOUT_MS) {
             rule.onAllNodesWithText("ПРОДОЛЖИТЬ БЕЗ ВХОДА").fetchSemanticsNodes().isNotEmpty() ||
-                rule.onAllNodesWithTag(Home.LIST_TAG).fetchSemanticsNodes().isNotEmpty()
+                rule.onAllNodesWithTag("nav-0").fetchSemanticsNodes().isNotEmpty()
         }
         if(rule.onAllNodesWithText("ПРОДОЛЖИТЬ БЕЗ ВХОДА").fetchSemanticsNodes().isNotEmpty())
             rule.onNodeWithText("ПРОДОЛЖИТЬ БЕЗ ВХОДА").performClick()
+        // Startup legitimately restores the previous tab. Navigate without deleting its data/preferences.
+        rule.waitUntil(TIMEOUT_MS){rule.onAllNodesWithTag("nav-0").fetchSemanticsNodes().isNotEmpty()}
+        rule.onNodeWithTag("nav-0").performClick()
         rule.waitUntil(TIMEOUT_MS) {
             rule.onAllNodesWithTag(Home.LIST_TAG).fetchSemanticsNodes().isNotEmpty() &&
                 recipes.isNotEmpty() &&
@@ -151,6 +154,7 @@ class NavigationSmokeTest {
     }
 
     @Test fun actualStarterReadsRoomProfileAndOpensFeedingForm() {
+        awaitTableOfContents()
         // CI emulator QA database only; this is MainActivity, not a debug scene.
         val app=InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as MadreApplication
         val repository=app.sourdoughRepository

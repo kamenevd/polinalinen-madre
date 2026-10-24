@@ -68,5 +68,12 @@ class QaOwnerAcceptance {
         shot("qa-night-toc")
         // Diagnostics off by default/on relaunch; this explicit test never changes global OS settings.
         File(output,"acceptance.txt").writeText("Actual qa variant; FLAG_DEBUGGABLE=false; full unmodified UiDevice frames. Android request is not physical Huawei vibration or smoothness acceptance.\n")
+        // Gradle uninstalls the TEST APK immediately after the run, removing its external files.
+        // Export unchanged bytes with the CI shell BEFORE uninstall; never crop/re-render them.
+        device.executeShellCommand("mkdir -p /sdcard/Download/madre-qa-p0")
+        device.executeShellCommand("cp -R ${output.absolutePath}/. /sdcard/Download/madre-qa-p0/")
+        val exported=device.executeShellCommand("ls /sdcard/Download/madre-qa-p0/")
+        for(name in listOf("qa-haptic-diagnostics.png","qa-fps-settings.png","qa-night-settings.png","qa-night-toc.png"))
+            assertTrue("Raw frame must survive test APK uninstall: $name",exported.contains(name))
     }
 }

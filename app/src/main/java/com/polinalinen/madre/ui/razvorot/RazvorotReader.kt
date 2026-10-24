@@ -108,8 +108,21 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
                             val step=heading.take(2).toIntOrNull()!=null
                             val blockWidth=if(step)(width-with(density){54.dp.roundToPx()}).coerceAtLeast(1) else width
                             fun measured(n:Int):Int {
-                                val extra=with(density) {
-                                    (if(bi==0 && offset==0)128.dp else if(bi==r.ingredients.size && offset==0)40.dp else 0.dp).roundToPx()
+                                val extra=when {
+                                    bi==0 && offset==0 -> {
+                                        // Measure the actual new title/portion block, not the old guessed height:
+                                        // title + its 12dp gap + card's 12dp vertical insets + 12dp below.
+                                        val inside=(width-with(density){28.dp.roundToPx()}).coerceAtLeast(1)
+                                        val hint=measurer.measure("− / + внизу",PaperType.note,constraints=Constraints(maxWidth=inside))
+                                        val left=(inside-hint.size.width).coerceAtLeast(1)
+                                        val label=measurer.measure("НА СКОЛЬКО ПЕЧЁМ",PaperType.overline,constraints=Constraints(maxWidth=left))
+                                        val quantity=measurer.measure("×${BookCatalog.number(factor)}",PaperType.number,constraints=Constraints(maxWidth=left))
+                                        measurer.measure("Ингредиенты",PaperType.h2,constraints=Constraints(maxWidth=width)).size.height+
+                                            maxOf(label.size.height+quantity.size.height,hint.size.height)+with(density){48.dp.roundToPx()}
+                                    }
+                                    bi==r.ingredients.size && offset==0 -> measurer.measure("Как печём",PaperType.h2,
+                                        constraints=Constraints(maxWidth=width)).size.height+with(density){16.dp.roundToPx()}
+                                    else->0
                                 }
                                 if(bi<r.ingredients.size) {
                                     val headingHeight=measurer.measure(heading.uppercase(locale),PaperType.overline,constraints=Constraints(maxWidth=blockWidth)).size.height

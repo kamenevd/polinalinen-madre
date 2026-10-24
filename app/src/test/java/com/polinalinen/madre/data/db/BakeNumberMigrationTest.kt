@@ -28,7 +28,7 @@ class BakeNumberMigrationTest {
                     schema.getAsJsonArray("entities").forEach { entity ->
                         val e=entity.asJsonObject;val table=e.get("tableName").asString
                         db.execSQL(e.get("createSql").asString.replace("\${TABLE_NAME}",table))
-                        e.getAsJsonArray("indices").forEach{db.execSQL(it.asJsonObject.get("createSql").asString.replace("\${TABLE_NAME}",table))}
+                        (e.getAsJsonArray("indices")?:com.google.gson.JsonArray()).forEach{db.execSQL(it.asJsonObject.get("createSql").asString.replace("\${TABLE_NAME}",table))}
                     }
                     schema.getAsJsonArray("setupQueries").forEach{db.execSQL(it.asString)}
                     // Tied clocks must use sessionId, never SQLite insertion order.

@@ -18,6 +18,7 @@ import java.util.concurrent.TimeUnit
 class PlannedBakeReminderWorker(context: Context, params: WorkerParameters): Worker(context,params) {
     override fun doWork(): Result {
         val id=inputData.getString(KEY_PLAN_ID)?:return Result.success()
+        runBlocking{(applicationContext as MadreApplication).prepareBakeNumbers()}
         BookPreferences(applicationContext).use { prefs ->
             val plan=prefs.plans.firstOrNull{it.id==id}?:return Result.success()
             val recipe=runBlocking{(applicationContext as MadreApplication).recipeRepository.getRecipes()}.firstOrNull{it.id==plan.recipeId}

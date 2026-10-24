@@ -269,6 +269,7 @@ enum class PaperButtonVariant { PRIMARY, ACCENT, SECONDARY, TEXT }
     PaperTextButton(onClick, modifier, label = "Открыть Алису") {
         Icon(Icons.Outlined.LocalFireDepartment, contentDescription = null, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(8.dp))
-        Text(label, style = PaperType.ui)
+        Text("Алиса", style = PaperType.ui)
+        if(label!="Алиса")Text(label.removePrefix("Алиса"),style=PaperType.ui)
     }
 }

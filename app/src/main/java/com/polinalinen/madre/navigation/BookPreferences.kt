@@ -70,7 +70,8 @@ class BookPreferences(context: Context, namespace: String = "madre_prefs") : Aut
         val previous=readPlans()
         val next = (previous.filterNot { it.id == plan.id || it.id == replacingId } + plan).sortedBy { it.startAtMillis }
         val edit=prefs.edit().putString("planned_bakes", gson.toJson(next))
-        if(previous.any{it.id==plan.id && it!=plan})edit.remove("planned_action_nonce_${plan.id}")
+        // Number backfill changes presentation only; existing local reminder capabilities stay valid.
+        if(previous.any{it.id==plan.id && it.copy(number=plan.number)!=plan})edit.remove("planned_action_nonce_${plan.id}")
         if(replacingId!=null && replacingId!=plan.id)edit.remove("planned_action_nonce_$replacingId")
         if (!edit.commit()) return@synchronized false
         plans = next

@@ -60,6 +60,15 @@ class MadreApplication : Application() {
     /** One operation lane across every retained controller/Activity in this process. */
     internal val plannedBakeOperationGate=kotlinx.coroutines.sync.Mutex()
     val bakeNumbers by lazy { com.polinalinen.madre.navigation.BakeNumberStore(this) }
+    suspend fun prepareBakeNumbers() {
+        plannedBakeOperationGate.lock()
+        try {
+            val rows=activeBakeRepository.initializeLegacyKeys()
+            val pending=com.polinalinen.madre.utils.PrefsBakeSessionLedger(getSharedPreferences("madre_prefs",MODE_PRIVATE)).pendingSessionIds()
+                +bakeNumbers.finales().map{it.sessionId}
+            com.polinalinen.madre.navigation.BookPreferences(this).use{bakeNumbers.reconcile(rows,pending.toSet(),it)}
+        } finally {plannedBakeOperationGate.unlock()}
+    }
     val voiceIdentityStore: com.polinalinen.madre.voice.VoiceIdentityStore by lazy {
         com.polinalinen.madre.voice.VoiceIdentityStore(getSharedPreferences("madre_voice", MODE_PRIVATE), KeystoreTokenCipher())
     }

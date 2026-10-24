@@ -88,7 +88,7 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
                     scene in FixesNativeScenes->FixesNativeScene(scene,recipes,preferences,recentPhotos)
                     scene=="alice-yandex-consent" -> {
                         // Actual production page, synthetic selected bake/signed-in boundary; no account/network effects.
-                        val active=remember(recipe){BakingSession.start(7,recipe)}
+                        val active=remember(recipe){BakingSession.start(7,recipe).copy(bakeNumber=2)}
                         AlicePage(com.polinalinen.madre.voice.VoiceUiState(
                             com.polinalinen.madre.voice.VoiceStatus.WAITING_LINK, active.bakeKey),
                             listOf(active),{},{},{},{},{},yandexSignedIn=true,verifiedName="Пекарь")
@@ -106,7 +106,7 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
                     scene=="oven" -> Column {
                         val now=BakingClock.elapsed()
                         val active=remember(recipe){BakingSession(7,recipe,9,now-(recipe.timeline[9].durationMinutes*60L-1661L)*1000L,
-                            BakingClock.wallClock(),scaleFactor=2.0)}
+                            BakingClock.wallClock(),scaleFactor=2.0,bakeNumber=2)}
                         Box(Modifier.weight(1f).safeDrawingPadding()){BookOvenContent(recipes,listOf(active),emptyList(),{},{},{},{},{})}
                         SpineBar(1){}
                     }
@@ -134,7 +134,7 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
                     scene=="photo-viewer" -> PaperPhotoViewer({}) { BookText("Фото · локальная тестовая поверхность", 18) }
                     scene.startsWith("alice-sheet-") -> {
                         val mode = runCatching { AliceSheetMode.valueOf(scene.removePrefix("alice-sheet-").uppercase()) }.getOrDefault(AliceSheetMode.UNLINKED)
-                        BakingPaper(BakingSession(7,recipe,9,0L,0L,scaleFactor=2.0),1661L,{},{},{},{},onOpenAlice={})
+                        BakingPaper(BakingSession(7,recipe,9,0L,0L,scaleFactor=2.0,bakeNumber=2),1661L,{},{},{},{},onOpenAlice={})
                             PaperSheet({}) { AliceSheetContent(mode, com.polinalinen.madre.voice.VoiceUiState(
                                 if (mode == AliceSheetMode.OFFLINE) com.polinalinen.madre.voice.VoiceStatus.OFFLINE else com.polinalinen.madre.voice.VoiceStatus.UNLINKED),
                                 recipeName = recipe.name, stepText = recipe.timeline[0].description,
@@ -167,22 +167,22 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
                         SpineBar(0){}
                     }
                     scene=="spine" -> Box(Modifier.fillMaxSize(),contentAlignment=Alignment.BottomCenter){SpineBar(2){}}
-                    scene=="bake" -> BakingPaper(BakingSession(7,recipe,9,0L,0L,scaleFactor=2.0),1661L,{},{},{},{},onOpenAlice={})
+                    scene=="bake" -> BakingPaper(BakingSession(7,recipe,9,0L,0L,scaleFactor=2.0,bakeNumber=2),1661L,{},{},{},{},onOpenAlice={})
                     scene=="start-later" -> {
                         // Same injected clock as the oven header; no Worker and no pre-existing arbitrary ready time.
                         BookOvenContent(recipes,emptyList(),emptyList(),{},{},{},{},{})
-                        BookStartSheet(recipe,2,{},{},onPlan={_,_->},initialMode=1,onChapter={})
+                        BookStartSheet(recipe,2,{},{},onPlan={_,_->},initialMode=1,onChapter={},bakeNumber=1)
                     }
                     scene=="bake-more" -> {
-                        val bake=remember(recipe){BakingSession(7,recipe,9,0L,0L,scaleFactor=2.0)}
+                        val bake=remember(recipe){BakingSession(7,recipe,9,0L,0L,scaleFactor=2.0,bakeNumber=2)}
                         BakingPaper(bake,1661L,{},{},{},{},onOpenAlice={})
                         BookBakeMoreSheet(bake,true,{},{},{},{})
                     }
-                    scene=="bake-start" || scene=="bake-end" -> BakingPaper(BakingSession(7,recipe,9,0L,0L,scaleFactor=2.0),if(scene.endsWith("start"))recipe.timeline[9].durationMinutes*60L else 0L,{},{},{},{},onOpenAlice={})
-                    scene.startsWith("fulltimer-") -> FullTimer(BakingSession(7,recipe,9,0L,0L,scaleFactor=2.0),if(scene.endsWith("start"))recipe.timeline[9].durationMinutes*60L else 0L){}
+                    scene=="bake-start" || scene=="bake-end" -> BakingPaper(BakingSession(7,recipe,9,0L,0L,scaleFactor=2.0,bakeNumber=2),if(scene.endsWith("start"))recipe.timeline[9].durationMinutes*60L else 0L,{},{},{},{},onOpenAlice={})
+                    scene.startsWith("fulltimer-") -> FullTimer(BakingSession(7,recipe,9,0L,0L,scaleFactor=2.0,bakeNumber=2),if(scene.endsWith("start"))recipe.timeline[9].durationMinutes*60L else 0L){}
                     scene.startsWith("timer-weight-") -> Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) {TimerNumber("27:41",if(scene.endsWith("start"))0f else 1f,72.sp,(-3).sp,LocalPaper.current.ink)}
                     scene.startsWith("alice-") -> {
-                        BakingPaper(BakingSession(7,recipe,9,0L,0L,scaleFactor=2.0),1661L,{},{},{},{},onOpenAlice={})
+                        BakingPaper(BakingSession(7,recipe,9,0L,0L,scaleFactor=2.0,bakeNumber=2),1661L,{},{},{},{},onOpenAlice={})
                         DebugAliceSheet(scene,recipe)
                     }
                     scene.startsWith("starter-") -> {

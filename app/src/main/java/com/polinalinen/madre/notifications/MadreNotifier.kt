@@ -59,7 +59,8 @@ class MadreNotifier(private val context: Context) {
      * Разные шаги не затирают друг друга, повтор того же ключа заменяет своё же
      * уведомление, и ничего считать для этого не нужно.
      */
-    fun postBakingNotification(sessionId: Long, key: String, title: String, text: String) {
+    fun postBakingNotification(sessionId: Long, key: String, title: String, text: String,
+        bakeNumber:Int=(context.applicationContext as? com.polinalinen.madre.MadreApplication)?.bakeNumbers?.number(sessionId)?:0) {
         // The existing durable notification ledger admits each step deadline once.
         // Do not double a user-enabled notification-channel vibration.
         ensureChannel(CHANNEL_BAKING,"Выпечка")
@@ -71,12 +72,13 @@ class MadreNotifier(private val context: Context) {
             channelName = "Выпечка",
             tag = key,
             id = ID_KEYED,
-            title = title,
+            title = if(bakeNumber in 1..9 && !title.startsWith("№"))"№$bakeNumber $title" else title,
             text = text,
             // Cycle 20: тап открывает ИМЕННО эту выпечку. [sessionId] здесь
             // обязателен, а не «по возможности»: уведомление про шаг всегда
             // знает, чей это шаг, и молча остаться без дороги не должно.
             contentIntent = BakeOpenIntent.pendingIntent(context, sessionId),
+            numbers=listOf(bakeNumber),
         )
     }
 
@@ -95,7 +97,7 @@ class MadreNotifier(private val context: Context) {
             PlannedBakeActions.pendingIntent(context,plan,PlannedBakeAction.OPEN),
             actions=listOf(
                 NotificationCompat.Action.Builder(0,"Начать",PlannedBakeActions.pendingIntent(context,plan,PlannedBakeAction.START,nonce)).build(),
-                NotificationCompat.Action.Builder(0,"Через 30 мин",PlannedBakeActions.pendingIntent(context,plan,PlannedBakeAction.SNOOZE,nonce)).build()))
+                NotificationCompat.Action.Builder(0,"Через 30 мин",PlannedBakeActions.pendingIntent(context,plan,PlannedBakeAction.SNOOZE,nonce)).build()),plannedNumber=plan.number)
     }
     fun cancelPlannedBake(id: String) { NotificationManagerCompat.from(context).cancel("planned:$id",4000) }
 
@@ -134,6 +136,7 @@ class MadreNotifier(private val context: Context) {
         contentIntent: android.app.PendingIntent,
         action: NotificationCompat.Action? = null,
         actions: List<NotificationCompat.Action> = emptyList(),
+        numbers: List<Int> = emptyList(),plannedNumber:Int?=null,
     ) {
         if (!canPost()) return
         ensureChannel(channelId, channelName)
@@ -148,6 +151,7 @@ class MadreNotifier(private val context: Context) {
             .setAutoCancel(true)
             .setContentIntent(contentIntent)
             .apply { if (action != null) addAction(action);actions.forEach{addAction(it)} }
+            .apply { if(channelId==CHANNEL_BAKING)bakingLockScreenPrivacy(context,channelId,false,numbers,plannedNumber) }
             .build()
         notifySafely(id, notification, tag)
     }

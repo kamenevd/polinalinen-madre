@@ -65,7 +65,8 @@ class BakingRestoreFinishFromRecordTest {
         assertThat(vm.session(7L)).isNull()
         vm.stageBakePhoto(7L, "bake_photos/restored.jpg")
         var exits = 0
-        vm.finish(7L, ShelfShareDecision.PUT_WITH_PHOTO) { exits += 1 }
+        // Number retirement is serialized with real Room restoration; await the actual durable job.
+        vm.finish(7L, ShelfShareDecision.PUT_WITH_PHOTO) { exits += 1 }?.join()
         advanceUntilIdle()
 
         assertThat(sync.calls).hasSize(1)

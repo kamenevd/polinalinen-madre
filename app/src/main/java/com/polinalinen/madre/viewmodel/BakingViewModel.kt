@@ -84,7 +84,7 @@ class BakingViewModel @JvmOverloads constructor(
     private val plannedBakesOwner=lazy {
         com.polinalinen.madre.navigation.PlannedBakeOwner(madreApp,viewModelScope,madreApp.plannedBakeOperationGate,
             awaitReady={sessionIdsReady.await()},sessionForPlan={sessionForPlan(it)?.id},startBake={plan,portions->
-                _recipes.value.firstOrNull{it.id==plan.recipeId}?.let{startPlannedBake(it,portions.toDouble(),plan.id)}
+                _recipes.value.firstOrNull{it.id==plan.recipeId}?.let{startPlannedBakeUnderGate(it,portions.toDouble(),plan.id)}
             })
     }
     val plannedBakes get()=plannedBakesOwner.value
@@ -315,7 +315,11 @@ class BakingViewModel @JvmOverloads constructor(
         }
     }
     /** Durable primitive. All production card/sheet/notification entries use plannedBakes transactions. */
-    internal suspend fun startPlannedBake(recipe: Recipe, scaleFactor: Double, planId: String): Long? = viewModelScope.async {
+    internal suspend fun startPlannedBake(recipe: Recipe, scaleFactor: Double, planId: String): Long? {
+        sessionIdsReady.await()
+        return madreApp.plannedBakeOperationGate.withLock { startPlannedBakeUnderGate(recipe,scaleFactor,planId) }
+    }
+    private suspend fun startPlannedBakeUnderGate(recipe: Recipe, scaleFactor: Double, planId: String): Long? = viewModelScope.async {
         startBakingInternal(recipe,scaleFactor,true,plannedBakeKey(planId),planId)
     }.await()
     fun sessionForPlan(planId: String): BakingSession? = _sessions.value.firstOrNull{it.bakeKey==plannedBakeKey(planId)}
@@ -329,6 +333,14 @@ class BakingViewModel @JvmOverloads constructor(
                 require(scaleFactor in 1.0..5.0 && scaleFactor == scaleFactor.toInt().toDouble())
                 check(controllerLive)
                 val durable=activeBakeRepository.all()
+                if(dedupeKey!=null)durable.firstOrNull{it.bakeKey==dedupeKey}?.let { row ->
+                    val restored=BakingSession.restoreFromActive(row.sessionId,recipe,row.stepIndex,row.startedAtWallClock,row.pausedAtWallClock,
+                        BakingClock.elapsed(),BakingClock.wallClock(),row.scaleFactor,requireNotNull(row.bakeKey),row.revision,row.recipeRevision,row.bakeNumber)
+                    _sessions.update{list->list.filterNot{it.id==row.sessionId}+restored}
+                    numberStore.reserve(row.sessionId,row.bakeNumber)
+                    restartTimer(row.sessionId);publishProgress()
+                    return@withLock row.sessionId
+                }
                 val number=com.polinalinen.madre.navigation.BookPreferences(madreApp).use { book ->
                     planId?.let{book.currentPlan(it)?.number?.takeIf{n->n in 1..9}}
                         ?: numberStore.next(durable,book.snapshotPlans())
@@ -438,14 +450,14 @@ class BakingViewModel @JvmOverloads constructor(
     /** Await real Room/ledger restoration before interpreting a notification as a missing bake. */
     suspend fun prepareBakeDestination(sessionId: Long): Boolean {
         sessionIdsReady.await()
-        return transitionGate.withLock {
+        return madreApp.plannedBakeOperationGate.withLock { transitionGate.withLock {
             _pendingAbandons.value[sessionId]?.let { pending ->
                 val current=session(sessionId)
                 if(pending.valid(current,BakingClock.elapsed()))forgetAbandon(sessionId)
                 else if(pending.matches(current))cancelSessionNow(requireNotNull(current))
             }
             session(sessionId) != null || ensureCompletion(sessionId) != null
-        }
+        } }
     }
 
     fun adjustTime(id: Long, minutes: Int) = launchTransition {
@@ -467,11 +479,11 @@ class BakingViewModel @JvmOverloads constructor(
     private suspend fun persistTransition(old: BakingSession, next: BakingSession?, resetNotifications: Boolean = false) {
         if(next?.isCompleted==true)numberStore.rememberFinale(com.polinalinen.madre.navigation.BakeNumberStore.Finale(
             old.id,old.recipe.id,old.recipe.name,requireNotNull(old.trustedPortions),requireNotNull(next.completedAt),old.bakeNumber))
-        if(next==null)numberStore.release(old.id)
         try { activeBakeRepository.commit(old.id, if (old.isCompleted) null else old.activeSnapshot(),
             next?.takeUnless { it.isCompleted }?.activeSnapshot(),
             preserveUnknownStep = !old.restoredStepValid, valid = { controllerLive }) }
-        catch(e:Exception) { if(next==null)numberStore.reserve(old.id,old.bakeNumber);if(next?.isCompleted==true)numberStore.forgetFinale(old.id);throw e }
+        catch(e:Exception) { if(next?.isCompleted==true)numberStore.forgetFinale(old.id);throw e }
+        if(next==null)numberStore.release(old.id)
         if(resetNotifications)notificationLedger.forgetSession(old.id).forEach { notifier.cancelByKey(it) }
         publishTransition(old, next)
         _mutationError.value = null

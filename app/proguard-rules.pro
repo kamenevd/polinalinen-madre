@@ -18,6 +18,9 @@
 -keep class com.polinalinen.madre.model.** { *; }
 -keep class com.polinalinen.madre.data.remote.** { *; }
 -keep class com.polinalinen.madre.account.** { *; }
+# Durable local plan/finale JSON must retain its field names across upgrades too.
+-keep class com.polinalinen.madre.navigation.PlannedBake { *; }
+-keep class com.polinalinen.madre.navigation.BakeNumberStore$Finale { *; }
 -keepclassmembers,allowobfuscation class * {
   @com.google.gson.annotations.SerializedName <fields>;
 }

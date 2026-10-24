@@ -24,12 +24,12 @@ internal val FixesNativeScenes=setOf("settings-account-out","settings-account-in
     "yandex-offer-busy","yandex-offer-error","yandex-offer-offline","yandex-offer-error-network","yandex-offer-error-yandex","yandex-offer-error-server","alice-connect-0","alice-connect-1",
     "alice-connect-2","alice-linked","station-timer")
 
-internal fun syntheticNativeBake(recipe:Recipe,id:Long=7):BakingSession {
+internal fun syntheticNativeBake(recipe:Recipe,id:Long=7,number:Int=2):BakingSession {
     val step=9.coerceAtMost(recipe.timeline.lastIndex)
     val remaining=1661L.coerceAtMost(recipe.timeline[step].durationMinutes*60L)
     val elapsed=BakingClock.elapsed()
     return BakingSession(id,recipe,step,elapsed-(recipe.timeline[step].durationMinutes*60L-remaining)*1000L,
-        BakingClock.wallClock(),scaleFactor=2.0)
+        BakingClock.wallClock(),scaleFactor=2.0,bakeNumber=number)
 }
 
 /** Explicit SignedOut QA rendering only: real branded control, pure callback, no auth owner/SDK. */
@@ -62,16 +62,16 @@ internal fun syntheticNativeBake(recipe:Recipe,id:Long=7):BakingSession {
         scene=="oven-empty" || scene=="oven-planned" || scene=="oven-overdue"->Column {
             val clock=LocalBookClock.current
             val plans=if(scene=="oven-empty")emptyList() else listOf(PlannedBake(recipe.id,2,
-                clock.millis()+if(scene=="oven-overdue")-3_600_000L else 3_600_000L))
+                clock.millis()+if(scene=="oven-overdue")-3_600_000L else 3_600_000L,number=3))
             Box(Modifier.weight(1f).safeDrawingPadding()){BookOvenContent(recipes,emptyList(),plans,{},{},{},{},{})}
             SpineBar(1){}
         }
         scene=="sheet-start-now"->{
             BookOvenContent(recipes,emptyList(),emptyList(),{},{},{},{},{})
-            BookStartSheet(recipe,2,{},{},onPlan={_,_->},initialMode=0,onChapter={})
+            BookStartSheet(recipe,2,{},{},onPlan={_,_->},initialMode=0,onChapter={},bakeNumber=1)
         }
         scene=="bake-two-chips"->{
-            val second=remember(recipes){syntheticNativeBake(recipes[1],8)}
+            val second=remember(recipes){syntheticNativeBake(recipes[1],8,number=1)}
             BakingPaper(bake,1661L,{},{},{},{},onOpenAlice={},sessions=listOf(bake,second),onSwitchSession={})
         }
         scene=="bake-fulltimer"->FullTimer(bake,1661L){}
@@ -110,7 +110,7 @@ internal fun syntheticNativeBake(recipe:Recipe,id:Long=7):BakingSession {
     val selected=if(scene=="bake-finale-photo")photos.firstOrNull()?.path else null
     val selection=rememberFinaleShareSelection(scene,scene!="bake-finale-noaccount",selected!=null)
     BakeFinalePage(BakeFinalePageState(recipe.name,1,2,RecipeScale.totalMinutes(recipe,2),recipe.timeline.size,
-        1792731600000L,recipes.map{it.id==recipe.id},1),{},{},
+        1792731600000L,recipes.map{it.id==recipe.id},1,bakeNumber=2),{},{},
         photo={BakeFinalePhoto(selected,photos,PhotoAttachmentActions({},{},{},{}),true,{})},
         extra={if(scene!="bake-finale-noaccount") {
             SmallLabel("НА ПОЛКУ «ТЕСТОВАЯ ПОЛКА»")

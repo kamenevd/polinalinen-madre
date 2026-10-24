@@ -100,6 +100,34 @@ class BakeNumberLifecycleTest {
         withTimeout(10_000){while(vm.session(id)!=null)delay(1)}
         assertEquals(0,app.bakeNumbers.number(id))
     }
+    @Test fun parallelControllersCannotAllocateTheSameNumberOrDuplicateAPlan()=runBlocking {
+        val first=controller();val second=controller()
+        first.previewBakeNumber();second.previewBakeNumber()
+        val recipe=app.recipeRepository.getRecipes().first()
+        val ids=coroutineScope{listOf(async{first.startBaking(recipe,2.0)!!},async{second.startBaking(recipe,2.0)!!}).awaitAll()}
+        assertEquals(2,ids.toSet().size)
+        assertEquals(setOf(1,2),app.activeBakeRepository.all().map{it.bakeNumber}.toSet())
+        val key="same-plan"
+        val plannedIds=coroutineScope{listOf(async{first.startPlannedBake(recipe,2.0,key)},async{second.startPlannedBake(recipe,2.0,key)}).awaitAll()}
+        assertEquals(plannedIds[0],plannedIds[1]);assertNotNull(plannedIds[0])
+        assertEquals(3,app.activeBakeRepository.all().size)
+        assertEquals(setOf(1,2,3),app.activeBakeRepository.all().map{it.bakeNumber}.toSet())
+    }
+    @Test fun staleControllerCannotReleaseOrQuarantineANumberOnFailedRoomCompare()=runBlocking {
+        val first=controller();val recipe=app.recipeRepository.getRecipes().first()
+        val id=first.startBaking(recipe,2.0)!!
+        val stale=controller();stale.previewBakeNumber()
+        first.togglePause(id).join()
+        stale.cancelSession(id).join()
+        assertEquals(1,app.bakeNumbers.number(id))
+        assertEquals(Long.MIN_VALUE,app.bakeNumbers.freed().getValue(1))
+        assertEquals(1,app.activeBakeRepository.all().size)
+    }
+    @Test fun workerPreparationBackfillsPlansWithoutOpeningAnyActivity()=runBlocking {
+        BookPreferences(app).use{it.putPlan(PlannedBake("ciabatta",2,clock.millis()+60_000L))}
+        app.prepareBakeNumbers()
+        assertEquals(1,BookPreferences(app).use{it.snapshotPlans().single().number})
+    }
     @Test fun cancelPlanReleasesItsNumberAndRestoredLegacyPlansFollowActiveNumbers()=runBlocking {
         val recipe=app.recipeRepository.getRecipes().first()
         val first=controller();first.startBaking(recipe,2.0)

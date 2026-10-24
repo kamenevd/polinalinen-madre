@@ -7,13 +7,13 @@ import com.polinalinen.madre.R
 
 /** A hidden lock-screen progress notification exposes no recipe, step, remaining time or actions. */
 internal fun NotificationCompat.Builder.bakingLockScreenPrivacy(
-    context: Context, channel: String, showProgress: Boolean, numbers:List<Int> = emptyList(),
+    context: Context, channel: String, showProgress: Boolean, numbers:List<Int> = emptyList(),plannedNumber:Int?=null,
 ): NotificationCompat.Builder {
     setVisibility(if (showProgress) NotificationCompat.VISIBILITY_PUBLIC else NotificationCompat.VISIBILITY_PRIVATE)
     if (!showProgress) setPublicVersion(NotificationCompat.Builder(context, channel)
         .setSmallIcon(R.drawable.ic_notification_bread)
         .setContentTitle("Мадре")
-        .setContentText(publicBakeNumbers(numbers))
+        .setContentText(if(plannedNumber!=null && plannedNumber in 1..9)"Запланированная выпечка №$plannedNumber" else publicBakeNumbers(numbers))
         .setVisibility(Notification.VISIBILITY_PUBLIC)
         .build())
     return this

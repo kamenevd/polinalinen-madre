@@ -111,6 +111,7 @@ class BakeStepEndWorker(
             key = BakingNotificationPlanner.stepDoneKey(sessionId, stepIndex),
             title = (if(number in 1..9)"№$number " else "")+"«$recipeName» — время вышло",
             text = "$stepTitle: шаг закончен, можно продолжать.",
+            bakeNumber = number,
         )
         return Result.success()
     }

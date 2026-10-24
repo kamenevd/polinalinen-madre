@@ -3,6 +3,7 @@ package com.polinalinen.madre.ui.photo
 import android.graphics.Bitmap
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.*
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -50,7 +51,10 @@ class PhotoAttachmentRecentUiTest {
         assertEquals(1,staged.size)
         assertNotEquals(original.absolutePath,staged.single())
         assertArrayEquals(before,File(staged.single()).readBytes())
-        rule.onNodeWithText("← Отмена").performClick()
+        // Invoke the real exposed action, not a touch injected into a newly-created
+        // Robolectric DialogWindow before its native input/focus handoff has settled.
+        rule.onNodeWithText("← Отмена").assertIsDisplayed().assertIsEnabled()
+            .performSemanticsAction(SemanticsActions.OnClick){assertTrue(it())}
         rule.waitUntil(10_000){
             rule.onAllNodesWithText("Рамка").fetchSemanticsNodes().isEmpty() && cancelled==1 && staging()==stagedBefore
         }

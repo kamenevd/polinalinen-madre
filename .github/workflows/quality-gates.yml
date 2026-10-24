@@ -31,6 +31,10 @@ on:
         description: Compare immutable14 functional baseline with current15 on the same CI AVD and generate real ART profile
         type: boolean
         default: false
+      bake_numbers_native:
+        description: Reshoot full native number-stage acceptance without repeating performance measurement
+        type: boolean
+        default: false
   schedule:
     # Takes effect only after an explicitly approved merge into default branch.
     - cron: "30 1 * * *"
@@ -39,7 +43,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: quality-${{ github.workflow }}-${{ github.ref }}
+  group: ${{ inputs.bake_numbers_native && 'native-only-' || '' }}quality-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -96,7 +100,7 @@ jobs:
         id: verify_qa_account_gate
         run: python3 scripts/verify_apk_account_gate.py app/build/outputs/apk/debug/app-debug.apk > app/build/reports/apk-account-gate.json
       - name: Extended visual verification (manual, nightly and RC)
-        if: (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && !inputs.fixes_7013_acceptance && !inputs.fixes_7014_acceptance && !inputs.fixes_7014_instrumented && !inputs.fixes_7015_huawei
+        if: (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && !inputs.fixes_7013_acceptance && !inputs.fixes_7014_acceptance && !inputs.fixes_7014_instrumented && !inputs.fixes_7015_huawei && !inputs.bake_numbers_native
         run: ./gradlew testDebugUnitTest verifyRoborazziDebug -Pmadre.extendedVerification=true --no-daemon --stacktrace --no-configuration-cache
       - name: FIXES frozen-head native acceptance (manual only)
         if: github.event_name == 'workflow_dispatch' && (inputs.fixes_7013_acceptance || inputs.fixes_7014_acceptance)
@@ -177,7 +181,7 @@ jobs:
     timeout-minutes: 35
     env:
       MADRE_FIXES_7014_ACCEPTANCE: ${{ (inputs.fixes_7014_acceptance || inputs.fixes_7014_instrumented) && 'true' || 'false' }}
-      MADRE_FIXES_7015_ACCEPTANCE: ${{ inputs.fixes_7015_huawei && 'true' || 'false' }}
+      MADRE_FIXES_7015_ACCEPTANCE: ${{ (inputs.fixes_7015_huawei || inputs.bake_numbers_native) && 'true' || 'false' }}
       QA_KEYSTORE_PASSWORD: ${{ secrets.MADRE_QA_KEYSTORE_PASSWORD }}
       QA_KEY_ALIAS: ${{ secrets.MADRE_QA_KEY_ALIAS }}
       QA_KEY_PASSWORD: ${{ secrets.MADRE_QA_KEY_PASSWORD }}

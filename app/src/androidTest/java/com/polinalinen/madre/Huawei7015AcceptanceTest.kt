@@ -22,6 +22,8 @@ class Huawei7015AcceptanceTest {
     private fun scene(name:String,night:Boolean=false) {
         rule.runOnIdle{rule.activity.scene=name;rule.activity.atmosphere=if(night)Atmosphere.NIGHT else Atmosphere.DAWN}
         rule.waitForIdle()
+        rule.onNodeWithTag("scene-$name").assertExists()
+        if(name=="yandex-offer")rule.onNodeWithText("НЕОБЯЗАТЕЛЬНО · МОЖНО ПОЗЖЕ").assertIsDisplayed()
     }
     private fun evidence(name:String)=TestStorage().openOutputFile("screenshots/huawei15/$name")
     private fun shot(name:String) {
@@ -38,14 +40,21 @@ class Huawei7015AcceptanceTest {
         rule.waitForIdle()
         rule.waitUntil(10_000){automation.rootInActiveWindow?.packageName?.toString()==rule.activity.packageName}
         assertEquals(rule.activity.packageName,automation.rootInActiveWindow?.packageName?.toString())
-        // Wait for a real rendered vsync and compositor frame, not merely a changed scene variable.
+        // Choreographer callbacks run BEFORE drawing and can capture the previous scene.
+        // Wait for accessibility to settle, then an actual RenderThread frame COMMIT.
+        automation.waitForIdle(500,10_000)
         val frame=java.util.concurrent.CountDownLatch(1)
-        rule.activity.runOnUiThread{android.view.Choreographer.getInstance().postFrameCallback{frame.countDown()}}
-        assertTrue(frame.await(5,java.util.concurrent.TimeUnit.SECONDS))
+        rule.activity.runOnUiThread{
+            val view=rule.activity.window.decorView
+            assertTrue("Hardware-backed frame commit required",view.isHardwareAccelerated)
+            view.viewTreeObserver.registerFrameCommitCallback{frame.countDown()}
+            view.requestLayout();view.postInvalidateOnAnimation()
+        }
+        assertTrue("Actual frame was not committed",frame.await(10,java.util.concurrent.TimeUnit.SECONDS))
         InstrumentationRegistry.getInstrumentation().waitForIdleSync()
-        Thread.sleep(250)
+        automation.waitForIdle(500,10_000)
         assertEquals(rule.activity.packageName,automation.rootInActiveWindow?.packageName?.toString())
-        evidence("$name-window.txt").bufferedWriter().use{it.write("activePackage=${automation.rootInActiveWindow?.packageName}\nscene=${rule.activity.scene}\nFull unmodified UiAutomation frame; app foreground verified after vsync.\n")}
+        evidence("$name-window.txt").bufferedWriter().use{it.write("activePackage=${automation.rootInActiveWindow?.packageName}\nscene=${rule.activity.scene}\nFull unmodified UiAutomation frame; actual RenderThread commit and accessibility idle awaited.\n")}
         val bitmap=requireNotNull(automation.takeScreenshot())
         evidence("$name.png").use{assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG,100,it))};bitmap.recycle()
     }
@@ -101,7 +110,9 @@ class Huawei7015AcceptanceTest {
         fun lastVisible()=runCatching{rule.onNodeWithText(com.polinalinen.madre.BuildConfig.VERSION_NAME).assertIsDisplayed()}.isSuccess
         var index=1
         while(!lastVisible() && index<12) {
+            val before=list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
             list.performSemanticsAction(SemanticsActions.ScrollBy){it(0f,rule.activity.resources.displayMetrics.heightPixels*.7f)}
+            rule.waitUntil(10_000){list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()>before}
             rule.waitForIdle()
             index++;shot("settings-full-${index.toString().padStart(2,'0')}")
         }

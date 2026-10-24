@@ -22,6 +22,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -35,8 +38,18 @@ import kotlin.random.Random
     val atmosphere = LocalAtmosphere.current
     return drawWithCache {
         val random = Random(71)
-        val grains = List((size.width * size.height / 90f).toInt().coerceAtMost(12000)) {
-            Offset(random.nextFloat() * size.width, random.nextFloat() * size.height)
+        val count=(size.width * size.height / 90f).toInt().coerceAtMost(12000)
+        val grains=FloatArray(count*2)
+        repeat(count){index->
+            grains[index*2]=random.nextFloat()*size.width
+            grains[index*2+1]=random.nextFloat()*size.height
+        }
+        // Same deterministic circular grains, one native batch instead of 12,000 JNI draws.
+        // FloatArray/Paint live in the draw cache: no per-frame point-array allocation.
+        val grainPaint=android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            color=p.ink.copy(alpha=.03f).toArgb()
+            strokeWidth=2*.45.dp.toPx()
+            strokeCap=android.graphics.Paint.Cap.ROUND
         }
         val glow = when (atmosphere) {
             Atmosphere.NIGHT -> p.acc.copy(alpha = .035f)
@@ -48,7 +61,7 @@ import kotlin.random.Random
         onDrawBehind {
             drawRect(p.bg)
             drawRect(brush)
-            grains.forEach { drawCircle(p.ink.copy(alpha = .03f), .45.dp.toPx(), it) }
+            drawIntoCanvas{it.nativeCanvas.drawPoints(grains,grainPaint)}
         }
     }
 }

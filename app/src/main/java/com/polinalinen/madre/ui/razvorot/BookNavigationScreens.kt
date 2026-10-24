@@ -48,7 +48,7 @@ import androidx.compose.ui.Alignment
             SmallLabel("${LocalAtmosphere.current.label} · КНИГА СЕМЬИ", Modifier.weight(1f).padding(top = 18.dp))
             PaperTextButton(onAa,label="Как читать") { BookText("Aa",21) }
             PaperIconButton(onSettings, label = profile?.let{"Аккаунт Яндекса, ${it.displayName.ifBlank{it.login}}"} ?: "Настройки") {
-                if(profile!=null)YandexAccountPortrait(profile,30.dp) else Icon(Icons.Outlined.Settings, null)
+                if(profile!=null)YandexAccountPortrait(profile,30.dp) else Icon(Icons.Outlined.Settings, "Настройки")
             }
         }
 

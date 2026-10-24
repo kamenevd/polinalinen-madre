@@ -35,8 +35,15 @@ source_overlay=head[head.index('        getByName("benchmark") {'):head.index(' 
 text=text.replace('    sourceSets {','    sourceSets {\n'+source_overlay,1)
 text+='\ndependencies { implementation("androidx.profileinstaller:profileinstaller:1.4.1") }\n'
 p.write_text(text)
-# Only the debug fixture gains a deterministic scroll route. Production14 functions stay exact.
+# Identical measurement aliases/root surface only. Immutable production functions stay exact.
 p=target/'app/src/debug/java/com/polinalinen/madre/ui/razvorot/RazvorotDebugScenes.kt';text=p.read_text()
+root_needle='Modifier.fillMaxSize().background(LocalPaper.current.bg).testTag("scene-$scene")'
+assert text.count(root_needle)==1
+text=text.replace(root_needle,'Modifier.fillMaxSize().then(if(scene=="toc-benchmark" || scene=="oven-benchmark")Modifier.paperBackground() else Modifier.background(LocalPaper.current.bg)).testTag("scene-$scene")',1)
+assert text.count('scene=="toc" || scene=="catalog"')==1
+assert text.count('scene=="oven" ->')==1
+text=text.replace('scene=="toc" || scene=="catalog"','scene=="toc" || scene=="catalog" || scene=="toc-benchmark"',1)
+text=text.replace('scene=="oven" ->','scene=="oven" || scene=="oven-benchmark" ->',1)
 needle='    val debug=remember{PaperDebugState()}'
 assert text.count(needle)==1
 if 'if(scene=="chapter-benchmark-scroll")chooseMode(ReadingMode.SCROLL)' not in text:

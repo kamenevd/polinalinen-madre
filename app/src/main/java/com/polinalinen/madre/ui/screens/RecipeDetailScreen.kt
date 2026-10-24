@@ -348,7 +348,8 @@ fun RecipeChapterContent(recipe: Recipe, scaleFactor: Double, textSize: Float = 
     var viewportTop by remember { mutableFloatStateOf(0f) }
     var viewportWidth by remember { mutableIntStateOf(0) }
     val anchors = remember(recipe.id, scaleFactor, textSize, fontScale, viewportWidth) { ChapterScrollAnchors() }
-    val requested = navigation?.let { (it.pageAnchors + it.anchor).distinct() }.orEmpty()
+    val requested = remember(navigation?.pageAnchors,navigation?.anchor) { navigation?.let { (it.pageAnchors + it.anchor).distinct() }.orEmpty() }
+    val scaledIngredients=remember(recipe,scaleFactor){recipe.ingredients.mapValues{(_,items)->items.map{RecipeScaler.scaledDisplayText(it,scaleFactor)}}}
     val currentNavigation by rememberUpdatedState(navigation)
 
     // The effect key and readiness guard must use the SAME composition snapshot.
@@ -403,11 +404,12 @@ fun RecipeChapterContent(recipe: Recipe, scaleFactor: Double, textSize: Float = 
         recipe.ingredients.entries.forEachIndexed { bi, (section, ingredients) ->
             SmallLabel(ingredientSectionTitle(section), Modifier.padding(horizontal = 22.dp, vertical = 14.dp)
                 .then(block("${recipe.id}:$bi:0")))
-            val lines=ingredients.map { RecipeScaler.scaledDisplayText(it,scaleFactor) }
-            val whole=lines.joinToString("\n")
+            val lines=scaledIngredients.getValue(section)
+            val whole=remember(lines){lines.joinToString("\n")}
             var start=0
             lines.forEachIndexed { index,line ->
-                val fragments=chapterFragmentCharacters(recipe.id,bi,whole,requested,start,line.length)
+                val startAt=start
+                val fragments=remember(recipe.id,bi,whole,requested,startAt,line.length){chapterFragmentCharacters(recipe.id,bi,whole,requested,startAt,line.length)}
                 val key="ingredient-$bi-$index"
                 val (name,amount)=com.polinalinen.madre.ui.razvorot.ingredientDisplayParts(line)
                 val prefix=if(amount.isEmpty())0 else amount.length+1
@@ -421,19 +423,21 @@ fun RecipeChapterContent(recipe: Recipe, scaleFactor: Double, textSize: Float = 
             }
         }
         val bindings=remember(recipe){RecipeScaler.scalableBindings(recipe)}
-        val stepTexts=recipe.timeline.map{RecipeScaler.scaledStepText(it.description,scaleFactor,bindings)}
+        val stepTexts=remember(recipe,scaleFactor,bindings){recipe.timeline.map{RecipeScaler.scaledStepText(it.description,scaleFactor,bindings)}}
+        val stepFragments=remember(recipe.id,recipe.ingredients.size,stepTexts,requested){stepTexts.mapIndexed{index,body->
+            chapterFragmentCharacters(recipe.id,recipe.ingredients.size+index,body,requested)}}
         HandwrittenEditSurface(recipe.id, Modifier.padding(top = 32.dp)) {
             FullRecipeSection(recipe, scaleFactor, textSize = textSize,stepModifier={index,body->
                 val bi=recipe.ingredients.size+index
                 if(!body)block("${recipe.id}:$bi:0") else textPosition("step-$index",
-                    chapterFragmentCharacters(recipe.id,bi,stepTexts[index],requested))
+                    stepFragments[index])
             },onStepTextLayout={index,layout->anchors.textLayout("step-$index",layout,
-                chapterFragmentCharacters(recipe.id,recipe.ingredients.size+index,stepTexts[index],requested))})
+                stepFragments[index])})
         }
-        val appendices=buildList {
+        val appendices=remember(recipe){buildList {
             if(recipe.servingTips.isNotEmpty())add("К столу" to recipe.servingTips.map{it.text})
             if(recipe.variations.isNotEmpty())add("Варианты" to recipe.variations.map{it.text})
-        }
+        }}
         appendices.forEachIndexed { index,(title,lines)->
             val bi=recipe.ingredients.size+recipe.timeline.size+index
             SmallLabel(title,Modifier.padding(22.dp).then(block("${recipe.id}:$bi:0")))
@@ -461,6 +465,7 @@ private fun FullRecipeSection(recipe: Recipe, scaleFactor: Double, modifier: Mod
     // Пересчитываются только те числа, которые сам рецепт пометил весом и
     // назвал по имени строки: остальное — проза, и трогать её книга не берётся.
     val quantityBindings = remember(recipe) { RecipeScaler.scalableBindings(recipe) }
+    val scaledSteps=remember(recipe,scaleFactor,quantityBindings){recipe.timeline.map{RecipeScaler.scaledStepText(it.description,scaleFactor,quantityBindings)}}
     Column(modifier.fillMaxWidth()) {
         Text("Как печём",style=PaperType.h2,color=colors.ink,
             modifier=Modifier.padding(horizontal=22.dp,vertical=8.dp))
@@ -495,7 +500,7 @@ private fun FullRecipeSection(recipe: Recipe, scaleFactor: Double, modifier: Mod
                             // пересчитаны тем же масштабом, что и список
                             // ингредиентов. Иначе на одной странице стояли бы
                             // два разных рецепта.
-                            RecipeScaler.scaledStepText(step.description, scaleFactor, quantityBindings),
+                            scaledSteps[i],
                             color = colors.ink,style = PaperType.body,
                             fontSize = textSize.sp,
                             lineHeight = (textSize * 25f / 16f).sp,

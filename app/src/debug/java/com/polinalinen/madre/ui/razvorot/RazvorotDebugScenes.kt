@@ -82,7 +82,7 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
     CompositionLocalProvider(LocalBookClock provides clock,LocalPaperDebug provides debug,com.polinalinen.madre.ui.kit.LocalCalmMode provides false,LocalDensity provides Density(density.density,if(scene=="shelf-large")1.3f else density.fontScale)) {
         RazvorotTheme(preferences,force=forceAtmosphere ?: if(night)Atmosphere.NIGHT else Atmosphere.DAWN) {
             Immersive(enabled = (scene.startsWith("reader-") && scene != "reader-chrome") || scene.startsWith("curl-") || scene.startsWith("gles2-curl-") || scene.startsWith("fulltimer-") || scene == "bake" || scene == "reading-sheet")
-            Box(Modifier.fillMaxSize().background(LocalPaper.current.bg).testTag("scene-$scene").semantics{stateDescription="${debug.renderer}:${debug.renderedFrames}:${debug.cachedPages}:${debug.reason}"}) {
+            Box(Modifier.fillMaxSize().then(if(scene=="toc-benchmark" || scene=="oven-benchmark")Modifier.paperBackground() else Modifier.background(LocalPaper.current.bg)).testTag("scene-$scene").semantics{stateDescription="${debug.renderer}:${debug.renderedFrames}:${debug.cachedPages}:${debug.reason}"}) {
                 when {
                     scene in BakeNumberScenes->BakeNumberScene(scene,recipes,preferences)
                     scene in FixesNativeScenes->FixesNativeScene(scene,recipes,preferences,recentPhotos)
@@ -98,12 +98,12 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
                         com.polinalinen.madre.account.yandex.YandexOfferContent(
                             com.polinalinen.madre.account.yandex.YandexAccountState.SignedOut,false,{},{},{})
                     }
-                    scene=="toc" || scene=="catalog" -> Column {
+                    scene=="toc" || scene=="catalog" || scene=="toc-benchmark" -> Column {
                         Box(Modifier.weight(1f).safeDrawingPadding()) { BookTocContent(recipes,emptyList(),
                             com.polinalinen.madre.navigation.BookBookmark(recipe.id,1,"Ингредиенты"),{_,_->},{},onAa={}) }
                         SpineBar(0){}
                     }
-                    scene=="oven" -> Column {
+                    scene=="oven" || scene=="oven-benchmark" -> Column {
                         val now=BakingClock.elapsed()
                         val active=remember(recipe){BakingSession(7,recipe,9,now-(recipe.timeline[9].durationMinutes*60L-1661L)*1000L,
                             BakingClock.wallClock(),scaleFactor=2.0,bakeNumber=2)}

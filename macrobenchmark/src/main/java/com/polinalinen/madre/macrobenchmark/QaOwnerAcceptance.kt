@@ -37,7 +37,7 @@ class QaOwnerAcceptance {
         assertTrue(device.wait(Until.hasObject(By.pkg(target)),20_000))
         dismissKnownLauncherAnr()
         device.wait(Until.findObject(By.text("ПОЗЖЕ")),5000)?.click()
-        device.wait(Until.findObject(By.text("Читать")),3000)?.click()
+        device.wait(Until.findObject(By.text(java.util.regex.Pattern.compile("(?iu)читать"))),3000)?.click()
         val settings=device.wait(Until.findObject(By.desc("Настройки")),15_000)
         assertNotNull("Real settings entry missing",settings);settings!!.click()
         val search=device.wait(Until.findObject(By.clazz("android.widget.EditText")),10_000)

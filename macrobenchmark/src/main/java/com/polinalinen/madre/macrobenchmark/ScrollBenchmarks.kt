@@ -8,9 +8,11 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import androidx.test.uiautomator.By
+import androidx.test.uiautomator.Until
 
 private const val TARGET="com.polinalinen.madre.benchmark"
-private val routes=listOf("toc","oven","chapter-benchmark-scroll")
+private val routes=listOf("toc-benchmark","oven-benchmark","chapter-benchmark-scroll")
 private fun routeIntent(scene:String)=Intent().setClassName(TARGET,"com.polinalinen.madre.ui.razvorot.RazvorotSceneActivity")
     .putExtra("scene",scene).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
 private fun MacrobenchmarkScope.scroll() {
@@ -23,7 +25,11 @@ class ScrollBenchmarks {
     private fun measure(route:String)=benchmark.measureRepeated(
         packageName=TARGET,metrics=listOf(FrameTimingMetric()),iterations=5,
         compilationMode=CompilationMode.None(),startupMode=StartupMode.WARM,
-        setupBlock={startActivityAndWait(routeIntent(route));device.waitForIdle(500)},
+        setupBlock={
+            startActivityAndWait(routeIntent(route));device.waitForIdle(500)
+            val label=when(route){"toc-benchmark"->"Оглавление";"oven-benchmark"->"Уже печём";else->"Ингредиенты"}
+            check(device.wait(Until.hasObject(By.textContains(label)),10_000)==true){"Actual benchmark route did not render: $route"}
+        },
         measureBlock={scroll()})
     @Test fun tocScroll()=measure(routes[0])
     @Test fun ovenScroll()=measure(routes[1])

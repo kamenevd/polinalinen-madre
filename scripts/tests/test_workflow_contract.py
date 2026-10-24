@@ -64,6 +64,16 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("lintDebug", lint)
         self.assertIn("lint-reports", lint)
 
+    def test_real_qa_runtime_condition_executes_under_the_pinned_actions_posix_shell(self):
+        import subprocess
+        text=self.read(".github/workflows/quality-gates.yml")
+        line=next(line.strip() for line in text.splitlines() if 'then bash scripts/run_qa_runtime_acceptance.sh' in line)
+        line=line.replace('bash scripts/run_qa_runtime_acceptance.sh','printf QA_RUNTIME_CALLED')
+        for value,expected in [('true','QA_RUNTIME_CALLED'),('false','')]:
+            result=subprocess.run(['sh','-c',line.replace('${{ inputs.bake_numbers_native }}',value)],capture_output=True,text=True)
+            self.assertEqual(0,result.returncode,result.stderr)
+            self.assertEqual(expected,result.stdout)
+
     def test_qa_signing_is_verified_before_upload_without_a_fallback(self):
         text = self.read(".github/workflows/quality-gates.yml")
         quality = text.split("  android-quality:\n", 1)[1].split("  lint-report:\n", 1)[0]

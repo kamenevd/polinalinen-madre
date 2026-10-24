@@ -37,6 +37,10 @@ class QaOwnerAcceptance {
             val schedule=device.wait(Until.findObject(By.text("Ко времени")),10_000)
             assertNotNull("Real start sheet missing",schedule);schedule!!.click()
             findByScrolling(By.textStartsWith("Запланировать")).click()
+            assertTrue("Real plan save must close its sheet",device.wait(Until.gone(By.textStartsWith("Запланировать")),10_000))
+            // showHome retains the existing LazyColumn position by design. Return
+            // to its header instead of treating a correctly offscreen title as loss.
+            repeat(5){device.swipe(device.displayWidth/2,device.displayHeight/3,device.displayWidth/2,device.displayHeight*3/4,25)}
             assertTrue(device.wait(Until.hasObject(By.textContains("Уже печём")),10_000))
             device.dumpWindowHierarchy(File(output,"qa-delivery-plans-written.xml"))
             assertTrue(device.takeScreenshot(File(output,"qa-delivery-plans-written.png")))

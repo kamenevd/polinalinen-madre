@@ -135,6 +135,7 @@ android {
         isMinifyEnabled=true
         isShrinkResources=true
         signingConfig=signingConfigs.findByName("qa")
+        if (providers.gradleProperty("madre.qaRegression").getOrElse("false").toBoolean()) proguardFile("qa-persistence-api.pro")
         buildConfigField("boolean", "YANDEX_ID", qaYandexActivationApproved.toString())
         buildConfigField("boolean", "QA_DIAGNOSTICS", "true")
         resValue("string", "app_name", "Мадре QA")

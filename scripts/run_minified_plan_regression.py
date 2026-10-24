@@ -47,6 +47,7 @@ original = source_hashes()
 original_rules = sha(before / 'app/proguard-rules.pro')
 shutil.copy2(ROOT / 'app/build.gradle.kts', before / 'app/build.gradle.kts')
 shutil.copy2(ROOT / 'app/qa-test-rules.pro', before / 'app/qa-test-rules.pro')
+shutil.copy2(ROOT / 'app/qa-persistence-api.pro', before / 'app/qa-persistence-api.pro')
 shutil.copytree(ROOT / 'app/src/qaRegression', before / 'app/src/qaRegression')
 assert source_hashes() == original and sha(before / 'app/proguard-rules.pro') == original_rules
 run([str(before / 'gradlew'), ':app:assembleQa', ':app:assembleQaAndroidTest', '-Pmadre.qaRegression=true', '--no-daemon', '--stacktrace', '--no-configuration-cache'], cwd=before)
@@ -74,7 +75,7 @@ for label, apk, test, mapping, source in [
     (destination / 'binary-verification.json').write_text(proof)
     (destination / 'source-build.json').write_text(json.dumps({
         'functional_source': source, 'build_controller_head': head,
-        'build_overlay': ['app/build.gradle.kts', 'app/qa-test-rules.pro', 'app/src/qaRegression/'] if label == 'negative-before' else [],
+        'build_overlay': ['app/build.gradle.kts', 'app/qa-test-rules.pro', 'app/qa-persistence-api.pro', 'app/src/qaRegression/'] if label == 'negative-before' else [],
         'main_source_sha256': original if label == 'negative-before' else {},
         'original_proguard_sha256': original_rules if label == 'negative-before' else sha(ROOT / 'app/proguard-rules.pro'),
         'target_apk_sha256': sha(apk), 'instrumentation_apk_sha256': sha(test),

@@ -4,7 +4,7 @@ import android.content.Context
 import android.content.pm.ApplicationInfo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.google.gson.JsonParser
+import org.json.JSONArray
 import com.polinalinen.madre.navigation.BookPreferences
 import com.polinalinen.madre.navigation.PlannedBake
 import org.junit.Assert.*
@@ -40,7 +40,8 @@ class MinifiedPlanRegressionTest {
                 assertEquals(if(negative)emptyList() else expected,book.snapshotPlans())
             }
             val valid=requireNotNull(raw.getString("planned_bakes",null))
-            val persistedIds=JsonParser.parseString(valid).asJsonArray.map { it.asJsonObject["recipeId"].asString }
+            val persisted=JSONArray(valid)
+            val persistedIds=(0 until persisted.length()).map { persisted.getJSONObject(it).getString("recipeId") }
             assertEquals(if(negative)listOf("waffles") else expected.map { it.recipeId },persistedIds)
             BookPreferences(context,"qa_minified_plan_regression").use { reread ->
                 assertEquals(if(negative)emptyList() else expected,reread.snapshotPlans())

@@ -49,7 +49,7 @@ enum class BakeNumberSize { Sm, Md, Lg, Display }
     Row(modifier.heightIn(min=48.dp).selectable(selected,role=Role.RadioButton,onClick=onClick)
         .background(if(selected)p.ink else p.bg2,RoundedCornerShape(24.dp)).padding(horizontal=8.dp,vertical=7.dp),
         verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(6.dp)) {
-        PaperBakeNumber(number,size=BakeNumberSize.Sm,planned=planned,accent=selected)
+        PaperBakeNumber(number,size=BakeNumberSize.Md,planned=planned,accent=selected)
         Text(label,style=PaperType.ui.copy(fontSize=13.sp),color=if(selected)p.bg else p.ink2)
     }
 }

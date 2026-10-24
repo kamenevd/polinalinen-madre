@@ -81,8 +81,15 @@ class SettingsSearchUiTest {
     }
     @Test fun actualSettingsSwitchesPersistThroughTheSharedApplicationRoomFlow() {
         rule.setContent { RazvorotTheme { SettingsScreen("Полина", {}, {}) } }
-        rule.onNodeWithContentDescription("Не гасить экран").performScrollTo().assertIsOn().performClick()
-        rule.waitUntil(10_000) { !app.bookDisplaySettings.value.keepScreenOn }
+        rule.onNodeWithContentDescription("Не гасить экран").performScrollTo().assertIsDisplayed().assertIsOn().performClick()
+        try {
+            rule.waitUntil(10_000) { !app.bookDisplaySettings.value.keepScreenOn }
+        } catch (failure: androidx.compose.ui.test.ComposeTimeoutException) {
+            val persisted = kotlinx.coroutines.runBlocking {
+                app.familySettingsRepository.observeBookDisplaySettings().first()
+            }
+            throw AssertionError("Keep-screen action did not settle: persisted=$persisted published=${app.bookDisplaySettings.value}", failure)
+        }
         rule.onNodeWithContentDescription("Не гасить экран").assertIsOff()
         rule.onNodeWithContentDescription("Ход выпечки на экране блокировки").performScrollTo().assertIsOff().performClick()
         rule.waitUntil(10_000) { app.bookDisplaySettings.value.lockScreenProgress }

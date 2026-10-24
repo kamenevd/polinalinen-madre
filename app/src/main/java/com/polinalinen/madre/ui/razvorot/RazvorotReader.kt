@@ -288,7 +288,10 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
                         }
                     }
                     val active=activeSessions.firstOrNull{it.recipe.id==recipe.id}
-                    if(active!=null)PaperButton(if(active.isCompleted)"Испечено · вписать" else "В печи · шаг ${active.currentStepIndex+1}",{onContinueBake(active.id)},Modifier.fillMaxWidth(),primary=true)
+                    if(active!=null) {
+                        PaperBakeNumber(active.bakeNumber,size=BakeNumberSize.Sm)
+                        PaperButton(if(active.isCompleted)"${com.polinalinen.madre.model.BakeNumbers.label(active.bakeNumber)} · Испечено · вписать" else "В печи · ${com.polinalinen.madre.model.BakeNumbers.label(active.bakeNumber)} · шаг ${active.currentStepIndex+1}",{onContinueBake(active.id)},Modifier.fillMaxWidth(),primary=true)
+                    }
                     else {
                         val trusted=factor in 1.0..5.0 && factor==factor.toInt().toDouble()
                         val stepper: @Composable ()->Unit = { PaperCompactStepper("×${BookCatalog.number(factor)}",{setFactor((factor-1).coerceAtLeast(1.0))},

@@ -340,6 +340,20 @@ val MIGRATION_10_11 = object : Migration(10, 11) {
     }
 }
 
+val MIGRATION_11_12 = object : Migration(11, 12) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE active_bakes ADD COLUMN bake_number INTEGER NOT NULL DEFAULT 0")
+        // Stable tie-breaker; never drop an overflow legacy row or expose its internal id.
+        db.query("SELECT sessionId FROM active_bakes ORDER BY startedAtWallClock, sessionId").use { rows ->
+            var number = 1
+            while (rows.moveToNext()) {
+                if (number <= 9) db.execSQL("UPDATE active_bakes SET bake_number = ? WHERE sessionId = ?", arrayOf(number, rows.getLong(0)))
+                number++
+            }
+        }
+    }
+}
+
 @Database(
     entities = [
         UserEntity::class,
@@ -352,7 +366,7 @@ val MIGRATION_10_11 = object : Migration(10, 11) {
         SealedNoteEntity::class,
         FamilySettingEntity::class,
     ],
-    version = 11,
+    version = 12,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -373,15 +387,17 @@ abstract class MadreDatabase : RoomDatabase() {
          */
         val MIGRATIONS: Array<Migration> = arrayOf(
             MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
-            MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11,
+            MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
         )
 
         // Room создаётся один раз через Application (см. MadreApplication.kt),
         // а не через lazy-singleton в ViewModel — закрывает баг v3 #1
         // (db.close() в onCleared() → crash при повторном входе).
-        fun build(context: Context): MadreDatabase =
-            Room.databaseBuilder(context.applicationContext, MadreDatabase::class.java, "madre.db")
+        fun build(context: Context): MadreDatabase {
+            LegacyDatabaseBackup.beforeNumberMigration(context)
+            return Room.databaseBuilder(context.applicationContext, MadreDatabase::class.java, "madre.db")
                 .addMigrations(*MIGRATIONS)
                 .build()
+        }
     }
 }

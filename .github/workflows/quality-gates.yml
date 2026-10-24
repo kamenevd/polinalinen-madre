@@ -132,6 +132,7 @@ jobs:
             app/build/reports/
             app/build/test-results/
             app/build/outputs/roborazzi/
+            app/schemas/
           if-no-files-found: warn
           retention-days: 14
 

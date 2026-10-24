@@ -100,7 +100,7 @@ internal fun syntheticNativeBake(recipe:Recipe,id:Long=7):BakingSession {
         }
         scene=="station-timer"->{
             BakingPaper(bake,1661L,{},{},{},{},onOpenAlice={})
-            StationTimerSheet(1661L,{})
+            StationTimerSheet(1661L,bakeNumber=bake.bakeNumber,onDismiss={})
         }
     }
 }

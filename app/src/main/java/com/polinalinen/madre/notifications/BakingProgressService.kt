@@ -236,7 +236,7 @@ class BakingProgressService : LifecycleService() {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
             .setShowWhen(false)
-            .bakingLockScreenPrivacy(this, CHANNEL_ID, showLockScreenProgress)
+            .bakingLockScreenPrivacy(this, CHANNEL_ID, showLockScreenProgress,(application as com.polinalinen.madre.MadreApplication).activeBakes.progress.value.map{it.bakeNumber})
 
     /**
      * Тап открывает ИМЕННО эту выпечку. Cycle 20: дорога сюда общая с

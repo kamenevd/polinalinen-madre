@@ -23,14 +23,16 @@ class PlannedBakeOwner(
     private val startBake:suspend (PlannedBake,Int)->Long?,
 ):AutoCloseable {
     private val preferences=BookPreferences(context.applicationContext)
+    private val app=context.applicationContext as com.polinalinen.madre.MadreApplication
     private val scheduler=PlannedBakeScheduler(context.applicationContext)
     private val _busy=MutableStateFlow(false)
     val busy=_busy.asStateFlow()
 
     private suspend fun <T> transaction(markBusy:Boolean=true,block:suspend ()->T):T = scope.async {
+        awaitReady()
         gate.withLock {
             if(markBusy)_busy.value=true
-            try { awaitReady();block() } finally { if(markBusy)_busy.value=false }
+            try { block() } finally { if(markBusy)_busy.value=false }
         }
     }.await()
 
@@ -38,7 +40,7 @@ class PlannedBakeOwner(
         val current=preferences.currentPlan(id)
         val existing=sessionForPlan(id)
         if(existing!=null) {
-            if(current!=null)consume(id)
+            if(current!=null)consume(id,release=false)
             return@transaction existing
         }
         if(current==null || (expected!=null && current!=expected))return@transaction null
@@ -46,7 +48,7 @@ class PlannedBakeOwner(
         require(amount in 1..5)
         val session=startBake(current,amount)?:return@transaction null
         // Activity cancellation cannot leave a committed bake's original plan available to SNOOZE.
-        consume(current.id)
+        consume(current.id,release=false)
         session
     }
 
@@ -56,7 +58,6 @@ class PlannedBakeOwner(
         if(expected!=null && current!=expected)return@transaction null
         val moved=BakePlanning.snooze(current,clock.millis())
         store(moved,id,clock)
-        moved
     }
 
     suspend fun save(plan:PlannedBake,clock:Clock,replacingId:String?=null,expected:PlannedBake?=null) = transaction {
@@ -67,14 +68,18 @@ class PlannedBakeOwner(
             }
         }
         check(sessionForPlan(plan.id)==null) { "Plan already started" }
-        store(plan,replacingId,clock)
+        val prior=preferences.currentPlan(replacingId?:plan.id)
+        val number=prior?.number?.takeIf{it in 1..9}
+            ?: app.bakeNumbers.next(app.activeBakeRepository.all(),preferences.snapshotPlans())
+            ?: throw IllegalStateException(com.polinalinen.madre.model.BakeNumbers.LIMIT_MESSAGE)
+        store(plan.copy(number=number),replacingId,clock)
     }
 
     suspend fun remove(id:String) = transaction {consume(id)}
 
     suspend fun restore() = transaction(markBusy=false) {
         val plans=preferences.snapshotPlans()
-        plans.filter{sessionForPlan(it.id)!=null}.forEach{consume(it.id)}
+        plans.filter{sessionForPlan(it.id)!=null}.forEach{consume(it.id,release=false)}
         withContext(NonCancellable+Dispatchers.IO) {
             scheduler.restoreMissing(preferences.snapshotPlans())
         }
@@ -86,10 +91,13 @@ class PlannedBakeOwner(
         check(preferences.putPlan(plan,replacingId)) { "Plan was not persisted" }
         if(replacingId!=null && replacingId!=plan.id)scheduler.cancel(replacingId).result.get()
         scheduler.schedule(plan,now).result.get()
+        plan
     }
 
-    private suspend fun consume(id:String) = withContext(NonCancellable+Dispatchers.IO) {
+    private suspend fun consume(id:String,release:Boolean=true) = withContext(NonCancellable+Dispatchers.IO) {
+        val number=preferences.currentPlan(id)?.number?:0
         check(preferences.removePlan(id)) { "Plan was not removed" }
+        if(release)app.bakeNumbers.releasePlan(number)
         scheduler.cancel(id).result.get()
     }
 

@@ -44,4 +44,5 @@ data class ActiveBakeEntity(
     val bakeKey: String? = null,
     @ColumnInfo(defaultValue = "0") val revision: Long = 0,
     val recipeRevision: String? = null,
+    @ColumnInfo(name = "bake_number", defaultValue = "0") val bakeNumber: Int = 0,
 )

@@ -125,12 +125,15 @@ import androidx.compose.runtime.remember
 
 @Composable fun PaperBakeCard(title: String, overline: String, image: Int, progress: Float,
     onClick: () -> Unit, modifier: Modifier = Modifier, overlineColor:Color=LocalPaper.current.mut,
-    actions:@Composable ()->Unit={},timer: @Composable () -> Unit) {
+    actions:@Composable ()->Unit={},bakeNumber:Int=0,planned:Boolean=false,timer: @Composable () -> Unit) {
     val p = LocalPaper.current
     PaperCard(modifier.then(bookAction("Открыть выпечку: $title", onClick = onClick)),contentPadding=PaddingValues(0.dp)) {
         Row(Modifier.padding(18.dp),verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             // Decode against the actual cell constraints, not the full bundled photograph.
-            AsyncImage(image, null, Modifier.size(72.dp).clip(RoundedCornerShape(14.dp)), contentScale = ContentScale.Crop)
+            Box {
+                AsyncImage(image, null, Modifier.size(72.dp).clip(RoundedCornerShape(14.dp)), contentScale = ContentScale.Crop)
+                PaperBakeNumber(bakeNumber,Modifier.align(Alignment.TopStart),planned=planned,ring=true)
+            }
             Column(Modifier.weight(1f)) { SmallLabel(overline,color=overlineColor); Text(title, style = PaperType.title, color = p.ink); timer() }
             Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, tint = p.mut)
         }

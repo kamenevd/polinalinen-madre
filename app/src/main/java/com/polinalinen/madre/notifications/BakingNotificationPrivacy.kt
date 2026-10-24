@@ -7,14 +7,19 @@ import com.polinalinen.madre.R
 
 /** A hidden lock-screen progress notification exposes no recipe, step, remaining time or actions. */
 internal fun NotificationCompat.Builder.bakingLockScreenPrivacy(
-    context: Context, channel: String, showProgress: Boolean,
+    context: Context, channel: String, showProgress: Boolean, numbers:List<Int> = emptyList(),
 ): NotificationCompat.Builder {
     setVisibility(if (showProgress) NotificationCompat.VISIBILITY_PUBLIC else NotificationCompat.VISIBILITY_PRIVATE)
     if (!showProgress) setPublicVersion(NotificationCompat.Builder(context, channel)
         .setSmallIcon(R.drawable.ic_notification_bread)
         .setContentTitle("Мадре")
-        .setContentText("Выпечка идёт")
+        .setContentText(publicBakeNumbers(numbers))
         .setVisibility(Notification.VISIBILITY_PUBLIC)
         .build())
     return this
+}
+
+internal fun publicBakeNumbers(numbers:List<Int>):String {
+    val valid=numbers.filter{it in 1..9}.distinct().sorted()
+    return if(valid.isEmpty())"Выпечка идёт" else "Выпечка ${valid.joinToString(" и "){"№$it"}} ${if(valid.size==1)"идёт" else "идут"}"
 }

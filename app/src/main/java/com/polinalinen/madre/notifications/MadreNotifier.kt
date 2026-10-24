@@ -90,7 +90,7 @@ class MadreNotifier(private val context: Context) {
     }
 
     fun postPlannedBake(plan: com.polinalinen.madre.navigation.PlannedBake, recipeName: String, nonce: String) {
-        post(CHANNEL_BAKING,"Выпечка","planned:${plan.id}",4000,"Пора ставить опару · $recipeName ×${plan.portions}",
+        post(CHANNEL_BAKING,"Выпечка","planned:${plan.id}",4000,(if(plan.number in 1..9)"№${plan.number} " else "")+"Пора ставить опару · $recipeName ×${plan.portions}",
             "Начало ${java.text.SimpleDateFormat("d MMM, HH:mm",java.util.Locale.forLanguageTag("ru")).format(java.util.Date(plan.startAtMillis))}. Таймер начнётся только после «Начать».",
             PlannedBakeActions.pendingIntent(context,plan,PlannedBakeAction.OPEN),
             actions=listOf(

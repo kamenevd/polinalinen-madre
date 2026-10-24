@@ -83,7 +83,7 @@ import androidx.compose.ui.Alignment
                 match.ingredient?.let { "есть: $it · ${difficultyLabel(recipe.difficulty)}" }
                     ?: "${recipe.description.trimEnd('.')} · ${difficultyLabel(recipe.difficulty)}",
                 { onChapter(recipe.id, -1) }, modifier=Modifier.testTag(Home.chapterRowTag(recipe.id)),
-                activeLabel = active?.let { "В печи · шаг ${it.currentStepIndex + 1} из ${recipe.timeline.size}" }, query = query,
+                activeLabel = active?.let { "В печи · ${BakeNumbers.label(it.bakeNumber)} · шаг ${it.currentStepIndex + 1} из ${recipe.timeline.size}" }, query = query,
                 spokenTime=com.polinalinen.madre.notifications.BakingProgress.spokenRemaining(RecipeScale.totalMinutes(recipe,1)*60L))
         } }
         item(key="toc-colophon",contentType="footer") { Column(Modifier.padding(top=8.dp,bottom=30.dp)) {
@@ -124,6 +124,7 @@ import androidx.compose.ui.Alignment
             item(key="oven-empty",contentType="empty") { PaperNote("Сейчас ничего не печётся. Выберите главу ниже — запуск в одно касание.") }
         }
         items(pendingFinished,key={"finished:${it.first}"},contentType={"finished-bake"}) { (id,completion) -> PaperCard(Modifier.fillMaxWidth()) {
+            PaperBakeNumber(completion.bakeNumber)
             SmallLabel("ИСПЕЧЕНО · ВПИШИТЕ В КНИГУ",color=p.rib)
             Text(completion.recipeName,style=PaperType.title,color=p.ink)
             PaperTextAction("Вписать в книгу",{onOpenSession(id)})
@@ -131,7 +132,7 @@ import androidx.compose.ui.Alignment
         items(visiblePlans,key={"plan:${it.first.id}"},contentType={"planned-bake"}) { (plan,recipe) ->
             val overdue=plan.startAtMillis<now
             PaperBakeCard(recipe.name,if(overdue)"ПОРА НАЧИНАТЬ · ×${plan.portions}" else "ЗАПЛАНИРОВАНО · ×${plan.portions}",
-                recipePhoto(recipe.id),0f,{onOpenPlan(plan)},overlineColor=if(overdue)p.rib else p.mut,
+                recipePhoto(recipe.id),0f,{onOpenPlan(plan)},overlineColor=if(overdue)p.rib else p.mut,bakeNumber=plan.number,planned=true,
                 actions={if(overdue)Row(Modifier.fillMaxWidth().padding(horizontal=18.dp,vertical=8.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                         PaperButton("Начать",{onStartPlan(plan)},Modifier.weight(1f),enabled=!plansBusy,variant=PaperButtonVariant.ACCENT)
                         PaperButton("Через 30 мин",{onSnoozePlan(plan)},Modifier.weight(1f),enabled=!plansBusy,variant=PaperButtonVariant.SECONDARY)
@@ -169,7 +170,7 @@ import androidx.compose.ui.Alignment
     val progress = (1 - remaining.toFloat() / duration).coerceIn(0f, 1f)
     PaperBakeCard(session.recipe.name,
         if (session.isCompleted) "ИСПЕЧЕНО · ВПИШИТЕ В КНИГУ" else "ШАГ ${session.currentStepIndex + 1}/${session.recipe.timeline.size} · ${step.title}",
-        recipePhoto(session.recipe.id), session.progress, onClick) {
+        recipePhoto(session.recipe.id), session.progress, onClick,bakeNumber=session.bakeNumber) {
         if (session.isCompleted) PaperNote("Результат ждёт в этой выпечке")
         else {
             Row(verticalAlignment=Alignment.Bottom,horizontalArrangement=Arrangement.spacedBy(8.dp)) {

@@ -91,6 +91,7 @@ import java.util.Locale
         recipe?.let{r->portions?.let{RecipeScale.totalMinutes(r,it)}},recipe?.timeline?.size,
         completion?.completedAtMillis?:session?.completedAt,
         recipes.map{(counts[it.id]?:0)>0},counts.values.sum(),
+        bakeNumber=session?.bakeNumber?:completion?.bakeNumber?:0,
     )
     val note=TracingPaper.noteFor(state.totalBakes)
     BakeFinalePage(state,::back,{
@@ -114,7 +115,7 @@ import java.util.Locale
 }
 
 internal data class BakeFinalePageState(val name:String,val chapter:Int?,val portions:Int?,val minutes:Int?,
-    val steps:Int?,val completedAtMillis:Long?,val chapters:List<Boolean>,val totalBakes:Int)
+    val steps:Int?,val completedAtMillis:Long?,val chapters:List<Boolean>,val totalBakes:Int,val bakeNumber:Int=0)
 
 /** This same stateless renderer is captured by the native CI fixture; it has no storage or auth effects. */
 @Composable internal fun BakeFinalePage(state:BakeFinalePageState,onBack:()->Unit,onFinish:()->Unit,
@@ -142,12 +143,13 @@ internal data class BakeFinalePageState(val name:String,val chapter:Int?,val por
                 val metadata=listOfNotNull(state.chapter?.let{"ГЛАВА %02d".format(it)},
                     state.portions?.let{"×$it СЕМЬИ"},state.minutes?.let{BookCatalog.duration(it)})
                 if(metadata.isNotEmpty())SmallLabel(metadata.joinToString(" · "),color=p.acc)
+                if(state.bakeNumber in 1..9)PaperBakeNumber(state.bakeNumber)
                 val titleStyle=PaperType.finale.copy(fontSize=(92f/displayScale).sp,lineHeight=(78f/displayScale).sp,letterSpacing=(-4f/displayScale).sp)
                 val heading:@Composable ()->Unit={Text("Испе-\nчено.",style=titleStyle,
                     color=p.ink,modifier=Modifier.graphicsLayer{alpha=reveal;translationY=if(reducedMotion)0f else (1-reveal)*24.dp.toPx()}
                         .blur((if(reducedMotion)0f else (1-reveal)*5).dp).clearAndSetSemantics{contentDescription="Испечено"})}
-                val seal:@Composable ()->Unit={state.completedAtMillis?.let{PaperBakeSeal(it,
-                    Modifier.graphicsLayer{alpha=stamp;scaleX=if(reducedMotion)1f else 1f+(1f-stamp)*1.2f;scaleY=scaleX})}}
+                val seal:@Composable ()->Unit={state.completedAtMillis?.let{PaperBakeSeal(it,bakeNumber=state.bakeNumber,
+                    modifier=Modifier.graphicsLayer{alpha=stamp;scaleX=if(reducedMotion)1f else 1f+(1f-stamp)*1.2f;scaleY=scaleX})}}
                 BoxWithConstraints(Modifier.fillMaxWidth()) {
                     val measurer=rememberTextMeasurer()
                     val density=LocalDensity.current
@@ -175,6 +177,7 @@ internal data class BakeFinalePageState(val name:String,val chapter:Int?,val por
                     }
                 HairRule()
                 extra()
+                if(state.bakeNumber in 1..9)PaperNote("После этого номер ${state.bakeNumber} освободится")
                 Spacer(Modifier.height(12.dp))
             }
             PaperButton(finishLabel,onFinish,Modifier.fillMaxWidth().padding(horizontal=22.dp,vertical=12.dp),

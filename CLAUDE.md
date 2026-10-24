@@ -153,8 +153,8 @@ START/ADVANCE Undo ограждён ключом/ревизией/сроком; 
 
 ## Данные
 
-Room **версия 11**, 9 объявленных сущностей, 10 миграций
-(`MIGRATION_1_2` … `MIGRATION_10_11`). Список миграций — один, в
+Room **версия 12**, 9 объявленных сущностей, 11 миграций
+(`MIGRATION_1_2` … `MIGRATION_11_12`). Миграция 11→12 добавляет bake_number и выдаёт 1–9 по startedAtWallClock/sessionId без удаления legacy-строк; до открытия Room создаётся проверенная копия v11 в noBackupFilesDir/room-11-before-12. Номер финала живёт в prefs до «Вписать», план передаёт свой номер старту. Общий порядок блокировок: Application plannedBakeOperationGate → VM transitionGate → короткий PLANS_LOCK; ожидание готовности вне Application gate. Список миграций — один, в
 `MadreDatabase.Companion.MIGRATIONS`; его же берёт
 `androidTest/data/db/MigrationTest.kt`. Миграция, написанная но не
 зарегистрированная, роняет тест, а не «проходит» на своей копии списка.

@@ -20,7 +20,7 @@ data class BookBookmark(val recipeId: String, val page: Int, val section:String?
     }
 }
 
-data class PlannedBake(val recipeId: String, val portions: Int, val startAtMillis: Long) {
+data class PlannedBake(val recipeId: String, val portions: Int, val startAtMillis: Long, val number: Int = 0) {
     val id: String get() = "$recipeId:$startAtMillis"
 }
 

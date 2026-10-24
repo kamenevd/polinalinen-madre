@@ -192,6 +192,7 @@ data class BakingSession(
     val revision: Long = 0,
     val recipeRevision: String? = null,
     val restoredStepValid: Boolean = true,
+    val bakeNumber: Int = 0,
 ) {
     /** UNKNOWN stays unknown through every renderer and history writer. */
     val trustedPortions: Int?
@@ -224,6 +225,7 @@ data class BakingSession(
             bakeKey: String = java.util.UUID.randomUUID().toString(),
             revision: Long = 0,
             recipeRevision: String? = null,
+            bakeNumber: Int = 0,
         ): BakingSession {
             val pauseOffset = pausedAtWallClock?.let { (it - startedAtWallClock).coerceAtLeast(0L) }
             val seed = BakingSession(
@@ -239,6 +241,7 @@ data class BakingSession(
                 revision = revision,
                 recipeRevision = recipeRevision,
                 restoredStepValid = stepIndex in recipe.timeline.indices,
+                bakeNumber = bakeNumber,
             )
             return seed.rebasedTo(nowElapsed, nowWallClock)
         }

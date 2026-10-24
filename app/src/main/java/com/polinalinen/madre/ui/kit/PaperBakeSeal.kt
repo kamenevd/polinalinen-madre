@@ -19,11 +19,11 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /** An ink impression, never a button. The date belongs to the completed record, not today's clock. */
-@Composable fun PaperBakeSeal(completedAtMillis:Long,modifier:Modifier=Modifier) {
+@Composable fun PaperBakeSeal(completedAtMillis:Long,modifier:Modifier=Modifier,bakeNumber:Int=0) {
     val date=Instant.ofEpochMilli(completedAtMillis).atZone(ZoneId.systemDefault())
     val roman=listOf("I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII")
     val label="${date.dayOfMonth}.${roman[date.monthValue-1]}"
-    val weekday=date.format(DateTimeFormatter.ofPattern("EEEE",Locale.forLanguageTag("ru")))
+    val weekday=(if(bakeNumber in 1..9)"№$bakeNumber · " else "")+date.format(DateTimeFormatter.ofPattern("EEEE",Locale.forLanguageTag("ru")))
     val p=LocalPaper.current
     val scale=LocalDensity.current.fontScale.coerceAtLeast(1f)
     Box(modifier.size(104.dp).rotate(-12f).clearAndSetSemantics{contentDescription="Испечено · $label · $weekday"},contentAlignment=Alignment.Center) {

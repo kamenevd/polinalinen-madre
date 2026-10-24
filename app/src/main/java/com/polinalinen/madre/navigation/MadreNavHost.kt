@@ -110,6 +110,8 @@ fun MadreNavHost(
     val navSnackbar = remember { PaperSnackbarState() }
     val bakeActionBarHeight=remember{mutableStateOf(0.dp)}
     val restoreReady by bakingViewModel.restoreReady.collectAsState()
+    val bakeMutationError by bakingViewModel.mutationError.collectAsState()
+    LaunchedEffect(bakeMutationError) { bakeMutationError?.let { navSnackbar.showSnackbar(it) } }
     var startupHandled by rememberSaveable { mutableStateOf(false) }
     var startRecipeId by rememberSaveable { mutableStateOf<String?>(null) }
     var startMode by rememberSaveable { mutableStateOf(0) }
@@ -597,6 +599,8 @@ fun MadreNavHost(
         }
             startRecipeId?.let { id->recipesForStats.firstOrNull{it.id==id}?.let { recipe->
                 val editing=bookPreferences.plans.firstOrNull{it.id==editingPlanId}
+                var previewNumber by remember(id,editing?.id){mutableStateOf<Int?>(editing?.number)}
+                LaunchedEffect(id,editing,bookPreferences.plans) { previewNumber=editing?.number?:bakingViewModel.previewBakeNumber() }
                 BookStartSheet(recipe,editing?.portions?:bookPreferences.portions(id),onStart={portions->
                     val editedId=editingPlanId
                     planSaving=true;planError=null
@@ -607,14 +611,14 @@ fun MadreNavHost(
                             if(sid!=null) {
                                 bookPreferences.savePortions(id,portions);startRecipeId=null
                                 navController.navigate(MadreDestinations.bake(sid.toString()))
-                            } else planError="Не удалось начать выпечку. Попробуйте ещё раз."
+                            } else planError=bakingViewModel.mutationError.value?:"Не удалось начать выпечку. Попробуйте ещё раз."
                         } catch(e:Exception) {
                             if(e is kotlinx.coroutines.CancellationException)throw e
                             planError="Не удалось завершить действие. План сохранён."
                         } finally {planSaving=false}
                     }
                 },onDismiss={startRecipeId=null},onChapter=if(startFromOven)({startRecipeId=null;openChapter(id)}) else null,
-                    initialMode=startMode,existingPlan=editing,busy=planBusy,error=planError,onPlan={portions,start->
+                    initialMode=startMode,existingPlan=editing,busy=planBusy,error=planError,bakeNumber=previewNumber,onPlan={portions,start->
                         val replacedId=editingPlanId
                         planSaving=true;planError=null
                         navigationScope.launch {
@@ -625,7 +629,10 @@ fun MadreNavHost(
                                     else "План сохранён. Уведомления отключены в настройках Android.") }
                             } catch(e:Exception) {
                                 if(e is kotlinx.coroutines.CancellationException)throw e
-                                planError="Не удалось сохранить план и напоминание. Попробуйте ещё раз."
+                                if(e.message==com.polinalinen.madre.model.BakeNumbers.LIMIT_MESSAGE) {
+                                    planError=com.polinalinen.madre.model.BakeNumbers.LIMIT_MESSAGE
+                                    navigationScope.launch{navSnackbar.showSnackbar(com.polinalinen.madre.model.BakeNumbers.LIMIT_MESSAGE)}
+                                } else planError="Не удалось сохранить план и напоминание. Попробуйте ещё раз."
                             } finally {planSaving=false}
                         }
                     },onRemovePlan={val removedId=editingPlanId;planSaving=true;navigationScope.launch {

@@ -79,6 +79,7 @@ class BakingViewModel @JvmOverloads constructor(
     private val madreApp = app as MadreApplication
     private val recipeRepository = madreApp.recipeRepository
     private val activeBakeRepository = madreApp.activeBakeRepository
+    private val numberStore = madreApp.bakeNumbers
     private val transitionGate = Mutex()
     private val plannedBakesOwner=lazy {
         com.polinalinen.madre.navigation.PlannedBakeOwner(madreApp,viewModelScope,madreApp.plannedBakeOperationGate,
@@ -162,6 +163,7 @@ class BakingViewModel @JvmOverloads constructor(
         val recipeName: String,
         val portions: Int,
         val completedAtMillis: Long,
+        val bakeNumber: Int = 0,
     ) {
         val recordId = CompletableDeferred<Long>()
         private val recordStarted = AtomicBoolean(false)
@@ -233,8 +235,12 @@ class BakingViewModel @JvmOverloads constructor(
             _recipes.value = recipes
             // Cycle 15/17: посеять nextSessionId И восстановить UI-сессии из
             // active_bakes (policy A) до того, как startBaking выдаст новый id.
-            val saved = activeBakeRepository.initializeLegacyKeys()
-            val pendingFinales=sessionLedger.pendingSessionIds()
+            val pendingFinales=sessionLedger.pendingSessionIds()+numberStore.finales().map{it.sessionId}
+            val saved = madreApp.plannedBakeOperationGate.withLock {
+                val rows=activeBakeRepository.initializeLegacyKeys()
+                com.polinalinen.madre.navigation.BookPreferences(madreApp).use { book -> numberStore.reconcile(rows,pendingFinales.toSet(),book) }
+                rows
+            }
             nextSessionId = maxOf(nextSessionId, saved.maxOfOrNull { it.sessionId + 1 } ?: 1L,
                 pendingFinales.maxOrNull()?.plus(1L) ?: 1L)
             val byId = recipes.associateBy { it.id }
@@ -258,6 +264,7 @@ class BakingViewModel @JvmOverloads constructor(
                     bakeKey = requireNotNull(row.bakeKey),
                     revision = row.revision,
                     recipeRevision = row.recipeRevision,
+                    bakeNumber = row.bakeNumber,
                 )
             }
             if (restored.isNotEmpty()) {
@@ -295,26 +302,44 @@ class BakingViewModel @JvmOverloads constructor(
     fun session(id: Long): BakingSession? = _sessions.value.find { it.id == id }
 
     /** A timer is opened only after the snapshot is durably created. */
-    suspend fun startBaking(recipe: Recipe, scaleFactor: Double): Long? = startBakingInternal(recipe, scaleFactor, false)
-    suspend fun startBakingWithUndo(recipe: Recipe, scaleFactor: Double): Long? = startBakingInternal(recipe, scaleFactor, true)
+    suspend fun startBaking(recipe: Recipe, scaleFactor: Double): Long? = numberedStart(recipe,scaleFactor,false)
+    suspend fun startBakingWithUndo(recipe: Recipe, scaleFactor: Double): Long? = numberedStart(recipe,scaleFactor,true)
+    private suspend fun numberedStart(recipe: Recipe, scaleFactor: Double, undo: Boolean): Long? {
+        sessionIdsReady.await()
+        return madreApp.plannedBakeOperationGate.withLock { startBakingInternal(recipe,scaleFactor,undo) }
+    }
+    suspend fun previewBakeNumber(): Int? {
+        sessionIdsReady.await()
+        return madreApp.plannedBakeOperationGate.withLock {
+            com.polinalinen.madre.navigation.BookPreferences(madreApp).use { book -> numberStore.next(activeBakeRepository.all(),book.snapshotPlans()) }
+        }
+    }
     /** Durable primitive. All production card/sheet/notification entries use plannedBakes transactions. */
     internal suspend fun startPlannedBake(recipe: Recipe, scaleFactor: Double, planId: String): Long? = viewModelScope.async {
-        startBakingInternal(recipe,scaleFactor,true,plannedBakeKey(planId))
+        startBakingInternal(recipe,scaleFactor,true,plannedBakeKey(planId),planId)
     }.await()
     fun sessionForPlan(planId: String): BakingSession? = _sessions.value.firstOrNull{it.bakeKey==plannedBakeKey(planId)}
     private fun plannedBakeKey(planId: String)=java.util.UUID.nameUUIDFromBytes(("planned-bake:$planId").toByteArray(Charsets.UTF_8)).toString()
 
-    private suspend fun startBakingInternal(recipe: Recipe, scaleFactor: Double, withUndo: Boolean, dedupeKey: String? = null): Long? {
+    private suspend fun startBakingInternal(recipe: Recipe, scaleFactor: Double, withUndo: Boolean, dedupeKey: String? = null, planId: String? = null): Long? {
         sessionIdsReady.await()
         return transitionGate.withLock {
             if(dedupeKey!=null)_sessions.value.firstOrNull{it.bakeKey==dedupeKey}?.let{return@withLock it.id}
             try {
                 require(scaleFactor in 1.0..5.0 && scaleFactor == scaleFactor.toInt().toDouble())
                 check(controllerLive)
-                val id = nextSessionId++
+                val durable=activeBakeRepository.all()
+                val number=com.polinalinen.madre.navigation.BookPreferences(madreApp).use { book ->
+                    planId?.let{book.currentPlan(it)?.number?.takeIf{n->n in 1..9}}
+                        ?: numberStore.next(durable,book.snapshotPlans())
+                }
+                if(number==null) { _mutationError.value=com.polinalinen.madre.model.BakeNumbers.LIMIT_MESSAGE;return@withLock null }
+                val id = maxOf(nextSessionId,durable.maxOfOrNull{it.sessionId+1}?:1L)
+                nextSessionId=id+1
                 val started=BakingSession.start(id,recipe,scaleFactor)
-                val next=started.copy(recipeRevision=recipeRepository.revision,bakeKey=dedupeKey?:started.bakeKey)
+                val next=started.copy(recipeRevision=recipeRepository.revision,bakeKey=dedupeKey?:started.bakeKey,bakeNumber=number)
                 activeBakeRepository.commit(id, null, next.activeSnapshot(), valid = { controllerLive })
+                numberStore.reserve(id,number)
                 sessionLedger.forget(id)
                 _completions.update { it - id }
                 _finishing.update { it - id }
@@ -388,7 +413,7 @@ class BakingViewModel @JvmOverloads constructor(
         if(old.isCompleted || _finishing.value.contains(id) || _pendingAbandons.value.containsKey(id))return@launchTransition
         val now=BakingClock.elapsed()
         val token=BakeUndo(java.util.UUID.randomUUID().toString(),old,old.revision,now+8000,
-            BakeUndo.Kind.ABANDON,(old.stepEndsAtElapsed(now)-now).coerceAtLeast(0),"Бросили «${old.recipe.name}» · клякса появится через 8 с")
+            BakeUndo.Kind.ABANDON,(old.stepEndsAtElapsed(now)-now).coerceAtLeast(0),"${com.polinalinen.madre.model.BakeNumbers.label(old.bakeNumber)} ${old.recipe.name} выброшена")
         _pendingAbandons.update { it+(id to token) }
         undoExpiry?.cancel();_undo.value=token
         abandonJobs[id]=viewModelScope.launch {
@@ -431,18 +456,22 @@ class BakingViewModel @JvmOverloads constructor(
 
     private fun launchTransition(block: suspend () -> Unit) = viewModelScope.launch {
         sessionIdsReady.await()
-        transitionGate.withLock {
+        madreApp.plannedBakeOperationGate.withLock { transitionGate.withLock {
             try { check(controllerLive); block() }
             catch (e: CancellationException) { throw e }
             catch (_: Exception) { _mutationError.value = "Изменение не сохранено. Проверь выпечку на телефоне." }
-        }
+        } }
     }
 
     /** All local mutations and voice use this same durable-before-publish path. Caller owns transitionGate. */
     private suspend fun persistTransition(old: BakingSession, next: BakingSession?, resetNotifications: Boolean = false) {
-        activeBakeRepository.commit(old.id, if (old.isCompleted) null else old.activeSnapshot(),
+        if(next?.isCompleted==true)numberStore.rememberFinale(com.polinalinen.madre.navigation.BakeNumberStore.Finale(
+            old.id,old.recipe.id,old.recipe.name,requireNotNull(old.trustedPortions),requireNotNull(next.completedAt),old.bakeNumber))
+        if(next==null)numberStore.release(old.id)
+        try { activeBakeRepository.commit(old.id, if (old.isCompleted) null else old.activeSnapshot(),
             next?.takeUnless { it.isCompleted }?.activeSnapshot(),
-            preserveUnknownStep = !old.restoredStepValid, valid = { controllerLive })
+            preserveUnknownStep = !old.restoredStepValid, valid = { controllerLive }) }
+        catch(e:Exception) { if(next==null)numberStore.reserve(old.id,old.bakeNumber);if(next?.isCompleted==true)numberStore.forgetFinale(old.id);throw e }
         if(resetNotifications)notificationLedger.forgetSession(old.id).forEach { notifier.cancelByKey(it) }
         publishTransition(old, next)
         _mutationError.value = null
@@ -483,6 +512,7 @@ class BakingViewModel @JvmOverloads constructor(
                             BakeStepEndWorker.KEY_STEP_INDEX to bake.stepIndex,
                             BakeStepEndWorker.KEY_RECIPE_NAME to bake.recipeName,
                             BakeStepEndWorker.KEY_STEP_TITLE to bake.stepTitle,
+                            BakeStepEndWorker.KEY_BAKE_NUMBER to bake.bakeNumber,
                         )
                     )
                     .build()
@@ -569,9 +599,9 @@ class BakingViewModel @JvmOverloads constructor(
                 }
             } finally {
                 if (session(sessionId) != null) {
-                    transitionGate.withLock { exitSessionNow(sessionId) }
+                    madreApp.plannedBakeOperationGate.withLock { transitionGate.withLock { exitSessionNow(sessionId) } }
                 } else if(retiredRestoredCompletion) {
-                    transitionGate.withLock { cleanExitedSession(sessionId) }
+                    madreApp.plannedBakeOperationGate.withLock { transitionGate.withLock { numberStore.release(sessionId);cleanExitedSession(sessionId) } }
                 }
                 onExit()
             }
@@ -602,13 +632,21 @@ class BakingViewModel @JvmOverloads constructor(
 
     private suspend fun restoreCompletionNow(sessionId: Long): BakeCompletion? {
         _completions.value[sessionId]?.let { return it }
-        val recordId = sessionLedger.recordIdFor(sessionId) ?: return null
+        val saved=numberStore.finales().firstOrNull{it.sessionId==sessionId}
+        val recordId = sessionLedger.recordIdFor(sessionId) ?: saved?.recordId
+        if(recordId==null) {
+            if(saved==null || session(sessionId)?.isCompleted==false)return null
+            val pending=reserveCompletion(sessionId,saved.recipeId,saved.recipeName,saved.portions,saved.completedAt)
+            startRecordInsert(sessionId,pending)
+            return pending
+        }
         val record = bakeHistory.get(recordId) ?: return null
         val candidate = BakeCompletion(
             recipeId = record.recipeId,
             recipeName = record.recipeName,
             portions = record.portions,
             completedAtMillis = record.completedAtMillis,
+            bakeNumber = numberStore.number(sessionId),
         )
         candidate.recordId.complete(recordId)
         val completion = putCompletionIfAbsent(sessionId, candidate)
@@ -633,6 +671,7 @@ class BakingViewModel @JvmOverloads constructor(
                 recipeName = recipeName,
                 portions = portions,
                 completedAtMillis = completedAtMillis,
+                bakeNumber = numberStore.number(sessionId),
             )
             val next = current + (sessionId to candidate)
             if (_completions.compareAndSet(current, next)) return candidate
@@ -659,6 +698,7 @@ class BakingViewModel @JvmOverloads constructor(
                     completedAtMillis = completion.completedAtMillis,
                 )
             }.getOrNull() ?: return@launch
+            numberStore.finales().firstOrNull{it.sessionId==sessionId}?.let{numberStore.rememberFinale(it.copy(recordId=recordId))}
             if (sessionLedger.remember(sessionId, recordId) && !completion.recordId.isCompleted) {
                 completion.recordId.complete(recordId)
             }
@@ -734,7 +774,10 @@ class BakingViewModel @JvmOverloads constructor(
         authority: () -> VoiceAuthority,
     ): VoiceCommandReceiptEntity? {
         sessionIdsReady.await()
-        return transitionGate.withLock {
+        return madreApp.plannedBakeOperationGate.withLock { applyVoiceLocked(command,receivedElapsed,authority) }
+    }
+
+    private suspend fun applyVoiceLocked(command: VoiceCommand,receivedElapsed: Long,authority: ()->VoiceAuthority): VoiceCommandReceiptEntity? = transitionGate.withLock {
             try {
                 val fingerprint = command.fingerprint()
                 val prior = activeBakeRepository.receipt(command.id)
@@ -755,6 +798,7 @@ class BakingViewModel @JvmOverloads constructor(
                 if (decision.outcome == VoiceOutcome.APPLIED) {
                     publishTransition(old, proposed)
                     if (proposed == null) {
+                        numberStore.release(old.id)
                         _cancelledCount.update { it + 1 }
                         cleanExitedSession(old.id)
                         recoverCancellationEffects()
@@ -763,7 +807,6 @@ class BakingViewModel @JvmOverloads constructor(
                 stored
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { null } // No durable outcome is NOT an acknowledgement.
-        }
     }
 
     private suspend fun recoverCancellationEffects() {
@@ -832,6 +875,7 @@ class BakingViewModel @JvmOverloads constructor(
             BakingProgress(
                 sessionId = s.id,
                 recipeName = s.recipe.name,
+                bakeNumber = s.bakeNumber,
                 // Cycle 19: имя закваски едет в шапку своей карточки в шторке.
                 starterName = starterName,
                 stepTitle = s.currentStep.title,

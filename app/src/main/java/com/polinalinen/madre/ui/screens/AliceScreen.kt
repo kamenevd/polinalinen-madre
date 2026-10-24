@@ -82,7 +82,8 @@ internal fun AlicePage(state: VoiceUiState, sessions: List<BakingSession>, onBac
             if (state.status == VoiceStatus.OFFLINE || state.status == VoiceStatus.ERROR) SmallLabel("НЕТ СВЯЗИ", color = colors.mut)
             state.message?.let { Text(it, color = colors.rib,style = PaperType.body) }
             if (selected != null) {
-                Text("${selected.recipe.name} · выпечка №${selected.id}\n${selected.currentStep.title}", color = colors.ink,style = PaperType.body)
+                PaperBakeNumber(selected.bakeNumber)
+                Text("${com.polinalinen.madre.model.BakeNumbers.label(selected.bakeNumber)} · ${selected.recipe.name}\n${selected.currentStep.title}", color = colors.ink,style = PaperType.body)
             }
             if(state.status!=VoiceStatus.CONNECTED && state.status!=VoiceStatus.REVOKE_PENDING)
                 AliceConnectionSteps(waiting=state.status==VoiceStatus.WAITING_LINK || busy,
@@ -95,7 +96,8 @@ internal fun AlicePage(state: VoiceUiState, sessions: List<BakingSession>, onBac
                 Text("Выберите выпечку", color = colors.ink,style = PaperType.title)
                 if (sessions.isEmpty()) Text("Сейчас ничего не печётся", color = colors.ink2,style=PaperType.note)
                 else {
-                    TapCycleRow(label = "Выпечка", value = candidate?.let { "${it.recipe.name} · №${it.id}" } ?: "не выбрана",
+                    candidate?.let { PaperBakeNumber(it.bakeNumber,size=BakeNumberSize.Sm) }
+                    TapCycleRow(label = "Выпечка", value = candidate?.let { "${com.polinalinen.madre.model.BakeNumbers.label(it.bakeNumber)} · ${it.recipe.name}" } ?: "не выбрана",
                         onClick = {
                             val index = sessions.indexOfFirst { it.bakeKey == candidateKey }
                             candidateKey = sessions[(index + 1) % sessions.size].bakeKey

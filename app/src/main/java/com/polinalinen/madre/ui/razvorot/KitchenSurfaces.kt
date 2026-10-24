@@ -41,7 +41,7 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
     onAdjustMinutes:(Int)->Unit={},sessions:List<BakingSession> = emptyList(),onSwitchSession:(Long)->Unit={}) {
     var full by rememberSaveable { mutableStateOf(false) }
     var stationTimer by rememberSaveable(session.id) { mutableStateOf(false) }
-    if(full) { FullTimer(session,remaining){full=false};return }
+    if(full) { FullTimer(session,remaining,sessions=sessions,onSwitchSession=onSwitchSession){full=false};return }
     val actionBarHeight=LocalBakeActionBarHeight.current
     val density=LocalDensity.current
     val bottomInset=WindowInsets.systemBarsIgnoringVisibility.union(WindowInsets.displayCutout).getBottom(density)
@@ -54,7 +54,11 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
             PaperIconButton(onDetails,label="Действия выпечки") { Icon(Icons.Outlined.MoreHoriz,"Действия выпечки") }
         }
       Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal=22.dp)) {
-        SmallLabel(session.trustedPortions?.let { "${session.recipe.name} · ×$it СЕМЬИ" } ?: "${session.recipe.name} · ПОРЦИИ НЕ СОХРАНЕНЫ")
+        Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+            PaperBakeNumber(session.bakeNumber,size=BakeNumberSize.Lg,accent=true)
+            Column { SmallLabel("ВЫПЕЧКА ${com.polinalinen.madre.model.BakeNumbers.label(session.bakeNumber)}")
+                SmallLabel(session.trustedPortions?.let { "${session.recipe.name} · ×$it СЕМЬИ" } ?: "${session.recipe.name} · ПОРЦИИ НЕ СОХРАНЕНЫ") }
+        }
         PaperStepRail(session.recipe.timeline.size,session.currentStepIndex,Modifier.fillMaxWidth().padding(top=14.dp))
         Row(Modifier.fillMaxWidth().padding(top=26.dp),verticalAlignment=Alignment.Bottom) {
             BookText("%02d".format(session.currentStepIndex+1),100,weight=FontWeight.ExtraLight)
@@ -91,13 +95,13 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
             PaperButton(if(session.isPaused)"Продолжить" else "Пауза",onPause,Modifier.weight(1f),variant=PaperButtonVariant.SECONDARY)
             PaperButton(if(session.isLastStep)"Испечено" else "Дальше →",onNext,Modifier.weight(1f),true, enabled = !session.isLastStep || session.trustedPortions != null)
         }
-        if (onOpenAlice != null && com.polinalinen.madre.config.FeatureFlags.ALICE) PaperAliceButton(onOpenAlice, Modifier.fillMaxWidth())
+        if (onOpenAlice != null && com.polinalinen.madre.config.FeatureFlags.ALICE) PaperAliceButton(onOpenAlice, Modifier.fillMaxWidth(),label="Алиса · «${com.polinalinen.madre.model.BakeNumbers.ordinal(session.bakeNumber)}»")
         if(com.polinalinen.madre.config.FeatureFlags.YANDEX_ID)PaperTextAction("Таймер на Станции",{stationTimer=true})
       }
     }
-    if(stationTimer)com.polinalinen.madre.account.yandex.StationTimerSheet(remaining){stationTimer=false}
+    if(stationTimer)com.polinalinen.madre.account.yandex.StationTimerSheet(remaining,bakeNumber=session.bakeNumber){stationTimer=false}
 }
-@Composable fun FullTimer(session:BakingSession,remaining:Long,onClose:()->Unit) {
+@Composable fun FullTimer(session:BakingSession,remaining:Long,sessions:List<BakingSession> = emptyList(),onSwitchSession:(Long)->Unit={},onClose:()->Unit) {
     val keepScreenOn = LocalBookDisplaySettings.current.keepScreenOn
     Immersive(keepScreenOn = keepScreenOn)
     val progress=timerProgress(session.currentStep.durationMinutes*60L,remaining)
@@ -105,11 +109,13 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
     Box(Modifier.fillMaxSize().background(Illustration.OvenDark).clickable(onClickLabel="Свернуть таймер",onClick=onClose)) {
         Canvas(Modifier.fillMaxSize()) {drawRect(Brush.radialGradient(listOf(Illustration.OvenGlow,Color.Transparent),Offset(size.width*.5f,size.height),size.height*.7f))}
         Column(Modifier.align(Alignment.CenterStart).windowInsetsPadding(WindowInsets.systemBarsIgnoringVisibility.union(WindowInsets.displayCutout)).padding(26.dp)) {
+            CompositionLocalProvider(LocalPaper provides NightPaper) { PaperBakeNumber(session.bakeNumber,size=BakeNumberSize.Display) }
             SmallLabel("${session.currentStep.title.uppercase()} · ШАГ ${session.currentStepIndex+1} ИЗ ${session.recipe.timeline.size}",color=NightPaper.acc)
             TimerNumber(if(remaining>=3600)"${remaining/3600}ч" else "%02d".format(remaining/60),progress,150.sp,(-8).sp,NightPaper.ink)
             TimerNumber(if(remaining>=3600)"%02d:%02d".format(remaining/60%60,remaining%60) else "%02d".format(remaining%60),progress,100.sp,0.sp,NightPaper.acc)
             BookText(if(session.isPaused)"Пауза" else if(remaining==0L)"Время вышло" else session.recipe.name,24,Modifier.padding(top=20.dp),italic=true,color=NightPaper.ink)
             SmallLabel(if(keepScreenOn)"ЭКРАН НЕ ГАСНЕТ · КОСНИТЕСЬ, ЧТОБЫ СВЕРНУТЬ" else "КОСНИТЕСЬ, ЧТОБЫ СВЕРНУТЬ",Modifier.padding(top=24.dp),color=NightPaper.ink2)
+            CompositionLocalProvider(LocalPaper provides NightPaper) { BookBakeSessionChips(sessions.filter{it.id!=session.id},session.id,onSwitchSession) }
         }
     }
 }

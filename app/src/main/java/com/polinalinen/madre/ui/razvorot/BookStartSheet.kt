@@ -29,7 +29,7 @@ import androidx.compose.material.icons.outlined.Schedule
     onDismiss: () -> Unit, onChapter: (() -> Unit)? = null,
     onPlan: ((Int,Long) -> Unit)? = null, initialMode: Int = 0, existingPlan: PlannedBake? = null,
     onRemovePlan: (() -> Unit)? = null, busy: Boolean = false, error: String? = null, nowMillis: Long? = null,
-    clock:Clock=LocalBookClock.current) {
+    clock:Clock=LocalBookClock.current, bakeNumber:Int?=existingPlan?.number) {
     var portions by rememberSaveable(recipe.id,existingPlan?.id) { mutableIntStateOf(initialPortions.coerceIn(1,5)) }
     var mode by rememberSaveable(recipe.id,existingPlan?.id) { mutableIntStateOf(if(existingPlan!=null)1 else initialMode.coerceIn(0,1)) }
     val actualClock=remember(clock,nowMillis){nowMillis?.let{Clock.fixed(Instant.ofEpochMilli(it),clock.zone)}?:clock}
@@ -49,6 +49,10 @@ import androidx.compose.material.icons.outlined.Schedule
             verticalArrangement=Arrangement.spacedBy(10.dp)) {
             SmallLabel("ИСПЕЧЬ")
             BookText(recipe.name,30)
+            bakeNumber?.let { number -> Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+                PaperBakeNumber(number,size=BakeNumberSize.Lg,planned=mode==1)
+                Column { PaperNote("Получит номер $number");PaperNote("Алисе: «${com.polinalinen.madre.model.BakeNumbers.ordinal(number)}»") }
+            } }
             PaperStepper("×$portions",{if(!busy)portions=(portions-1).coerceAtLeast(1)},
                 {if(!busy)portions=(portions+1).coerceAtMost(5)},minusEnabled=!busy && portions>1,plusEnabled=!busy && portions<5,caption="семьи")
             RecipeScale.yieldText(recipe,portions)?.let { PaperNote(it) }
@@ -70,7 +74,7 @@ import androidx.compose.material.icons.outlined.Schedule
                 if(mode==1)PaperNote("Напомним за 10 мин до начала.")
             }
             if(error!=null)PaperNote(error)
-            PaperButton(if(busy)"Сохраняем…" else if(mode==1)"Запланировать" else "Начать · ×$portions",{
+            PaperButton(if(busy)"Сохраняем…" else if(mode==1)"Запланировать${bakeNumber?.let{" · №$it"}.orEmpty()}" else "Начать${bakeNumber?.let{" · №$it"}.orEmpty()} · ×$portions",{
                 if(mode==0)onStart(portions) else startAt?.let{
                     if(it>=actualClock.millis())onPlan?.invoke(portions,it) else late=true
                 }

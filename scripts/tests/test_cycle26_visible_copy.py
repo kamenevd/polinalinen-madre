@@ -10,8 +10,8 @@ NAV_PREFIX = "app/src/main/java/com/polinalinen/madre/ui/razvorot/"
 # NAV-SIMPLIFY23.10 explicitly reintroduces these three labels, not the old copy elsewhere.
 NAV_APPROVED_COPY = {
     NAV_PREFIX + "BookCatalog.kt": {'"В печи"'},
-    NAV_PREFIX + "RazvorotReader.kt": {'"В печи · шаг ${active.currentStepIndex+1}"'},
-    NAV_PREFIX + "BookNavigationScreens.kt": {'"В печи · шаг ${it.currentStepIndex + 1} из ${recipe.timeline.size}"'},
+    NAV_PREFIX + "RazvorotReader.kt": {'"В печи · ${com.polinalinen.madre.model.BakeNumbers.label(active.bakeNumber)} · шаг ${active.currentStepIndex+1}"'},
+    NAV_PREFIX + "BookNavigationScreens.kt": {'"В печи · ${BakeNumbers.label(it.bakeNumber)} · шаг ${it.currentStepIndex + 1} из ${recipe.timeline.size}"'},
 }
 DESIGN = ROOT / "DESIGN-V4.md"
 PLAN = ROOT / "workflow" / "evidence" / "cycle26" / "plan.md"

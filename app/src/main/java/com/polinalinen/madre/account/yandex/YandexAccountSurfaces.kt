@@ -229,13 +229,17 @@ private fun accountErrorCopy(kind:YandexAccountError)=when(kind) {
 }
 
 /** Works without account/voice linking. It does not send a command or invent a Station name. */
-@Composable fun StationTimerSheet(remainingSeconds:Long,onDismiss:()->Unit) {
+@Composable fun StationTimerSheet(remainingSeconds:Long,bakeNumber:Int=0,onDismiss:()->Unit) {
     val phrase=StationTimerPrompt.phrase(remainingSeconds)
     val clipboard=androidx.compose.ui.platform.LocalClipboardManager.current
     var copied by remember(phrase){mutableStateOf(false)}
     PaperSheet(onDismiss) {
         Column(Modifier.fillMaxWidth().padding(horizontal=22.dp,vertical=18.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
             Text("Таймер на Станции",style=PaperType.h2,color=LocalPaper.current.ink)
+            if(bakeNumber in 1..9) {
+                PaperBakeNumber(bakeNumber)
+                PaperNote("Встроенный таймер Станции номер не знает. В навыке «Голос закваски» спросите, что со ${com.polinalinen.madre.model.BakeNumbers.genitive(bakeNumber)}.")
+            }
             Text(phrase ?: StationTimerPrompt.EXPIRED,style=PaperType.body,color=LocalPaper.current.ink)
             PaperNote(StationTimerPrompt.EXPLANATION)
             if(phrase!=null)PaperButton("Скопировать фразу",{

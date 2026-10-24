@@ -153,8 +153,8 @@ data class BakingNotificationContent(
 
             return BakingNotificationContent(
                 sessionId = bake.sessionId,
-                title = bake.recipeName,
-                headerLine = "${StarterName.sanitize(bake.starterName)} · ${bake.recipeName}",
+                title = if(bake.bakeNumber in 1..9)"№${bake.bakeNumber} ${bake.recipeName} · $time" else bake.recipeName,
+                headerLine = (if(bake.bakeNumber in 1..9)"№${bake.bakeNumber} · " else "")+"${StarterName.sanitize(bake.starterName)} · ${bake.recipeName}",
                 compact = "${bake.stepTitle} · $compactTail · шаг ${bake.stepIndex + 1} из ${bake.stepCount}",
                 stepLine = head,
                 compactStepLine = if (badge == null) head else "$badge · $head",

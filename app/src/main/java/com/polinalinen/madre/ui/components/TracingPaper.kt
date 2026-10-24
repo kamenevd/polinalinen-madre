@@ -26,7 +26,7 @@ object TracingPaper {
         totalBakes == 1 -> "первая страница нашей книги. пусть их будет много"
         totalBakes == 10 -> "десятая выпечка. у нас с вами уже свои привычки"
         totalBakes == 25 -> "двадцать пятая. я узнаю ваши руки без подсказок"
-        isMilestone(totalBakes) -> "выпечка № $totalBakes — юбилейная страница"
+        isMilestone(totalBakes) -> "$totalBakes-я в книге — юбилейная страница"
         else -> null
     }
 }

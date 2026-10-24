@@ -20,7 +20,7 @@ import kotlinx.coroutines.delay
             LaunchedEffect(session.id,session.revision) {
                 while(true){remaining=session.remainingSeconds(BakingClock.elapsed());delay(1000)}
             }
-            PaperChip("${session.recipe.name} · ${if(session.isCompleted)"Испечено" else timerDigits(remaining)}",session.id==selected,{onSelect(session.id)})
+            PaperBakeChip(session.bakeNumber,if(session.id==selected)session.recipe.name else if(session.isCompleted)"Испечено" else timerDigits(remaining),session.id==selected,{onSelect(session.id)})
         } }
     }
 }
@@ -29,7 +29,8 @@ import kotlinx.coroutines.delay
     onChapter: () -> Unit, onAbandon: () -> Unit, onDismiss: () -> Unit) {
     PaperSheet(onDismiss) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(22.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-            SmallLabel("ВЫПЕЧКА")
+            PaperBakeNumber(session.bakeNumber,size=BakeNumberSize.Lg)
+            SmallLabel("ВЫПЕЧКА ${com.polinalinen.madre.model.BakeNumbers.label(session.bakeNumber)}")
             BookText(session.recipe.name,28)
             PaperListRow("Открыть главу на этом шаге",onClick={onDismiss();onChapter()})
             PaperListRow("Не гасить экран",onClick={onKeepScreenOn(!keepScreenOn)},

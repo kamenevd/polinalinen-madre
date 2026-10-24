@@ -18,4 +18,5 @@ fun BakingSession.activeSnapshot() = ActiveBakeEntity(
     bakeKey = bakeKey,
     revision = revision,
     recipeRevision = recipeRevision,
+    bakeNumber = bakeNumber,
 )

@@ -38,10 +38,10 @@ class VoiceMigrationTest {
             }).build())
         helper.writableDatabase; helper.close()
         val room = androidx.room.Room.databaseBuilder(context, com.polinalinen.madre.data.db.MadreDatabase::class.java, name)
-            .addMigrations(MIGRATION_10_11).allowMainThreadQueries().build()
+            .addMigrations(*com.polinalinen.madre.data.db.MadreDatabase.MIGRATIONS).allowMainThreadQueries().build()
         try {
             val db = room.openHelper.writableDatabase // Runs Room's full schema validation, not just SQL.
-            assertEquals(11, db.version)
+            assertEquals(12, db.version)
             db.query("SELECT scaleFactor,recipeRevision,pausedAtWallClock FROM active_bakes WHERE sessionId=7").use {
                 assertTrue(it.moveToFirst()); assertTrue(it.isNull(0)); assertTrue(it.isNull(1)); assertEquals(1200L,it.getLong(2))
             }

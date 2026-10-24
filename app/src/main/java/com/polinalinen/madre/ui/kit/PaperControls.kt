@@ -265,10 +265,10 @@ enum class PaperButtonVariant { PRIMARY, ACCENT, SECONDARY, TEXT }
 }
 
 /** Neutral kitchen flame, not a borrowed branded Alice asset. */
-@Composable fun PaperAliceButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+@Composable fun PaperAliceButton(onClick: () -> Unit, modifier: Modifier = Modifier,label:String="Алиса") {
     PaperTextButton(onClick, modifier, label = "Открыть Алису") {
         Icon(Icons.Outlined.LocalFireDepartment, contentDescription = null, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(8.dp))
-        Text("Алиса", style = PaperType.ui)
+        Text(label, style = PaperType.ui)
     }
 }

@@ -70,6 +70,7 @@ class BakeRestoreWorker(
                                 BakeStepEndWorker.KEY_STEP_INDEX to bake.stepIndex,
                                 BakeStepEndWorker.KEY_RECIPE_NAME to bake.recipeName,
                                 BakeStepEndWorker.KEY_STEP_TITLE to bake.stepTitle,
+                                BakeStepEndWorker.KEY_BAKE_NUMBER to bake.bakeNumber,
                             )
                         )
                         .build()
@@ -103,11 +104,12 @@ class BakeStepEndWorker(
         val stepIndex = inputData.getInt(KEY_STEP_INDEX, 0)
         val recipeName = inputData.getString(KEY_RECIPE_NAME).orEmpty()
         val stepTitle = inputData.getString(KEY_STEP_TITLE).orEmpty()
+        val number=inputData.getInt(KEY_BAKE_NUMBER,0)
 
         MadreNotifier(applicationContext).postBakingNotification(
             sessionId = sessionId,
             key = BakingNotificationPlanner.stepDoneKey(sessionId, stepIndex),
-            title = "«$recipeName» — время вышло",
+            title = (if(number in 1..9)"№$number " else "")+"«$recipeName» — время вышло",
             text = "$stepTitle: шаг закончен, можно продолжать.",
         )
         return Result.success()
@@ -118,5 +120,6 @@ class BakeStepEndWorker(
         const val KEY_STEP_INDEX = "step_index"
         const val KEY_RECIPE_NAME = "recipe_name"
         const val KEY_STEP_TITLE = "step_title"
+        const val KEY_BAKE_NUMBER = "bake_number"
     }
 }

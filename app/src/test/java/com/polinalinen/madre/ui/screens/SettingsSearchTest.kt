@@ -16,7 +16,7 @@ class SettingsSearchTest {
         assertTrue(SettingsEntry.entries.none { settingsMatches(it, "зефир") })
     }
     @Test fun notificationAliasFindsOnlyImplementedControlsWithoutInventingQuietHours() {
-        assertEquals(setOf(SettingsEntry.REMINDERS, SettingsEntry.TIMER_SOUND),
+        assertEquals(setOf(SettingsEntry.REMINDERS, SettingsEntry.TIMER_SOUND, SettingsEntry.LOCK_PROGRESS),
             SettingsEntry.entries.filter { settingsMatches(it, "увед") }.toSet())
     }
 }

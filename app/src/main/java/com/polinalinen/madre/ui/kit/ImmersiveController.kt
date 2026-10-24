@@ -117,9 +117,25 @@ fun Context.findActivity(): Activity? {
         onDispose { controller?.release(key) }
     }
     DisposableEffect(view, keepScreenOn) {
-        val previous = view.keepScreenOn
-        if (keepScreenOn) view.keepScreenOn = true
-        onDispose { if (keepScreenOn) view.keepScreenOn = previous }
+        KeepScreenRequests.request(view, key, keepScreenOn)
+        onDispose { KeepScreenRequests.release(view, key) }
+    }
+}
+
+/** Reader/timer/overlay share a View: out-of-order disposal must not restore another owner's old true flag. */
+internal object KeepScreenRequests {
+    private class Leases(val baseline: Boolean, val requests: MutableMap<Any, Boolean> = linkedMapOf())
+    private val views = WeakHashMap<android.view.View, Leases>()
+    @Synchronized fun request(view: android.view.View, key: Any, enabled: Boolean) {
+        val leases = views.getOrPut(view) { Leases(view.keepScreenOn) }
+        leases.requests[key] = enabled
+        view.keepScreenOn = leases.baseline || leases.requests.values.any { it }
+    }
+    @Synchronized fun release(view: android.view.View, key: Any) {
+        val leases = views[view] ?: return
+        leases.requests.remove(key)
+        view.keepScreenOn = leases.baseline || leases.requests.values.any { it }
+        if (leases.requests.isEmpty()) views.remove(view)
     }
 }
 

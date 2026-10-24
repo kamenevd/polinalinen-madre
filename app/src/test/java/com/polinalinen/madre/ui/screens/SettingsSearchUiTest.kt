@@ -15,6 +15,7 @@ import org.junit.runner.RunWith
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import kotlinx.coroutines.flow.first
 
 /** Production content and actual preference persistence; no account, device or network effects. */
 @RunWith(AndroidJUnit4::class)
@@ -34,6 +35,7 @@ class SettingsSearchUiTest {
         rule.onNodeWithContentDescription("Найти настройку").performTextInput("увед")
         rule.onNodeWithText("Напоминания").assertExists()
         rule.onNodeWithText("Звук таймера").assertExists()
+        rule.onNodeWithText("Ход выпечки на экране блокировки").assertExists()
         rule.onNodeWithText("В журнале").assertDoesNotExist()
         rule.onNodeWithText("ЧТЕНИЕ").assertDoesNotExist()
         rule.onNodeWithContentDescription("Очистить поиск").performClick()
@@ -76,5 +78,20 @@ class SettingsSearchUiTest {
         assertEquals(app.packageName, intent.getStringExtra(android.provider.Settings.EXTRA_APP_PACKAGE))
         assertEquals(com.polinalinen.madre.notifications.MadreNotifier.CHANNEL_BAKING,
             intent.getStringExtra(android.provider.Settings.EXTRA_CHANNEL_ID))
+    }
+    @Test fun actualSettingsSwitchesPersistThroughTheSharedApplicationRoomFlow() {
+        rule.setContent { RazvorotTheme { SettingsScreen("Полина", {}, {}) } }
+        rule.onNodeWithContentDescription("Не гасить экран").performScrollTo().assertIsOn().performClick()
+        rule.waitUntil(10_000) { !app.bookDisplaySettings.value.keepScreenOn }
+        rule.onNodeWithContentDescription("Не гасить экран").assertIsOff()
+        rule.onNodeWithContentDescription("Ход выпечки на экране блокировки").performScrollTo().assertIsOff().performClick()
+        rule.waitUntil(10_000) { app.bookDisplaySettings.value.lockScreenProgress }
+        rule.onNodeWithContentDescription("Ход выпечки на экране блокировки").assertIsOn()
+        kotlinx.coroutines.runBlocking {
+            val restored = com.polinalinen.madre.data.repository.FamilySettingsRepository(app.database)
+                .observeBookDisplaySettings().first()
+            assertFalse(restored.keepScreenOn)
+            assertTrue(restored.lockScreenProgress)
+        }
     }
 }

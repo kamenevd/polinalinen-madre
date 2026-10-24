@@ -21,6 +21,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
+import com.polinalinen.madre.model.BookDisplaySettings
 
 /**
  * Единая точка создания Room/repository — синглтоны живут в Application,
@@ -76,6 +80,9 @@ class MadreApplication : Application() {
         appScope.launch { voiceCoordinator.disconnect() }
     }
     val familySettingsRepository: FamilySettingsRepository by lazy { FamilySettingsRepository(database) }
+    val bookDisplaySettings: StateFlow<BookDisplaySettings> by lazy {
+        familySettingsRepository.observeBookDisplaySettings().stateIn(appScope, SharingStarted.Eagerly, BookDisplaySettings())
+    }
     // Cycle 5: общая книга на PocketBase — клиент и очередь фоновой отправки.
     val madreApi: MadreApi by lazy { MadreApiFactory.create() }
     /**

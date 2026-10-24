@@ -51,7 +51,9 @@ class PhotoAttachmentRecentUiTest {
         assertNotEquals(original.absolutePath,staged.single())
         assertArrayEquals(before,File(staged.single()).readBytes())
         rule.onNodeWithText("← Отмена").performClick()
-        rule.waitUntil(10_000){rule.onAllNodesWithText("Рамка").fetchSemanticsNodes().isEmpty() && cancelled==1}
+        rule.waitUntil(10_000){
+            rule.onAllNodesWithText("Рамка").fetchSemanticsNodes().isEmpty() && cancelled==1 && staging()==stagedBefore
+        }
         assertEquals(0,attached)
         assertEquals(stagedBefore,staging())
         assertTrue(original.isFile)

@@ -115,6 +115,8 @@ fun SettingsScreen(
 ) {
     val colors = LocalPaper.current
     val familyName by familySettingsViewModel.familyName.collectAsState()
+    val displaySettings by familySettingsViewModel.bookDisplaySettings.collectAsState()
+    val displayError by familySettingsViewModel.displayError.collectAsState()
     val familyBookState by familyBookViewModel.state.collectAsState()
     LaunchedEffect(Unit) { familyBookViewModel.restore() }
     // Книга в семье — значит, её имя живёт в карточке общей книги, и второму
@@ -125,7 +127,9 @@ fun SettingsScreen(
         onStarterNameChange, bakeCount, feedingCount, intervalHours, onIntervalHoursChange,
         remindersEnabled, onRemindersEnabledChange, calmMode, onCalmModeChange,
         familyName, familyBookState, familySettingsViewModel::setFamilyName, familyBookViewModel::signOut, onOpenAlice,
-        readingPreferences)
+        readingPreferences, displaySettings = displaySettings,
+        onKeepScreenOnChange = { familySettingsViewModel.setKeepScreenOn(it) },
+        onLockScreenProgressChange = { familySettingsViewModel.setLockScreenProgress(it) }, displayError = displayError)
 }
 
 /** Same production layout; fixtures can supply state without touching accounts/network. */
@@ -138,6 +142,9 @@ fun SettingsScreen(
     familyName: String?, familyBookState: FamilyBookState,
     onSetFamilyName: (String) -> Unit, onSignOut: () -> Unit, onOpenAlice: () -> Unit = {},
     preferences: ReadingPreferences = rememberReadingPreferences(), initialSearch: String = "",
+    displaySettings: com.polinalinen.madre.model.BookDisplaySettings = LocalBookDisplaySettings.current,
+    onKeepScreenOnChange: (Boolean) -> Unit = {}, onLockScreenProgressChange: (Boolean) -> Unit = {},
+    displayError: String? = null,
 ) {
     val inFamily = familyBookState.account?.hasFamily == true
     var query by rememberSaveable { mutableStateOf(initialSearch) }
@@ -154,6 +161,7 @@ fun SettingsScreen(
             Text("выходные данные книги", color = LocalPaper.current.ink2, style = PaperType.note,
                 modifier = Modifier.padding(horizontal = 22.dp, vertical = 4.dp))
             PaperSearchField(query, { query = it }, Modifier.padding(horizontal = 22.dp, vertical = 16.dp))
+            if (displayError != null) PaperNote(displayError)
             if (shown(SettingsEntry.ACCOUNT)) com.polinalinen.madre.account.yandex.YandexSettingsSection(myName,onMyNameChange,onOpenAlice)
             if (visible.isEmpty()) PaperEmpty("Такой настройки нет", "Попробуй другое слово или очисти поиск.",
                 action = { PaperButton("Очистить поиск", { query = "" }, Modifier.padding(horizontal = 22.dp)) })
@@ -181,7 +189,7 @@ fun SettingsScreen(
                 SettingsRow(shelfLabel, "›", onOpenShelfSettings)
                 if (account != null) TextAction("Выйти · книга на телефоне останется", onClick = onSignOut)
             }
-            if (shown(SettingsEntry.THEME, SettingsEntry.READING_MODE, SettingsEntry.TEXT_SIZE, SettingsEntry.CALM)) SettingsSection(Sections.LOOK) {
+            if (shown(SettingsEntry.THEME, SettingsEntry.READING_MODE, SettingsEntry.TEXT_SIZE, SettingsEntry.KEEP_SCREEN, SettingsEntry.CALM)) SettingsSection(Sections.LOOK) {
                 if (shown(SettingsEntry.THEME)) {
                     SettingsCaption("Тема · ${preferences.atmosphere.label}")
                     PaperAtmospherePicker(preferences)
@@ -192,14 +200,19 @@ fun SettingsScreen(
                         { preferences.chooseMode(if (it == 0) ReadingMode.BOOK else ReadingMode.SCROLL) }, label = "Как читать рецепт")
                 }
                 if (shown(SettingsEntry.TEXT_SIZE)) SettingsRow("Размер текста", "${preferences.textSize.toInt()} · Аа", { showReadingSettings = true })
+                if (shown(SettingsEntry.KEEP_SCREEN)) PaperSettingSwitch("Не гасить экран", displaySettings.keepScreenOn,
+                    onKeepScreenOnChange, note = "Пока открыты рецепт или таймер")
                 if (shown(SettingsEntry.CALM)) {
                     CalmModeRow(calmMode, onCalmModeChange)
                     SettingsCaption("В спокойном режиме нет непрерывных декораций. Бумага, рамки и следы на страницах остаются.")
                 }
             }
-            if (shown(SettingsEntry.TIMER_SOUND)) SettingsSection(Sections.NOTIFICATIONS) {
+            if (shown(SettingsEntry.TIMER_SOUND, SettingsEntry.LOCK_PROGRESS)) SettingsSection(Sections.NOTIFICATIONS) {
                 val context = LocalContext.current
-                SettingsRow("Звук таймера", "Настройки телефона", { openTimerSoundSettings(context) })
+                if (shown(SettingsEntry.LOCK_PROGRESS)) PaperSettingSwitch("Ход выпечки на экране блокировки",
+                    displaySettings.lockScreenProgress, onLockScreenProgressChange,
+                    note = "Текущий шаг и время без разблокировки. Если выключено — только «Выпечка идёт».")
+                if (shown(SettingsEntry.TIMER_SOUND)) SettingsRow("Звук таймера", "Настройки телефона", { openTimerSoundSettings(context) })
             }
             if (shown(SettingsEntry.ALICE, SettingsEntry.JOURNAL, SettingsEntry.VERSION)) SettingsSection(Sections.ABOUT) {
                 if (shown(SettingsEntry.ALICE)) SettingsRow("Алиса на кухне", "›", onOpenAlice)

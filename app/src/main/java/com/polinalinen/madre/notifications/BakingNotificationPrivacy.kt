@@ -1,0 +1,20 @@
+package com.polinalinen.madre.notifications
+
+import android.app.Notification
+import android.content.Context
+import androidx.core.app.NotificationCompat
+import com.polinalinen.madre.R
+
+/** A hidden lock-screen progress notification exposes no recipe, step, remaining time or actions. */
+internal fun NotificationCompat.Builder.bakingLockScreenPrivacy(
+    context: Context, channel: String, showProgress: Boolean,
+): NotificationCompat.Builder {
+    setVisibility(if (showProgress) NotificationCompat.VISIBILITY_PUBLIC else NotificationCompat.VISIBILITY_PRIVATE)
+    if (!showProgress) setPublicVersion(NotificationCompat.Builder(context, channel)
+        .setSmallIcon(R.drawable.ic_notification_bread)
+        .setContentTitle("Мадре")
+        .setContentText("Выпечка идёт")
+        .setVisibility(Notification.VISIBILITY_PUBLIC)
+        .build())
+    return this
+}

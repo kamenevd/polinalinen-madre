@@ -150,6 +150,7 @@ fun MadreNavHost(
     val shelfViewModel: ShelfViewModel = viewModel()
     val familyBookViewModel: FamilyBookViewModel = viewModel()
     val app = context.applicationContext as MadreApplication
+    val displaySettings by app.bookDisplaySettings.collectAsState()
     val navigationScope = rememberCoroutineScope()
     var aliceSheet by remember { mutableStateOf(false) }
     val planScheduler=remember(context){com.polinalinen.madre.notifications.PlannedBakeScheduler(context.applicationContext)}
@@ -352,7 +353,7 @@ fun MadreNavHost(
         ((System.currentTimeMillis() - oldest.timestampMillis) / 86_400_000L).toInt() + 1
     } ?: 1
 
-    CompositionLocalProvider(LocalCalmMode provides calmMode) {
+    CompositionLocalProvider(LocalCalmMode provides calmMode, LocalBookDisplaySettings provides displaySettings) {
         RazvorotTheme(readingPreferences) {
         Box(Modifier.fillMaxSize()) {
         NavHost(navController = navController, startDestination = MadreDestinations.HOME) {
@@ -435,6 +436,11 @@ fun MadreNavHost(
                     onComplete = {},
                     viewModel = bakingViewModel,
                     onOpenChapter={ bake->openChapter(bake.recipe.id,step=bake.currentStepIndex) },
+                    onKeepScreenOnChange={ value->navigationScope.launch {
+                        try { app.familySettingsRepository.setKeepScreenOn(value) }
+                        catch (cancelled:kotlinx.coroutines.CancellationException) { throw cancelled }
+                        catch (_:Exception) { navSnackbar.showSnackbar("Не удалось сохранить настройку экрана. Повторите выбор.") }
+                    } },
                     onSwitchSession={id->navController.navigate(MadreDestinations.bake(id.toString())) {
                         popUpTo(MadreDestinations.BAKE){inclusive=true}
                     } },

@@ -16,6 +16,7 @@ import com.polinalinen.madre.MadreApplication
 import com.polinalinen.madre.MainActivity
 import com.polinalinen.madre.R
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 /**
@@ -68,6 +69,7 @@ class BakingProgressService : LifecycleService() {
     /** Чьё уведомление сейчас держит сервис на переднем плане. */
     private var foregroundSessionId: Long? = null
     private var voiceJob: kotlinx.coroutines.Job? = null
+    private var showLockScreenProgress = false
 
     override fun onCreate() {
         super.onCreate()
@@ -76,7 +78,15 @@ class BakingProgressService : LifecycleService() {
         ensureChannel()
 
         lifecycleScope.launch {
-            (application as MadreApplication).activeBakes.progress.collectLatest { bakes ->
+            val app = application as MadreApplication
+            combine(app.activeBakes.progress, app.bookDisplaySettings) { bakes, settings ->
+                bakes to settings.lockScreenProgress
+            }.collectLatest { (bakes, showProgress) ->
+                if (showLockScreenProgress != showProgress) {
+                    showLockScreenProgress = showProgress
+                    // Re-render paused/expired timers too: their content may be unchanged while privacy changed.
+                    shownContent = emptyMap()
+                }
                 if (bakes.isEmpty()) {
                     // Последняя выпечка закрылась — снимаем всё своё и уходим.
                     // Ждать, пока система вспомнит про пустой сервис, нельзя:
@@ -226,6 +236,7 @@ class BakingProgressService : LifecycleService() {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
             .setShowWhen(false)
+            .bakingLockScreenPrivacy(this, CHANNEL_ID, showLockScreenProgress)
 
     /**
      * Тап открывает ИМЕННО эту выпечку. Cycle 20: дорога сюда общая с

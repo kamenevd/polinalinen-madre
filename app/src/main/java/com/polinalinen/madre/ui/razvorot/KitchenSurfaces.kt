@@ -93,10 +93,9 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
     if(stationTimer)com.polinalinen.madre.account.yandex.StationTimerSheet(remaining){stationTimer=false}
 }
 @Composable fun FullTimer(session:BakingSession,remaining:Long,onClose:()->Unit) {
-    Immersive(keepScreenOn = true)
-    val view=LocalView.current
+    val keepScreenOn = LocalBookDisplaySettings.current.keepScreenOn
+    Immersive(keepScreenOn = keepScreenOn)
     val progress=timerProgress(session.currentStep.durationMinutes*60L,remaining)
-    DisposableEffect(view){val old=view.keepScreenOn;view.keepScreenOn=true;onDispose{view.keepScreenOn=old}}
     BackHandler(onBack=onClose)
     Box(Modifier.fillMaxSize().background(Illustration.OvenDark).clickable(onClickLabel="Свернуть таймер",onClick=onClose)) {
         Canvas(Modifier.fillMaxSize()) {drawRect(Brush.radialGradient(listOf(Illustration.OvenGlow,Color.Transparent),Offset(size.width*.5f,size.height),size.height*.7f))}
@@ -105,7 +104,7 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
             TimerNumber(if(remaining>=3600)"${remaining/3600}ч" else "%02d".format(remaining/60),progress,150.sp,(-8).sp,NightPaper.ink)
             TimerNumber(if(remaining>=3600)"%02d:%02d".format(remaining/60%60,remaining%60) else "%02d".format(remaining%60),progress,100.sp,0.sp,NightPaper.acc)
             BookText(if(session.isPaused)"Пауза" else if(remaining==0L)"Время вышло" else session.recipe.name,24,Modifier.padding(top=20.dp),italic=true,color=NightPaper.ink)
-            SmallLabel("ЭКРАН НЕ ГАСНЕТ · КОСНИТЕСЬ, ЧТОБЫ СВЕРНУТЬ",Modifier.padding(top=24.dp),color=NightPaper.ink2)
+            SmallLabel(if(keepScreenOn)"ЭКРАН НЕ ГАСНЕТ · КОСНИТЕСЬ, ЧТОБЫ СВЕРНУТЬ" else "КОСНИТЕСЬ, ЧТОБЫ СВЕРНУТЬ",Modifier.padding(top=24.dp),color=NightPaper.ink2)
         }
     }
 }

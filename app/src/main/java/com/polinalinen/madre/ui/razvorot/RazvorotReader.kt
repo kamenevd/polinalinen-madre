@@ -65,7 +65,7 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
     var seekAnchor by rememberSaveable(recipeId) { mutableStateOf("$recipeId:title") }
     val scrollCursor = rememberSaveable(recipeId, saver=ChapterScrollState.Saver) { ChapterScrollState() }
     val p = LocalPaper.current
-    Immersive(barsRevealed = chrome)
+    Immersive(barsRevealed = chrome, keepScreenOn = LocalBookDisplaySettings.current.keepScreenOn)
     val stableInsets = WindowInsets.systemBarsIgnoringVisibility.union(WindowInsets.displayCutout)
     val stablePadding = stableInsets.asPaddingValues()
     BackHandler(onBack = onBack)

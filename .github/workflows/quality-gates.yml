@@ -288,6 +288,9 @@ jobs:
           python3 -c 'import os,re; assert re.fullmatch(r"[0-9a-fA-F]{32}", os.environ.get("MADRE_YANDEX_CLIENT_ID", "")), "Approved Yandex client id is required for instrumentation"'
           sdkmanager "build-tools;${MADRE_BUILD_TOOLS_VERSION}"
           ./gradlew :yandex-authsdk-330:mergeDebugAndroidTestManifest :app:assembleDebugAndroidTest --no-daemon --stacktrace --no-configuration-cache
+      - name: Build immutable negative R8 control before AVD boot, not alongside emulator memory
+        if: inputs.bake_numbers_native
+        run: python3 scripts/run_minified_plan_regression.py --prepare
       - name: Run emulator smoke tests
         uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
         with:

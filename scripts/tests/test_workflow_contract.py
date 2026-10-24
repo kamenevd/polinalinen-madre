@@ -114,6 +114,87 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("'test_only_persistence_ABI':False",runtime)
         self.assertIn("actualUnmodifiedDeliveryReadsLegacyAndAddsPlan",self.read("macrobenchmark/src/main/java/com/polinalinen/madre/macrobenchmark/QaOwnerAcceptance.kt"))
 
+    def test_minified_control_build_finishes_before_boot_and_transport_is_not_a_pass(self):
+        text=self.read(".github/workflows/quality-gates.yml")
+        self.assertLess(text.index("run: python3 scripts/run_minified_plan_regression.py --prepare"),text.index("name: Run emulator smoke tests"))
+        source=self.read("scripts/run_minified_plan_regression.py")
+        self.assertIn("metadata['controller_head']==head",source)
+        self.assertIn("source_hashes()==original",source)
+        self.assertIn("wait_for_emulator()",source)
+        self.assertIn("no data test PASS",source)
+        self.assertNotIn("kill-server",source)
+
+    def minified_transport_helpers(self):
+        # Execute the actual helpers without starting a build, adb or data tests.
+        import ast
+        import subprocess
+        import sys
+        from unittest.mock import Mock
+        source = ast.parse(self.read("scripts/run_minified_plan_regression.py"))
+        functions: list[ast.stmt] = [node for node in source.body if isinstance(node, ast.FunctionDef)
+                                    and node.name in ('run', 'wait_for_emulator')]
+        scope = {'subprocess': Mock(TimeoutExpired=subprocess.TimeoutExpired),
+                 'sys': sys, 'time': Mock(), 'transport_event': Mock(),
+                 'PACKAGE': 'com.polinalinen.madre.qa'}
+        exec(compile(ast.Module(body=functions, type_ignores=[]), '<actual-transport-helpers>', 'exec'), scope)
+        return scope
+
+    def test_minified_transport_retries_only_offline_idempotent_commands(self):
+        import subprocess
+        from unittest.mock import Mock
+        command = ['adb', 'install', '-r', 'test.apk']
+        for message, expected_calls in [('error: device offline', 2), ('INSTALL_FAILED_INVALID_APK', 1)]:
+            with self.subTest(message=message):
+                scope = self.minified_transport_helpers()
+                scope['wait_for_emulator'] = Mock()
+                scope['subprocess'].run.side_effect = [
+                    subprocess.CompletedProcess(command, 1, '', message),
+                    subprocess.CompletedProcess(command, 0, 'Success\n', '')]
+                if expected_calls == 2:
+                    self.assertEqual(0, scope['run'](command).returncode)
+                else:
+                    with self.assertRaises(subprocess.CalledProcessError):
+                        scope['run'](command)
+                self.assertEqual(expected_calls, scope['subprocess'].run.call_count)
+                self.assertEqual(expected_calls, scope['wait_for_emulator'].call_count)
+
+    def test_minified_transport_exhaustion_and_instrumentation_fail_closed(self):
+        import subprocess
+        from unittest.mock import Mock
+        scope = self.minified_transport_helpers()
+        scope['wait_for_emulator'] = Mock()
+        command = ['adb', 'pull', '/synthetic', '/local']
+        scope['subprocess'].run.return_value = subprocess.CompletedProcess(command, 1, '', 'error: device offline')
+        with self.assertRaises(subprocess.CalledProcessError):
+            scope['run'](command)
+        self.assertEqual(3, scope['subprocess'].run.call_count)
+        scope['subprocess'].run.reset_mock()
+        with self.assertRaisesRegex(AssertionError, 'Not a retryable adb operation'):
+            scope['run'](['adb', 'shell', 'am', 'instrument', '-w', 'synthetic.test'])
+        scope['subprocess'].run.assert_not_called()
+
+    def test_minified_wait_requires_booted_emulator_and_bounds_offline_wait(self):
+        import subprocess
+        for boot, succeeds in [('1\n1\n', True), ('0\n1\n', False), ('1\n0\n', False)]:
+            with self.subTest(boot=boot):
+                scope = self.minified_transport_helpers()
+                scope['subprocess'].run.side_effect = [
+                    result for _ in range(3) for result in (
+                        subprocess.CompletedProcess(['adb'], 0, '', ''),
+                        subprocess.CompletedProcess(['adb'], 0, boot, ''))]
+                if succeeds:
+                    scope['wait_for_emulator']()
+                    self.assertEqual(2, scope['subprocess'].run.call_count)
+                else:
+                    with self.assertRaisesRegex(RuntimeError, 'no data test PASS'):
+                        scope['wait_for_emulator']()
+                    self.assertEqual(6, scope['subprocess'].run.call_count)
+        scope = self.minified_transport_helpers()
+        scope['subprocess'].run.side_effect = subprocess.TimeoutExpired(['adb'], 120)
+        with self.assertRaisesRegex(RuntimeError, 'no data test PASS'):
+            scope['wait_for_emulator']()
+        self.assertEqual(3, scope['subprocess'].run.call_count)
+
     def test_debug_signing_has_its_own_identity_and_keeps_qa_isolation(self):
         text = self.read("app/build.gradle.kts")
         debug = text.split("        debug {", 1)[1].split("        release {", 1)[0]

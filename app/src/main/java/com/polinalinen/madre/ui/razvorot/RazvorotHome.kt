@@ -88,7 +88,7 @@ import com.polinalinen.madre.ui.components.bookAction
 }
 @Composable internal fun SpineBar(section:Int,onSelect:(Int)->Unit) {
     val p=LocalPaper.current
-    Row(Modifier.fillMaxWidth().background(p.glass).drawBehind{drawLine(p.line,Offset.Zero,Offset(size.width,0f),1.dp.toPx())}.navigationBarsPadding().height(IntrinsicSize.Min).heightIn(min=70.dp).testTag("spine-navigation"),verticalAlignment=Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().background(p.bg).drawBehind{drawLine(p.line,Offset.Zero,Offset(size.width,0f),1.dp.toPx())}.navigationBarsPadding().height(IntrinsicSize.Min).heightIn(min=70.dp).testTag("spine-navigation"),verticalAlignment=Alignment.CenterVertically) {
             val labels=listOf("Читать","Печь","Закваска","Полка")
             val icons=listOf(Icons.Outlined.MenuBook,Icons.Outlined.LocalFireDepartment,Icons.Outlined.Science,Icons.Outlined.CollectionsBookmark)
             labels.forEachIndexed { i,label ->

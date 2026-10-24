@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.window.DialogWindowProvider
@@ -27,6 +28,9 @@ class ImmersiveController {
     private val windows = WeakHashMap<Window, Int>()
     private val tones = linkedMapOf<Any, Boolean>()
     private var themeLight = true
+    var paperColor:Int=android.graphics.Color.TRANSPARENT
+        private set
+    fun setPaperColor(color:Int) {if(paperColor!=color){paperColor=color;reapplyAll()}}
     var lightPaper: Boolean = true
         private set
     val wanted: Boolean get() = requests.values.any { it }
@@ -64,7 +68,10 @@ class ImmersiveController {
             else WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         }
     }
+    @Suppress("DEPRECATION")
     fun reapply(window: Window) {
+        // Android35 enforces transparent edge-to-edge; older OEMs need an explicit paper bar.
+        window.navigationBarColor=if(Build.VERSION.SDK_INT>=35)android.graphics.Color.TRANSPARENT else paperColor
         WindowCompat.getInsetsController(window, window.decorView).apply {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             isAppearanceLightStatusBars = lightPaper
@@ -94,8 +101,13 @@ fun Context.findActivity(): Activity? {
     val fallback = remember { ImmersiveController() }
     val controller = inherited ?: (activity as? ImmersiveHost)?.immersiveController ?: fallback
     val ime = WindowInsets.isImeVisible
+    val color=LocalPaper.current.bg.toArgb()
     var previousIme by remember { mutableStateOf(ime) }
     SideEffect {
+        if(controller.paperColor!=color) {
+            controller.setPaperColor(color)
+            activity?.window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(color))
+        }
         controller.setPaperLight(light)
         if (previousIme && !ime) controller.reapplyAll()
         previousIme = ime

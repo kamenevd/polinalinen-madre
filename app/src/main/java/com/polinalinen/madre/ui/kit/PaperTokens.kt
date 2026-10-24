@@ -35,15 +35,15 @@ data class PaperColors(
 val DawnPaper = PaperColors(Color(0xFFF4F1EC), Color(0xFFEAE5DD), Color.White, Color(0xFF16130F), Color(0xFF4F4943), Color(0xFF8F8880), Color(0xFFE1DBD2), Color(0xFFD2602A), Color(0xFFB83A2E), Color(0xFFF7DECD), Color(0xFF5F7D45), Color(0xFFE1EBD6))
 val DayPaper = PaperColors(Color(0xFFF8F3EA), Color(0xFFEFE7DA), Color.White, Color(0xFF16130F), Color(0xFF4F4943), Color(0xFF8F8880), Color(0xFFE6DCCD), Color(0xFFD2602A), Color(0xFFB83A2E), Color(0xFFF7DECD), Color(0xFF5F7D45), Color(0xFFE1EBD6))
 val DuskPaper = PaperColors(Color(0xFFF1E2CC), Color(0xFFE7D3B6), Color(0xFFFBF1E2), Color(0xFF2A1C10), Color(0xFF5F4630), Color(0xFF9A7F64), Color(0xFFDCC6A6), Color(0xFFC24E1C), Color(0xFFB83A2E), Color(0xFFF0CDB0), Color(0xFF5F7D45), Color(0xFFE1EBD6), .75f)
-val NightPaper = PaperColors(Color(0xFF0D0B0A), Color(0xFF1A1512), Color(0xFF191411), Color(0xFFF2E9DE), Color(0xFFC0B3A5), Color(0xFF7F7469), Color(0xFF2A231F), Color(0xFFF08A4B), Color(0xFFD0503F), Color(0xFF3B2516), Color(0xFFA2C084), Color(0xFF232D1C), .70f, .55f)
+val NightPaper = PaperColors(Color(0xFF17130F), Color(0xFF211C17), Color(0xFF211C17), Color(0xFFEDE6DC), Color(0xFFC0B3A5), Color(0xFFB1A293), Color(0xFF2E2721), Color(0xFFF08A4B), Color(0xFFEA8B7A), Color(0xFF3B2516), Color(0xFFA2C084), Color(0xFF232D1C), .70f, .55f)
 internal fun paperAt(atmosphere:Atmosphere)=when(atmosphere){Atmosphere.DAY->DayPaper;Atmosphere.DUSK->DuskPaper;Atmosphere.NIGHT->NightPaper;else->DawnPaper}
 /** Every Material role is intentional: no dynamic/default violet enters chips or sliders. */
 internal fun paperScheme(p:PaperColors)=lightColorScheme(
-    primary=p.acc,onPrimary=Color.White,primaryContainer=p.bg2,onPrimaryContainer=p.ink,inversePrimary=p.acc,
+    primary=p.acc,onPrimary=if(p==NightPaper)p.bg else Color.White,primaryContainer=p.bg2,onPrimaryContainer=p.ink,inversePrimary=p.acc,
     secondary=p.acc,onSecondary=p.card,secondaryContainer=p.acc2,onSecondaryContainer=p.ink,
     tertiary=p.sage,onTertiary=p.bg,tertiaryContainer=p.sage2,onTertiaryContainer=p.ink,
     background=p.bg,onBackground=p.ink,surface=p.bg,onSurface=p.ink,surfaceVariant=p.bg2,onSurfaceVariant=p.mut,
-    surfaceTint=p.acc,inverseSurface=p.ink,inverseOnSurface=p.bg,
+    surfaceTint=if(p==NightPaper)Color.Transparent else p.acc,inverseSurface=p.ink,inverseOnSurface=p.bg,
     error=p.ribbon,onError=p.card,errorContainer=p.bg2,onErrorContainer=p.ribbon,
     outline=p.line,outlineVariant=p.line,scrim=Color.Black,
     surfaceBright=p.card,surfaceDim=p.bg2,surfaceContainer=p.card,surfaceContainerHigh=p.bg2,

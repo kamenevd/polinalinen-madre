@@ -69,7 +69,7 @@ enum class PaperButtonVariant { PRIMARY, ACCENT, SECONDARY, TEXT }
     }
     val foreground = when (actualVariant) {
         PaperButtonVariant.PRIMARY -> p.bg
-        PaperButtonVariant.ACCENT -> Color.White
+        PaperButtonVariant.ACCENT -> if(p==NightPaper)p.bg else Color.White
         PaperButtonVariant.SECONDARY -> p.ink
         PaperButtonVariant.TEXT -> p.acc
     }

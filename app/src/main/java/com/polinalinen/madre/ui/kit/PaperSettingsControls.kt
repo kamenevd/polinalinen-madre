@@ -52,7 +52,7 @@ import androidx.compose.ui.unit.Dp
 
 @Composable fun PaperSettingSwitch(label: String, checked: Boolean, onChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier, note: String? = null) {
-    PaperListRow(label, modifier, note = note, trailing = {
+    PaperListRow(label, modifier, note = note,compact=true, trailing = {
         PaperSwitch(checked, onChange, Modifier.semantics {
             contentDescription = label
             onClick(label, null)

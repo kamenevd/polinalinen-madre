@@ -107,7 +107,7 @@ private fun BookplateNameInput(onSetName: (String) -> Unit) {
         textAlign = TextAlign.Center,
     )
     PaperField(draft, { draft = BookplateName.sanitize(it) }, placeholder = "семья Ивановых",
-        modifier = Modifier.fillMaxWidth().padding(top = 10.dp))
+        modifier = Modifier.fillMaxWidth().padding(top = 10.dp),keyboardOptions=androidx.compose.foundation.text.KeyboardOptions(capitalization=androidx.compose.ui.text.input.KeyboardCapitalization.Words))
     if (draft.isNotBlank()) {
         Text(
             "вписать навсегда",

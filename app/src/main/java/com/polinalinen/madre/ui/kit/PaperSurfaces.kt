@@ -55,6 +55,7 @@ import kotlin.random.Random
 
 /** Stable, consumed content insets: immersive bars can hide, the physical cutout cannot.
  * Compose consumption prevents double padding when a screen is inside the home/scaffold. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable fun Modifier.paperContentInsets():Modifier = windowInsetsPadding(
     WindowInsets.safeDrawing.union(WindowInsets.systemBarsIgnoringVisibility).union(WindowInsets.displayCutout))
 
@@ -111,18 +112,21 @@ import kotlin.random.Random
 @Composable fun PaperListRow(title: String, modifier: Modifier = Modifier, note: String? = null,
     value: String? = null, valueColor: Color = LocalPaper.current.acc,
     onClick: (() -> Unit)? = null, repeatable: Boolean = false, trailing: (@Composable () -> Unit)? = null,
-    leading: (@Composable () -> Unit)? = null) {
+    compact:Boolean=false,leading: (@Composable () -> Unit)? = null) {
     val p = LocalPaper.current
-    Row(modifier.fillMaxWidth().heightIn(min = 64.dp)
+    val stackValue=compact && androidx.compose.ui.platform.LocalDensity.current.fontScale>1.3f
+    Row(modifier.fillMaxWidth().heightIn(min = if(compact)56.dp else 64.dp)
         .then(if (onClick != null) com.polinalinen.madre.ui.components.bookAction("$title: ${value.orEmpty()}", repeatable = repeatable, onClick = onClick) else Modifier)
         .drawBehind { drawLine(p.line, Offset(0f, size.height), Offset(size.width, size.height), 1.dp.toPx()) }
-        .padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        .padding(vertical = if(compact)4.dp else 12.dp), verticalAlignment = Alignment.CenterVertically) {
         if(leading!=null) { leading();Spacer(Modifier.width(14.dp)) }
         Column(Modifier.weight(1f)) {
             Text(title, color = p.ink, style = PaperType.title)
-            if (note != null) Text(note, color = p.mut, style = PaperType.note, modifier = Modifier.padding(top = 4.dp))
+            if(value!=null && stackValue)Text(value,color=valueColor,style=PaperType.ui,modifier=Modifier.padding(top=4.dp))
+            if (note != null) Text(note, color = p.mut, style = PaperType.note,maxLines=if(compact)1 else Int.MAX_VALUE,
+                overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis,modifier = Modifier.padding(top = 4.dp))
         }
-        if (value != null) Text(value, color = valueColor, style = PaperType.ui, modifier = Modifier.padding(start = 12.dp))
+        if (value != null && !stackValue) Text(value, color = valueColor, style = PaperType.ui, modifier = Modifier.padding(start = 12.dp))
         if (trailing != null) trailing()
     }
 }

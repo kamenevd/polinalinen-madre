@@ -156,11 +156,11 @@ fun SettingsScreen(
     fun shown(vararg entries: SettingsEntry) = entries.any { it in visible }
     PaperScaffold(contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) {
         item {
-        Column(Modifier.padding(bottom = 32.dp)) {
+        Column(Modifier.padding(bottom = 16.dp)) {
             PaperHeader("Настройки", onBack = onBack, overline = "Книга", modifier = Modifier.padding(horizontal = 22.dp))
             Text("выходные данные книги", color = LocalPaper.current.ink2, style = PaperType.note,
                 modifier = Modifier.padding(horizontal = 22.dp, vertical = 4.dp))
-            PaperSearchField(query, { query = it }, Modifier.padding(horizontal = 22.dp, vertical = 16.dp))
+            PaperSearchField(query, { query = it }, Modifier.padding(horizontal = 22.dp, vertical = 8.dp))
             if (displayError != null) PaperNote(displayError)
             if (shown(SettingsEntry.ACCOUNT)) {
                 if(accountContent!=null)accountContent() else com.polinalinen.madre.account.yandex.YandexSettingsSection(myName,onMyNameChange,onOpenAlice)
@@ -174,7 +174,7 @@ fun SettingsScreen(
                 // Preserve the existing local ex libris; never replace the family's server-owned name.
                 if (shown(SettingsEntry.BOOKPLATE)) {
                     Bookplate(familyName = familyName, onSetName = onSetFamilyName,
-                        modifier = Modifier.padding(vertical = 18.dp), label = "Как подписана книга")
+                        modifier = Modifier.padding(vertical = 8.dp), label = "Как подписана книга")
                 }
             }
             if (shown(SettingsEntry.STARTER_NAME, SettingsEntry.RHYTHM, SettingsEntry.REMINDERS)) SettingsSection(Sections.STARTER) {
@@ -191,7 +191,7 @@ fun SettingsScreen(
                 SettingsRow(shelfLabel, "›", onOpenShelfSettings)
                 if (account != null) TextAction("Выйти · книга на телефоне останется", onClick = onSignOut)
             }
-            if (shown(SettingsEntry.THEME, SettingsEntry.READING_MODE, SettingsEntry.TEXT_SIZE, SettingsEntry.KEEP_SCREEN, SettingsEntry.CALM)) SettingsSection(Sections.LOOK) {
+            if (shown(SettingsEntry.THEME, SettingsEntry.READING_MODE, SettingsEntry.TEXT_SIZE, SettingsEntry.KEEP_SCREEN, SettingsEntry.CALM,SettingsEntry.HAPTICS)) SettingsSection(Sections.LOOK) {
                 if (shown(SettingsEntry.THEME)) {
                     SettingsCaption("Тема · ${preferences.atmosphere.label}")
                     PaperAtmospherePicker(preferences)
@@ -207,6 +207,11 @@ fun SettingsScreen(
                 if (shown(SettingsEntry.CALM)) {
                     CalmModeRow(calmMode, onCalmModeChange)
                     SettingsCaption("В спокойном режиме нет непрерывных декораций. Бумага, рамки и следы на страницах остаются.")
+                }
+                if(shown(SettingsEntry.HAPTICS)) {
+                    val view=androidx.compose.ui.platform.LocalView.current
+                    PaperSettingSwitch("Тактильный отклик",preferences.haptics,preferences::chooseHaptics)
+                    PaperTextAction("Попробовать отклик",{performPaperHaptic(view.context,view,enabled=preferences.haptics)},enabled=preferences.haptics)
                 }
             }
             if (shown(SettingsEntry.TIMER_SOUND, SettingsEntry.LOCK_PROGRESS)) SettingsSection(Sections.NOTIFICATIONS) {
@@ -254,9 +259,9 @@ private fun SettingsSection(
     first: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-    Spacer(Modifier.height(if (first) 12.dp else 28.dp))
+    Spacer(Modifier.height(16.dp))
     PaperSection(title, headingModifier = Modifier.padding(horizontal = 22.dp)) {
-        PaperCard(Modifier.padding(horizontal = 22.dp)) { content() }
+        Column(Modifier.padding(horizontal = 22.dp)) { content() }
     }
 }
 
@@ -267,11 +272,8 @@ private fun FeedingRhythmRow(intervalHours: Int, onChange: (Int) -> Unit) {
     SettingsCaption("Ритм кормления")
     PaperSegmented(listOf("12 ч", "сутки", "2 дня", "3 дня", "неделя"), hours.indexOf(intervalHours),
         { onChange(hours[it]) }, label = "Ритм кормления")
-    Text(
+    SettingsCaption(
         "Руководство Levito Madre: при хранении на средней полке холодильника 4–6°C — каждые 3–5 дней. Это ориентир, не замена вашему ритму.",
-        color = LocalPaper.current.ink2,style = PaperType.body,
-        fontSize = 12.sp,
-        modifier = Modifier.padding(vertical = 4.dp),
     )
 }
 
@@ -305,7 +307,7 @@ private fun RemindersRow(remindersEnabled: Boolean, onRemindersEnabledChange: (B
     } else {
         // Переключать нечего: телефон запретил книге писать, и «вкл» здесь было
         // бы обещанием, которого книга не сдержит.
-        PaperListRow("Напоминания",note="не разрешены телефоном",onClick=null)
+        PaperListRow("Напоминания",note="не разрешены телефоном",onClick=null,compact=true)
         SettingsCaption(
             "книга не разбудит вас, когда закончится расстойка, не напомнит про закваску " +
                 "и не покажет ход выпечки в шторке. Таймер на экране при этом работает как прежде."
@@ -501,7 +503,11 @@ internal fun FamilyBookField(
 ) {
     PaperField(value = value, onValueChange = onValueChange, label = label,
         visualTransformation = if (masked) PasswordVisualTransformation() else VisualTransformation.None,
-        keyboardOptions = if (masked) KeyboardOptions(keyboardType = KeyboardType.Password) else KeyboardOptions.Default,
+        keyboardOptions = when {
+            masked->KeyboardOptions(keyboardType=KeyboardType.Password)
+            label=="Название полки" || label=="Ваше имя"->KeyboardOptions(capitalization=androidx.compose.ui.text.input.KeyboardCapitalization.Words)
+            else->KeyboardOptions.Default
+        },
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp))
 }
 
@@ -511,24 +517,24 @@ private fun SettingsCaption(text: String) {
     val colors = LocalPaper.current
     Text(
         text,
-        color = colors.ink2,style = PaperType.body,
-        fontStyle = FontStyle.Italic,
-        fontSize = 11.5.sp,
-        modifier = Modifier.padding(bottom = 12.dp),
+        color = colors.ink2,style = PaperType.caption,
+        maxLines=1,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        modifier = Modifier.padding(bottom = 4.dp),
     )
 }
 
 @Composable
 private fun SettingsField(label: String, caption: String, field: @Composable () -> Unit) {
     val colors = LocalPaper.current
-    Column(Modifier.fillMaxWidth().padding(vertical = 16.dp)) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         PageLabel(label, color = colors.ink)
-        Box(Modifier.padding(top = 8.dp)) { field() }
+        Box(Modifier.padding(top = 4.dp)) { field() }
         Text(
             caption,
             color = colors.ink2,style = PaperType.body,
             fontStyle = FontStyle.Italic,
             fontSize = 11.sp,
+            maxLines=1,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 4.dp),
         )
     }
@@ -559,16 +565,18 @@ internal fun StarterNameField(persisted: String, onChange: (String) -> Unit) {
             onChange(trimmed)
         },
         placeholder = StarterName.DEFAULT,
+        capitalization=androidx.compose.ui.text.input.KeyboardCapitalization.Sentences,
     )
 }
 
 @Composable
-private fun NameField(value: String, onChange: (String) -> Unit, placeholder: String) {
-    PaperField(value, onChange, placeholder = placeholder, modifier = Modifier.fillMaxWidth())
+private fun NameField(value: String, onChange: (String) -> Unit, placeholder: String,
+    capitalization:androidx.compose.ui.text.input.KeyboardCapitalization=androidx.compose.ui.text.input.KeyboardCapitalization.Words) {
+    PaperField(value, onChange, placeholder = placeholder, modifier = Modifier.fillMaxWidth(),keyboardOptions=KeyboardOptions(capitalization=capitalization))
 }
 
 @Composable
 private fun SettingsRow(label: String, value: String, onClick: (() -> Unit)?, valueColor: androidx.compose.ui.graphics.Color? = null) {
     PaperListRow(label, value = value,
-        valueColor = valueColor ?: LocalPaper.current.acc, onClick = onClick)
+        valueColor = valueColor ?: LocalPaper.current.acc, onClick = onClick,compact=true)
 }

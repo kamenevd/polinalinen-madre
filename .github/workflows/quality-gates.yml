@@ -270,6 +270,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
+            if [ "${{ inputs.bake_numbers_native }}" = "true" ]; then python3 scripts/run_minified_plan_regression.py; fi
             bash scripts/run_instrumented_acceptance.sh
             if [ "${{ inputs.bake_numbers_native }}" = "true" ]; then bash scripts/run_qa_runtime_acceptance.sh; fi
       - name: Upload actual non-debuggable QA runtime and owner diagnostics PNG

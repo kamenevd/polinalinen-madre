@@ -90,6 +90,8 @@ for label, apk, test, mapping, source in [
             '-e', 'negative', 'true' if label == 'negative-before' else 'false', '-e', 'phase', phase,
             PACKAGE + '.test/androidx.test.runner.AndroidJUnitRunner'], text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         (destination / f'{phase}-instrumentation.txt').write_text(result.stdout)
+        logcat=subprocess.run(['adb','logcat','-d','-t','2000'],text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+        (destination / f'{phase}-logcat.txt').write_text(logcat.stdout)
         assert result.returncode == 0 and 'OK (1 test)' in result.stdout and 'FAILURES' not in result.stdout, f'{label}/{phase} actual instrumentation failed; inspect raw output'
     run(['adb', 'pull', f'/sdcard/Android/data/{PACKAGE}/files/minified-plan-regression', str(destination / 'raw')])
     assert all((destination / 'raw' / f'{phase}-prefs.json').is_file() for phase in ('write', 'restart'))

@@ -3,7 +3,7 @@
 set -euo pipefail
 out="$PWD/performance-evidence/qa-runtime"
 mkdir -p "$out"
-python3 scripts/run_minified_plan_regression.py
+# Minified persistence already ran first in the same CI AVD, before ordinary debug smoke.
 python3 - "$out" <<'PY'
 import hashlib,json,os,pathlib,shutil,sys
 out=pathlib.Path(sys.argv[1]);source=pathlib.Path(os.environ['MADRE_EXACT_QA_DIR'])

@@ -12,6 +12,7 @@ import com.github.takahirom.roborazzi.*
 import com.polinalinen.madre.MadreApplication
 import com.polinalinen.madre.data.repository.RecipeRepository
 import com.polinalinen.madre.ui.screens.GalleryPhoto
+import com.polinalinen.madre.ui.kit.Atmosphere
 import com.polinalinen.madre.utils.PhotoStore
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
@@ -45,7 +46,7 @@ class Fixes7013ExtendedRenderTest {
         assertEquals(4,photos.size)
         val module=if(File("app/src/main/AndroidManifest.xml").isFile)File("app") else File(".")
         val directory=File(module,"build/outputs/roborazzi/fixes-7013").apply{mkdirs()}
-        val cases=buildList {
+        val cases=buildList<Pair<String,Atmosphere>> {
             // The original 20 frames, captured by the same actual-window compositor as the extras.
             for(scene in listOf("chapter-title","toc","oven","start-later","starter-growing","shelf"))add(scene to Atmosphere.DAWN)
             for(scene in listOf("chapter-ingr","bake","bake-finale","yandex-offer"))for(theme in listOf(Atmosphere.DAWN,Atmosphere.NIGHT))add(scene to theme)
@@ -72,7 +73,9 @@ class Fixes7013ExtendedRenderTest {
                 "sheet-calc-flour"->rule.onNodeWithText("По муке").performClick()
                 "sheet-calc-pct"->rule.onNodeWithText("% пекаря").performScrollTo().performClick()
                 "chapter-end-edge"->{
-                    rule.onNodeWithTag("paper-turn").performSemanticsAction(SemanticsActions.CustomActions){actions->actions.first{it.label=="Следующая страница"}.action()}
+                    val next=rule.onNodeWithTag("paper-turn").fetchSemanticsNode().config[SemanticsActions.CustomActions]
+                        .first{it.label=="Следующая страница"}
+                    rule.runOnIdle{next.action()}
                     rule.onNodeWithTag("chapter-edge").assertExists()
                 }
             }

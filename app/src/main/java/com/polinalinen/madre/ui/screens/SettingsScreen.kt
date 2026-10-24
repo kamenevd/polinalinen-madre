@@ -144,12 +144,12 @@ fun SettingsScreen(
     preferences: ReadingPreferences = rememberReadingPreferences(), initialSearch: String = "",
     displaySettings: com.polinalinen.madre.model.BookDisplaySettings = LocalBookDisplaySettings.current,
     onKeepScreenOnChange: (Boolean) -> Unit = {}, onLockScreenProgressChange: (Boolean) -> Unit = {},
-    displayError: String? = null,
+    displayError: String? = null,accountContent:(@Composable ()->Unit)?=null,
 ) {
     val inFamily = familyBookState.account?.hasFamily == true
     var query by rememberSaveable { mutableStateOf(initialSearch) }
     var showReadingSettings by remember { mutableStateOf(false) }
-    val hasAccount = com.polinalinen.madre.account.yandex.LocalYandexAccountUi.current != null
+    val hasAccount = accountContent!=null || com.polinalinen.madre.account.yandex.LocalYandexAccountUi.current != null
     val visible = remember(query, hasAccount, inFamily) { SettingsEntry.entries.filter {
         (it != SettingsEntry.ACCOUNT || hasAccount) && (it != SettingsEntry.BOOKPLATE || !inFamily) && settingsMatches(it, query)
     }.toSet() }
@@ -162,7 +162,9 @@ fun SettingsScreen(
                 modifier = Modifier.padding(horizontal = 22.dp, vertical = 4.dp))
             PaperSearchField(query, { query = it }, Modifier.padding(horizontal = 22.dp, vertical = 16.dp))
             if (displayError != null) PaperNote(displayError)
-            if (shown(SettingsEntry.ACCOUNT)) com.polinalinen.madre.account.yandex.YandexSettingsSection(myName,onMyNameChange,onOpenAlice)
+            if (shown(SettingsEntry.ACCOUNT)) {
+                if(accountContent!=null)accountContent() else com.polinalinen.madre.account.yandex.YandexSettingsSection(myName,onMyNameChange,onOpenAlice)
+            }
             if (visible.isEmpty()) PaperEmpty("Такой настройки нет", "Попробуй другое слово или очисти поиск.",
                 action = { PaperButton("Очистить поиск", { query = "" }, Modifier.padding(horizontal = 22.dp)) })
             if (shown(SettingsEntry.NAME, SettingsEntry.BOOKPLATE)) SettingsSection(Sections.ME, first = true) {

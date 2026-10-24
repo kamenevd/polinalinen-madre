@@ -75,6 +75,19 @@ private const val PRIVACY="Мадре получит только имя, пор
     var profileOpen by rememberSaveable{mutableStateOf(false)}
     var confirmOut by rememberSaveable{mutableStateOf(false)}
     val profile=(state as? YandexAccountState.SignedIn)?.profile
+    YandexSettingsAccountContent(state,pending,myName,onMyNameChange,onOpenAlice,owner.signIn,
+        {profileOpen=true},owner.model::retryPendingUnbind,{confirmOut=true},notice)
+    if(profileOpen && profile!=null)YandexAccountSheet(profile,
+        onDismiss={profileOpen=false},onSwitch={profileOpen=false;owner.signIn(false)},
+        onSignOut={profileOpen=false;confirmOut=true})
+    if(confirmOut)YandexSignOutDialog(onConfirm={confirmOut=false;owner.model.signOut()},onDismiss={confirmOut=false})
+}
+
+/** Pure production surface shared with native fixtures; never constructs an auth owner. */
+@Composable internal fun YandexSettingsAccountContent(state:YandexAccountState,pending:Boolean,
+    myName:String,onMyNameChange:(String)->Unit,onOpenAlice:()->Unit,onSignIn:(Boolean)->Unit,
+    onProfile:()->Unit,onRetryUnbind:()->Unit,onConfirmOut:()->Unit,notice:String?=null) {
+    val profile=(state as? YandexAccountState.SignedIn)?.profile
     PaperSection("ЯНДЕКС ID",Modifier.padding(horizontal=22.dp,vertical=18.dp)) {
         PaperCard {
             if(profile==null) {
@@ -82,10 +95,10 @@ private const val PRIVACY="Мадре получит только имя, пор
                 PaperNote("Алиса сможет узнать ваш аккаунт. Книга, печь и закваска работают и без входа.")
                 Spacer(Modifier.height(16.dp))
             }
-            YandexAccountPanel(state,pending,owner.signIn,{profileOpen=true},owner.model::retryPendingUnbind)
+            YandexAccountPanel(state,pending,onSignIn,onProfile,onRetryUnbind)
             notice?.let{PaperNote(it)}
             if(state is YandexAccountState.Error && !pending) {
-                PaperTextAction("Отключить аккаунт на этом телефоне",{confirmOut=true},destructive=true)
+                PaperTextAction("Отключить аккаунт на этом телефоне",onConfirmOut,destructive=true)
             }
             if(profile!=null) {
                 PaperListRow("Алиса",note="Открыть настоящую связку навыка",onClick=onOpenAlice)
@@ -95,15 +108,15 @@ private const val PRIVACY="Мадре получит только имя, пор
             }
         }
     }
-    if(profileOpen && profile!=null)YandexAccountSheet(profile,
-        onDismiss={profileOpen=false},onSwitch={profileOpen=false;owner.signIn(false)},
-        onSignOut={profileOpen=false;confirmOut=true})
-    if(confirmOut)PaperConfirmDialog("Выйти из Яндекс ID?",
-        "Книга, закваска, дневник, выпечки и фото останутся на этом телефоне. Алиса перестанет узнавать вас. Аккаунт и семья Полки не меняются.",
-        "Выйти","Остаться",onConfirm={confirmOut=false;owner.model.signOut()},onDismiss={confirmOut=false},destructive=true)
 }
 
-@Composable private fun YandexAccountSheet(profile:VerifiedYandexProfile,onDismiss:()->Unit,onSwitch:()->Unit,onSignOut:()->Unit) {
+@Composable internal fun YandexSignOutDialog(onConfirm:()->Unit,onDismiss:()->Unit) {
+    PaperConfirmDialog("Выйти из Яндекс ID?",
+        "Книга, закваска, дневник, выпечки и фото останутся на этом телефоне. Алиса перестанет узнавать вас. Аккаунт и семья Полки не меняются.",
+        "Выйти","Остаться",onConfirm=onConfirm,onDismiss=onDismiss,destructive=true)
+}
+
+@Composable internal fun YandexAccountSheet(profile:VerifiedYandexProfile,onDismiss:()->Unit,onSwitch:()->Unit,onSignOut:()->Unit) {
     val context=LocalContext.current
     var linkError by remember{mutableStateOf(false)}
     PaperSheet(onDismiss) {

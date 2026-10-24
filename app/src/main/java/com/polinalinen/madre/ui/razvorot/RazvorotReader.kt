@@ -205,7 +205,7 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
                 contentKey=listOf(recipeId,factor,width,height,preferences.textSize),onGestureStart={chrome=false},
                 onEdge={ direction -> chrome=true;edgeMessage=if(direction>0)"Конец главы · «Испечь» — внизу" else "Это титул · назад — к оглавлению" }) { index ->
                 val leaf=leaves[index];val r=recipes[leaf.chapter]
-                Column(Modifier.fillMaxSize().background(p.bg).semantics(mergeDescendants=true) { contentDescription = if(leaf.title)r.name else if(leaf.end)"Конец главы ${leaf.chapter+1}. Теперь — испечь." else leaf.lines.joinToString("\n"){it.first+"\n"+it.second} }.padding(top=if(leaf.title)0.dp else headerHeight,bottom=footerHeight)) {
+                Column(Modifier.fillMaxSize().background(p.bg).semantics { contentDescription = if(leaf.title)r.name else if(leaf.end)"Конец главы ${leaf.chapter+1}. Теперь — испечь." else leaf.lines.joinToString("\n"){it.first+"\n"+it.second} }.padding(top=if(leaf.title)0.dp else headerHeight,bottom=footerHeight)) {
                     if(leaf.title) TitleLeaf(r,leaf.chapter,recipes.size)
                     else if(leaf.end) Column(Modifier.fillMaxWidth().weight(1f).padding(26.dp),verticalArrangement=Arrangement.Center,horizontalAlignment=Alignment.CenterHorizontally) {
                         SmallLabel("КОНЕЦ ГЛАВЫ %02d".format(leaf.chapter+1))

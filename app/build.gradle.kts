@@ -38,6 +38,7 @@ if (qaSigningInputs.any { !it.isNullOrBlank() } && !hasCompleteQaSigning) {
 val extendedVerification = providers.gradleProperty("madre.extendedVerification")
     .map { it.toBoolean() }.getOrElse(false)
 val extendedOnlyTests = listOf(
+    "com.polinalinen.madre.ui.razvorot.Fixes7013ExtendedRenderTest",
     "com.polinalinen.madre.ui.razvorot.RazvorotExtendedRenderTest",
     "com.polinalinen.madre.ui.razvorot.AliceSheetGoldenTest",
     "com.polinalinen.madre.ui.razvorot.PaperMaterialExtendedTest",

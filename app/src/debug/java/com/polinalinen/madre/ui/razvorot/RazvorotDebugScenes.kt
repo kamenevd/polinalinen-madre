@@ -37,6 +37,7 @@ class RazvorotSceneActivity : ComponentActivity(), ImmersiveHost {
     override val immersiveController = ImmersiveController()
     var scene by mutableStateOf("home-dawn")
     var atmosphere by mutableStateOf<Atmosphere?>(null)
+    var recentPhotos by mutableStateOf<List<GalleryPhoto>>(emptyList())
     var captureWindow:android.view.Window?=null
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -44,7 +45,7 @@ class RazvorotSceneActivity : ComponentActivity(), ImmersiveHost {
         scene=savedInstanceState?.getString("debug_scene") ?: intent.getStringExtra("scene") ?: "home-dawn"
         atmosphere = savedInstanceState?.getString("debug_atmosphere")?.let { value -> Atmosphere.entries.firstOrNull { it.name == value } }
         val recipes=runBlocking{RecipeRepository(this@RazvorotSceneActivity).getRecipes()}
-        setContent { key(scene,atmosphere) { RazvorotDebugScene(scene,recipes,atmosphere) } }
+        setContent { key(scene,atmosphere) { RazvorotDebugScene(scene,recipes,atmosphere,recentPhotos) } }
     }
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putString("debug_scene", scene)
@@ -62,7 +63,7 @@ class RazvorotSceneActivity : ComponentActivity(), ImmersiveHost {
 
 internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","reader-text-16","reader-text-22","curl-top","curl-mid","curl-bottom","curl-back","reader-chrome","reading-sheet","home-dawn","home-night","spine","bake","alice-listening","alice-reading","alice-confirm","alice-night","starter-growing","starter-peak","starter-hungry","shelf","shelf-night","shelf-large","curl-mid-night","gles2-curl-mid","bake-start","bake-end","fulltimer-start","fulltimer-end","timer-weight-start","timer-weight-end","toc","oven","chapter-title","chapter-ingr","sheet-calc","bake-more","start-later")
 
-@Composable internal fun RazvorotDebugScene(scene:String,recipes:List<Recipe>,forceAtmosphere:Atmosphere?=null) {
+@Composable internal fun RazvorotDebugScene(scene:String,recipes:List<Recipe>,forceAtmosphere:Atmosphere?=null,recentPhotos:List<GalleryPhoto> = emptyList()) {
     val context=LocalContext.current
     val preferences=remember(scene){
         context.getSharedPreferences("razvorot_fixture",0).edit().clear().commit()
@@ -78,6 +79,7 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
             Immersive(enabled = (scene.startsWith("reader-") && scene != "reader-chrome") || scene.startsWith("curl-") || scene.startsWith("gles2-curl-") || scene.startsWith("fulltimer-") || scene == "bake" || scene == "reading-sheet")
             Box(Modifier.fillMaxSize().background(LocalPaper.current.bg).testTag("scene-$scene").semantics{stateDescription="${debug.renderer}:${debug.renderedFrames}:${debug.cachedPages}:${debug.reason}"}) {
                 when {
+                    scene in FixesNativeScenes->FixesNativeScene(scene,recipes,preferences,recentPhotos)
                     scene=="alice-yandex-consent" -> {
                         // Actual production page, synthetic selected bake/signed-in boundary; no account/network effects.
                         val active=remember(recipe){BakingSession.start(7,recipe)}
@@ -107,8 +109,9 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
                         var start by remember{mutableStateOf(false)}
                         var quantities by remember{mutableStateOf(false)}
                         var factor by remember{mutableStateOf(2.0)}
-                        RazvorotReader(recipes,selected.id,preferences,{},{},{quantities=true},initialPage=if(scene=="chapter-ingr")1 else -1,
-                            scaleFactor=factor,onScaleFactor={factor=it},onOpenAlice={},onSchedule={start=true})
+                        RazvorotReader(recipes,selected.id,preferences,{},{},{quantities=true},initialPage=when(scene){"chapter-ingr"->1;"chapter-end-edge"->Int.MAX_VALUE;else->-1},
+                            scaleFactor=factor,onScaleFactor={factor=it},onOpenAlice={},onSchedule={start=true},
+                            activeSessions=if(scene=="chapter-active")listOf(remember(selected){syntheticNativeBake(selected)}) else emptyList(),onContinueBake={})
                         if(start)BookStartSheet(selected,factor.toInt(),{},{start=false},onPlan={_,_->},initialMode=1)
                         if(quantities)BookPortionsSheet(selected,factor,{factor=it},{quantities=false})
                     }
@@ -117,10 +120,7 @@ internal val RazvorotScenes=listOf("reader-title-dawn","reader-title-night","rea
                         BookPortionsSheet(recipe,2.0,{},{})
                     }
                     scene=="bake-finale" -> {
-                        // Stateless native fixture: one synthetic completed record, no Room write/auth/permissions.
-                        BakeFinalePage(BakeFinalePageState(recipe.name,1,2,RecipeScale.totalMinutes(recipe,2),
-                            recipe.timeline.size,1792731600000L,recipes.map{it.id==recipe.id},1),{},{},
-                            photo={BakeFinalePhoto(null,emptyList(),com.polinalinen.madre.ui.photo.PhotoAttachmentActions({},{},{},{}),true,{})})
+                        NativeFinaleFixture(recipe,recipes,scene,recentPhotos)
                     }
                     scene=="kit" -> KitShowcase()
                     scene=="photo-viewer" -> PaperPhotoViewer({}) { BookText("Фото · локальная тестовая поверхность", 18) }

@@ -25,12 +25,13 @@ class RazvorotV3RenderTest {
     private fun render(scene:String, themes:List<Atmosphere> = listOf(Atmosphere.DAWN,Atmosphere.NIGHT)) {
         val context=ApplicationProvider.getApplicationContext<Context>()
         val recipes=runBlocking{RecipeRepository(context).getRecipes()}
+        val photos=if(scene=="bake-finale")nativeSyntheticPhotos(context) else emptyList()
         val module=if(File("app/src/main/AndroidManifest.xml").isFile)File("app") else File(".")
         for(theme in themes) {
         val output=File(module,"build/outputs/roborazzi/key/$scene-${theme.captureName()}.png").absoluteFile
         output.parentFile.mkdirs()
         captureRoboImage(filePath=output.path,roborazziOptions=RoborazziOptions(taskType=RoborazziTaskType.Record)) {
-            RazvorotDebugScene(scene,recipes,theme)
+            RazvorotDebugScene(scene,recipes,theme,photos)
         }
         assertThat(output.isFile).isTrue()
         assertThat(output.length()).isGreaterThan(1000L)

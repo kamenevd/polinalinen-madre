@@ -60,7 +60,7 @@ internal fun aliceSheetMode(state: VoiceUiState): AliceSheetMode = when {
     onConnect: () -> Unit = {}, onRetry: () -> Unit = {}, onRead: () -> Unit = {},
     onRemaining: () -> Unit = {}, onNext: () -> Unit = {}, paused: Boolean = false,
     onPause: () -> Unit = {}, onApprove: () -> Unit = {}, onReject: () -> Unit = {},
-    accountStep: (@Composable () -> Unit)? = null,hasActiveBakes:Boolean=recipeName!=null) {
+    accountStep: (@Composable () -> Unit)? = null,hasActiveBakes:Boolean=recipeName!=null,verifiedName:String?=null) {
     val p = LocalPaper.current
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -80,7 +80,7 @@ internal fun aliceSheetMode(state: VoiceUiState): AliceSheetMode = when {
             AliceSheetMode.UNLINKED -> {
                 com.polinalinen.madre.ui.screens.AliceConnectionSteps(
                     waiting=state.status==VoiceStatus.WAITING_LINK || state.status==VoiceStatus.LOADING,
-                    onHelp=onConnect,accountStep=accountStep)
+                    onHelp=onConnect,accountStep=accountStep,verifiedName=verifiedName)
                 PaperTextAction("ВЫБРАТЬ ВЫПЕЧКУ И РАЗРЕШИТЬ ДОСТУП",onConnect)
             }
             AliceSheetMode.CONFIRM -> {

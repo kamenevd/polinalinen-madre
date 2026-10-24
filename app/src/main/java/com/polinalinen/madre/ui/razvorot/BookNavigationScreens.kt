@@ -31,13 +31,14 @@ import java.time.Clock
 import androidx.compose.ui.Alignment
 
 @Composable fun BookTocContent(recipes: List<Recipe>, sessions: List<BakingSession>, bookmark: BookBookmark?,
-    onChapter: (String, Int) -> Unit, onSettings: () -> Unit, modifier: Modifier = Modifier, onAa: () -> Unit = {}) {
+    onChapter: (String, Int) -> Unit, onSettings: () -> Unit, modifier: Modifier = Modifier, onAa: () -> Unit = {},
+    profileOverride:com.polinalinen.madre.account.yandex.VerifiedYandexProfile?=null) {
     var query by rememberSaveable { mutableStateOf("") }
     var filter by rememberSaveable { mutableStateOf(CatalogFilter.ALL) }
     val rows = remember(recipes, sessions, query, filter) { BookCatalog.search(recipes, query, filter, sessions) }
     val account=com.polinalinen.madre.account.yandex.LocalYandexAccountUi.current
     val accountState=account?.model?.state?.collectAsState()?.value
-    val profile=(accountState as? com.polinalinen.madre.account.yandex.YandexAccountState.SignedIn)?.profile
+    val profile=profileOverride ?: (accountState as? com.polinalinen.madre.account.yandex.YandexAccountState.SignedIn)?.profile
     Column(modifier.fillMaxSize().testTag(Home.LIST_TAG).verticalScroll(rememberScrollState()).padding(horizontal = 22.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {

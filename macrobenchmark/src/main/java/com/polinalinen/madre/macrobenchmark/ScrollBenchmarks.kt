@@ -32,7 +32,8 @@ class ScrollBenchmarks {
 @RunWith(AndroidJUnit4::class)
 class GenerateReadingProfile {
     @get:Rule val profile=BaselineProfileRule()
-    @Test fun actualProductionReadingJourneys()=profile.collect(TARGET,includeInStartupProfile=true) {
+    @Test fun actualProductionReadingJourneys()=profile.collect(TARGET,includeInStartupProfile=false,
+        filterPredicate={it.contains("Lcom/polinalinen/madre/")}) {
         routes.forEach{route->startActivityAndWait(routeIntent(route));scroll()}
     }
 }

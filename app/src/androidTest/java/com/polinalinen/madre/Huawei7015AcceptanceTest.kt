@@ -72,6 +72,8 @@ class Huawei7015AcceptanceTest {
     @Test fun nightChapterBottomAndCompleteOrderedSettingsCapture() {
         scene("chapter-ingr",true);shot("night-chapter")
         scene("toc",true);rule.onNodeWithTag("spine-navigation").assertIsDisplayed();shot("night-bottom-navigation")
+        // Changed production image loading/lazy rows also get real pixels, not a mock.
+        scene("oven",true);Thread.sleep(700);rule.waitForIdle();shot("night-oven-sized-images")
         scene("settings",true)
         val list=rule.onNodeWithTag("paper-list")
         shot("settings-full-01")

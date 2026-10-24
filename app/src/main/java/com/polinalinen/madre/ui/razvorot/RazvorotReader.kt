@@ -31,6 +31,7 @@ import com.polinalinen.madre.model.BakingSession
 import kotlinx.coroutines.delay
 import com.polinalinen.madre.ui.screens.RecipeChapterContent
 import com.polinalinen.madre.ui.screens.ChapterScrollNavigation
+import com.polinalinen.madre.ui.screens.ChapterScrollState
 import com.polinalinen.madre.ui.components.bookAction
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -130,6 +131,7 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
         }
         var page by rememberSaveable(recipeId) { mutableIntStateOf(0) }
         var scrollRequest by rememberSaveable(recipeId) { mutableLongStateOf(0L) }
+        val scrollCursor = rememberSaveable(recipeId, saver=ChapterScrollState.Saver) { ChapterScrollState() }
         LaunchedEffect(leaves) {
             if (leaves.isEmpty()) return@LaunchedEffect
             if (seekActive && initialPage >= 0) {
@@ -165,7 +167,7 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
         if(current!=null && recipe!=null) {
             if(preferences.mode==ReadingMode.SCROLL || density.fontScale>1.3f || annotations) {
                 Box(Modifier.fillMaxSize().padding(top=headerHeight,bottom=footerHeight)) {
-                    val navigation=ChapterScrollNavigation(anchor,scrollRequest,leaves.map{it.anchor}) { visible ->
+                    val navigation=ChapterScrollNavigation(anchor,scrollRequest,leaves.map{it.anchor},scrollCursor) { visible ->
                         leaves.indexOfFirst{it.anchor==visible}.takeIf{it>=0}?.let{page=it;anchor=visible}
                     }
                     if(scrollContent!=null)scrollContent(recipe,navigation)

@@ -1,6 +1,12 @@
 package com.polinalinen.madre.ui.screens
 
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.foundation.ScrollState
 import androidx.compose.ui.text.TextLayoutResult
 
 /** A seek is explicit; passive scrolling changes the bookmark without issuing another seek. */
@@ -8,8 +14,22 @@ data class ChapterScrollNavigation(
     val anchor: String,
     val request: Long,
     val pageAnchors: List<String>,
+    val cursor: ChapterScrollState,
     val onAnchorChanged: (String) -> Unit,
 )
+
+/** Owned beside the reader's page, not by the transient embedded renderer. */
+class ChapterScrollState(offset: Int = 0, request: Long = Long.MIN_VALUE, layout: String? = null) {
+    val scroll = ScrollState(offset)
+    var processed by mutableLongStateOf(request)
+    var geometry by mutableStateOf(layout)
+    companion object {
+        val Saver = listSaver<ChapterScrollState, Any>(
+            save = { listOf(it.scroll.value, it.processed, it.geometry.orEmpty()) },
+            restore = { ChapterScrollState(it[0] as Int, it[1] as Long, (it[2] as String).ifEmpty { null }) },
+        )
+    }
+}
 
 /** Actual text-layout anchors, not estimates from page number or font size. */
 internal class ChapterScrollAnchors {

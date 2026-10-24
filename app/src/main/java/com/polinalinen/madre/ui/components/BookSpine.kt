@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.components
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
@@ -11,7 +12,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.polinalinen.madre.ui.theme.AppColors
 
 /**
  * DESIGN-V4.md Cycle 2, фича «Растущий корешок» (SpineGrowth). Толщина и
@@ -47,7 +47,7 @@ fun BookSpine(
     modifier: Modifier = Modifier,
     height: Dp = 220.dp,
 ) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     val totalRecords = bakeCount + feedingCount
     val thickness = SpineGrowth.thicknessDp(totalRecords).dp
     val wornLines = SpineGrowth.wornLineCount(totalRecords)
@@ -57,21 +57,21 @@ fun BookSpine(
         val h = size.height.coerceAtLeast(1f)
         val corner = CornerRadius(4.dp.toPx())
 
-        drawRoundRect(colors.espresso, cornerRadius = corner)
+        drawRoundRect(colors.ink, cornerRadius = corner)
         // Рамка тиснения по краю корешка — тон чуть теплее, тонкой волосяной линией.
-        drawRoundRect(colors.caramel.copy(alpha = 0.5f), cornerRadius = corner, style = Stroke(1.dp.toPx()))
+        drawRoundRect(colors.acc.copy(alpha = 0.5f), cornerRadius = corner, style = Stroke(1.dp.toPx()))
 
         // Капталы (headband) — тканевая полоска сверху/снизу настоящего корешка.
         val headband = 6.dp.toPx().coerceAtMost(h / 4f)
-        drawRect(colors.caramel, topLeft = Offset(0f, 0f), size = Size(w, headband))
-        drawRect(colors.caramel, topLeft = Offset(0f, h - headband), size = Size(w, headband))
+        drawRect(colors.acc, topLeft = Offset(0f, 0f), size = Size(w, headband))
+        drawRect(colors.acc, topLeft = Offset(0f, h - headband), size = Size(w, headband))
 
         // Потёртости — чем длиннее история, тем их больше.
         if (wornLines > 0) {
             val step = h / (wornLines + 1)
             repeat(wornLines) { i ->
                 val y = step * (i + 1)
-                val tone = if (i % 2 == 0) colors.cocoa else colors.caramel
+                val tone = if (i % 2 == 0) colors.ink2 else colors.acc
                 drawLine(
                     color = tone.copy(alpha = 0.55f),
                     start = Offset(w * 0.15f, y),

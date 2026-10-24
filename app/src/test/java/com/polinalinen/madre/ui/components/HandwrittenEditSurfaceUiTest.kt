@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.components
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -10,10 +11,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.polinalinen.madre.ui.theme.MadreTheme
+import com.polinalinen.madre.ui.kit.RazvorotTheme as MadreTheme
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test
@@ -61,13 +63,30 @@ class HandwrittenEditSurfaceUiTest {
                         Box(Modifier.fillMaxWidth().height(2000.dp))
                     }
                     item(key = "full-recipe") {
-                        HandwrittenEditSurface(recipeId = "borodinsky") {
+                        // The retained editor still works when explicitly tested enabled;
+                        // the shipping facade is separately required to be read-only.
+                        HandwrittenEditLayer(recipeId = "borodinsky",canEdit=true) {
                             Text("Рецепт целиком")
                         }
                     }
                 }
             }
         }
+    }
+
+    @Test fun disabledShippingFacadeHidesEveryEditActionAndPreservesStoredStrokes() {
+        val context=androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        val id="read-only-owner15"
+        val strokes=listOf(listOf(androidx.compose.ui.geometry.Offset(.1f,.2f),androidx.compose.ui.geometry.Offset(.6f,.7f)))
+        runBlocking{HandwrittenEdit.saveStrokes(context,id,strokes)}
+        val file=java.io.File(context.filesDir,HandwrittenEdit.strokesFileNameFor(id));val before=file.readBytes()
+        rule.setContent{MadreTheme{HandwrittenEditSurface(id){Text("Сохранённый рецепт доступен")}}}
+        rule.onNodeWithText("Сохранённый рецепт доступен").assertIsDisplayed()
+        rule.onNodeWithText(OFF).assertDoesNotExist();rule.onNodeWithText(ON).assertDoesNotExist()
+        rule.onNodeWithContentDescription("Убрать последний штрих").assertDoesNotExist()
+        rule.waitForIdle()
+        org.junit.Assert.assertArrayEquals(before,file.readBytes())
+        org.junit.Assert.assertEquals(strokes,runBlocking{HandwrittenEdit.loadStrokes(context,id)})
     }
 
     private fun scrollTo(index: Int) {

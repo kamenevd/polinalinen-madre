@@ -15,3 +15,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "Madre"
 include(":app")
+include(":yandex-authsdk-330")
+include(":macrobenchmark")

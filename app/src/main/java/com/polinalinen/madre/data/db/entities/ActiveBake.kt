@@ -1,5 +1,6 @@
 package com.polinalinen.madre.data.db.entities
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -39,4 +40,9 @@ data class ActiveBakeEntity(
     val startedAtWallClock: Long,
     /** Момент паузы по стенным часам; null — выпечка идёт. */
     val pausedAtWallClock: Long? = null,
+    val scaleFactor: Double? = null,
+    val bakeKey: String? = null,
+    @ColumnInfo(defaultValue = "0") val revision: Long = 0,
+    val recipeRevision: String? = null,
+    @ColumnInfo(name = "bake_number", defaultValue = "0") val bakeNumber: Int = 0,
 )

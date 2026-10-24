@@ -6,12 +6,44 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      capture_baseline:
+        description: Re-render immutable60985a8 comparison (expensive, manual only)
+        type: boolean
+        default: false
+      fixes_7013_acceptance:
+        description: Capture FIXES7.0.13 requested native states at this frozen head (manual only)
+        type: boolean
+        default: false
+      fixes_7014_acceptance:
+        description: Capture FIXES7.0.14 states and execute fullscreen/navigation on a real CI cutout emulator
+        type: boolean
+        default: false
+      fixes_7014_instrumented:
+        description: Run requested fullscreen/navigation cutout tests without a full native acceptance render
+        type: boolean
+        default: false
+      fixes_7015_huawei:
+        description: Required owner15 cutout/back-gesture and controlled release-like profiling
+        type: boolean
+        default: false
+      perf_compare:
+        description: Compare immutable issued15 functional debug/release-like controls with current QA on the same CI AVD
+        type: boolean
+        default: false
+      bake_numbers_native:
+        description: Reshoot full native number-stage acceptance without repeating performance measurement
+        type: boolean
+        default: false
+  schedule:
+    # Takes effect only after an explicitly approved merge into default branch.
+    - cron: "30 1 * * *"
 
 permissions:
   contents: read
 
 concurrency:
-  group: quality-${{ github.workflow }}-${{ github.ref }}
+  group: ${{ inputs.bake_numbers_native && format('native-{0}-', github.sha) || '' }}quality-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -33,6 +65,13 @@ jobs:
     name: Android quality
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      QA_KEYSTORE_PASSWORD: ${{ secrets.MADRE_QA_KEYSTORE_PASSWORD }}
+      QA_KEY_ALIAS: ${{ secrets.MADRE_QA_KEY_ALIAS }}
+      QA_KEY_PASSWORD: ${{ secrets.MADRE_QA_KEY_PASSWORD }}
+      MADRE_SIGNING_CERT_SHA256: "9ACA5F5F57F301EC8359AD670ECEB6387156132007C07FF36A31266326468258"
+      MADRE_YANDEX_CLIENT_ID: ${{ secrets.MADRE_YANDEX_CLIENT_ID }}
+      MADRE_BUILD_TOOLS_VERSION: "36.0.0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
@@ -40,9 +79,81 @@ jobs:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
       - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+        with:
+          packages: platform-tools
       - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
-      - name: Unit tests, lint, visual golden and debug build
-        run: ./gradlew testDebugUnitTest lintDebug verifyRoborazziDebug assembleDebug --no-daemon --stacktrace
+      - name: Install pinned QA verification tools
+        run: sdkmanager "build-tools;${MADRE_BUILD_TOOLS_VERSION}"
+      # Current parent authority: stable QA identity approved from7.0.8 onward.
+      # Production signing remains separate; no ephemeral delivery fallback.
+      - name: Restore private stable QA signing
+        env:
+          QA_KEYSTORE_BASE64: ${{ secrets.MADRE_QA_KEYSTORE_BASE64 }}
+          QA_SIGNING_CERT_SHA256: ${{ secrets.MADRE_QA_SIGNING_CERT_SHA256 }}
+        run: python3 scripts/restore_qa_signing.py
+      - name: Compile, domain tests, style boundary, 20 key native frames and QA APK
+        run: ./gradlew compileDebugKotlin compileReleaseKotlin testDebugUnitTest assembleDebug assembleQa --no-daemon --stacktrace --no-configuration-cache
+      - name: Build minified QA instrumentation separately without displacing debug domain and render tests
+        run: ./gradlew :app:assembleQa :app:assembleQaAndroidTest -Pmadre.qaRegression=true --no-daemon --stacktrace --no-configuration-cache
+      - name: Verify stable QA APK identity before any APK upload
+        id: verify_qa_signature
+        run: python3 scripts/verify_apk_signature.py app/build/outputs/apk/debug/app-debug.apk
+      - name: Verify actual QA APK account flag and approved public client without exposing values
+        id: verify_qa_account_gate
+        run: python3 scripts/verify_apk_account_gate.py app/build/outputs/apk/debug/app-debug.apk > app/build/reports/apk-account-gate.json
+      - name: Verify real release-like QA binary, stable certificate, R8 mapping and packed ART
+        id: verify_real_qa
+        run: |
+          python3 scripts/verify_apk_signature.py app/build/outputs/apk/qa/app-qa.apk
+          python3 scripts/verify_qa_release_like.py app/build/outputs/apk/qa/app-qa.apk --mapping app/build/outputs/mapping/qa/mapping.txt > app/build/reports/qa-binary-provenance.json
+      - name: Extended visual verification (manual, nightly and RC)
+        if: (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && !inputs.fixes_7013_acceptance && !inputs.fixes_7014_acceptance && !inputs.fixes_7014_instrumented && !inputs.fixes_7015_huawei && !inputs.bake_numbers_native
+        run: ./gradlew testDebugUnitTest verifyRoborazziDebug -Pmadre.extendedVerification=true --no-daemon --stacktrace --no-configuration-cache
+      - name: FIXES frozen-head native acceptance (manual only)
+        if: github.event_name == 'workflow_dispatch' && (inputs.fixes_7013_acceptance || inputs.fixes_7014_acceptance)
+        run: |
+          mkdir -p app/build/reports/critical-before-fixes-acceptance
+          cp -R app/build/test-results/testDebugUnitTest app/build/reports/critical-before-fixes-acceptance/
+          ./gradlew testDebugUnitTest --tests 'com.polinalinen.madre.ui.razvorot.Fixes7013ExtendedRenderTest' -Pmadre.extendedVerification=true --no-daemon --stacktrace --no-configuration-cache
+      - name: Native412 comparison from immutable60985a8 app sources
+        if: github.event_name == 'workflow_dispatch' && inputs.capture_baseline
+        run: python3 scripts/capture_style_baseline.py
+
+      - name: Upload actual verified release-like QA and exact build provenance
+        if: success() && steps.verify_real_qa.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: madre-qa-release-like
+          path: |
+            app/build/outputs/apk/qa/app-qa.apk
+            app/build/outputs/mapping/qa/
+            app/build/reports/qa-binary-provenance.json
+            app/build/intermediates/merged_manifests/qa/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload same-certificate minified QA instrumentation
+        if: success() && steps.verify_real_qa.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: madre-qa-regression-test
+          path: app/build/outputs/apk/androidTest/qa/*.apk
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload verified debug APK first
+        if: success() && steps.verify_qa_signature.outcome == 'success' && steps.verify_qa_account_gate.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: madre-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload key native PNG
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: madre-key-png
+          path: app/build/outputs/roborazzi/key/*.png
+          if-no-files-found: error
+          retention-days: 14
       - name: Upload Android reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -52,20 +163,20 @@ jobs:
             app/build/reports/
             app/build/test-results/
             app/build/outputs/roborazzi/
+            app/schemas/
           if-no-files-found: warn
           retention-days: 14
-      - name: Upload verified debug APK
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: madre-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
-          retention-days: 14
 
-  instrumented-smoke:
-    name: Instrumented smoke
+
+      - name: Remove private QA keystore
+        if: always()
+        run: python3 scripts/restore_qa_signing.py --cleanup
+
+  lint-report:
+    name: Lint (report only)
+    continue-on-error: true
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
@@ -73,22 +184,103 @@ jobs:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
       - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+        with:
+          packages: platform-tools
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+      - name: Lint warnings do not block PR or APK
+        continue-on-error: true
+        run: ./gradlew lintDebug --no-daemon --stacktrace
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: lint-reports
+          path: app/build/reports/lint-results-debug.*
+          if-no-files-found: warn
+          retention-days: 14
+
+  instrumented-smoke:
+    name: Instrumented smoke
+    needs: android-quality
+    # Keep the protected check name; PR/push is SKIPPED, not a passed smoke.
+    # RC release gate still requires a real success at this exact SHA.
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      MADRE_FIXES_7014_ACCEPTANCE: ${{ (inputs.fixes_7014_acceptance || inputs.fixes_7014_instrumented) && 'true' || 'false' }}
+      MADRE_FIXES_7015_ACCEPTANCE: ${{ (inputs.fixes_7015_huawei || inputs.bake_numbers_native) && 'true' || 'false' }}
+      MADRE_EXACT_QA_DIR: ${{ github.workspace }}/.ci-exact/qa
+      MADRE_EXACT_QA_TEST_DIR: ${{ github.workspace }}/.ci-exact/qa-test
+      QA_KEYSTORE_PASSWORD: ${{ secrets.MADRE_QA_KEYSTORE_PASSWORD }}
+      QA_KEY_ALIAS: ${{ secrets.MADRE_QA_KEY_ALIAS }}
+      QA_KEY_PASSWORD: ${{ secrets.MADRE_QA_KEY_PASSWORD }}
+      MADRE_SIGNING_CERT_SHA256: "9ACA5F5F57F301EC8359AD670ECEB6387156132007C07FF36A31266326468258"
+      MADRE_YANDEX_CLIENT_ID: ${{ secrets.MADRE_YANDEX_CLIENT_ID }}
+      MADRE_BUILD_TOOLS_VERSION: "36.0.0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+      - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+        with:
+          packages: platform-tools
       - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
       - name: Enable KVM
+        # The optional device job must use the same QA identity, never an ephemeral debug key.
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
             | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+      - name: Fetch immutable negative-control source
+        if: inputs.bake_numbers_native
+        run: git fetch --no-tags origin 2880abbe51d85145c4b666d60f35153e05a02727
+      - name: Download exact verified QA from this run, never rebuild a different delivery candidate
+        if: inputs.bake_numbers_native
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: madre-qa-release-like
+          path: ${{ env.MADRE_EXACT_QA_DIR }}
+      - name: Download corresponding minified QA instrumentation
+        if: inputs.bake_numbers_native
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: madre-qa-regression-test
+          path: ${{ env.MADRE_EXACT_QA_TEST_DIR }}
+      - name: Restore private stable QA signing for instrumentation
+        env:
+          QA_KEYSTORE_BASE64: ${{ secrets.MADRE_QA_KEYSTORE_BASE64 }}
+          QA_SIGNING_CERT_SHA256: ${{ secrets.MADRE_QA_SIGNING_CERT_SHA256 }}
+        run: python3 scripts/restore_qa_signing.py
+      - name: Verify approved SDK instrumentation configuration without displaying its value
+        run: |
+          python3 -c 'import os,re; assert re.fullmatch(r"[0-9a-fA-F]{32}", os.environ.get("MADRE_YANDEX_CLIENT_ID", "")), "Approved Yandex client id is required for instrumentation"'
+          sdkmanager "build-tools;${MADRE_BUILD_TOOLS_VERSION}"
+          ./gradlew :yandex-authsdk-330:mergeDebugAndroidTestManifest :app:assembleDebugAndroidTest --no-daemon --stacktrace --no-configuration-cache
       - name: Run emulator smoke tests
         uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
         with:
           api-level: 35
           target: google_apis
           arch: x86_64
+          profile: pixel_5
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
+          script: |
+            if [ "${{ inputs.bake_numbers_native }}" = "true" ]; then python3 scripts/run_minified_plan_regression.py; fi
+            bash scripts/run_instrumented_acceptance.sh
+            if [ "${{ inputs.bake_numbers_native }}" = "true" ]; then bash scripts/run_qa_runtime_acceptance.sh; fi
+      - name: Upload actual non-debuggable QA runtime and owner diagnostics PNG
+        if: always() && inputs.bake_numbers_native
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: qa-native-runtime
+          path: performance-evidence/qa-runtime/
+          if-no-files-found: error
+          retention-days: 14
       - name: Upload instrumentation reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -99,3 +291,82 @@ jobs:
             app/build/outputs/androidTest-results/
           if-no-files-found: warn
           retention-days: 14
+      - name: Upload Razvorot screenshots
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: madre-screenshots
+          path: |
+            screenshots/
+            app/build/outputs/connected_android_test_additional_output/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Remove private QA keystore after instrumentation
+        if: always()
+        run: python3 scripts/restore_qa_signing.py --cleanup
+
+  required-7015-performance:
+    name: Required15 release-like performance
+    if: github.event_name == 'workflow_dispatch' && inputs.fixes_7015_huawei
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      QA_KEYSTORE_PASSWORD: ${{ secrets.MADRE_QA_KEYSTORE_PASSWORD }}
+      QA_KEY_ALIAS: ${{ secrets.MADRE_QA_KEY_ALIAS }}
+      QA_KEY_PASSWORD: ${{ secrets.MADRE_QA_KEY_PASSWORD }}
+      MADRE_YANDEX_CLIENT_ID: ${{ secrets.MADRE_YANDEX_CLIENT_ID }}
+      MADRE_PERF_COMPARE: ${{ inputs.perf_compare && 'true' || 'false' }}
+      MADRE_PERF_BASE: ef9fc07f5591b755faaea32cf6430dc1d6b828e9
+      MADRE_PERF_PREBUILT: 'true'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699
+        with:
+          packages: platform-tools
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+      - name: Restore same QA key for isolated measurement APKs only
+        env:
+          QA_KEYSTORE_BASE64: ${{ secrets.MADRE_QA_KEYSTORE_BASE64 }}
+          QA_SIGNING_CERT_SHA256: ${{ secrets.MADRE_QA_SIGNING_CERT_SHA256 }}
+        run: python3 scripts/restore_qa_signing.py
+      - name: Prepare immutable15 release-like control with benchmark-only overlays
+        run: |
+          sdkmanager "build-tools;36.0.0"
+          python3 scripts/prepare_perf_baseline.py "$RUNNER_TEMP/madre-perf-before"
+
+      - name: Build both actual R8 timing targets and driver before booting AVD
+        run: |
+          (cd "$RUNNER_TEMP/madre-perf-before" && ./gradlew :app:assembleBenchmark :macrobenchmark:assembleBenchmark --no-daemon --stacktrace --no-configuration-cache)
+          ./gradlew :app:assembleBenchmark :macrobenchmark:assembleBenchmark --no-daemon --stacktrace --no-configuration-cache
+      - name: Enable KVM for controlled CI AVD
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Measure BEFORE and controlled AFTER with raw Perfetto traces
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -feature -Vulkan -noaudio -no-boot-anim -camera-back none
+          script: bash scripts/run_perf_comparison.sh
+      - name: Upload real metrics traces profiles and exact controls even on failure
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: required15-performance
+          path: performance-evidence/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Remove private QA key
+        if: always()
+        run: python3 scripts/restore_qa_signing.py --cleanup

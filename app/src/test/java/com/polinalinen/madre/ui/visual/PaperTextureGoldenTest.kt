@@ -1,15 +1,15 @@
 package com.polinalinen.madre.ui.visual
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.polinalinen.madre.ui.components.coffeeRings
 import com.polinalinen.madre.ui.components.dampPaper
 import com.polinalinen.madre.ui.components.wornPage
-import com.polinalinen.madre.ui.theme.MadreTheme
+import com.polinalinen.madre.ui.kit.RazvorotTheme as MadreTheme
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
@@ -37,7 +37,7 @@ class PaperTextureGoldenTest {
     fun `износ страницы часто печёного рецепта`() {
         captureRoboImage {
             MadreTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
+                PaperSurface(modifier = Modifier.fillMaxSize()) {
                     // 20 выпечек — выше всех трёх порогов WornPage разом:
                     // и потемнение края, и отпечаток пальца, и потёртость корешка.
                     Box(Modifier.fillMaxSize().wornPage(bakeCount = 20, seed = 4242L))
@@ -50,7 +50,7 @@ class PaperTextureGoldenTest {
     fun `кофейные круги от трёх прерванных выпечек`() {
         captureRoboImage {
             MadreTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
+                PaperSurface(modifier = Modifier.fillMaxSize()) {
                     Box(Modifier.fillMaxSize().coffeeRings(cancelledCount = 3, seed = 4242L))
                 }
             }
@@ -61,7 +61,7 @@ class PaperTextureGoldenTest {
     fun `отсыревшая бумага в дождь`() {
         captureRoboImage {
             MadreTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
+                PaperSurface(modifier = Modifier.fillMaxSize()) {
                     Box(Modifier.fillMaxSize().dampPaper(alpha = 0.8f, seed = 4242L))
                 }
             }
@@ -73,7 +73,7 @@ class PaperTextureGoldenTest {
     fun `три слоя бумаги вместе`() {
         captureRoboImage {
             MadreTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
+                PaperSurface(modifier = Modifier.fillMaxSize()) {
                     Box(
                         Modifier
                             .fillMaxSize()

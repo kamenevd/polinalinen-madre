@@ -1,0 +1,7 @@
+Pinned Yandex Auth SDK3.3.0, Copyright2017 YANDEX LLC, Apache License2.0.
+This local security-corrected source build is NOT an unmodified upstream binary.
+Only AuthSdkActivity result callback custody is corrected; public APIs, real strategy
+contracts, native package signatures, SSL handlers and result validation stay upstream.
+Manifest package attribute is moved to AGP namespace only. See provenance.json.
+No bearer is removed from a saved Bundle after the fact: the real callback consumes
+it at STOP. Full inherited saved-state behavior remains enabled and is tested.

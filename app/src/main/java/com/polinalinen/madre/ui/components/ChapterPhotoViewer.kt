@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.components
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -27,13 +28,11 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.polinalinen.madre.model.ChapterPhoto
 import com.polinalinen.madre.model.ChapterPhotos
-import com.polinalinen.madre.ui.theme.AppColors
 import com.polinalinen.madre.utils.PhotoStore
 
 /** Всё, на что смотрят снаружи: тег страницы для тестов листания. */
@@ -69,16 +68,11 @@ fun ChapterPhotoViewer(
     initialPage: Int = 0,
     onPageChange: (Int) -> Unit = {},
 ) {
-    Dialog(
+    PaperPhotoViewer(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            dismissOnBackPress = true,
-            dismissOnClickOutside = true,
-        ),
     ) {
-        val colors = AppColors.current
-        Box(Modifier.fillMaxSize().background(colors.paper)) {
+        val colors = LocalPaper.current
+        Box(Modifier.fillMaxSize().background(Illustration.PhotoBackdrop)) {
             if (photos.isEmpty()) {
                 // Досюда доходить не должны — плитка без фото не открывается,
                 // — но пустой чёрный экран был бы неотличим от поломки.
@@ -112,8 +106,7 @@ fun ChapterPhotoViewer(
                     val current = photos[ChapterPhotos.clampIndex(pagerState.currentPage, photos.size)]
                     Text(
                         ChapterPhotos.caption(current),
-                        color = colors.cocoa,
-                        fontFamily = FontFamily.Serif,
+                        color = colors.ink2,style = PaperType.body,
                         fontSize = 12.sp,
                         textAlign = TextAlign.Center,
                     )
@@ -121,17 +114,16 @@ fun ChapterPhotoViewer(
                     if (counter.isNotEmpty()) {
                         Text(
                             counter,
-                            color = colors.crust,
-                            fontFamily = FontFamily.Serif,
+                            color = colors.acc,style = PaperType.body,
                             fontStyle = FontStyle.Italic,
                             fontSize = 12.sp,
                             modifier = Modifier.padding(top = 2.dp),
                         )
                     }
-                    BookButton(
+                    PaperButton(
                         label = "Закрыть",
                         onClick = onDismiss,
-                        variant = BookButtonVariant.SECONDARY,
+                        variant = PaperButtonVariant.SECONDARY,
                         modifier = Modifier.padding(top = 8.dp),
                     )
                 }
@@ -142,7 +134,7 @@ fun ChapterPhotoViewer(
 
 @Composable
 private fun ChapterPhotoPage(photo: ChapterPhoto) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     val context = LocalContext.current
     val file = remember(photo.path) { PhotoStore.resolve(context, photo.path) }
     val caption = ChapterPhotos.caption(photo)
@@ -168,14 +160,12 @@ private fun ChapterPhotoPage(photo: ChapterPhoto) {
             ) {
                 Text(
                     "файла больше нет",
-                    color = colors.espresso,
-                    fontFamily = FontFamily.Serif,
+                    color = colors.ink,style = PaperType.body,
                     fontSize = 17.sp,
                 )
                 Text(
                     "снимок удалили с телефона — запись о выпечке осталась в книге",
-                    color = colors.cocoa,
-                    fontFamily = FontFamily.Serif,
+                    color = colors.ink2,style = PaperType.body,
                     fontStyle = FontStyle.Italic,
                     fontSize = 12.sp,
                     textAlign = TextAlign.Center,
@@ -188,12 +178,11 @@ private fun ChapterPhotoPage(photo: ChapterPhoto) {
 
 @Composable
 private fun EmptyChapterPage(chapterName: String) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Text(
             "в главе «$chapterName» пока нет фотографий",
-            color = colors.cocoa,
-            fontFamily = FontFamily.Serif,
+            color = colors.ink2,style = PaperType.body,
             fontStyle = FontStyle.Italic,
             fontSize = 15.sp,
             textAlign = TextAlign.Center,

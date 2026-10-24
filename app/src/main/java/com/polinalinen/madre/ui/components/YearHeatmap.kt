@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.components
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,8 +34,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.polinalinen.madre.model.YearGrid
 import com.polinalinen.madre.model.YearRhythm
-import com.polinalinen.madre.ui.theme.AppColors
-import com.polinalinen.madre.ui.theme.MadreExtendedColors
 
 /**
  * Cycle 15: ритм года — 52 недельные колонки, листается вбок.
@@ -53,7 +52,7 @@ object YearHeatmapTags {
 
 @Composable
 fun YearHeatmap(grid: YearGrid, modifier: Modifier = Modifier) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     val labels = remember(grid) { YearRhythm.monthLabels(grid) }
     val state = rememberLazyListState()
 
@@ -84,7 +83,7 @@ fun YearHeatmap(grid: YearGrid, modifier: Modifier = Modifier) {
 private fun WeekColumn(
     week: List<com.polinalinen.madre.model.YearDay?>,
     label: String?,
-    colors: MadreExtendedColors,
+    colors: PaperColors,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(CELL_GAP)) {
         // Место под подпись занято всегда, даже когда подписи нет: иначе
@@ -93,8 +92,7 @@ private fun WeekColumn(
             if (label != null) {
                 Text(
                     label,
-                    color = colors.cocoa,
-                    fontFamily = FontFamily.SansSerif,
+                    color = colors.ink2,style = PaperType.caption,
                     fontSize = 8.sp,
                     // Подпись шире колонки и не должна её растягивать — она
                     // просто висит над своей неделей и заезжает на соседнюю.
@@ -128,7 +126,7 @@ private fun WeekColumn(
 
 /** «меньше — больше»: без легенды тон клетки не значит ничего. */
 @Composable
-private fun Legend(colors: MadreExtendedColors, modifier: Modifier = Modifier) {
+private fun Legend(colors: PaperColors, modifier: Modifier = Modifier) {
     Row(
         modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.End,
@@ -136,8 +134,7 @@ private fun Legend(colors: MadreExtendedColors, modifier: Modifier = Modifier) {
     ) {
         Text(
             "меньше",
-            color = colors.cocoa,
-            fontFamily = FontFamily.Serif,
+            color = colors.ink2,style = PaperType.body,
             fontStyle = FontStyle.Italic,
             fontSize = 10.sp,
         )
@@ -152,8 +149,7 @@ private fun Legend(colors: MadreExtendedColors, modifier: Modifier = Modifier) {
         }
         Text(
             "больше",
-            color = colors.cocoa,
-            fontFamily = FontFamily.Serif,
+            color = colors.ink2,style = PaperType.body,
             fontStyle = FontStyle.Italic,
             fontSize = 10.sp,
         )
@@ -161,11 +157,11 @@ private fun Legend(colors: MadreExtendedColors, modifier: Modifier = Modifier) {
 }
 
 /** Тёплая шкала: пергамент → карамель → корочка → тёмный янтарь. */
-private fun heatTone(level: Int, colors: MadreExtendedColors): Color = when (level) {
-    0 -> colors.parchment
-    1 -> colors.caramel
-    2 -> colors.crust
-    else -> colors.amberDeep
+private fun heatTone(level: Int, colors: PaperColors): Color = when (level) {
+    0 -> colors.bg2
+    1 -> colors.acc
+    2 -> colors.acc
+    else -> colors.ink2
 }
 
 private val CELL_SIZE = 12.dp

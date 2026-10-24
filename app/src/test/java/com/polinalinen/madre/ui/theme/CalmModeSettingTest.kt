@@ -1,5 +1,7 @@
 package com.polinalinen.madre.ui.theme
 
+import com.polinalinen.madre.ui.kit.CalmModeSetting
+import com.polinalinen.madre.ui.kit.FlagStore
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 

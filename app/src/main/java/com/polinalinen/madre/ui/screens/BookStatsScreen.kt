@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.screens
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,8 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -48,15 +47,12 @@ import com.polinalinen.madre.model.YearRhythm
 import com.polinalinen.madre.ui.components.AgedPhoto
 import com.polinalinen.madre.ui.components.ChapterPhotoViewer
 import com.polinalinen.madre.ui.components.BackLabel
-import com.polinalinen.madre.ui.components.BookButton
-import com.polinalinen.madre.ui.components.BookButtonVariant
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.HeavyRule
 import com.polinalinen.madre.ui.components.PageLabel
 import com.polinalinen.madre.ui.components.Stamp
 import com.polinalinen.madre.ui.components.YearHeatmap
 import androidx.compose.ui.platform.testTag
-import com.polinalinen.madre.ui.theme.AppColors
 import androidx.compose.ui.platform.LocalContext
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
@@ -97,7 +93,7 @@ fun BookStatsScreen(
     feedingMillis: List<Long> = emptyList(),
     onBack: () -> Unit,
 ) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     // Пути к фотокарточкам в Room относительные — их нужно собирать
     // относительно filesDir (PhotoStore.resolve), а для этого нужен Context.
     val context = LocalContext.current
@@ -146,9 +142,9 @@ fun BookStatsScreen(
     // ровно то, чего LazyColumn и должен избегать.
     val chapterRows = remember(recipes) { recipes.chunked(CHAPTER_COLUMNS) }
 
-    Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
+    PaperSurface(color = colors.bg, modifier = Modifier.fillMaxSize()) {
         LazyColumn(
-            Modifier.statusBarsPadding().testTag(BookStats.LIST_TAG),
+            Modifier.testTag(BookStats.LIST_TAG),
             contentPadding = PaddingValues(bottom = 32.dp),
         ) {
             item {
@@ -158,21 +154,19 @@ fun BookStatsScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 BackLabel("Полка", onClick = onBack)
-                Stamp(if (isMe) "твоя книга" else "только чтение", colors.cocoa)
+                Stamp(if (isMe) "твоя книга" else "только чтение", colors.ink2)
             }
 
             Column(Modifier.padding(horizontal = 22.dp)) {
                 Text(
                     ownerLabel,
-                    color = colors.espresso,
-                    fontFamily = FontFamily.Serif,
-                    fontWeight = FontWeight.Bold,
+                    color = colors.ink,style = PaperType.body,
+                    fontWeight = FontWeight.Medium,
                     fontSize = 28.sp,
                 )
                 Text(
                     if (records.isEmpty()) "книга пока пуста" else "испечено раз: ${records.size}",
-                    color = colors.cocoa,
-                    fontFamily = FontFamily.Serif,
+                    color = colors.ink2,style = PaperType.body,
                     fontStyle = FontStyle.Italic,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(top = 2.dp),
@@ -181,14 +175,14 @@ fun BookStatsScreen(
 
             HeavyRule(Modifier.padding(horizontal = 22.dp, vertical = 14.dp))
 
-            PageLabel("Формуляр книги", color = colors.espresso, modifier = Modifier.padding(horizontal = 22.dp))
+            PageLabel("Формуляр книги", color = colors.ink, modifier = Modifier.padding(horizontal = 22.dp))
             Column(Modifier.padding(horizontal = 22.dp, vertical = 10.dp).fillMaxWidth()) {
                 FormularRow("Выпечек всего", "${records.size}")
                 if (topRecipeName != null) FormularRow("Любимая глава", topRecipeName)
                 FormularRow("Печёт", if (avgInterval != null) "раз в $avgInterval ${dayWord(avgInterval)}" else "рано считать")
             }
 
-            PageLabel("Ритм года", color = colors.espresso, modifier = Modifier.padding(horizontal = 22.dp, vertical = 8.dp))
+            PageLabel("Ритм года", color = colors.ink, modifier = Modifier.padding(horizontal = 22.dp, vertical = 8.dp))
             YearHeatmap(yearGrid)
             Text(
                 if (yearGrid.totalEvents == 0) {
@@ -197,23 +191,21 @@ fun BookStatsScreen(
                     "за год: ${yearGrid.totalEvents} ${entryWord(yearGrid.totalEvents)} " +
                         "в ${yearGrid.activeDays} ${dayWord(yearGrid.activeDays)}"
                 },
-                color = colors.cocoa,
-                fontFamily = FontFamily.Serif,
+                color = colors.ink2,style = PaperType.body,
                 fontStyle = FontStyle.Italic,
                 fontSize = 11.5.sp,
                 modifier = Modifier.padding(horizontal = 22.dp).padding(top = 8.dp),
             )
             Text(
                 weekday?.let { "чаще всего — по $it" } ?: if (dates.isEmpty()) "здесь пока тихо — ни одной записи" else "пока рано искать закономерность",
-                color = colors.cocoa,
-                fontFamily = FontFamily.Serif,
+                color = colors.ink2,style = PaperType.body,
                 fontStyle = FontStyle.Italic,
                 fontSize = 13.sp,
                 modifier = Modifier.padding(horizontal = 22.dp).padding(top = 8.dp),
             )
 
             HairRule(Modifier.padding(horizontal = 22.dp, vertical = 16.dp))
-            PageLabel("Главы", color = colors.espresso, modifier = Modifier.padding(horizontal = 22.dp))
+            PageLabel("Главы", color = colors.ink, modifier = Modifier.padding(horizontal = 22.dp))
             Spacer(Modifier.height(10.dp))
             }
 
@@ -269,8 +261,7 @@ fun BookStatsScreen(
             item {
             Text(
                 "страницы проявляются по мере того, как здесь пекут",
-                color = colors.cocoa,
-                fontFamily = FontFamily.Serif,
+                color = colors.ink2,style = PaperType.body,
                 fontStyle = FontStyle.Italic,
                 fontSize = 11.sp,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -316,22 +307,18 @@ fun BookStatsScreen(
         val attempts = records.filter { it.recipeId == opened.id }.sortedByDescending { it.completedAtMillis }
         // Форма/цвет — не стандартный Material-попап (concept: "никакого material-дизайна",
         // DESIGN-V4.md §Концепция): плоская карточка страницы, скругление ≤4dp.
-        AlertDialog(
+        PaperDialog(
             onDismissRequest = { openedRecipeId = null },
             confirmButton = {
                 // У лайтбокса не было ни одной кнопки закрытия: уйти можно
                 // было только тапом мимо карточки или системной «назад».
-                BookButton(
+                PaperButton(
                     label = "Закрыть",
                     onClick = { openedRecipeId = null },
-                    variant = BookButtonVariant.SECONDARY,
+                    variant = PaperButtonVariant.SECONDARY,
                 )
             },
-            shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
-            containerColor = colors.cream,
-            titleContentColor = colors.espresso,
-            textContentColor = colors.espresso,
-            title = { Text(opened.name, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold) },
+            title = { Text(opened.name,style = PaperType.body, fontWeight = FontWeight.Medium) },
             text = {
                 // Попыток у любимой главы бывает много, и почти у каждой —
                 // фотокарточка: список ленивый, чтобы лайтбокс не декодировал
@@ -339,7 +326,7 @@ fun BookStatsScreen(
                 LazyColumn(Modifier.heightIn(max = LIGHTBOX_MAX_HEIGHT)) {
                     items(attempts, key = { it.id }) { a ->
                         val d = Instant.ofEpochMilli(a.completedAtMillis).atZone(ZoneId.systemDefault()).toLocalDate()
-                        Text("${formatRuDate(d)} · ×${a.portions}", fontFamily = FontFamily.Serif, fontSize = 14.sp)
+                        Text("${formatRuDate(d)} · ×${a.portions}",style = PaperType.body, fontSize = 14.sp)
                         // «Старое фото» (Cycle 6, AgedPhoto): вклеенная фотокарточка
                         // стареет вместе с записью — цвет, сепия, выцветание.
                         if (a.photoPath != null) {
@@ -360,11 +347,11 @@ fun BookStatsScreen(
 
 @Composable
 private fun FormularRow(label: String, value: String) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     Row(
         Modifier.fillMaxWidth().padding(vertical = 6.dp).drawBehind {
             drawLine(
-                color = colors.flour,
+                color = colors.line,
                 start = androidx.compose.ui.geometry.Offset(0f, size.height),
                 end = androidx.compose.ui.geometry.Offset(size.width, size.height),
                 strokeWidth = 1.dp.toPx(),
@@ -372,8 +359,8 @@ private fun FormularRow(label: String, value: String) {
         },
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(label, color = colors.cocoa, fontFamily = FontFamily.Serif, fontSize = 13.sp)
-        Text(value, color = colors.sage, fontFamily = FontFamily.Serif, fontStyle = FontStyle.Italic, fontSize = 16.sp)
+        Text(label, color = colors.ink2,style = PaperType.body, fontSize = 13.sp)
+        Text(value, color = colors.sage,style = PaperType.body, fontStyle = FontStyle.Italic, fontSize = 16.sp)
     }
 }
 
@@ -399,7 +386,7 @@ private fun ChapterTile(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     val context = LocalContext.current
     // Файл могли удалить из галереи телефона — тогда это глава без снимка,
     // а не глава с пустой рамкой.
@@ -412,7 +399,7 @@ private fun ChapterTile(
                 .fillMaxWidth()
                 .aspectRatio(1f)
                 .drawBehind {
-                    if (count > 0) drawRect(colors.crust) else drawRect(colors.parchment)
+                    if (count > 0) drawRect(colors.acc) else drawRect(colors.bg2)
                 }
         ) {
             if (coverFile != null) {
@@ -430,8 +417,7 @@ private fun ChapterTile(
             if (count > 0) {
                 Text(
                     "×$count",
-                    color = colors.cream,
-                    fontFamily = FontFamily.SansSerif,
+                    color = colors.card,style = PaperType.caption,
                     fontSize = 10.sp,
                     modifier = Modifier.align(Alignment.BottomEnd).padding(4.dp),
                 )
@@ -439,8 +425,7 @@ private fun ChapterTile(
         }
         Text(
             name,
-            color = if (count > 0) colors.espresso else colors.flour,
-            fontFamily = FontFamily.Serif,
+            color = if (count > 0) colors.ink else colors.line,style = PaperType.body,
             fontStyle = FontStyle.Italic,
             fontSize = 12.sp,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,

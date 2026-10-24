@@ -1,12 +1,12 @@
 package com.polinalinen.madre.ui.components
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import com.polinalinen.madre.ui.theme.AppColors
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random
@@ -60,7 +60,7 @@ fun InkBlotSpot(
     seed: Long,
     modifier: Modifier = Modifier,
     blurred: Boolean = false,
-    color: Color = AppColors.current.espresso,
+    color: Color = LocalPaper.current.ink,
 ) {
     val spec = InkBlot.specFor(seed)
     Canvas(modifier) {

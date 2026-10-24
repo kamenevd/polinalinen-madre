@@ -1,5 +1,8 @@
 package com.polinalinen.madre.ui.screens
 
+import kotlinx.coroutines.launch
+
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,13 +16,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.Surface
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -29,7 +38,15 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.text.TextLayoutResult
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.collect
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
@@ -43,7 +60,6 @@ import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.model.RecipeScale
 import com.polinalinen.madre.model.RecipeScaler
 import com.polinalinen.madre.ui.components.BackLabel
-import com.polinalinen.madre.ui.components.BookButton
 import com.polinalinen.madre.ui.components.DottedLeaderRow
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.HandwrittenEditSurface
@@ -57,8 +73,7 @@ import com.polinalinen.madre.ui.components.coffeeRings
 import com.polinalinen.madre.ui.components.crumbs
 import com.polinalinen.madre.ui.components.dustLayer
 import com.polinalinen.madre.ui.components.wornPage
-import com.polinalinen.madre.ui.theme.AppColors
-import com.polinalinen.madre.ui.theme.LocalCalmMode
+import com.polinalinen.madre.ui.kit.LocalCalmMode
 import com.polinalinen.madre.utils.heroResFor
 import com.polinalinen.madre.utils.ingredientSectionTitle
 import com.polinalinen.madre.viewmodel.BakingViewModel
@@ -75,8 +90,16 @@ fun RecipeDetailScreen(
     onBack: () -> Unit,
     onStartBaking: (sessionId: Long) -> Unit,
     viewModel: BakingViewModel = viewModel(),
+    onOpenAlice: () -> Unit = {},
+    embedded: Boolean = false,
+    scaleFactorOverride: Double? = null,
+    textSize: Float = 16f,
+    chapterScrollNavigation: ChapterScrollNavigation? = null,
+    onPortions: (() -> Unit)? = null,
 ) {
-    val colors = AppColors.current
+    val startScope = androidx.compose.runtime.rememberCoroutineScope()
+    val mutationError by viewModel.mutationError.collectAsState()
+    val colors = LocalPaper.current
     val recipes by viewModel.recipes.collectAsState()
     val recipe = recipes.find { it.id == recipeId }
     // Книга ещё раскрывается (recipes.json читается с диска) — это не то же
@@ -90,7 +113,7 @@ fun RecipeDetailScreen(
     // Cycle 14: порции — единственный источник масштаба. Коэффициент, выход,
     // подписи шагов и запись в историю берут его отсюда и только отсюда.
     var portions by rememberSaveable { mutableIntStateOf(RecipeScale.MIN_PORTIONS) }
-    val scaleFactor = RecipeScale.factor(portions)
+    val scaleFactor = scaleFactorOverride ?: RecipeScale.factor(portions)
 
     // Сколько раз печён именно этот рецепт — питает крошки, износ и кофейные
     // круги. Берём из общего среза bake_records, который уже держит
@@ -116,7 +139,12 @@ fun RecipeDetailScreen(
         prefs.getInt(CoffeeRing.prefsKey(recipeId), 0)
     }
 
-    Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
+    if (embedded) {
+        RecipeChapterContent(recipe, scaleFactor, textSize, onOpenAlice, chapterScrollNavigation,onPortions)
+        return
+    }
+
+    PaperSurface(color = colors.bg, modifier = Modifier.fillMaxSize()) {
         // Cycle 12, бюджет разворота: не больше ДВУХ живых слоёв на экран.
         // Живой — тот, что либо крутит анимацию каждый кадр, либо слушает
         // палец поверх текста. Здесь их ровно два, и оба только в полном
@@ -151,11 +179,12 @@ fun RecipeDetailScreen(
         // из сети, и по индексу «гостевая страница» однажды получила бы состояние
         // «из других книг».
         LazyColumn(
-            modifier = Modifier.statusBarsPadding(),
+            modifier = Modifier,
             // Тот же нижний отступ, что раньше давал .padding(bottom) внутри
             // скролла: он едет вместе с контентом, а не подрезает viewport.
             contentPadding = PaddingValues(bottom = 24.dp),
         ) {
+            item(key = "mutation-error") { mutationError?.let { Text(it, color = LocalPaper.current.error, style = PaperType.note, modifier = Modifier.padding(22.dp)) } }
             item(key = "header") {
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
@@ -169,9 +198,8 @@ fun RecipeDetailScreen(
             item(key = "title") {
                 Text(
                     recipe.name,
-                    color = colors.espresso,
-                    fontFamily = FontFamily.Serif,
-                    fontWeight = FontWeight.Bold,
+                    color = colors.ink,style = PaperType.body,
+                    fontWeight = FontWeight.Medium,
                     fontSize = 32.sp,
                     lineHeight = 36.sp,
                     modifier = Modifier.padding(horizontal = 22.dp),
@@ -181,8 +209,7 @@ fun RecipeDetailScreen(
             item(key = "description") {
                 Text(
                     recipe.description,
-                    color = colors.cocoa,
-                    fontFamily = FontFamily.Serif,
+                    color = colors.ink2,style = PaperType.body,
                     fontStyle = FontStyle.Italic,
                     fontSize = 13.sp,
                     modifier = Modifier.padding(horizontal = 22.dp, vertical = 6.dp),
@@ -211,7 +238,7 @@ fun RecipeDetailScreen(
             recipe.ingredients.forEach { (section, items) ->
                 item(key = "ingredients-$section") {
                     val sectionTitle = ingredientSectionTitle(section)
-                    PageLabel(sectionTitle, Modifier.padding(start = 22.dp, top = 14.dp), color = colors.espresso)
+                    PageLabel(sectionTitle, Modifier.padding(start = 22.dp, top = 14.dp), color = colors.ink)
                     Column(Modifier.padding(horizontal = 22.dp, vertical = 4.dp)) {
                         items.forEach { ingredient ->
                             val text = RecipeScaler.scaledDisplayText(ingredient, scaleFactor)
@@ -224,8 +251,7 @@ fun RecipeDetailScreen(
                             } else {
                                 Text(
                                     text,
-                                    color = colors.espresso,
-                                    fontFamily = FontFamily.Serif,
+                                    color = colors.ink,style = PaperType.body,
                                     fontSize = 14.sp,
                                     modifier = Modifier.padding(vertical = 5.dp),
                                 )
@@ -242,11 +268,10 @@ fun RecipeDetailScreen(
                 // весь список ингредиентов: без этой строки легко уехать в
                 // трёхчасовую выпечку не на ту семью.
                 Box(Modifier.padding(horizontal = 22.dp)) {
-                    BookButton(
+                    PaperButton(
                         label = "Начать выпечку",
                         onClick = {
-                            val sessionId = viewModel.startBaking(recipe, scaleFactor)
-                            onStartBaking(sessionId)
+                            startScope.launch { viewModel.startBaking(recipe, scaleFactor)?.let(onStartBaking) }
                         },
                         // Часы считаются от плана рецепта, а не от порций: время
                         // этапов от количества семей не зависит (RecipeScale.TIMING_NOTE).
@@ -255,6 +280,10 @@ fun RecipeDetailScreen(
                             "${recipe.timeline.size} шагов — таймер поведёт за руку",
                     )
                 }
+            }
+
+            if (com.polinalinen.madre.config.FeatureFlags.ALICE) item(key = "alice") {
+                PaperAliceButton(onOpenAlice, Modifier.fillMaxWidth().padding(horizontal = 22.dp))
             }
 
             // Просьба Полины (2026-07-21, помнить и не убирать): весь рецепт должен
@@ -287,9 +316,9 @@ fun RecipeDetailScreen(
  */
 @Composable
 private fun MissingRecipePage(loading: Boolean, onBack: () -> Unit) {
-    val colors = AppColors.current
-    Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
-        Column(Modifier.statusBarsPadding().fillMaxSize()) {
+    val colors = LocalPaper.current
+    PaperSurface(color = colors.bg, modifier = Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize()) {
             BackLabel("Оглавление", onClick = onBack, modifier = Modifier.padding(horizontal = 22.dp))
             Column(
                 Modifier.fillMaxSize().padding(horizontal = 22.dp),
@@ -298,8 +327,7 @@ private fun MissingRecipePage(loading: Boolean, onBack: () -> Unit) {
             ) {
                 Text(
                     if (loading) "книга раскрывается…" else "такой главы в книге нет",
-                    color = colors.espresso,
-                    fontFamily = FontFamily.Serif,
+                    color = colors.ink,style = PaperType.body,
                     fontStyle = FontStyle.Italic,
                     fontSize = 18.sp,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -309,25 +337,141 @@ private fun MissingRecipePage(loading: Boolean, onBack: () -> Unit) {
     }
 }
 
+/** Same chapter renderer in scroll/large-type mode; no second navigation or start button. */
 @Composable
-private fun FullRecipeSection(recipe: Recipe, scaleFactor: Double, modifier: Modifier = Modifier) {
-    val colors = AppColors.current
+fun RecipeChapterContent(recipe: Recipe, scaleFactor: Double, textSize: Float = 16f,
+    onOpenAlice: (() -> Unit)? = null, navigation: ChapterScrollNavigation? = null,onPortions:(()->Unit)?=null) {
+    val colors = LocalPaper.current
+    val cursor = navigation?.cursor ?: rememberSaveable(recipe.id,saver=ChapterScrollState.Saver) { ChapterScrollState() }
+    val scroll = cursor.scroll
+    val fontScale = androidx.compose.ui.platform.LocalDensity.current.fontScale
+    var viewportTop by remember { mutableFloatStateOf(0f) }
+    var viewportWidth by remember { mutableIntStateOf(0) }
+    val anchors = remember(recipe.id, scaleFactor, textSize, fontScale, viewportWidth) { ChapterScrollAnchors() }
+    val requested = remember(navigation?.pageAnchors,navigation?.anchor) { navigation?.let { (it.pageAnchors + it.anchor).distinct() }.orEmpty() }
+    val scaledIngredients=remember(recipe,scaleFactor){recipe.ingredients.mapValues{(_,items)->items.map{RecipeScaler.scaledDisplayText(it,scaleFactor)}}}
+    val currentNavigation by rememberUpdatedState(navigation)
+
+    // The effect key and readiness guard must use the SAME composition snapshot.
+    // Live viewportWidth may already be measured while the captured layoutKey
+    // is still unmeasured, incorrectly replacing restoration with an anchor seek.
+    val measuredWidth = viewportWidth
+    val layoutKey = "$measuredWidth:$fontScale:$textSize:$scaleFactor"
+    fun top(coordinates: androidx.compose.ui.layout.LayoutCoordinates) =
+        (coordinates.positionInRoot().y - viewportTop + scroll.value).toInt()
+    fun block(anchor: String) = Modifier.onGloballyPositioned { anchors.block(anchor, top(it)) }
+    fun textPosition(key: String, fragments: Map<String, Int>) = Modifier.onGloballyPositioned {
+        anchors.textTop(key, top(it), fragments)
+    }
+    LaunchedEffect(navigation?.request, layoutKey) {
+        val target = navigation ?: return@LaunchedEffect
+        if (measuredWidth == 0) return@LaunchedEffect
+        val restored = cursor.pendingRestore
+        val explicitSeek = cursor.processed != target.request
+        if (restored != null && !explicitSeek && cursor.geometry == layoutKey) {
+            snapshotFlow { anchors.positions["${recipe.id}:end"] }.filterNotNull().first()
+            scroll.scrollTo(restored)
+            cursor.processed = target.request
+            cursor.pendingRestore = null
+            return@LaunchedEffect
+        }
+        if (!explicitSeek && cursor.geometry == layoutKey) return@LaunchedEffect
+        val destinationAnchor = if (explicitSeek) target.seekAnchor else target.anchor
+        val destination = snapshotFlow { anchors.positions[destinationAnchor] }.filterNotNull().first()
+        scroll.scrollTo(destination)
+        cursor.processed = target.request
+        cursor.geometry = layoutKey
+        cursor.pendingRestore = null
+    }
+    LaunchedEffect(scroll, anchors) {
+        snapshotFlow {
+            val current = currentNavigation
+            if (current == null || cursor.pendingRestore != null || current.request != cursor.processed || cursor.geometry != layoutKey) null
+            else if (scroll.maxValue > 0 && scroll.value == scroll.maxValue) current.pageAnchors.lastOrNull()
+            else current.pageAnchors.mapNotNull { anchor -> anchors.positions[anchor]?.let { anchor to it } }
+                .filter { it.second <= scroll.value + 1 }.maxByOrNull { it.second }?.first
+        }.filterNotNull().collect { currentNavigation?.onAnchorChanged?.invoke(it) }
+    }
+    Box(Modifier.fillMaxSize().onGloballyPositioned { viewportTop = it.positionInRoot().y }
+        .onSizeChanged { viewportWidth = it.width }) {
+    // One bounded chapter, not the whole book. ScrollState's saver preserves the
+    // actual text offset. Keeping FullRecipeSection intact preserves note coordinates.
+    Column(Modifier.fillMaxSize().verticalScroll(scroll).testTag("reader-scroll").padding(bottom=24.dp)) {
+        BookText(recipe.name, 30, Modifier.padding(22.dp).then(block("${recipe.id}:title")))
+        PaperNote(recipe.description, Modifier.padding(horizontal = 22.dp))
+        Text("Ингредиенты",style=PaperType.h2,color=colors.ink,modifier=Modifier.padding(horizontal=22.dp,vertical=12.dp))
+        PaperPortionSummary("×${com.polinalinen.madre.ui.razvorot.BookCatalog.number(scaleFactor)}",onPortions,Modifier.padding(horizontal=22.dp))
+        recipe.ingredients.entries.forEachIndexed { bi, (section, ingredients) ->
+            SmallLabel(ingredientSectionTitle(section), Modifier.padding(horizontal = 22.dp, vertical = 14.dp)
+                .then(block("${recipe.id}:$bi:0")))
+            val lines=scaledIngredients.getValue(section)
+            val whole=remember(lines){lines.joinToString("\n")}
+            var start=0
+            lines.forEachIndexed { index,line ->
+                val startAt=start
+                val fragments=remember(recipe.id,bi,whole,requested,startAt,line.length){chapterFragmentCharacters(recipe.id,bi,whole,requested,startAt,line.length)}
+                val key="ingredient-$bi-$index"
+                val (name,amount)=com.polinalinen.madre.ui.razvorot.ingredientDisplayParts(line)
+                val prefix=if(amount.isEmpty())0 else amount.length+1
+                val nameFragments=fragments.filterValues{it>=prefix}.mapValues{it.value-prefix}
+                val amountFragments=fragments.filterValues{it<amount.length}
+                PaperIngredientLine(name,amount,Modifier.padding(horizontal=22.dp,vertical=5.dp),textSize,
+                    nameModifier=textPosition("$key-name",nameFragments),amountModifier=textPosition("$key-amount",amountFragments),
+                    onNameLayout={anchors.textLayout("$key-name",it,nameFragments)},
+                    onAmountLayout={anchors.textLayout("$key-amount",it,amountFragments)})
+                start+=line.length+1
+            }
+        }
+        val bindings=remember(recipe){RecipeScaler.scalableBindings(recipe)}
+        val stepTexts=remember(recipe,scaleFactor,bindings){recipe.timeline.map{RecipeScaler.scaledStepText(it.description,scaleFactor,bindings)}}
+        val stepFragments=remember(recipe.id,recipe.ingredients.size,stepTexts,requested){stepTexts.mapIndexed{index,body->
+            chapterFragmentCharacters(recipe.id,recipe.ingredients.size+index,body,requested)}}
+        HandwrittenEditSurface(recipe.id, Modifier.padding(top = 32.dp)) {
+            FullRecipeSection(recipe, scaleFactor, textSize = textSize,stepModifier={index,body->
+                val bi=recipe.ingredients.size+index
+                if(!body)block("${recipe.id}:$bi:0") else textPosition("step-$index",
+                    stepFragments[index])
+            },onStepTextLayout={index,layout->anchors.textLayout("step-$index",layout,
+                stepFragments[index])})
+        }
+        val appendices=remember(recipe){buildList {
+            if(recipe.servingTips.isNotEmpty())add("К столу" to recipe.servingTips.map{it.text})
+            if(recipe.variations.isNotEmpty())add("Варианты" to recipe.variations.map{it.text})
+        }}
+        appendices.forEachIndexed { index,(title,lines)->
+            val bi=recipe.ingredients.size+recipe.timeline.size+index
+            SmallLabel(title,Modifier.padding(22.dp).then(block("${recipe.id}:$bi:0")))
+            val whole=lines.joinToString("\n");var start=0
+            lines.forEachIndexed { part,line->
+                val fragments=chapterFragmentCharacters(recipe.id,bi,whole,requested,start,line.length)
+                val key="appendix-$index-$part"
+                Text(line,style=PaperType.note,color=colors.mut,
+                    modifier=Modifier.padding(horizontal=22.dp,vertical=6.dp).then(textPosition(key,fragments)),
+                    onTextLayout={anchors.textLayout(key,it,fragments)})
+                start+=line.length+1
+            }
+        }
+        if(onOpenAlice!=null)PaperAliceButton(onOpenAlice, Modifier.padding(22.dp))
+        BookText("Конец главы. Теперь — испечь.", 24,
+            Modifier.padding(22.dp).then(block("${recipe.id}:end")), italic = true)
+    }
+    }
+}
+
+@Composable
+private fun FullRecipeSection(recipe: Recipe, scaleFactor: Double, modifier: Modifier = Modifier, textSize: Float = 15.5f,
+    stepModifier: (Int,Boolean) -> Modifier = {_,_->Modifier}, onStepTextLayout:(Int,TextLayoutResult)->Unit={_,_->}) {
+    val colors = LocalPaper.current
     // Пересчитываются только те числа, которые сам рецепт пометил весом и
     // назвал по имени строки: остальное — проза, и трогать её книга не берётся.
     val quantityBindings = remember(recipe) { RecipeScaler.scalableBindings(recipe) }
+    val scaledSteps=remember(recipe,scaleFactor,quantityBindings){recipe.timeline.map{RecipeScaler.scaledStepText(it.description,scaleFactor,quantityBindings)}}
     Column(modifier.fillMaxWidth()) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 22.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            HairRule(Modifier.weight(1f))
-            PageLabel("Рецепт целиком", color = colors.espresso, modifier = Modifier.padding(horizontal = 10.dp))
-            HairRule(Modifier.weight(1f))
-        }
+        Text("Как печём",style=PaperType.h2,color=colors.ink,
+            modifier=Modifier.padding(horizontal=22.dp,vertical=8.dp))
         Text(
             "для тех, кто печёт по-своему — без таймера, по книге",
-            color = colors.cocoa,
-            fontFamily = FontFamily.Serif,
+            color = colors.ink2,style = PaperType.body,
             fontStyle = FontStyle.Italic,
             fontSize = 11.sp,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -335,11 +479,10 @@ private fun FullRecipeSection(recipe: Recipe, scaleFactor: Double, modifier: Mod
         )
         Column(Modifier.padding(horizontal = 22.dp, vertical = 18.dp)) {
             recipe.timeline.forEachIndexed { i, step ->
-                Row(Modifier.fillMaxWidth().padding(bottom = 20.dp)) {
+                Row(Modifier.fillMaxWidth().padding(bottom = 20.dp).then(stepModifier(i,false))) {
                     Text(
                         "${i + 1}",
-                        color = colors.flour,
-                        fontFamily = FontFamily.Serif,
+                        color = if(LocalAtmosphere.current==Atmosphere.NIGHT)colors.ink2 else colors.line,style = PaperType.body,
                         fontWeight = FontWeight.ExtraBold,
                         fontSize = 26.sp,
                         modifier = Modifier.width(34.dp),
@@ -347,9 +490,8 @@ private fun FullRecipeSection(recipe: Recipe, scaleFactor: Double, modifier: Mod
                     Column {
                         Text(
                             step.title.uppercase(),
-                            color = colors.crust,
-                            fontFamily = FontFamily.SansSerif,
-                            fontWeight = FontWeight.Bold,
+                            color = colors.acc,style = PaperType.caption,
+                            fontWeight = FontWeight.Medium,
                             fontSize = 11.sp,
                             letterSpacing = 1.sp,
                         )
@@ -358,12 +500,12 @@ private fun FullRecipeSection(recipe: Recipe, scaleFactor: Double, modifier: Mod
                             // пересчитаны тем же масштабом, что и список
                             // ингредиентов. Иначе на одной странице стояли бы
                             // два разных рецепта.
-                            RecipeScaler.scaledStepText(step.description, scaleFactor, quantityBindings),
-                            color = colors.espresso,
-                            fontFamily = FontFamily.Serif,
-                            fontSize = 15.5.sp,
-                            lineHeight = 23.sp,
-                            modifier = Modifier.padding(top = 3.dp),
+                            scaledSteps[i],
+                            color = colors.ink,style = PaperType.body,
+                            fontSize = textSize.sp,
+                            lineHeight = (textSize * 25f / 16f).sp,
+                            modifier = Modifier.padding(top = 3.dp).then(stepModifier(i,true)),
+                            onTextLayout = {onStepTextLayout(i,it)},
                         )
                     }
                 }
@@ -371,8 +513,7 @@ private fun FullRecipeSection(recipe: Recipe, scaleFactor: Double, modifier: Mod
         }
         Text(
             "— вот и весь рецепт —",
-            color = colors.cocoa,
-            fontFamily = FontFamily.Serif,
+            color = colors.ink2,style = PaperType.body,
             fontStyle = FontStyle.Italic,
             fontSize = 17.sp,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -383,13 +524,13 @@ private fun FullRecipeSection(recipe: Recipe, scaleFactor: Double, modifier: Mod
 
 @Composable
 private fun StatsFooter(recipe: Recipe) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     val hours = recipe.timeline.sumOf { it.durationMinutes } / 60
     val roman = listOf("—", "I", "II", "III", "IV", "V")
     val difficultyColor = when {
         recipe.difficulty <= 2 -> colors.sage
-        recipe.difficulty == 3 -> colors.crust
-        else -> colors.terracotta
+        recipe.difficulty == 3 -> colors.acc
+        else -> colors.rib
     }
     Column(Modifier.padding(horizontal = 22.dp, vertical = 10.dp)) {
         HeavyRule()
@@ -407,14 +548,13 @@ private fun StatCell(
     value: String,
     label: String,
     modifier: Modifier = Modifier,
-    valueColor: androidx.compose.ui.graphics.Color = AppColors.current.espresso,
+    valueColor: androidx.compose.ui.graphics.Color = LocalPaper.current.ink,
 ) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, color = valueColor, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+        Text(value, color = valueColor,style = PaperType.body, fontWeight = FontWeight.Medium, fontSize = 20.sp)
         Text(
             label.uppercase(),
-            color = AppColors.current.cocoa,
-            fontFamily = FontFamily.SansSerif,
+            color = LocalPaper.current.ink2,style = PaperType.caption,
             fontSize = 9.sp,
             letterSpacing = 1.5.sp,
         )
@@ -444,7 +584,7 @@ internal fun PortionSelector(portions: Int, onSelect: (Int) -> Unit, modifier: M
  */
 @Composable
 private fun ScaleNotes(recipe: Recipe, portions: Int) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     val yieldText = RecipeScale.yieldText(recipe, portions)
     val capacityNote = RecipeScale.capacityNote(recipe, portions)
 
@@ -452,15 +592,13 @@ private fun ScaleNotes(recipe: Recipe, portions: Int) {
         if (yieldText != null) {
             Text(
                 yieldText,
-                color = colors.espresso,
-                fontFamily = FontFamily.Serif,
+                color = colors.ink,style = PaperType.body,
                 fontSize = 14.sp,
             )
         }
         Text(
             RecipeScale.TIMING_NOTE,
-            color = colors.cocoa,
-            fontFamily = FontFamily.Serif,
+            color = colors.ink2,style = PaperType.body,
             fontStyle = FontStyle.Italic,
             fontSize = 11.5.sp,
             modifier = Modifier.padding(top = 3.dp),
@@ -472,7 +610,7 @@ private fun ScaleNotes(recipe: Recipe, portions: Int) {
                     .fillMaxWidth()
                     .drawBehind {
                         drawRoundRect(
-                            colors.terracotta,
+                            colors.rib,
                             style = Stroke(1.dp.toPx()),
                             cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx()),
                         )
@@ -481,8 +619,7 @@ private fun ScaleNotes(recipe: Recipe, portions: Int) {
             ) {
                 Text(
                     capacityNote,
-                    color = colors.espresso,
-                    fontFamily = FontFamily.Serif,
+                    color = colors.ink,style = PaperType.body,
                     fontSize = 12.5.sp,
                     lineHeight = 18.sp,
                 )
@@ -503,13 +640,13 @@ internal fun portionLabel(n: Int): String = "печём на $n ${familyWord(n)}
 /** Hero-фото как вклеенная фотокарточка: белая рамка, лёгкий поворот. */
 @Composable
 private fun PastedPhoto(recipe: Recipe, modifier: Modifier = Modifier) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     val resId = heroResFor(recipe.id) ?: return
     Box(
         modifier
             .fillMaxWidth()
             .rotate(-1.2f)
-            .drawBehind { drawRect(colors.cream) }
+            .drawBehind { drawRect(colors.card) }
             .padding(8.dp)
     ) {
         // AsyncImage (не rememberAsyncImagePainter+Image) — размер запроса Coil

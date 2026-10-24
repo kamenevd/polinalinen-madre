@@ -12,7 +12,7 @@ class SettingsShelfFailureUiTest {
             .readText()
 
         assertThat(source).contains("failed.failure.message")
-        assertThat(source).contains("colors.terracotta")
+        assertThat(source).contains("colors.error")
         assertThat(source).contains("проверяем полку")
     }
 }

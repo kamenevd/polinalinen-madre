@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.screens
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -13,7 +14,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -32,7 +32,6 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.polinalinen.madre.ui.components.BackLabel
 import com.polinalinen.madre.ui.components.FullscreenPhotoViewer
-import com.polinalinen.madre.ui.theme.AppColors
 import com.polinalinen.madre.utils.PhotoStore
 
 /** One local photo from either a feeding or a completed bake. */
@@ -49,7 +48,7 @@ fun PhotoGalleryScreen(
     photos: List<GalleryPhoto>,
     onBack: () -> Unit,
 ) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     val context = LocalContext.current
     val ordered = remember(photos) {
         photos.asSequence()
@@ -59,7 +58,7 @@ fun PhotoGalleryScreen(
     }
     var opened by remember { mutableStateOf<GalleryPhoto?>(null) }
 
-    Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
+    PaperSurface(color = colors.bg, modifier = Modifier.fillMaxSize()) {
         LazyVerticalGrid(
             columns = GridCells.Adaptive(minSize = 132.dp),
             contentPadding = PaddingValues(start = 22.dp, end = 22.dp, bottom = 32.dp),
@@ -71,8 +70,7 @@ fun PhotoGalleryScreen(
                     BackLabel("Дневник закваски", onClick = onBack)
                     Text(
                         "ФОТО ЗАКВАСКИ",
-                        color = colors.cocoa,
-                        fontFamily = FontFamily.SansSerif,
+                        color = colors.ink2,style = PaperType.caption,
                         fontSize = 10.sp,
                         letterSpacing = 2.sp,
                         modifier = Modifier.align(Alignment.CenterEnd),
@@ -110,14 +108,14 @@ private fun GalleryTile(
     context: android.content.Context,
     onClick: () -> Unit,
 ) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     val file = remember(photo.path) { PhotoStore.resolve(context, photo.path) }
     Box(
         Modifier
             .fillMaxWidth()
             .aspectRatio(1f)
-            .drawBehind { drawRect(colors.cream) }
-            .clickable(onClickLabel = "Открыть фото", onClick = onClick),
+            .drawBehind { drawRect(colors.card) }
+            .then(com.polinalinen.madre.ui.components.bookAction("Открыть фото", onClick = onClick)),
         contentAlignment = Alignment.Center,
     ) {
         if (file.isFile) {
@@ -133,8 +131,7 @@ private fun GalleryTile(
         } else {
             Text(
                 "файл\nне найден",
-                color = colors.cocoa,
-                fontFamily = FontFamily.Serif,
+                color = colors.ink2,style = PaperType.body,
                 fontStyle = FontStyle.Italic,
                 fontSize = 12.sp,
             )
@@ -143,17 +140,7 @@ private fun GalleryTile(
 }
 
 @Composable
-private fun EmptyGallery(colors: com.polinalinen.madre.ui.theme.MadreExtendedColors) {
-    Box(
-        Modifier.fillMaxWidth().padding(top = 54.dp, bottom = 120.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            "Фотографии появятся здесь после кормления\nили готовой выпечки.",
-            color = colors.cocoa,
-            fontFamily = FontFamily.Serif,
-            fontStyle = FontStyle.Italic,
-            fontSize = 16.sp,
-        )
-    }
+private fun EmptyGallery(colors: com.polinalinen.madre.ui.kit.PaperColors) {
+    PaperEmpty("Фото закваски", "Фотографии появятся здесь после кормления\nили готовой выпечки.",
+        Modifier.padding(top = 26.dp, bottom = 80.dp))
 }

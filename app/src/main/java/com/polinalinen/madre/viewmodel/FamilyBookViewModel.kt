@@ -84,6 +84,7 @@ class FamilyBookViewModel internal constructor(
     fun refreshFamily() = runNetwork { repository.refresh() }
 
     fun signOut() {
+        (getApplication<Application>() as MadreApplication).disconnectVoice()
         repository.signOut()
     }
 

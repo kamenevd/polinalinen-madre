@@ -66,12 +66,12 @@ class BakingPhotoFrozenWhileFinishingTest {
         }
 
         val id = seedActiveSession(vm, sessionId = 1L, recipe = sampleRecipe(), scaleFactor = 1.0)
-        vm.advanceStep(id)
+        vm.advanceStep(id).join()
         advanceUntilIdle()
         vm.stageBakePhoto(id, a)
 
         var exits = 0
-        vm.finish(id, ShelfShareDecision.PUT_WITH_PHOTO) { exits += 1 }
+        val finishing = vm.finish(id, ShelfShareDecision.PUT_WITH_PHOTO) { exits += 1 }
         vm.stageBakePhoto(id, b)
         vm.unstageBakePhoto(id)
 
@@ -80,6 +80,7 @@ class BakingPhotoFrozenWhileFinishingTest {
         assertThat(vm.finishing.value.contains(id)).isTrue()
 
         gate.complete(Unit)
+        finishing?.join()
         advanceUntilIdle()
 
         assertThat(history.attachCalls).containsExactly(1L to a)

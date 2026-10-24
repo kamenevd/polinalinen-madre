@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.components
 
+import com.polinalinen.madre.ui.kit.*
 import android.content.Context
 import android.graphics.Typeface
 import android.hardware.Sensor
@@ -24,8 +25,8 @@ import androidx.compose.ui.node.invalidateDraw
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.unit.sp
-import com.polinalinen.madre.ui.theme.Cocoa
-import com.polinalinen.madre.ui.theme.Cream
+import com.polinalinen.madre.ui.kit.Illustration.CrumbInk as Cocoa
+import com.polinalinen.madre.ui.kit.Illustration.PageCream as Cream
 import kotlin.math.abs
 import kotlin.math.min
 
@@ -135,7 +136,7 @@ private class LightPageNode(
     private var sheenSpec: LightPage.SheenSpec? = null
 
     private val watermarkPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-        typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
+        typeface = null
         textAlign = android.graphics.Paint.Align.CENTER
         color = Cocoa.toArgb()
     }
@@ -176,6 +177,7 @@ private class LightPageNode(
     override fun onObservedReadsChanged() {
         observeReads {
             val context = currentValueOf(LocalContext)
+            watermarkPaint.typeface = PaperFonts.medium(context)
             unsubscribe()
             subscribe(context)
         }

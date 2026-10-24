@@ -6,6 +6,8 @@ import com.polinalinen.madre.data.db.entities.FamilySettingKeys
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
+import com.polinalinen.madre.model.BookDisplaySettings
 import kotlinx.coroutines.withContext
 
 /**
@@ -20,5 +22,20 @@ class FamilySettingsRepository(db: MadreDatabase) {
 
     suspend fun setFamilyName(name: String) = withContext(Dispatchers.IO) {
         dao.upsert(FamilySettingEntity(FamilySettingKeys.FAMILY_NAME, name))
+    }
+
+    fun observeBookDisplaySettings(): Flow<BookDisplaySettings> = combine(
+        dao.observe(FamilySettingKeys.KEEP_SCREEN_ON), dao.observe(FamilySettingKeys.LOCK_SCREEN_PROGRESS),
+    ) { keep, lock -> BookDisplaySettings(
+        keep?.value?.toBooleanStrictOrNull() ?: true,
+        lock?.value?.toBooleanStrictOrNull() ?: false,
+    ) }
+
+    suspend fun setKeepScreenOn(value: Boolean) = withContext(Dispatchers.IO) {
+        dao.upsert(FamilySettingEntity(FamilySettingKeys.KEEP_SCREEN_ON, value.toString()))
+    }
+
+    suspend fun setLockScreenProgress(value: Boolean) = withContext(Dispatchers.IO) {
+        dao.upsert(FamilySettingEntity(FamilySettingKeys.LOCK_SCREEN_PROGRESS, value.toString()))
     }
 }

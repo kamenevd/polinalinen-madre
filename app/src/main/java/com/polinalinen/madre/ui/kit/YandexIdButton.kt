@@ -1,0 +1,90 @@
+package com.polinalinen.madre.ui.kit
+
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Text
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.polinalinen.madre.account.yandex.VerifiedYandexProfile
+import com.polinalinen.madre.R
+import com.polinalinen.madre.ui.components.TapGate
+
+enum class YandexIdButtonSize { L, M }
+
+/**
+ * Бренд Яндекса: единственное узкое исключение. Black/white and the official
+ * unmodified logo/text vector paths MUST NOT be tinted to the paper palette.
+ * Source/hash provenance is bundled in raw/yandex_id_button_provenance.json.
+ */
+@Composable
+fun YandexIdButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    size: YandexIdButtonSize = YandexIdButtonSize.M,
+    dark: Boolean = LocalAtmosphere.current == Atmosphere.NIGHT,
+    enabled: Boolean = true,
+) {
+    val artworkHeight = if (size == YandexIdButtonSize.L) 56.dp else 44.dp
+    val targetHeight = if (size == YandexIdButtonSize.L) 56.dp else 48.dp
+    val background = if (dark) Color(0xFFFFFFFF) else Color(0xFF000000)
+    val interactions = remember { MutableInteractionSource() }
+    val gate = remember { TapGate() }
+    Box(modifier.fillMaxWidth().height(targetHeight)
+        .semantics { contentDescription = "Войти с Яндекс ID" }
+        .clickable(interactionSource = interactions, indication = null, enabled = enabled,
+            role = Role.Button, onClickLabel = "Войти с Яндекс ID") {
+            if (gate.accept(System.currentTimeMillis())) onClick()
+        }, contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxWidth().height(artworkHeight)
+            .clip(RoundedCornerShape(artworkHeight / 2)).background(background)
+            .then(if(dark)Modifier.border((artworkHeight.value/56f).dp,Color(0xFF000000),RoundedCornerShape(artworkHeight/2)) else Modifier),
+            contentAlignment = Alignment.Center) {
+            Image(painterResource(if (dark) R.drawable.yandex_id_button_white else R.drawable.yandex_id_button_black),
+                contentDescription = null, contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxWidth().height(artworkHeight))
+        }
+    }
+}
+
+/** Monogram stays visible on absent, failed or offline portraits. */
+@Composable fun YandexAccountPortrait(profile: VerifiedYandexProfile, size: Dp = 56.dp) {
+    val p = LocalPaper.current
+    val label = profile.displayName.ifBlank { profile.login }
+    val monogram=String(Character.toChars(label.codePointAt(0))).uppercase()
+    val iconTextSize=(size.value*.42f/LocalDensity.current.fontScale).sp
+    Box(Modifier.size(size)
+        .semantics { contentDescription = "Аккаунт Яндекса, $label" }, contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxSize().clip(CircleShape).background(p.acc2),contentAlignment=Alignment.Center) {
+            Text(monogram, color = p.acc, style = PaperType.h2.copy(fontSize=iconTextSize,lineHeight=iconTextSize))
+            profile.avatarUrl?.let { url ->
+                AsyncImage(model = ImageRequest.Builder(LocalContext.current).data(url)
+                    .memoryCacheKey(profile.avatarCacheKey).diskCacheKey(profile.avatarCacheKey)
+                    .crossfade(false).build(), contentDescription = null,
+                    contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            }
+        }
+        Image(painterResource(R.drawable.yandex_id_badge),contentDescription=null,
+            modifier=Modifier.align(Alignment.BottomEnd).offset(2.dp,2.dp).size(if(size>=48.dp)18.dp else 12.dp))
+    }
+}

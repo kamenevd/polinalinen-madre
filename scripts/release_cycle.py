@@ -312,6 +312,7 @@ def build_parser() -> argparse.ArgumentParser:
     prepare = sub.add_parser("prepare-version")
     prepare.add_argument("--state", type=Path, default=Path("workflow/CYCLE.yaml"))
     prepare.add_argument("--gradle", type=Path, default=Path("app/build.gradle.kts"))
+    prepare.add_argument("--version", help="strict SemVer for a new test delivery")
     plan = sub.add_parser("plan")
     plan.add_argument("--state", type=Path, default=Path("workflow/CYCLE.yaml"))
     pack = sub.add_parser("package")
@@ -333,9 +334,18 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "prepare-version":
         state = json.loads(args.state.read_text(encoding="utf-8"))
-        updated, code = prepare_gradle_version(args.gradle.read_text(encoding="utf-8"), state["cycle"]["version"])
+        version = args.version or state["cycle"]["version"]
+        if args.version:
+            try:
+                from scripts.version_contract import semver
+            except ModuleNotFoundError:
+                from version_contract import semver
+            _, previous = parse_gradle_version(args.gradle.read_text(encoding="utf-8"))
+            if semver(version) <= semver(previous):
+                raise ReleaseError("new delivery version must strictly increase")
+        updated, code = prepare_gradle_version(args.gradle.read_text(encoding="utf-8"), version)
         args.gradle.write_text(updated, encoding="utf-8")
-        print(f"PREPARED versionCode={code} versionName={state['cycle']['version']}")
+        print(f"PREPARED versionCode={code} versionName={version}")
         return 0
     if args.command == "plan":
         state = json.loads(args.state.read_text(encoding="utf-8"))

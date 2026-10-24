@@ -18,6 +18,13 @@
 -keep class com.polinalinen.madre.model.** { *; }
 -keep class com.polinalinen.madre.data.remote.** { *; }
 -keep class com.polinalinen.madre.account.** { *; }
+# Durable local plan/finale JSON must retain its field names across upgrades too.
+-keep class com.polinalinen.madre.navigation.PlannedBake { *; }
+-keep class com.polinalinen.madre.navigation.BakeNumberStore$Finale { *; }
+# Other concrete Gson DTOs outside model/account/remote; encrypted storage is not an exemption.
+-keep class com.polinalinen.madre.voice.VoiceIdentity { *; }
+-keep class com.polinalinen.madre.voice.VoiceCommand { *; }
+-keep enum com.polinalinen.madre.voice.VoiceOperation { *; }
 -keepclassmembers,allowobfuscation class * {
   @com.google.gson.annotations.SerializedName <fields>;
 }
@@ -27,3 +34,6 @@
 # List<Recipe> разбирается в List<LinkedTreeMap>.
 -keepattributes Signature, *Annotation*, InnerClasses
 -dontnote kotlinx.serialization.AnnotationsKt
+
+# Binary QA verification reads public constants without exposing OAuth identifiers.
+-keep class com.polinalinen.madre.BuildConfig { *; }

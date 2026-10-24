@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.components
 
+import com.polinalinen.madre.ui.kit.*
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -15,11 +16,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Redo
-import androidx.compose.material.icons.filled.Undo
+import androidx.compose.material.icons.outlined.Redo
+import androidx.compose.material.icons.outlined.Undo
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -43,7 +42,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.polinalinen.madre.ui.theme.AppColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -168,8 +166,13 @@ fun HandwrittenEditSurface(
     recipeId: String,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
+) = HandwrittenEditLayer(recipeId,modifier,com.polinalinen.madre.config.FeatureFlags.RECIPE_EDIT,content)
+
+/** Retained editor renderer for future enablement/tests. All production entrypoints use the gated facade. */
+@Composable internal fun HandwrittenEditLayer(
+    recipeId:String,modifier:Modifier=Modifier,canEdit:Boolean,content:@Composable ()->Unit,
 ) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     val context = androidx.compose.ui.platform.LocalContext.current
 
     // Cycle 16: rememberSaveable, а не remember. Рецепт переехал на LazyColumn,
@@ -193,38 +196,38 @@ fun HandwrittenEditSurface(
 
     // Сохраняем на каждое изменение истории, а не только по «готово»: уйти со
     // страницы посреди правки — обычное дело, и написанное должно пережить это.
-    LaunchedEffect(history, loaded) {
-        if (loaded) HandwrittenEdit.saveStrokes(context, recipeId, history.strokes)
+    LaunchedEffect(history, loaded,canEdit) {
+        if (loaded && canEdit) HandwrittenEdit.saveStrokes(context, recipeId, history.strokes)
     }
 
     Column(modifier) {
-        Row(
+        if(canEdit)Row(
             Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
                 if (editing) "готово — вписать в книгу" else "редактировать от руки",
-                color = if (editing) colors.terracotta else colors.crust,
-                fontFamily = FontFamily.SansSerif,
+                color = if (editing) colors.rib else colors.acc,style = PaperType.caption,
                 fontSize = 10.sp,
                 letterSpacing = 2.sp,
                 modifier = Modifier
                     .weight(1f)
-                    .clickable {
+                    .then(bookAction("Рисование от руки") {
+                        if(!canEdit)return@bookAction
                         if (editing) currentStroke = emptyList()
                         editing = !editing
-                    },
+                    }),
             )
             if (editing) {
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     InkHistoryButton(
-                        icon = Icons.Filled.Undo,
+                        icon = Icons.Outlined.Undo,
                         description = "Убрать последний штрих",
                         enabled = history.canUndo,
                         onClick = { history = history.undo() },
                     )
                     InkHistoryButton(
-                        icon = Icons.Filled.Redo,
+                        icon = Icons.Outlined.Redo,
                         description = "Вернуть убранный штрих",
                         enabled = history.canRedo,
                         onClick = { history = history.redo() },
@@ -248,7 +251,7 @@ fun HandwrittenEditSurface(
 
             // Векторные штрихи: и сохранённые, и тот, что палец ведёт прямо сейчас.
             Canvas(Modifier.matchParentSize()) {
-                val ink = colors.espresso.copy(alpha = HandwrittenEdit.INK_ALPHA)
+                val ink = colors.ink.copy(alpha = HandwrittenEdit.INK_ALPHA)
                 val width = HandwrittenEdit.STROKE_WIDTH_DP.dp.toPx()
                 (history.strokes + listOf(currentStroke)).forEach { stroke ->
                     if (stroke.isEmpty()) return@forEach
@@ -265,7 +268,7 @@ fun HandwrittenEditSurface(
                 }
             }
 
-            if (editing) {
+            if (editing && canEdit) {
                 Box(
                     Modifier
                         .matchParentSize()
@@ -299,14 +302,11 @@ private fun InkHistoryButton(
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
-    val colors = AppColors.current
-    IconButton(
+    val colors = LocalPaper.current
+    PaperIconButton(
         onClick = onClick,
         enabled = enabled,
-        colors = IconButtonDefaults.iconButtonColors(
-            contentColor = colors.espresso,
-            disabledContentColor = colors.flour,
-        ),
+        label = description,
     ) {
         Icon(icon, contentDescription = description, modifier = Modifier.size(20.dp))
     }

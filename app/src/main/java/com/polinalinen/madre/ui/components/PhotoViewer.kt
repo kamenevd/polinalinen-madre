@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.components
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
@@ -22,12 +23,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.Text
 import androidx.compose.ui.platform.LocalContext
 import coil.compose.AsyncImage
-import com.polinalinen.madre.ui.theme.AppColors
 import com.polinalinen.madre.utils.PhotoStore
 
 /**
@@ -65,17 +64,10 @@ fun FullscreenPhotoViewer(
     onDismiss: () -> Unit,
     caption: String? = null,
 ) {
-    Dialog(
+    PaperPhotoViewer(
         onDismissRequest = onDismiss,
-        // Диалог во весь экран: карточку смотрят целиком, а не в окошке.
-        // Системная кнопка «назад» закрывает его сама (dismissOnBackPress).
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            dismissOnBackPress = true,
-            dismissOnClickOutside = true,
-        ),
     ) {
-        val colors = AppColors.current
+        val colors = LocalPaper.current
         var scale by remember { mutableFloatStateOf(1f) }
         var offsetX by remember { mutableFloatStateOf(0f) }
         var offsetY by remember { mutableFloatStateOf(0f) }
@@ -85,7 +77,7 @@ fun FullscreenPhotoViewer(
         Box(
             Modifier
                 .fillMaxSize()
-                .background(colors.paper),
+                .background(Illustration.PhotoBackdrop),
             contentAlignment = Alignment.Center,
         ) {
             AsyncImage(
@@ -113,10 +105,10 @@ fun FullscreenPhotoViewer(
                     },
             )
 
-            BookButton(
+            PaperButton(
                 label = "Закрыть",
                 onClick = onDismiss,
-                variant = BookButtonVariant.SECONDARY,
+                variant = PaperButtonVariant.SECONDARY,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
@@ -125,8 +117,7 @@ fun FullscreenPhotoViewer(
 
             Text(
                 caption ?: "два пальца — приблизить",
-                color = colors.cocoa,
-                fontFamily = FontFamily.Serif,
+                color = colors.ink2,style = PaperType.body,
                 fontSize = 12.sp,
                 textAlign = TextAlign.Center,
                 modifier = Modifier

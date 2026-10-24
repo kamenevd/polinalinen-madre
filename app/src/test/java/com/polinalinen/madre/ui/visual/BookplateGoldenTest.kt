@@ -1,12 +1,12 @@
 package com.polinalinen.madre.ui.visual
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.polinalinen.madre.ui.components.Bookplate
-import com.polinalinen.madre.ui.theme.MadreTheme
+import com.polinalinen.madre.ui.kit.RazvorotTheme as MadreTheme
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
@@ -20,7 +20,7 @@ class BookplateGoldenTest {
     fun familyName() {
         captureRoboImage {
             MadreTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
+                PaperSurface(modifier = Modifier.fillMaxSize()) {
                     Bookplate(
                         familyName = "Каменевы",
                         onSetName = {},

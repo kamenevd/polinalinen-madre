@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.components
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -38,8 +39,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.polinalinen.madre.sourdough.GrowthPhase
-import com.polinalinen.madre.ui.theme.AppColors
-import com.polinalinen.madre.ui.theme.LocalCalmMode
+import com.polinalinen.madre.ui.kit.LocalCalmMode
 
 // ═══════════════════════════════════════════════════════════════
 // «Живая книга» — типографские компоненты. См. DESIGN-V4.md.
@@ -47,25 +47,18 @@ import com.polinalinen.madre.ui.theme.LocalCalmMode
 
 /** Служебный ярлык: UPPERCASE, разрядка. «ОГЛАВЛЕНИЕ», «РЕЦЕПТ № 01». */
 @Composable
-fun PageLabel(text: String, modifier: Modifier = Modifier, color: Color = AppColors.current.cocoa) {
-    Text(
-        text = text.uppercase(),
-        modifier = modifier,
-        color = color,
-        fontFamily = FontFamily.SansSerif,
-        fontSize = 10.sp,
-        letterSpacing = 3.sp,
-    )
+fun PageLabel(text: String, modifier: Modifier = Modifier, color: Color = LocalPaper.current.ink2) {
+    SmallLabel(text, modifier, color)
 }
 
 /** Жирная типографская линейка (2dp Espresso) — главные разделы. */
 @Composable
 fun HeavyRule(modifier: Modifier = Modifier) {
-    val ink = AppColors.current.espresso
+    val ink = LocalPaper.current.line
     Box(
         modifier
             .fillMaxWidth()
-            .height(2.dp)
+            .height(1.dp)
             .drawBehind { drawRect(ink) }
     )
 }
@@ -73,7 +66,7 @@ fun HeavyRule(modifier: Modifier = Modifier) {
 /** Волосяная линейка (0.5dp Flour) — строки. */
 @Composable
 fun HairRule(modifier: Modifier = Modifier) {
-    val flour = AppColors.current.flour
+    val flour = LocalPaper.current.line
     Box(
         modifier
             .fillMaxWidth()
@@ -88,7 +81,7 @@ fun HairRule(modifier: Modifier = Modifier) {
  */
 @Composable
 fun DottedLeaderRow(name: String, value: String, modifier: Modifier = Modifier) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -97,8 +90,7 @@ fun DottedLeaderRow(name: String, value: String, modifier: Modifier = Modifier) 
     ) {
         Text(
             text = name,
-            color = colors.espresso,
-            fontFamily = FontFamily.Serif,
+            color = colors.ink,style = PaperType.body,
             fontSize = 14.sp,
         )
         Box(
@@ -108,7 +100,7 @@ fun DottedLeaderRow(name: String, value: String, modifier: Modifier = Modifier) 
                 .height(1.5.dp)
                 .drawBehind {
                     drawLine(
-                        color = colors.flour,
+                        color = colors.line,
                         start = Offset(0f, size.height / 2),
                         end = Offset(size.width, size.height / 2),
                         strokeWidth = size.height,
@@ -118,10 +110,9 @@ fun DottedLeaderRow(name: String, value: String, modifier: Modifier = Modifier) 
         )
         Text(
             text = value,
-            color = colors.crust,
-            fontFamily = FontFamily.Serif,
+            color = colors.acc,style = PaperType.body,
             fontSize = 15.sp,
-            fontWeight = FontWeight.Bold,
+            fontWeight = FontWeight.Medium,
         )
     }
 }
@@ -146,8 +137,7 @@ fun Stamp(text: String, color: Color, modifier: Modifier = Modifier, rotation: F
     ) {
         Text(
             text = text.uppercase(),
-            color = color,
-            fontFamily = FontFamily.SansSerif,
+            color = color,style = PaperType.caption,
             fontSize = 10.sp,
             letterSpacing = 2.sp,
         )
@@ -173,14 +163,14 @@ fun RibbonBookmark(
     modifier: Modifier = Modifier,
     width: Dp = 22.dp,
     length: Dp = 92.dp,
-    color: Color = AppColors.current.terracotta,
+    color: Color = LocalPaper.current.rib,
     // Cycle 18: лента ничего не обещает — она лежит на странице и показывает,
     // что выпечка идёт. Раньше здесь было «Открыть таймер активной выпечки»,
     // и это была правда: ляссе вело к таймеру второй дорогой мимо талона.
     description: String = "Ляссе: выпечка идёт",
     totalBakes: Int = 0,
 ) {
-    val parchment = AppColors.current.parchment
+    val parchment = LocalPaper.current.bg2
     Box(
         modifier
             .width(maxOf(width, 48.dp))
@@ -259,7 +249,7 @@ fun RibbonBookmark(
  */
 @Composable
 fun HerbariumMark(isFavorite: Boolean, modifier: Modifier = Modifier, size: Dp = 26.dp) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     val progress by animateFloatAsState(
         targetValue = if (isFavorite) 1f else 0f,
         animationSpec = spring(dampingRatio = 0.62f),
@@ -282,10 +272,10 @@ fun HerbariumMark(isFavorite: Boolean, modifier: Modifier = Modifier, size: Dp =
             val cx = w * 0.52f
             val cy = h * 0.42f
             val alpha = 0.22f + 0.78f * progress
-            val petal = lerp(colors.flour, colors.terracotta, 0.35f + 0.45f * progress).copy(alpha = alpha)
-            val center = lerp(colors.parchment, colors.crust, 0.55f * progress).copy(alpha = alpha)
-            val stem = lerp(colors.flour, colors.sage, 0.5f + 0.3f * progress).copy(alpha = alpha * 0.9f)
-            val outline = colors.cocoa.copy(alpha = 0.18f + 0.35f * progress)
+            val petal = lerp(colors.line, colors.rib, 0.35f + 0.45f * progress).copy(alpha = alpha)
+            val center = lerp(colors.bg2, colors.acc, 0.55f * progress).copy(alpha = alpha)
+            val stem = lerp(colors.line, colors.sage, 0.5f + 0.3f * progress).copy(alpha = alpha * 0.9f)
+            val outline = colors.ink2.copy(alpha = 0.18f + 0.35f * progress)
 
             // Стебель
             val stemPath = Path().apply {
@@ -324,7 +314,7 @@ fun HerbariumMark(isFavorite: Boolean, modifier: Modifier = Modifier, size: Dp =
             // Бледный отпечаток-«пыльца» когда любимое
             if (progress > 0.85f) {
                 drawCircle(
-                    colors.crust.copy(alpha = 0.08f),
+                    colors.acc.copy(alpha = 0.08f),
                     w * 0.42f,
                     Offset(cx, cy),
                 )
@@ -348,26 +338,7 @@ fun TicketFrame(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
-    val colors = AppColors.current
-    Box(
-        modifier = modifier
-            .drawBehind {
-                val stroke = 1.5.dp.toPx()
-                val r = 4.dp.toPx()
-                drawRoundRect(
-                    color = colors.espresso,
-                    style = Stroke(width = stroke),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(r),
-                )
-                // Перфорация: полукруги по центру боков — «пробитый» талон
-                val notchR = 5.dp.toPx()
-                drawCircle(colors.paper, notchR, Offset(0f, size.height / 2))
-                drawCircle(colors.espresso, notchR, Offset(0f, size.height / 2), style = Stroke(stroke))
-                drawCircle(colors.paper, notchR, Offset(size.width, size.height / 2))
-                drawCircle(colors.espresso, notchR, Offset(size.width, size.height / 2), style = Stroke(stroke))
-            }
-            .padding(16.dp)
-    ) { content() }
+    PaperCard(modifier) { content() }
 }
 
 /**
@@ -381,7 +352,7 @@ fun WaxSealStamp(
     title: String,
     caption: String,
     modifier: Modifier = Modifier,
-    color: Color = AppColors.current.sage,
+    color: Color = LocalPaper.current.sage,
     stampSize: Dp = 128.dp,
     rotationDeg: Float = -3f,
 ) {
@@ -399,16 +370,14 @@ fun WaxSealStamp(
         androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 title.uppercase(),
-                color = color,
-                fontFamily = FontFamily.SansSerif,
-                fontWeight = FontWeight.Bold,
+                color = color,style = PaperType.caption,
+                fontWeight = FontWeight.Medium,
                 fontSize = 14.sp,
                 letterSpacing = 2.sp,
             )
             Text(
                 caption,
-                color = color,
-                fontFamily = FontFamily.Serif,
+                color = color,style = PaperType.body,
                 fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
                 fontSize = 13.sp,
                 modifier = Modifier.padding(top = 2.dp),
@@ -423,13 +392,13 @@ fun WaxSealStamp(
  */
 @Composable
 fun BubbleVignette(phase: GrowthPhase, modifier: Modifier = Modifier) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     val tone = when (phase) {
         GrowthPhase.PEAK -> colors.sage
-        GrowthPhase.HUNGRY -> colors.terracotta
-        GrowthPhase.DECLINING -> colors.cool
-        GrowthPhase.EMPTY -> colors.flour
-        else -> colors.caramel
+        GrowthPhase.HUNGRY -> colors.rib
+        GrowthPhase.DECLINING -> colors.mut
+        GrowthPhase.EMPTY -> colors.line
+        else -> colors.acc
     }
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
         HairRule(Modifier.weight(1f))
@@ -437,8 +406,8 @@ fun BubbleVignette(phase: GrowthPhase, modifier: Modifier = Modifier) {
             val c = Offset(size.width / 2, size.height / 2)
             drawCircle(tone, size.minDimension * 0.32f, c)
             drawCircle(tone.copy(alpha = 0.4f), size.minDimension * 0.46f, c, style = Stroke(1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f))))
-            drawCircle(colors.paper.copy(alpha = 0.5f), 2.5.dp.toPx(), c + Offset(-6f, -7f))
-            drawCircle(colors.paper.copy(alpha = 0.4f), 1.5.dp.toPx(), c + Offset(7f, 5f))
+            drawCircle(colors.bg.copy(alpha = 0.5f), 2.5.dp.toPx(), c + Offset(-6f, -7f))
+            drawCircle(colors.bg.copy(alpha = 0.4f), 1.5.dp.toPx(), c + Offset(7f, 5f))
         }
         HairRule(Modifier.weight(1f))
     }

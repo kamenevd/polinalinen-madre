@@ -61,6 +61,18 @@ Sealed-class навигации из v3 **нет** и не должно появ
 
 ---
 
+## Android voice и окна (PR61, дополнение Димы18:32)
+
+FeatureFlags.ALICE=true в общемmain, Android-ядро перенесено с PR58@564fbb9 без его backend/workflow. Единственный writer состояния выпечки — BakingViewModel; startBaking suspend/nullable, переход durable-before-publish, receipt+состояние фиксируются атомарно с проверкой lease/expiry/generation. Room10→11 сохраняет старые записи и оставляет неизвестные порции null до явного подтверждения; назад на старую схему без восстановления данных не переходить. VoiceMigrationTest использует синтетическуюlegacy schema10 и настоящую валидациюRoom11 в blocking JVMCI. Новое отдельное даДимы19:02 разрешило productionbackend/OAuth: parentразвернул pinnedPR58backend на8743 и сам ведётЯндексID/консоль. Androidwriterне трогаетserver/edge/семейныйтелефон. Реальнаяпривязкаещёнеподтверждена; успешныйHTTP сlinked=false остаётся WAITING_LINK/«Не подключено», неCONNECTED. UIневыдаётALICE=true заживуюсвязь и не опрашиваетHTTPбесконечно послеотказа.
+
+ImmersiveController вui/kit владеет Activity и Modal Window, scope-запросами и восстановлением системных баров. MainActivity и RazvorotSceneActivity используют один код, старыхdebugSYSTEM_UI_FLAG нет. Фон до краёв; контент/хром используют safe/cutout и стабильные ignoring-visibility insets. FullscreenInstrumentedTest и полнаяAlice24кадра толькоmanual/RC; physicalHuawei не подтверждён JVM/PNG.
+
+## Актуальный UI-контракт F (PR61, 23.10.2026)
+
+Старые ограничения v4 ниже (светлая тема/углы4dp/системные шрифты/AppColors) отменены STYLE-SYSTEM F. `ui/kit` — единственный владелец PaperTokens/LocalPaper/PaperType, статических Literata/Manrope, 4 тем и M3/Foundation-контролов/диалогов. `RazvorotTheme` оборачивает все назначения в NavHost; `CalmMode` перенесён в kit без изменения ключа/default. Старого `ui/theme` больше нет. `SettingsContent` — stateless production layout для локальных screenshot-fixtures, не отдельный макет. Home UI, вызывавшийся только старыми тестами, вынесен в test-only `LegacyHomeFixture`; живые Home/TocLine/HomeCopy остались в `HomeContract`. Мёртвая ветка ShelfScreen(false) удалена; репозитории/данные/маршруты не менялись.
+
+PR: compile/testDebugUnitTest/StyleBoundary +20 PNG412×915; reading-sheet отдельно dawn/day/evening/night. Линт не блокирует, полный instrumented/GLES — manual/nightly/RC, skipped на PR не является passed. Стилевой baseline330→0, новых0; исключение только точного ui/kit path+package. NAV идёт следующим самостоятельным этапом; актуальный граф описан ниже.
+
 ## Архитектура
 
 ```
@@ -110,16 +122,21 @@ MadreApplication          единственный владелец Room и ре
 
 ```
 home
-recipe/{recipeId}
-baking/{sessionId}
-baking/{sessionId}/complete
+chapter/{recipeId}?page={page}&step={step}
+bake/{sessionId}
 starter            starter/feed
 photo-gallery      settings    settings/shelf
 shelf              shelf/{ownerId}
 ```
 
-Ссылки строятся **только** хелперами (`MadreDestinations.recipeDetail(id)`),
+Ссылки строятся **только** хелперами (`MadreDestinations.chapter(id, page, step)`, `MadreDestinations.bake(sid)`),
 не конкатенацией на месте вызова.
+
+NAV: «Читать» сразу открывает оглавление; chapter содержит страницы только выбранного рецепта, page/step по умолчанию -1 (титул), scroll/fontScale>1.3 остаётся внутри того же маршрута. RUN/FullTimer/FINALE — состояния bake, без отдельного complete/bake-actions/recipe-calculator. Маршруты и данные Закваски/Полки/Alice сохранены относительно7.0.6.
+
+BookPreferences хранит bookmark/порции/вкладку и planned_bakes в madre_prefs, не вводя Room-миграцию. PlannedBakeReminderWorker только напоминает: входные данные — id плана, ни создания сессии, ни account-токена. Явные notification-действия START/SNOOZE требуют одноразовой локальной capability, отменяемой при изменении плана; обычный внешний Intent только открывает интерфейс. BakingViewModel остаётся единственным writer: startPlannedBake имеет детерминированный bakeKey, предотвращая повторный durable старт после пересоздания. MainActivity сохраняет pending navigation в instance state и не проигрывает старый launcher Intent повторно при восстановлении.
+
+START/ADVANCE Undo ограждён ключом/ревизией/сроком; ADVANCE возвращает оставшиеся секунды и перепланирует уведомление, но не откатывает voice authority/revision/receipt/lease. ABANDON откладывает фактическое завершение на8сек: до срока сессия/Room/таймер живы, process death не создаёт преждевременную кляксу. Полная N1–N12 приёмка и физический Huawei отдельно от отдельных зелёных промежуточных APK.
 
 С Cycle 27 «Полка» на первой полосе снова ведёт на `shelf` — корешки семьи
 и журнал «Когда · Кто · Глава». Свой корешок с красным ляссе; пустой справа
@@ -136,8 +153,8 @@ shelf              shelf/{ownerId}
 
 ## Данные
 
-Room **версия 10**, 8 объявленных сущностей, 9 миграций
-(`MIGRATION_1_2` … `MIGRATION_9_10`). Список миграций — один, в
+Room **версия 12**, 9 объявленных сущностей, 11 миграций
+(`MIGRATION_1_2` … `MIGRATION_11_12`). Миграция 11→12 добавляет bake_number и выдаёт 1–9 по startedAtWallClock/sessionId без удаления legacy-строк; до открытия Room создаётся проверенная копия v11 в noBackupFilesDir/room-11-before-12. Номер финала живёт в prefs до «Вписать», план передаёт свой номер старту. Общий порядок блокировок: Application plannedBakeOperationGate → VM transitionGate → короткий PLANS_LOCK; ожидание готовности вне Application gate. Список миграций — один, в
 `MadreDatabase.Companion.MIGRATIONS`; его же берёт
 `androidTest/data/db/MigrationTest.kt`. Миграция, написанная но не
 зарегистрированная, роняет тест, а не «проходит» на своей копии списка.

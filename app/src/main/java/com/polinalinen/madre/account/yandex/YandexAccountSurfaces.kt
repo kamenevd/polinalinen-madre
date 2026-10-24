@@ -1,0 +1,251 @@
+package com.polinalinen.madre.account.yandex
+
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Text
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import com.polinalinen.madre.ui.kit.*
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.CloudQueue
+import androidx.compose.material.icons.outlined.PersonOutline
+import androidx.compose.material.icons.outlined.PeopleOutline
+import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material3.Icon
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.sp
+
+/** Optional Activity-owned wiring. Null preserves all SignedOut/baseline routes. */
+class YandexAccountUi(val model:YandexAccountViewModel,val signIn:(Boolean)->Unit)
+val LocalYandexAccountUi=staticCompositionLocalOf<YandexAccountUi?>{null}
+private const val PRIVACY="Мадре получит только имя, портрет и номер аккаунта. Пароль Яндекс нам не показывает. Книга остаётся на телефоне."
+private const val ALICE_PRIVACY="Только имя, портрет и номер аккаунта. Пароль Яндекс не передаёт. Книга остаётся на телефоне."
+
+@Composable fun YandexAccountPanel(state:YandexAccountState,pendingUnbind:Boolean,
+    onSignIn:(Boolean)->Unit,onProfile:()->Unit,onRetryUnbind:()->Unit,
+    size:YandexIdButtonSize=YandexIdButtonSize.M,compactAlice:Boolean=false) {
+    val compactSignedOut=compactAlice && state is YandexAccountState.SignedOut && !pendingUnbind
+    val snackbar=remember{PaperSnackbarState()}
+    LaunchedEffect(state,pendingUnbind) {
+        if(state is YandexAccountState.Error && !pendingUnbind && snackbar.showSnackbar("Вход не удался","ПОВТОРИТЬ",indefinite=true))onSignIn(false)
+    }
+    Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(if(compactSignedOut)8.dp else 12.dp)) {
+        when {
+            pendingUnbind -> {
+                PaperNote("На телефоне отключено. Отзыв доступа на сервере ещё не подтверждён.")
+                PaperButton("Повторить отключение",onRetryUnbind,variant=PaperButtonVariant.SECONDARY)
+            }
+            state is YandexAccountState.SignedIn -> {
+                PaperListRow(state.profile.displayName.ifBlank{state.profile.login},
+                    note="${state.profile.login} · Яндекс ID",onClick=onProfile,
+                    leading={YandexAccountPortrait(state.profile,56.dp)},
+                    trailing={Icon(Icons.Outlined.ChevronRight,null,tint=LocalPaper.current.ink2)})
+            }
+            state is YandexAccountState.SigningIn -> {
+                PaperButton("Открываем Яндекс ID…",{},enabled=false,variant=PaperButtonVariant.SECONDARY)
+                if(!state.browser)PaperTextAction("ВОЙТИ ЧЕРЕЗ БРАУЗЕР",{onSignIn(true)})
+                PaperNote("Книга работает и без входа.")
+            }
+            state is YandexAccountState.Binding -> {
+                PaperButton("Узнаём вас…",{},enabled=false,variant=PaperButtonVariant.SECONDARY)
+                PaperNote("Проверяем вход на сервере Мадре. Книга остаётся на телефоне.")
+            }
+            else -> {
+                if(state is YandexAccountState.Error) {
+                    if(state.kind==YandexAccountError.NETWORK)PaperCard {PaperNote(accountErrorCopy(state.kind))}
+                    else Text(accountErrorCopy(state.kind),style=PaperType.note,color=LocalPaper.current.ink2)
+                }
+                YandexIdButton({onSignIn(false)},size=size)
+                Text(if(compactSignedOut)ALICE_PRIVACY else PRIVACY,style=PaperType.note,color=LocalPaper.current.ink2)
+                if(state is YandexAccountState.Error)PaperSnackbar(snackbar)
+            }
+        }
+    }
+}
+
+@Composable fun YandexSettingsSection(myName:String,onMyNameChange:(String)->Unit,onOpenAlice:()->Unit) {
+    val owner=LocalYandexAccountUi.current ?: return
+    val state by owner.model.state.collectAsState()
+    val pending by owner.model.pendingUnbind.collectAsState()
+    val notice by owner.model.offerError.collectAsState()
+    val voice by (LocalContext.current.applicationContext as com.polinalinen.madre.MadreApplication).voiceCoordinator.state.collectAsState()
+    var profileOpen by rememberSaveable{mutableStateOf(false)}
+    var confirmOut by rememberSaveable{mutableStateOf(false)}
+    val profile=(state as? YandexAccountState.SignedIn)?.profile
+    YandexSettingsAccountContent(state,pending,myName,onMyNameChange,onOpenAlice,owner.signIn,
+        {profileOpen=true},owner.model::retryPendingUnbind,{confirmOut=true},notice,
+        aliceConnected=voice.status==com.polinalinen.madre.voice.VoiceStatus.CONNECTED)
+    if(profileOpen && profile!=null)YandexAccountSheet(profile,
+        onDismiss={profileOpen=false},onSwitch={profileOpen=false;owner.signIn(false)},
+        onSignOut={profileOpen=false;confirmOut=true})
+    if(confirmOut)YandexSignOutDialog(onConfirm={confirmOut=false;owner.model.signOut()},onDismiss={confirmOut=false})
+}
+
+/** Pure production surface shared with native fixtures; never constructs an auth owner. */
+@Composable internal fun YandexSettingsAccountContent(state:YandexAccountState,pending:Boolean,
+    myName:String,onMyNameChange:(String)->Unit,onOpenAlice:()->Unit,onSignIn:(Boolean)->Unit,
+    onProfile:()->Unit,onRetryUnbind:()->Unit,onConfirmOut:()->Unit,notice:String?=null,aliceConnected:Boolean=false) {
+    val profile=(state as? YandexAccountState.SignedIn)?.profile
+    PaperSection("ЯНДЕКС ID",Modifier.padding(horizontal=22.dp,vertical=18.dp)) {
+        PaperCard {
+            if(profile==null) {
+                Text("Подключите Яндекс ID",style=PaperType.h2,color=LocalPaper.current.ink)
+                PaperNote("Алиса сможет узнать ваш аккаунт. Книга, печь и закваска работают и без входа.")
+                Spacer(Modifier.height(16.dp))
+            }
+            YandexAccountPanel(state,pending,onSignIn,onProfile,onRetryUnbind)
+            notice?.let{PaperNote(it)}
+            if(state is YandexAccountState.Error && !pending) {
+                PaperTextAction("Отключить аккаунт на этом телефоне",onConfirmOut,destructive=true)
+            }
+            if(profile!=null) {
+                PaperListRow("Алиса",value=if(aliceConnected)"подключена ✓" else "не подключена",
+                    valueColor=if(aliceConnected)LocalPaper.current.sage else LocalPaper.current.ink2,onClick=onOpenAlice)
+                profile.bookNameSuggestion(myName)?.let{suggestion->
+                    PaperTextAction("Использовать имя «$suggestion»",{if(myName.isBlank())onMyNameChange(suggestion)})
+                }
+            }
+        }
+    }
+}
+
+@Composable internal fun YandexSignOutDialog(onConfirm:()->Unit,onDismiss:()->Unit) {
+    PaperConfirmDialog("Выйти из Яндекс ID?",
+        "Книга, закваска, дневник, выпечки и фото останутся на этом телефоне. Алиса перестанет узнавать вас. Аккаунт и семья Полки не меняются.",
+        "Выйти","Остаться",onConfirm=onConfirm,onDismiss=onDismiss,destructive=true)
+}
+
+@Composable internal fun YandexAccountSheet(profile:VerifiedYandexProfile,onDismiss:()->Unit,onSwitch:()->Unit,onSignOut:()->Unit) {
+    val context=LocalContext.current
+    var linkError by remember{mutableStateOf(false)}
+    PaperSheet(onDismiss) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal=22.dp,vertical=16.dp),
+            verticalArrangement=Arrangement.spacedBy(14.dp)) {
+            Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(14.dp)) {
+                YandexAccountPortrait(profile)
+                Column {Text(profile.displayName.ifBlank{profile.login},style=PaperType.h2,color=LocalPaper.current.ink)
+                    PaperNote("${profile.login} · Яндекс ID")}
+            }
+            Text("Что Мадре знает о вас",style=PaperType.h2,color=LocalPaper.current.ink)
+            PaperListRow("Имя и портрет",note="Только на телефоне")
+            PaperListRow("Номер аккаунта Яндекса",note="На сервере Мадре, чтобы Алиса узнала вас")
+            PaperListRow("Почта, телефон, пароль",note="Не запрашиваем")
+            PaperListRow("Доступ",note="Можно отозвать в настройках Яндекс ID")
+            PaperButton("Сменить аккаунт",onSwitch,variant=PaperButtonVariant.SECONDARY)
+            PaperButton("Открыть Яндекс ID",{linkError=runCatching{context.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse("https://id.yandex.ru"))) }.isFailure},
+                variant=PaperButtonVariant.SECONDARY)
+            if(linkError)PaperNote("Не удалось открыть браузер. Настройки аккаунта доступны на id.yandex.ru.")
+            PaperTextAction("ВЫЙТИ ИЗ ЯНДЕКС ID",onSignOut,destructive=true)
+        }
+    }
+}
+
+/** Optional first-offer content; declining never changes the book, starter, shelf or timers. */
+@Composable fun YandexOfferContent(state:YandexAccountState,pendingUnbind:Boolean,onSignIn:(Boolean)->Unit,
+    onSkip:()->Unit,onRetryUnbind:()->Unit) {
+    BackHandler { onSkip() }
+    val p=LocalPaper.current
+    PaperSurface(modifier=Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().padding(horizontal=22.dp)) {
+            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+                SmallLabel("НЕОБЯЗАТЕЛЬНО · МОЖНО ПОЗЖЕ",Modifier.weight(1f),p.ink2)
+                PaperTextAction("ПОЗЖЕ",onSkip)
+            }
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                YandexOfferIllustration(Modifier.align(Alignment.CenterHorizontally).padding(top=30.dp))
+                Text(buildAnnotatedString {
+                    append("Войдите — ")
+                    withStyle(SpanStyle(color=p.acc,fontStyle=FontStyle.Italic)){append("и Алиса")}
+                    append("\nузнает вашу книгу")
+                },style=PaperType.display.copy(fontSize=38.sp,lineHeight=42.sp),color=p.ink,
+                    modifier=Modifier.padding(top=22.dp,bottom=12.dp))
+                YandexBenefit(0,"Алиса в одно касание","навык Мадре узнает вас сам — без кодов")
+                YandexBenefit(1,"Копия на Яндекс Диске","дневник и фото выпечек — если захотите")
+                YandexBenefit(2,"Ваше имя и портрет","в приветствии и на полке семьи")
+                YandexBenefit(3,"Вместе за закваской","видно, кто покормил — скоро")
+            }
+            Column(Modifier.padding(top=16.dp,bottom=12.dp)) {
+                // The panel keeps real busy/error/revocation fences; only the composition changes.
+                if(pendingUnbind || state !is YandexAccountState.SignedOut) {
+                    YandexAccountPanel(state,pendingUnbind,onSignIn,{},onRetryUnbind,size=YandexIdButtonSize.L)
+                } else YandexIdButton({onSignIn(false)},size=YandexIdButtonSize.L)
+                PaperTextAction("ПРОДОЛЖИТЬ БЕЗ ВХОДА",onSkip,Modifier.align(Alignment.CenterHorizontally))
+                if(!pendingUnbind && (state is YandexAccountState.SignedOut || state is YandexAccountState.SigningIn || state is YandexAccountState.Binding))
+                    Text(PRIVACY,style=PaperType.note.copy(fontSize=12.sp,lineHeight=17.sp),color=p.ink2,
+                        textAlign=TextAlign.Center,modifier=Modifier.fillMaxWidth())
+            }
+        }
+    }
+}
+
+@Composable private fun YandexBenefit(icon:Int,title:String,note:String) {
+    val p=LocalPaper.current
+    Row(Modifier.fillMaxWidth().padding(vertical=7.dp),horizontalArrangement=Arrangement.spacedBy(14.dp)) {
+        Box(Modifier.size(36.dp).background(p.bg2,CircleShape),contentAlignment=Alignment.Center) {
+            PaperBenefitIcon(icon)
+        }
+        Column(Modifier.weight(1f)) {
+            Text(title,style=PaperType.title,color=p.ink)
+            Text(note,style=PaperType.note.copy(fontSize=14.sp,lineHeight=20.sp),color=p.ink2)
+        }
+    }
+}
+
+private fun accountErrorCopy(kind:YandexAccountError)=when(kind) {
+    YandexAccountError.NETWORK->"Нет связи — попробуем, когда появится сеть"
+    YandexAccountError.YANDEX->"Яндекс ID не ответил. Попробуйте ещё раз — книга работает и без входа"
+    YandexAccountError.SERVER->"Вход прошёл, но сервер Мадре не ответил. Повторим сами"
+    YandexAccountError.FOREIGN_CLIENT->"Яндекс ID не подтвердил вход для Мадре. Повторите попытку."
+    YandexAccountError.STORAGE->"Не удалось сохранить настройки входа. Не закрывайте приложение и повторите попытку."
+}
+
+/** Login is optional and never substitutes for the existing explicit bake/voice consent. */
+@Composable fun YandexAliceAccountStep(onOpenSettings:()->Unit,compactAlice:Boolean=false) {
+    val owner=LocalYandexAccountUi.current
+    if(owner==null) {
+        YandexIdButton({},size=YandexIdButtonSize.M,enabled=false)
+        PaperNote("Вход с Яндекс ID пока недоступен. Подключение навыка с кодом — в «Не выходит?».")
+        return
+    }
+    val state by owner.model.state.collectAsState()
+    val pending by owner.model.pendingUnbind.collectAsState()
+    YandexAccountPanel(state,pending,owner.signIn,onOpenSettings,owner.model::retryPendingUnbind,compactAlice=compactAlice)
+}
+
+/** Works without account/voice linking. It does not send a command or invent a Station name. */
+@Composable fun StationTimerSheet(remainingSeconds:Long,bakeNumber:Int=0,onDismiss:()->Unit) {
+    val phrase=StationTimerPrompt.phrase(remainingSeconds)
+    val clipboard=androidx.compose.ui.platform.LocalClipboardManager.current
+    var copied by remember(phrase){mutableStateOf(false)}
+    PaperSheet(onDismiss) {
+        Column(Modifier.fillMaxWidth().padding(horizontal=22.dp,vertical=18.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
+            Text("Таймер на Станции",style=PaperType.h2,color=LocalPaper.current.ink)
+            if(bakeNumber in 1..9) {
+                PaperBakeNumber(bakeNumber)
+                PaperNote("Встроенный таймер Станции номер не знает. В навыке «Голос закваски» спросите, что со ${com.polinalinen.madre.model.BakeNumbers.genitive(bakeNumber)}.")
+            }
+            Text(phrase ?: StationTimerPrompt.EXPIRED,style=PaperType.body,color=LocalPaper.current.ink)
+            PaperNote(StationTimerPrompt.EXPLANATION)
+            if(phrase!=null)PaperButton("Скопировать фразу",{
+                clipboard.setText(androidx.compose.ui.text.AnnotatedString(phrase));copied=true
+            },variant=PaperButtonVariant.SECONDARY)
+            if(copied)PaperNote("Фраза скопирована")
+        }
+    }
+}

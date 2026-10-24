@@ -30,6 +30,7 @@ import com.polinalinen.madre.model.RecipeScaler
 import com.polinalinen.madre.model.BakingSession
 import kotlinx.coroutines.delay
 import com.polinalinen.madre.ui.screens.RecipeChapterContent
+import com.polinalinen.madre.ui.screens.ChapterScrollNavigation
 import com.polinalinen.madre.ui.components.bookAction
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -47,7 +48,7 @@ internal data class ReadingLeaf(val chapter: Int, val title: Boolean = false, va
 fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: ReadingPreferences, onBack: () -> Unit, onBake: (Recipe) -> Unit, onCalculator: (Recipe) -> Unit, initialStep: Int? = null, activeSessions: List<BakingSession> = emptyList(), onContinueBake: (Long) -> Unit = {},
     initialPage: Int = -1, onPageChanged: (Int) -> Unit = {}, scaleFactor: Double? = null,
     onScaleFactor: ((Double) -> Unit)? = null, onSchedule: ((Recipe) -> Unit)? = null,
-    onOpenAlice: (() -> Unit)? = null, scrollContent: (@Composable (Recipe) -> Unit)? = null) {
+    onOpenAlice: (() -> Unit)? = null, scrollContent: (@Composable (Recipe, ChapterScrollNavigation) -> Unit)? = null) {
     var settings by remember { mutableStateOf(false) }
     var chrome by rememberSaveable { mutableStateOf(true) }
     var annotations by rememberSaveable(recipeId) { mutableStateOf(false) }
@@ -128,11 +129,13 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
             }
         }
         var page by rememberSaveable(recipeId) { mutableIntStateOf(0) }
+        var scrollRequest by rememberSaveable(recipeId) { mutableLongStateOf(0L) }
         LaunchedEffect(leaves) {
             if (leaves.isEmpty()) return@LaunchedEffect
             if (seekActive && initialPage >= 0) {
                 page = initialPage.coerceIn(0, leaves.lastIndex)
                 anchor = leaves[page].anchor
+                scrollRequest++
                 seekActive = false
                 return@LaunchedEffect
             }
@@ -142,10 +145,15 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
             page=leaves.indexOfFirst { it.anchor==anchor && !seekActive }.takeIf { it>=0 }
                 ?: containing
                 ?: leaves.indexOfFirst { it.anchor.startsWith(recipeId+":") }.coerceAtLeast(0)
-            if(seekActive)anchor=leaves.getOrNull(page)?.anchor?:anchor
+            if(seekActive){
+                val targetRecipe=recipes.first{it.id==recipeId}
+                anchor=initialStep?.takeIf { it in targetRecipe.timeline.indices }?.let { "$recipeId:${targetRecipe.ingredients.size+it}:0" }
+                    ?:leaves.getOrNull(page)?.anchor?:anchor
+                scrollRequest++
+            }
             seekActive=false
         }
-        fun move(index:Int) { page=index.coerceIn(0,(leaves.size-1).coerceAtLeast(0));leaves.getOrNull(page)?.let { anchor=it.anchor }; if(leaves.getOrNull(page)?.end==true)chrome=true }
+        fun move(index:Int) { page=index.coerceIn(0,(leaves.size-1).coerceAtLeast(0));leaves.getOrNull(page)?.let { anchor=it.anchor };scrollRequest++; if(leaves.getOrNull(page)?.end==true)chrome=true }
         val currentPage by rememberUpdatedState(page)
         val pageCallback by rememberUpdatedState(onPageChanged)
         val hasPages by rememberUpdatedState(leaves.isNotEmpty())
@@ -157,7 +165,11 @@ fun RazvorotReader(recipes: List<Recipe>, recipeId: String, preferences: Reading
         if(current!=null && recipe!=null) {
             if(preferences.mode==ReadingMode.SCROLL || density.fontScale>1.3f || annotations) {
                 Box(Modifier.fillMaxSize().padding(top=headerHeight,bottom=footerHeight)) {
-                    if(scrollContent!=null)scrollContent(recipe) else RecipeChapterContent(recipe,factor,preferences.textSize)
+                    val navigation=ChapterScrollNavigation(anchor,scrollRequest,leaves.map{it.anchor}) { visible ->
+                        leaves.indexOfFirst{it.anchor==visible}.takeIf{it>=0}?.let{page=it;anchor=visible}
+                    }
+                    if(scrollContent!=null)scrollContent(recipe,navigation)
+                    else RecipeChapterContent(recipe,factor,preferences.textSize,navigation=navigation)
                 }
             } else PaperTurn(page,leaves.size,preferences,{move(it)},Modifier.testTag("paper-turn"),onCenter={chrome=!chrome},
                 contentKey=listOf(recipeId,factor,width,height,preferences.textSize),onGestureStart={chrome=false},

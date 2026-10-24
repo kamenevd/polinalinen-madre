@@ -403,8 +403,8 @@ fun MadreNavHost(
                     onPageChanged={page->bookPreferences.saveBookmark(BookBookmark(recipeId,page))},
                     scaleFactor=factor,onScaleFactor=changeFactor,onOpenAlice={aliceSheet=true},
                     onSchedule={recipe->openStart(recipe.id,1)},
-                    scrollContent={ RecipeDetailScreen(recipeId,{navController.popBackStack()},{},bakingViewModel,onOpenAlice={aliceSheet=true},
-                        embedded=true,scaleFactorOverride=factor,textSize=readingPreferences.textSize) },
+                    scrollContent={ _,scrollNavigation->RecipeDetailScreen(recipeId,{showHome(0)},{},bakingViewModel,onOpenAlice={aliceSheet=true},
+                        embedded=true,scaleFactorOverride=factor,textSize=readingPreferences.textSize,chapterScrollNavigation=scrollNavigation) },
                 )
                 }
                 if(calculator)recipesForStats.firstOrNull{it.id==recipeId}?.let { recipe->BookPortionsSheet(recipe,factor,changeFactor){calculator=false} }

@@ -16,12 +16,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -31,6 +38,13 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.text.TextLayoutResult
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.collect
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -80,6 +94,7 @@ fun RecipeDetailScreen(
     embedded: Boolean = false,
     scaleFactorOverride: Double? = null,
     textSize: Float = 16f,
+    chapterScrollNavigation: ChapterScrollNavigation? = null,
 ) {
     val startScope = androidx.compose.runtime.rememberCoroutineScope()
     val mutationError by viewModel.mutationError.collectAsState()
@@ -124,7 +139,7 @@ fun RecipeDetailScreen(
     }
 
     if (embedded) {
-        RecipeChapterContent(recipe, scaleFactor, textSize, onOpenAlice)
+        RecipeChapterContent(recipe, scaleFactor, textSize, onOpenAlice, chapterScrollNavigation)
         return
     }
 
@@ -323,40 +338,102 @@ private fun MissingRecipePage(loading: Boolean, onBack: () -> Unit) {
 
 /** Same chapter renderer in scroll/large-type mode; no second navigation or start button. */
 @Composable
-fun RecipeChapterContent(recipe: Recipe, scaleFactor: Double, textSize: Float = 16f, onOpenAlice: (() -> Unit)? = null) {
+fun RecipeChapterContent(recipe: Recipe, scaleFactor: Double, textSize: Float = 16f,
+    onOpenAlice: (() -> Unit)? = null, navigation: ChapterScrollNavigation? = null) {
     val colors = LocalPaper.current
-    LazyColumn(Modifier.fillMaxSize().testTag("reader-scroll"),
-        contentPadding = PaddingValues(bottom = 24.dp)) {
-        item(key = "title") { BookText(recipe.name, 30, Modifier.padding(22.dp)) }
-        item(key = "description") { PaperNote(recipe.description, Modifier.padding(horizontal = 22.dp)) }
-        recipe.ingredients.forEach { (section, ingredients) -> item(key = "ingredients-$section") {
-            SmallLabel(ingredientSectionTitle(section), Modifier.padding(horizontal = 22.dp, vertical = 14.dp))
-            ingredients.forEach { ingredient ->
-                Text(RecipeScaler.scaledDisplayText(ingredient, scaleFactor), color = colors.ink2,
+    val scroll = rememberScrollState()
+    val fontScale = androidx.compose.ui.platform.LocalDensity.current.fontScale
+    var viewportTop by remember { mutableFloatStateOf(0f) }
+    var viewportWidth by remember { mutableIntStateOf(0) }
+    val anchors = remember(recipe.id, scaleFactor, textSize, fontScale, viewportWidth) { ChapterScrollAnchors() }
+    val requested = navigation?.let { (it.pageAnchors + it.anchor).distinct() }.orEmpty()
+    val currentNavigation by rememberUpdatedState(navigation)
+    var lastRequest by rememberSaveable(recipe.id) { mutableLongStateOf(Long.MIN_VALUE) }
+    var lastLayout by rememberSaveable(recipe.id) { mutableStateOf<String?>(null) }
+    val layoutKey = "$viewportWidth:$fontScale:$textSize:$scaleFactor"
+    fun top(coordinates: androidx.compose.ui.layout.LayoutCoordinates) =
+        (coordinates.positionInRoot().y - viewportTop + scroll.value).toInt()
+    fun block(anchor: String) = Modifier.onGloballyPositioned { anchors.block(anchor, top(it)) }
+    fun textPosition(key: String, fragments: Map<String, Int>) = Modifier.onGloballyPositioned {
+        anchors.textTop(key, top(it), fragments)
+    }
+    LaunchedEffect(navigation?.request, layoutKey) {
+        val target = navigation ?: return@LaunchedEffect
+        if (viewportWidth == 0 || (lastRequest == target.request && lastLayout == layoutKey)) return@LaunchedEffect
+        val destination = snapshotFlow { anchors.positions[target.anchor] }.filterNotNull().first()
+        scroll.scrollTo(destination)
+        lastRequest = target.request
+        lastLayout = layoutKey
+    }
+    LaunchedEffect(scroll, anchors) {
+        snapshotFlow {
+            val current = currentNavigation
+            if (current == null || current.request != lastRequest || lastLayout != layoutKey) null
+            else if (scroll.maxValue > 0 && scroll.value == scroll.maxValue) current.pageAnchors.lastOrNull()
+            else current.pageAnchors.mapNotNull { anchor -> anchors.positions[anchor]?.let { anchor to it } }
+                .filter { it.second <= scroll.value + 1 }.maxByOrNull { it.second }?.first
+        }.filterNotNull().collect { currentNavigation?.onAnchorChanged?.invoke(it) }
+    }
+    Box(Modifier.fillMaxSize().onGloballyPositioned { viewportTop = it.positionInRoot().y }
+        .onSizeChanged { viewportWidth = it.width }) {
+    // One bounded chapter, not the whole book. ScrollState's saver preserves the
+    // actual text offset. Keeping FullRecipeSection intact preserves note coordinates.
+    Column(Modifier.fillMaxSize().verticalScroll(scroll).testTag("reader-scroll").padding(bottom=24.dp)) {
+        BookText(recipe.name, 30, Modifier.padding(22.dp).then(block("${recipe.id}:title")))
+        PaperNote(recipe.description, Modifier.padding(horizontal = 22.dp))
+        recipe.ingredients.entries.forEachIndexed { bi, (section, ingredients) ->
+            SmallLabel(ingredientSectionTitle(section), Modifier.padding(horizontal = 22.dp, vertical = 14.dp)
+                .then(block("${recipe.id}:$bi:0")))
+            val lines=ingredients.map { RecipeScaler.scaledDisplayText(it,scaleFactor) }
+            val whole=lines.joinToString("\n")
+            var start=0
+            lines.forEachIndexed { index,line ->
+                val fragments=chapterFragmentCharacters(recipe.id,bi,whole,requested,start,line.length)
+                val key="ingredient-$bi-$index"
+                Text(line, color = colors.ink2,
                     style = PaperType.body.copy(fontSize = textSize.sp, lineHeight = (textSize * 25f / 16f).sp),
-                    modifier = Modifier.padding(horizontal = 22.dp, vertical = 5.dp))
+                    modifier = Modifier.padding(horizontal = 22.dp, vertical = 5.dp).then(textPosition(key,fragments)),
+                    onTextLayout={anchors.textLayout(key,it,fragments)})
+                start+=line.length+1
             }
-        } }
-        // Keep this as one item and retain the exact recipeId key/coordinate space.
-        // Existing vector and legacy bitmap notes are neither copied nor deleted.
-        item(key = "full-recipe") { HandwrittenEditSurface(recipe.id, Modifier.padding(top = 32.dp)) {
-            FullRecipeSection(recipe, scaleFactor, textSize = textSize)
-        } }
-        if(recipe.servingTips.isNotEmpty())item(key = "serving") {
-            SmallLabel("К столу", Modifier.padding(22.dp))
-            recipe.servingTips.forEach { PaperNote(it.text, Modifier.padding(horizontal = 22.dp, vertical = 6.dp)) }
         }
-        if(recipe.variations.isNotEmpty())item(key = "variations") {
-            SmallLabel("Варианты", Modifier.padding(22.dp))
-            recipe.variations.forEach { PaperNote(it.text, Modifier.padding(horizontal = 22.dp, vertical = 6.dp)) }
+        val bindings=remember(recipe){RecipeScaler.scalableBindings(recipe)}
+        val stepTexts=recipe.timeline.map{RecipeScaler.scaledStepText(it.description,scaleFactor,bindings)}
+        HandwrittenEditSurface(recipe.id, Modifier.padding(top = 32.dp)) {
+            FullRecipeSection(recipe, scaleFactor, textSize = textSize,stepModifier={index,body->
+                val bi=recipe.ingredients.size+index
+                if(!body)block("${recipe.id}:$bi:0") else textPosition("step-$index",
+                    chapterFragmentCharacters(recipe.id,bi,stepTexts[index],requested))
+            },onStepTextLayout={index,layout->anchors.textLayout("step-$index",layout,
+                chapterFragmentCharacters(recipe.id,recipe.ingredients.size+index,stepTexts[index],requested))})
         }
-        if(onOpenAlice!=null)item(key = "alice") { PaperAliceButton(onOpenAlice, Modifier.padding(22.dp)) }
-        item(key = "end") { BookText("Конец главы. Теперь — испечь.", 24, Modifier.padding(22.dp), italic = true) }
+        val appendices=buildList {
+            if(recipe.servingTips.isNotEmpty())add("К столу" to recipe.servingTips.map{it.text})
+            if(recipe.variations.isNotEmpty())add("Варианты" to recipe.variations.map{it.text})
+        }
+        appendices.forEachIndexed { index,(title,lines)->
+            val bi=recipe.ingredients.size+recipe.timeline.size+index
+            SmallLabel(title,Modifier.padding(22.dp).then(block("${recipe.id}:$bi:0")))
+            val whole=lines.joinToString("\n");var start=0
+            lines.forEachIndexed { part,line->
+                val fragments=chapterFragmentCharacters(recipe.id,bi,whole,requested,start,line.length)
+                val key="appendix-$index-$part"
+                Text(line,style=PaperType.note,color=colors.mut,
+                    modifier=Modifier.padding(horizontal=22.dp,vertical=6.dp).then(textPosition(key,fragments)),
+                    onTextLayout={anchors.textLayout(key,it,fragments)})
+                start+=line.length+1
+            }
+        }
+        if(onOpenAlice!=null)PaperAliceButton(onOpenAlice, Modifier.padding(22.dp))
+        BookText("Конец главы. Теперь — испечь.", 24,
+            Modifier.padding(22.dp).then(block("${recipe.id}:end")), italic = true)
+    }
     }
 }
 
 @Composable
-private fun FullRecipeSection(recipe: Recipe, scaleFactor: Double, modifier: Modifier = Modifier, textSize: Float = 15.5f) {
+private fun FullRecipeSection(recipe: Recipe, scaleFactor: Double, modifier: Modifier = Modifier, textSize: Float = 15.5f,
+    stepModifier: (Int,Boolean) -> Modifier = {_,_->Modifier}, onStepTextLayout:(Int,TextLayoutResult)->Unit={_,_->}) {
     val colors = LocalPaper.current
     // Пересчитываются только те числа, которые сам рецепт пометил весом и
     // назвал по имени строки: остальное — проза, и трогать её книга не берётся.
@@ -380,7 +457,7 @@ private fun FullRecipeSection(recipe: Recipe, scaleFactor: Double, modifier: Mod
         )
         Column(Modifier.padding(horizontal = 22.dp, vertical = 18.dp)) {
             recipe.timeline.forEachIndexed { i, step ->
-                Row(Modifier.fillMaxWidth().padding(bottom = 20.dp)) {
+                Row(Modifier.fillMaxWidth().padding(bottom = 20.dp).then(stepModifier(i,false))) {
                     Text(
                         "${i + 1}",
                         color = colors.line,style = PaperType.body,
@@ -405,7 +482,8 @@ private fun FullRecipeSection(recipe: Recipe, scaleFactor: Double, modifier: Mod
                             color = colors.ink,style = PaperType.body,
                             fontSize = textSize.sp,
                             lineHeight = (textSize * 25f / 16f).sp,
-                            modifier = Modifier.padding(top = 3.dp),
+                            modifier = Modifier.padding(top = 3.dp).then(stepModifier(i,true)),
+                            onTextLayout = {onStepTextLayout(i,it)},
                         )
                     }
                 }

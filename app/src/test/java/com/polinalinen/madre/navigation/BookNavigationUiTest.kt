@@ -91,10 +91,11 @@ class BookNavigationUiTest {
         lateinit var nav:NavHostController
         rule.setContent{nav=rememberNavController();MadreNavHost(nav)}
         val recipe=recipes.first()
-        rule.waitUntil(10_000){rule.onAllNodesWithText("Что испечь",substring=true).fetchSemanticsNodes().isNotEmpty()}
-        rule.onNode(SemanticsMatcher("configure actual oven tile"){
+        val configure=SemanticsMatcher("configure actual oven tile"){
             it.config.getOrNull(SemanticsActions.OnClick)?.label=="Настроить выпечку: ${recipe.name}"
-        }).performScrollTo().performClick()
+        }
+        rule.waitUntil(10_000){rule.onAllNodes(configure).fetchSemanticsNodes().isNotEmpty()}
+        rule.onNode(configure).performScrollTo().performClick()
         rule.onNodeWithText("Открыть главу").performClick();rule.waitForIdle()
         assertEquals(MadreDestinations.CHAPTER,nav.currentDestination?.route)
         val entry=nav.currentBackStackEntry
@@ -254,7 +255,51 @@ class BookNavigationUiTest {
         rule.onNodeWithTag("reader-scroll").assertIsDisplayed()
         rule.onNodeWithTag("paper-turn").assertDoesNotExist()
         recipes.filter{it.id!=recipe.id}.forEach{rule.onAllNodesWithText(it.name).assertCountEquals(0)}
-        rule.onNodeWithTag("reader-scroll").performScrollToNode(hasText("редактировать от руки"))
-        rule.onNodeWithText("редактировать от руки").assertIsDisplayed()
+        rule.onNodeWithText("редактировать от руки").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun largeTypeBookmarkPageOpensActualIngredientsRatherThanTheTitle() {
+        val recipe=recipes.single{it.id=="ciabatta"}
+        val prefs=ReadingPreferences(app,"nav-bookmark-scroll-${UUID.randomUUID()}")
+        var bookmark:Int?=null
+        rule.setContent {val density=LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density,2f)) {
+                RazvorotTheme(prefs,force=Atmosphere.DAWN) {
+                    RazvorotReader(recipes,recipe.id,prefs,{},{},{},initialPage=1,
+                        onPageChanged={bookmark=it},scaleFactor=2.0)
+                }
+            }
+        }
+        rule.waitForIdle()
+        assertTrue(rule.onNodeWithTag("reader-scroll").fetchSemanticsNode()
+            .config[SemanticsProperties.VerticalScrollAxisRange].value()>0f)
+        rule.onNode(hasText(recipe.name) and hasAnyAncestor(hasTestTag("reader-scroll"))).assertIsNotDisplayed()
+        rule.waitUntil(5_000){rule.onNodeWithTag("reader-scroll").fetchSemanticsNode();bookmark==1}
+    }
+
+    @Test fun largeTypeStepSeekRestoresActualTextOffsetAndFooterMovesTheScrollContent() {
+        val recipe=recipes.single{it.id=="ciabatta"}
+        val prefs=ReadingPreferences(app,"nav-step-scroll-${UUID.randomUUID()}")
+        val restoration=StateRestorationTester(rule)
+        restoration.setContent { val density=LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density,2f)) {
+                RazvorotTheme(prefs,force=Atmosphere.NIGHT) {
+                    RazvorotReader(recipes,recipe.id,prefs,{},{},{},initialStep=2,scaleFactor=2.0)
+                }
+            }
+        }
+        rule.waitForIdle()
+        rule.onNodeWithText(recipe.timeline[2].title.uppercase()).assertIsDisplayed()
+        fun scrollOffset()=rule.onNodeWithTag("reader-scroll").fetchSemanticsNode()
+            .config[SemanticsProperties.VerticalScrollAxisRange].value()
+        val position=scrollOffset();assertTrue(position>0f)
+        restoration.emulateSavedInstanceStateRestore();rule.waitForIdle()
+        assertEquals(position,scrollOffset(),.01f)
+        rule.onNodeWithText(recipe.timeline[2].title.uppercase()).assertIsDisplayed()
+        rule.onNode(SemanticsMatcher("footer seeks actual title") {
+            it.config.getOrNull(SemanticsActions.OnClick)?.label=="Страница 1"
+        }).performClick();rule.waitForIdle()
+        assertTrue(scrollOffset()<position)
+        rule.onNode(hasText(recipe.name) and hasAnyAncestor(hasTestTag("reader-scroll"))).assertIsDisplayed()
     }
 }

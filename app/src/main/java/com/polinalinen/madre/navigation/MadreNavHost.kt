@@ -612,7 +612,10 @@ fun MadreNavHost(
                             if(sid!=null) {
                                 bookPreferences.savePortions(id,portions);startRecipeId=null
                                 navController.navigate(MadreDestinations.bake(sid.toString()))
-                            } else planError=bakingViewModel.mutationError.value?:"Не удалось начать выпечку. Попробуйте ещё раз."
+                            } else {
+                                planError=bakingViewModel.mutationError.value?:"Не удалось начать выпечку. Попробуйте ещё раз."
+                                if(planError==com.polinalinen.madre.model.BakeNumbers.LIMIT_MESSAGE)startRecipeId=null
+                            }
                         } catch(e:Exception) {
                             if(e is kotlinx.coroutines.CancellationException)throw e
                             planError="Не удалось завершить действие. План сохранён."
@@ -632,6 +635,7 @@ fun MadreNavHost(
                                 if(e is kotlinx.coroutines.CancellationException)throw e
                                 if(e.message==com.polinalinen.madre.model.BakeNumbers.LIMIT_MESSAGE) {
                                     planError=com.polinalinen.madre.model.BakeNumbers.LIMIT_MESSAGE
+                                    startRecipeId=null
                                     navigationScope.launch{navSnackbar.showSnackbar(com.polinalinen.madre.model.BakeNumbers.LIMIT_MESSAGE)}
                                 } else planError="Не удалось сохранить план и напоминание. Попробуйте ещё раз."
                             } finally {planSaving=false}

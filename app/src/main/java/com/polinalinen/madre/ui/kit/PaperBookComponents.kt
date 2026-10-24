@@ -132,7 +132,9 @@ import androidx.compose.runtime.remember
             // Decode against the actual cell constraints, not the full bundled photograph.
             Box {
                 AsyncImage(image, null, Modifier.size(72.dp).clip(RoundedCornerShape(14.dp)), contentScale = ContentScale.Crop)
-                PaperBakeNumber(bakeNumber,Modifier.align(Alignment.TopStart),planned=planned,ring=true)
+                // A paper backplate keeps the unfilled planned outline readable over a dark photograph.
+                PaperBakeNumber(bakeNumber,Modifier.align(Alignment.TopStart)
+                    .then(if(planned)Modifier.background(p.card,RoundedCornerShape(50)) else Modifier),planned=planned,ring=true)
             }
             Column(Modifier.weight(1f)) { SmallLabel(overline,color=overlineColor); Text(title, style = PaperType.title, color = p.ink); timer() }
             Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, tint = p.mut)

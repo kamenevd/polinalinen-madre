@@ -64,8 +64,8 @@ class MadreApplication : Application() {
         plannedBakeOperationGate.lock()
         try {
             val rows=activeBakeRepository.initializeLegacyKeys()
-            val pending=com.polinalinen.madre.utils.PrefsBakeSessionLedger(getSharedPreferences("madre_prefs",MODE_PRIVATE)).pendingSessionIds()
-                +bakeNumbers.finales().map{it.sessionId}
+            val pending=com.polinalinen.madre.utils.PrefsBakeSessionLedger(getSharedPreferences("madre_prefs",MODE_PRIVATE)).pendingSessionIds() +
+                bakeNumbers.finales().map{it.sessionId}
             com.polinalinen.madre.navigation.BookPreferences(this).use{bakeNumbers.reconcile(rows,pending.toSet(),it)}
         } finally {plannedBakeOperationGate.unlock()}
     }

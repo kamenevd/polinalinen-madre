@@ -208,8 +208,8 @@ jobs:
     env:
       MADRE_FIXES_7014_ACCEPTANCE: ${{ (inputs.fixes_7014_acceptance || inputs.fixes_7014_instrumented) && 'true' || 'false' }}
       MADRE_FIXES_7015_ACCEPTANCE: ${{ (inputs.fixes_7015_huawei || inputs.bake_numbers_native) && 'true' || 'false' }}
-      MADRE_EXACT_QA_DIR: ${{ runner.temp }}/exact-quality-qa
-      MADRE_EXACT_QA_TEST_DIR: ${{ runner.temp }}/exact-quality-qa-test
+      MADRE_EXACT_QA_DIR: ${{ github.workspace }}/.ci-exact/qa
+      MADRE_EXACT_QA_TEST_DIR: ${{ github.workspace }}/.ci-exact/qa-test
       QA_KEYSTORE_PASSWORD: ${{ secrets.MADRE_QA_KEYSTORE_PASSWORD }}
       QA_KEY_ALIAS: ${{ secrets.MADRE_QA_KEY_ALIAS }}
       QA_KEY_PASSWORD: ${{ secrets.MADRE_QA_KEY_PASSWORD }}

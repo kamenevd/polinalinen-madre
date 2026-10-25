@@ -19,6 +19,8 @@ import kotlinx.coroutines.withContext
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.key
+import androidx.activity.compose.BackHandler
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 
@@ -185,9 +187,17 @@ fun MadreNavHost(
     }
 
     val enterFeedingForm = {
-        sourdoughViewModel.clearSaveState()
-        navController.navigate(MadreDestinations.FEEDING_FORM) {
-            popUpTo(MadreDestinations.HOME) { inclusive = false }
+        // Keep the actual Diary owner below its form; direct/notification entry
+        // still starts at Home. A repeated request must not pop an open form.
+        if (navController.currentDestination?.route != MadreDestinations.FEEDING_FORM) {
+            val parent = if (navController.currentDestination?.route == MadreDestinations.STARTER_DETAIL)
+                MadreDestinations.STARTER_DETAIL else MadreDestinations.HOME
+            sourdoughViewModel.clearSaveState()
+            navController.navigate(MadreDestinations.FEEDING_FORM) {
+                popUpTo(parent) { inclusive = false }
+                launchSingleTop = true
+                restoreState = parent == MadreDestinations.STARTER_DETAIL
+            }
         }
     }
 
@@ -314,8 +324,34 @@ fun MadreNavHost(
     // Реальное sourdough-состояние (Cycle 3): конфиг и история кормлений из Room,
     // через SourdoughViewModel — реактивно, без ручного refetch после кормления.
     val sourdoughConfig by sourdoughViewModel.config.collectAsState()
-    val feedingHistory by sourdoughViewModel.history.collectAsState()
+    val observedFeedingHistory by sourdoughViewModel.history.collectAsState()
+    // The config flow can advance before Room replaces the previous history.
+    val feedingHistory = observedFeedingHistory.filter { it.sourdoughConfigId == sourdoughConfig?.id }
     val saveState by sourdoughViewModel.saveState.collectAsState()
+    var submittedFeedingForm by rememberSaveable { mutableStateOf<String?>(null) }
+    // Navigation retains the entire existing saveable form entry, including exact
+    // buffers and photo state. Its one saved entry belongs only to this Diary visit
+    // and actual book/config; there is no parallel draft model or persisted data.
+    val feedingBookOwner = sourdoughConfig?.let { "${it.userId}:${it.id}" }
+    val feedingScopeEntry = currentEntry
+    val diaryOwner = when (feedingScopeEntry?.destination?.route) {
+        MadreDestinations.STARTER_DETAIL -> feedingScopeEntry
+        MadreDestinations.FEEDING_FORM -> navController.previousBackStackEntry
+            ?.takeIf { it.destination.route == MadreDestinations.STARTER_DETAIL }
+        else -> null
+    }
+    var draftDiaryId by rememberSaveable { mutableStateOf<String?>(null) }
+    var draftBookOwner by rememberSaveable { mutableStateOf(feedingBookOwner) }
+    LaunchedEffect(feedingBookOwner, diaryOwner?.id, feedingScopeEntry) {
+        // Capture one composition snapshot: the first restored entry can arrive
+        // before this effect runs. Unknown bootstrap/entry is not a Diary exit.
+        if (feedingScopeEntry == null || feedingBookOwner == null) return@LaunchedEffect
+        if (draftDiaryId != diaryOwner?.id || draftBookOwner != feedingBookOwner) {
+            navController.clearBackStack(MadreDestinations.FEEDING_FORM)
+            draftDiaryId = diaryOwner?.id
+            draftBookOwner = feedingBookOwner
+        }
+    }
     // Cycle 14: имя закваски одно на всю книгу и живёт в Room. Отсюда оно
     // расходится в дневник, на первую полосу, в подписи фотокарточек кормлений
     // и (через SourdoughViewModel.rescheduleReminder) в напоминание.
@@ -515,26 +551,53 @@ fun MadreNavHost(
                     onBack = { navController.popBackStack() },
                 )
             }
-            composable(MadreDestinations.FEEDING_FORM) {
-                FeedingFormScreen(
-                    onSave = { starterGrams, flourGrams, waterGrams, location, note, photoPath ->
-                        sourdoughViewModel.feed(starterGrams, flourGrams, waterGrams, location, note, photoPath)
-                    },
-                    onBack = { navController.popBackStack() },
-                    saveState = saveState,
-                    // Гидратация, от которой считается это кормление: самая
-                    // свежая посчитанная. null — их ещё нет, и форма вслух
-                    // назовёт стартовую 50% из буклета.
-                    priorHydrationPercent = latestFinalHydration,
-                    lastFeeding = latestHistoryFeeding,
-                )
-                LaunchedEffect(saveState) {
-                    when (saveState) {
-                        is FeedingSaveState.Success -> {
-                            navController.popBackStack()
-                            sourdoughViewModel.consumeSaveState()
+            composable(MadreDestinations.FEEDING_FORM) { entry ->
+                val formDiaryId = remember(entry) {
+                    navController.previousBackStackEntry
+                        ?.takeIf { it.destination.route == MadreDestinations.STARTER_DETAIL }?.id
+                }
+                val closeForm = {
+                    navController.popBackStack(MadreDestinations.FEEDING_FORM, inclusive = true,
+                        saveState = formDiaryId != null)
+                    Unit
+                }
+                BackHandler(enabled = saveState !is FeedingSaveState.Saving, onBack = closeForm)
+                // An active editor also resets immediately if its real owner changes.
+                key(feedingBookOwner) {
+                    // Survives saved-entry restore, but never an owner round trip.
+                    val generation = rememberSaveable { java.util.UUID.randomUUID().toString() }
+                    val formSubmissionKey = "${entry.id}:$generation"
+                    val ownsResult = submittedFeedingForm == formSubmissionKey
+                    if (sourdoughConfig == null) PaperProgress() else FeedingFormScreen(
+                        onSave = { starterGrams, flourGrams, waterGrams, location, note, photoPath ->
+                            if (sourdoughViewModel.saveState.value !is FeedingSaveState.Saving) {
+                                submittedFeedingForm = formSubmissionKey
+                                sourdoughViewModel.feed(starterGrams, flourGrams, waterGrams, location, note, photoPath)
+                            }
+                        },
+                        onBack = closeForm,
+                        // A previous form's write is still busy, never a second lane.
+                        saveState = if (saveState is FeedingSaveState.Saving || ownsResult) saveState else FeedingSaveState.Idle,
+                        // null means no computed history: the form names the initial hydration.
+                        priorHydrationPercent = latestFinalHydration,
+                        lastFeeding = latestHistoryFeeding,
+                    )
+                    LaunchedEffect(saveState, formSubmissionKey) {
+                        when (saveState) {
+                            is FeedingSaveState.Success -> {
+                                if (submittedFeedingForm == formSubmissionKey) {
+                                    navController.clearBackStack(MadreDestinations.FEEDING_FORM)
+                                    navController.popBackStack()
+                                }
+                                submittedFeedingForm = null
+                                sourdoughViewModel.consumeSaveState()
+                            }
+                            is FeedingSaveState.Error -> if (submittedFeedingForm != formSubmissionKey) {
+                                submittedFeedingForm = null
+                                sourdoughViewModel.consumeSaveState()
+                            }
+                            else -> {}
                         }
-                        else -> {}
                     }
                 }
             }

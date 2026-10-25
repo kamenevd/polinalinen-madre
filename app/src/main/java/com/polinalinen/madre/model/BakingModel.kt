@@ -198,6 +198,9 @@ data class BakingSession(
     val trustedPortions: Int?
         get() = scaleFactor?.takeIf { it.isFinite() && it in 1.0..5.0 && it == it.toInt().toDouble() }?.toInt()
 
+    val canStepBack: Boolean
+        get() = currentStepIndex > 0 && restoredStepValid && trustedPortions != null && !isCompleted
+
     companion object {
         /** Завести сессию «сейчас» — единственный путь, которым в неё попадают часы. */
         fun start(id: Long, recipe: Recipe, scaleFactor: Double = 1.0): BakingSession =

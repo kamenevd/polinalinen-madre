@@ -39,9 +39,12 @@ import kotlin.math.roundToInt
 fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(s>=3600) "%d:%02d:%02d".format(s/3600,s/60%60,s%60) else "%02d:%02d".format(s/60,s%60) }
 @Composable fun BakingPaper(session: BakingSession, remaining:Long, onPause:()->Unit, onNext:()->Unit, onDetails:()->Unit, onBack:()->Unit, onOpenAlice:(()->Unit)?=null, onConfirmPortions:(Int)->Unit={},
     onAdjustMinutes:(Int)->Unit={},sessions:List<BakingSession> = emptyList(),onSwitchSession:(Long)->Unit={},
-    plans:List<com.polinalinen.madre.navigation.PlannedBake> = emptyList(),onOpenPlan:(com.polinalinen.madre.navigation.PlannedBake)->Unit={}) {
+    plans:List<com.polinalinen.madre.navigation.PlannedBake> = emptyList(),onOpenPlan:(com.polinalinen.madre.navigation.PlannedBake)->Unit={},
+    onPreviousStep:(()->Unit)?=null) {
     var full by rememberSaveable { mutableStateOf(false) }
     var stationTimer by rememberSaveable(session.id) { mutableStateOf(false) }
+    // A confirmation cannot survive a different bake or a committed timer/step mutation.
+    var confirmPrevious by remember(session.id,session.revision,session.currentStepIndex) { mutableStateOf(false) }
     if(full) { FullTimer(session,remaining,sessions=sessions,onSwitchSession=onSwitchSession,plans=plans,onOpenPlan=onOpenPlan){full=false};return }
     val actionBarHeight=LocalBakeActionBarHeight.current
     val density=LocalDensity.current
@@ -92,14 +95,28 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
       }
       Column(Modifier.fillMaxWidth().onSizeChanged{actionBarHeight?.value=with(density){(it.height+bottomInset).toDp()}}
           .padding(horizontal=22.dp,vertical=10.dp).testTag("bake-action-bar")) {
-        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.fillMaxWidth().testTag("bake-main-actions"),horizontalArrangement=Arrangement.spacedBy(10.dp)) {
             PaperButton(if(session.isPaused)"Продолжить" else "Пауза",onPause,Modifier.weight(1f),variant=PaperButtonVariant.SECONDARY)
             PaperButton(if(session.isLastStep)"Испечено" else "Дальше →",onNext,Modifier.weight(1f),true, enabled = !session.isLastStep || session.trustedPortions != null)
         }
-        if (onOpenAlice != null && com.polinalinen.madre.config.FeatureFlags.ALICE) PaperAliceButton(onOpenAlice, Modifier.fillMaxWidth(),label="Алиса · «${com.polinalinen.madre.model.BakeNumbers.ordinal(session.bakeNumber)}»")
-        if(com.polinalinen.madre.config.FeatureFlags.YANDEX_ID)PaperTextAction("Таймер на Станции",{stationTimer=true})
+        PaperButton("Вернуться на прошлый шаг",{confirmPrevious=true},
+            Modifier.fillMaxWidth().padding(top=8.dp).testTag("bake-previous-step"),
+            enabled=session.canStepBack && onPreviousStep!=null,variant=PaperButtonVariant.SECONDARY)
+        Row(Modifier.fillMaxWidth().testTag("bake-voice-actions"),verticalAlignment=Alignment.CenterVertically) {
+            if (onOpenAlice != null && com.polinalinen.madre.config.FeatureFlags.ALICE)
+                PaperTextButton(onOpenAlice,Modifier.weight(1f),label="Открыть Алису") {
+                    Icon(Icons.Outlined.Mic,null,Modifier.size(20.dp))
+                    Spacer(Modifier.width(6.dp));Text("Алиса",style=PaperType.ui)
+                    Text(" · «${com.polinalinen.madre.model.BakeNumbers.ordinal(session.bakeNumber)}»",style=PaperType.ui)
+                }
+            if(com.polinalinen.madre.config.FeatureFlags.YANDEX_ID)
+                PaperIconButton({stationTimer=true},label="Таймер на Станции") { Icon(Icons.Outlined.Timer,null) }
+        }
       }
     }
+    if(confirmPrevious && session.canStepBack && onPreviousStep!=null) PaperConfirmDialog(
+        "Вернуться на прошлый шаг?","Таймер прошлого шага начнётся заново.","Вернуться","Остаться",
+        onConfirm={confirmPrevious=false;onPreviousStep()},onDismiss={confirmPrevious=false})
     if(stationTimer)com.polinalinen.madre.account.yandex.StationTimerSheet(remaining,bakeNumber=session.bakeNumber){stationTimer=false}
 }
 @Composable fun FullTimer(session:BakingSession,remaining:Long,sessions:List<BakingSession> = emptyList(),onSwitchSession:(Long)->Unit={},

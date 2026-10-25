@@ -121,7 +121,8 @@ import com.polinalinen.madre.ui.components.bookAction
         if(session==null)Column(Modifier.padding(22.dp)){BookText("Выпечка закрыта",32);PaperButton("К книге",onBack)}
         else BakingPaper(session,remaining,{viewModel.togglePause(sessionId)},{viewModel.advanceStepWithUndo(sessionId, onComplete)},
             {more=true},onBack,onOpenAlice=onOpenAlice,onConfirmPortions={viewModel.confirmPortions(sessionId,it)},
-            onAdjustMinutes={viewModel.adjustTime(sessionId,it)},sessions=sessions.filterNot{it.isCompleted},onSwitchSession=onSwitchSession,plans=plans,onOpenPlan=onOpenPlan)
+            onAdjustMinutes={viewModel.adjustTime(sessionId,it)},sessions=sessions.filterNot{it.isCompleted},onSwitchSession=onSwitchSession,plans=plans,onOpenPlan=onOpenPlan,
+            onPreviousStep={viewModel.stepBack(sessionId)})
     }
     if(more && session!=null)BookBakeMoreSheet(session,keepScreenOn,onKeepScreenOnChange,
         {onOpenChapter(session)},{onAbandon(sessionId)},{more=false})

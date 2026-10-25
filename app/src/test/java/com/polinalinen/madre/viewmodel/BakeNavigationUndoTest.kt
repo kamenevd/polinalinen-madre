@@ -89,6 +89,90 @@ class BakeNavigationUndoTest {
             com.polinalinen.madre.notifications.BootRestorePlanner.uniqueWorkName(id)).get()
         assertTrue(work.any{it.state==androidx.work.WorkInfo.State.ENQUEUED})
     }
+    @Test fun explicitPreviousStepUsesDurableRetreatAndInvalidatesAdvanceUndo()=runBlocking {
+        val id=vm.startBaking(twoSteps(),2.0)!!
+        val first=vm.session(id)!!
+        val firstRow=app.activeBakeRepository.all().single{it.sessionId==id}
+        vm.stepBack(id).join()
+        assertEquals(first,vm.session(id));assertEquals(firstRow,app.activeBakeRepository.all().single{it.sessionId==id})
+        vm.advanceStepWithUndo(id).join();val token=vm.undo.value!!
+        val before=vm.session(id)!!
+        vm.stepBack(id).join();val after=vm.session(id)!!
+        assertEquals(0,after.currentStepIndex);assertFalse(after.isPaused)
+        assertEquals(before.revision+1,after.revision)
+        assertEquals(after.currentStep.durationMinutes*60L,after.remainingSeconds(BakingClock.elapsed()))
+        assertEquals(before.bakeKey,after.bakeKey);assertEquals(before.bakeNumber,after.bakeNumber)
+        val row=app.activeBakeRepository.all().single{it.sessionId==id}
+        assertEquals(0,row.stepIndex);assertEquals(after.revision,row.revision)
+        vm.undo(token.token).join();assertEquals(after,vm.session(id));assertNull(vm.undo.value)
+        assertTrue(history.recordCalls.isEmpty());assertTrue(sync.calls.isEmpty())
+        val work=androidx.work.WorkManager.getInstance(app).getWorkInfosForUniqueWork(
+            com.polinalinen.madre.notifications.BootRestorePlanner.uniqueWorkName(id)).get()
+        assertTrue(work.any{it.state==androidx.work.WorkInfo.State.ENQUEUED})
+    }
+
+    private val notifications get()=app.getSystemService(android.app.NotificationManager::class.java)
+    private fun notificationKeys()=notifications.activeNotifications.mapNotNull{it.tag}.toSet()
+    private fun notificationRecipe()=twoSteps().copy(timeline=listOf(
+        TimelineStep(StepType.WAIT,"Опара","Синтетический шаг",40),
+        TimelineStep(StepType.WAIT,"Расстойка","Другой синтетический шаг",40,requiresButterPrep=true)))
+    private fun expireCurrentStep(id:Long) {
+        SystemClock.sleep(vm.session(id)!!.remainingSeconds(BakingClock.elapsed())*1000+1000)
+        mainDispatcher.scheduler.advanceTimeBy(1000);mainDispatcher.scheduler.runCurrent()
+        assertEquals(0L,vm.session(id)!!.remainingSeconds(BakingClock.elapsed()))
+    }
+    @Test fun previousStepCancelsExpiredRemindersAndCanNotifyAtItsRestartedDeadline()=runBlocking {
+        org.robolectric.Shadows.shadowOf(app).grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
+        val id=vm.startBaking(notificationRecipe(),2.0)!!
+        val done=com.polinalinen.madre.notifications.BakingNotificationPlanner.stepDoneKey(id,0)
+        val butter=com.polinalinen.madre.notifications.BakingNotificationPlanner.butterPrepKey(id,0)
+        expireCurrentStep(id)
+        assertTrue(notificationKeys().containsAll(setOf(done,butter)))
+        vm.advanceStepWithUndo(id).join()
+        vm.stepBack(id).join()
+        val restarted=vm.session(id)!!
+        assertEquals(0,restarted.currentStepIndex)
+        assertEquals(40*60L,restarted.remainingSeconds(BakingClock.elapsed()))
+        assertFalse(notificationKeys().contains(done));assertFalse(notificationKeys().contains(butter))
+        val row=app.activeBakeRepository.all().single{it.sessionId==id}
+        assertEquals(restarted.revision,row.revision);assertEquals(0,row.stepIndex)
+        val work=androidx.work.WorkManager.getInstance(app).getWorkInfosForUniqueWork(
+            com.polinalinen.madre.notifications.BootRestorePlanner.uniqueWorkName(id)).get()
+        assertTrue(work.any{it.state==androidx.work.WorkInfo.State.ENQUEUED})
+        expireCurrentStep(id)
+        assertTrue(notificationKeys().containsAll(setOf(done,butter)))
+        // Each reminder is rearmed once, not on every subsequent timer tick.
+        notifications.cancel(done,com.polinalinen.madre.notifications.MadreNotifier.ID_KEYED)
+        notifications.cancel(butter,com.polinalinen.madre.notifications.MadreNotifier.ID_KEYED)
+        mainDispatcher.scheduler.advanceTimeBy(1000);mainDispatcher.scheduler.runCurrent()
+        assertFalse(notificationKeys().contains(done));assertFalse(notificationKeys().contains(butter))
+    }
+    @Test fun failedPreviousStepKeepsNotificationsLedgerUndoAndScheduledDeadline()=runBlocking {
+        org.robolectric.Shadows.shadowOf(app).grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
+        val id=vm.startBaking(notificationRecipe(),2.0)!!
+        expireCurrentStep(id)
+        vm.advanceStepWithUndo(id).join();val undo=vm.undo.value!!
+        val before=vm.session(id)!!;val keys=notificationKeys()
+        val done=com.polinalinen.madre.notifications.BakingNotificationPlanner.stepDoneKey(id,0)
+        val butter=com.polinalinen.madre.notifications.BakingNotificationPlanner.butterPrepKey(id,0)
+        assertTrue(keys.containsAll(setOf(done,butter)))
+        val workManager=androidx.work.WorkManager.getInstance(app)
+        val workName=com.polinalinen.madre.notifications.BootRestorePlanner.uniqueWorkName(id)
+        val workBefore=workManager.getWorkInfosForUniqueWork(workName).get().map{it.id to it.state}.toSet()
+        // Real Room compare-and-commit rejection, not a mocked persistence result.
+        val conflicting=app.activeBakeRepository.all().single{it.sessionId==id}.copy(revision=before.revision+1)
+        app.activeBakeRepository.remember(conflicting)
+        vm.stepBack(id).join()
+        assertNotNull(vm.mutationError.value);assertEquals(before,vm.session(id))
+        assertEquals(conflicting,app.activeBakeRepository.all().single{it.sessionId==id})
+        assertEquals(undo,vm.undo.value);assertEquals(keys,notificationKeys())
+        assertEquals(workBefore,workManager.getWorkInfosForUniqueWork(workName).get().map{it.id to it.state}.toSet())
+        val ledger=BakingViewModel::class.java.getDeclaredField("notificationLedger").apply{isAccessible=true}
+            .get(vm) as com.polinalinen.madre.notifications.NotificationLedger
+        assertFalse(ledger.markIfNew(done));assertFalse(ledger.markIfNew(butter))
+        assertTrue(history.recordCalls.isEmpty());assertTrue(sync.calls.isEmpty())
+    }
+
     @Test fun anotherCommittedMutationInvalidatesAnUndoToken()=runBlocking {
         val id=vm.startBaking(twoSteps(),2.0)!!
         vm.advanceStepWithUndo(id).join();val token=vm.undo.value!!

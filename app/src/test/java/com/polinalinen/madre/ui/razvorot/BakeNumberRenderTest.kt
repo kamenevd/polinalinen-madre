@@ -2,6 +2,7 @@ package com.polinalinen.madre.ui.razvorot
 
 import android.graphics.BitmapFactory
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.*
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.takahirom.roborazzi.*
 import com.polinalinen.madre.MadreApplication
@@ -21,6 +22,24 @@ import java.io.File
 @Config(sdk=[35],qualifiers="ru-w412dp-h915dp-mdpi",application=MadreApplication::class)
 class BakeNumberRenderTest {
     @get:Rule val rule=createAndroidComposeRule<RazvorotSceneActivity>()
+    /** Single opt-in CI frame, using the same production screen as the numbered fixture. */
+    @Test fun bakingPreviousStepFooter() {
+        rule.activityRule.scenario.onActivity{it.atmosphere=Atmosphere.DAWN;it.scene="bake-number"}
+        rule.waitForIdle()
+        rule.onNodeWithText("Вернуться на прошлый шаг").assertIsDisplayed().assertIsEnabled()
+        rule.onNodeWithText("Алиса",substring=true).assertIsDisplayed()
+        val main=rule.onNodeWithTag("bake-main-actions").fetchSemanticsNode().boundsInRoot
+        val back=rule.onNodeWithTag("bake-previous-step").fetchSemanticsNode().boundsInRoot
+        val voice=rule.onNodeWithTag("bake-voice-actions").fetchSemanticsNode().boundsInRoot
+        assertTrue(back.top>=main.bottom);assertTrue(voice.top>=back.bottom)
+        val module=if(File("app/src/main/AndroidManifest.xml").isFile)File("app") else File(".")
+        val output=File(module,"build/outputs/roborazzi/bake-back/bake-back-dawn.png")
+        output.parentFile!!.mkdirs()
+        captureScreenRoboImage(filePath=output.absolutePath,roborazziOptions=RoborazziOptions(taskType=RoborazziTaskType.Record))
+        val image=requireNotNull(BitmapFactory.decodeFile(output.absolutePath))
+        assertEquals(412,image.width);assertEquals(915,image.height);image.recycle()
+    }
+
     @Test fun numberedSurfacesUseProductionRenderers() {
         val module=if(File("app/src/main/AndroidManifest.xml").isFile)File("app") else File(".")
         val directory=File(module,"build/outputs/roborazzi/bake-numbers").apply{mkdirs()}

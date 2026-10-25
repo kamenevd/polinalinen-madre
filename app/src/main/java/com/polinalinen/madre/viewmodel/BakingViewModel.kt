@@ -742,8 +742,8 @@ class BakingViewModel @JvmOverloads constructor(
 
     fun stepBack(id: Long) = launchTransition {
         val old = session(id) ?: return@launchTransition
-        if (old.isCompleted || _finishing.value.contains(id)) return@launchTransition
-        persistTransition(old, old.retreat(BakingClock.elapsed(), BakingClock.wallClock()).copy(revision = old.revision + 1))
+        if (!old.canStepBack || _finishing.value.contains(id)) return@launchTransition
+        persistTransition(old, old.retreat(BakingClock.elapsed(), BakingClock.wallClock()).copy(revision = old.revision + 1), resetNotifications = true)
     }
 
     fun togglePause(id: Long) = launchTransition {

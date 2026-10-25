@@ -46,7 +46,7 @@ internal val BakeNumberScenes=setOf("oven-numbers","sheet-start-number","bake-nu
             BookOvenContent(recipes,sessions,listOf(plan),{},{},{},{},{})
             BookStartSheet(recipes.first{it.id=="focaccia"},2,{},{},onPlan={_,_->},bakeNumber=4,onChapter={})
         }
-        "bake-number" -> BakingPaper(current,1100,{},{},{},{},onOpenAlice={},sessions=sessions,plans=listOf(plan))
+        "bake-number" -> BakingPaper(current,1100,{},{},{},{},onOpenAlice={},sessions=sessions,plans=listOf(plan),onPreviousStep={})
         "bake-fulltimer-number" -> FullTimer(current,1100,sessions=sessions,plans=listOf(plan)){}
         "bake-finale-number" -> BakeFinalePage(BakeFinalePageState(ciabatta.name,recipes.indexOf(ciabatta)+1,2,
             RecipeScale.totalMinutes(ciabatta,2),ciabatta.timeline.size,LocalBookClock.current.millis(),recipes.map{it.id==ciabatta.id},24,bakeNumber=2),{},{},photo={PaperNote("Фото пока нет")})

@@ -54,6 +54,7 @@ class SettingsTapCycleUiTest {
             }
         }
 
+        rule.onNodeWithText("Закваска").performClick()
         rule.onNodeWithText("неделя").performScrollTo().performClick().assertIsSelected()
         rule.onNodeWithText("2 дня").performScrollTo().performClick().assertIsSelected()
         rule.onAllNodesWithText("Оставить как есть").assertCountEquals(0)
@@ -69,17 +70,19 @@ class SettingsTapCycleUiTest {
                     onMyNameChange = {},
                     onBack = {},
                     starterName = "Соня",
+                    readingPreferences = remember { ReadingPreferences(androidx.test.core.app.ApplicationProvider.getApplicationContext(),"tap-reduced").apply{setReduced(true)} },
                     calmMode = calm,
                     onCalmModeChange = { calm = it },
                 )
             }
         }
 
-        val control = rule.onNodeWithContentDescription("Спокойный режим")
+        rule.onNodeWithText("Внешний вид").performClick()
+        val control = rule.onNodeWithContentDescription("Меньше движения")
         control.assertIsOn().performScrollTo().performClick()
         rule.waitForIdle()
         control.assertIsOff()
-        rule.onNodeWithText("живое").assertExists()
+        rule.onNodeWithText("Спокойный режим").assertDoesNotExist()
     }
 
     @Test
@@ -98,15 +101,16 @@ class SettingsTapCycleUiTest {
             }
         }
 
-        val deniedNodes = rule.onAllNodesWithText("не разрешены телефоном").fetchSemanticsNodes()
+        rule.onNodeWithText("Уведомления и вибрация").performClick()
+        val deniedNodes = rule.onAllNodesWithText("Уведомления выключены в телефоне").fetchSemanticsNodes()
         if (deniedNodes.isNotEmpty()) {
             val labels = rule.onAllNodes(hasClickAction(), useUnmergedTree = true)
                 .fetchSemanticsNodes()
                 .mapNotNull { it.config.getOrNull(SemanticsActions.OnClick)?.label }
-            assertThat(labels.any { it == "Напоминания" || it.startsWith("Напоминания:") }).isFalse()
-            rule.onNodeWithContentDescription("Напоминания").assertDoesNotExist()
+            assertThat(labels.any { it == "Напоминать о закваске" || it.startsWith("Напоминать о закваске:") }).isFalse()
+            rule.onNodeWithContentDescription("Напоминать о закваске").assertDoesNotExist()
         } else {
-            val control = rule.onNodeWithContentDescription("Напоминания")
+            val control = rule.onNodeWithContentDescription("Напоминать о закваске")
             control.assertIsOn().performScrollTo().performClick().assertIsOff()
         }
     }

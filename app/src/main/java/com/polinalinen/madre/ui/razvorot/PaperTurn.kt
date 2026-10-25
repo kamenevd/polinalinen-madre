@@ -51,12 +51,10 @@ internal fun chapterTurnDirection(x: Float, dx: Float, dy: Float, width: Float):
     val density = LocalDensity.current.density
     val view = LocalView.current
     val calm = LocalCalmMode.current
-    val systemMotion = Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
-    val power = context.getSystemService(Context.POWER_SERVICE) as PowerManager
     var rendererFailed by remember { mutableStateOf(false) }
     var failureReason by remember { mutableStateOf("") }
     var slowSession by remember { mutableStateOf(false) }
-    val curl = preferences.mode == ReadingMode.BOOK && !preferences.reducedMotion && !calm && systemMotion && !power.isPowerSaveMode && view.isHardwareAccelerated && !rendererFailed && !slowSession
+    val curl = preferences.mode == ReadingMode.BOOK && !preferences.reducedMotion && !calm && view.isHardwareAccelerated && !rendererFailed && !slowSession
     var width by remember { mutableFloatStateOf(360f) }
     var height by remember { mutableFloatStateOf(780f) }
     var motion by remember(page) { mutableStateOf<PaperMotion?>(null) }
@@ -83,8 +81,6 @@ internal fun chapterTurnDirection(x: Float, dx: Float, dy: Float, width: Float):
                 preferences.mode!=ReadingMode.BOOK -> "preference-${preferences.mode}"
                 preferences.reducedMotion -> "reduced-motion"
                 calm -> "calm-mode"
-                !systemMotion -> "system-animation-scale-zero"
-                power.isPowerSaveMode -> "power-save"
                 !view.isHardwareAccelerated -> "view-not-hardware-accelerated"
                 rendererFailed -> failureReason
                 slowSession -> "low-fps"

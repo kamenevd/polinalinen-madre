@@ -34,28 +34,24 @@ class SettingsSearchUiTest {
                 "Подпись книги", FamilyBookState.SignedOut, {}, {}, preferences = preferences)
         } }
     }
-    @Test fun actualSearchHidesUnrelatedRowsAndClearRestoresThem() {
-        content(ReadingPreferences(app, "settings-search-ui"))
-        rule.onNodeWithContentDescription("Найти настройку").performTextInput("увед")
-        rule.onNodeWithText("Напоминания").assertExists()
-        rule.onNodeWithText("Звук таймера").assertExists()
-        rule.onNodeWithText("Ход выпечки на экране блокировки").assertExists()
-        rule.onNodeWithText("В журнале").assertDoesNotExist()
-        rule.onNodeWithText("ЧТЕНИЕ").assertDoesNotExist()
-        rule.onNodeWithContentDescription("Очистить поиск").performClick()
-        rule.onNodeWithText("В журнале").assertExists()
-        rule.onNodeWithText("ЧТЕНИЕ").assertExists()
+    @Test fun sixRowsReplaceSearchAndNoCredentialFieldsAreMounted() {
+        content(ReadingPreferences(app,"settings-search-ui"))
+        rule.onNodeWithContentDescription("Найти настройку").assertDoesNotExist()
+        rule.onAllNodes(hasSetTextAction()).assertCountEquals(0)
+        listOf("Семейная полка","Алиса","Закваска","Внешний вид","Уведомления и вибрация","О приложении").forEach { rule.onNodeWithText(it).assertExists() }
+        rule.onAllNodesWithTag("settings-group").assertCountEquals(3)
     }
-    @Test fun noMatchHasAWorkingRecoveryAction() {
-        content(ReadingPreferences(app, "settings-search-empty-ui"))
-        rule.onNodeWithContentDescription("Найти настройку").performTextInput("зефир")
-        rule.onNodeWithText("ТАКОЙ НАСТРОЙКИ НЕТ").assertExists()
-        rule.onNodeWithText("Очистить поиск").performScrollTo().performClick()
+    @Test fun disclosureAndBackRestoreTheRoot() {
+        content(ReadingPreferences(app,"settings-search-empty-ui"))
+        rule.onNodeWithText("О приложении").performScrollTo().performClick()
         rule.onNodeWithText("В журнале").assertExists()
+        rule.onNodeWithContentDescription("Назад").performClick()
+        rule.onNodeWithText("Закваска").assertExists()
     }
     @Test fun visibleRhythmChoiceSendsItsActualValueNotTheNextHiddenOption() {
         var chosen: Int? = null
         content(ReadingPreferences(app, "settings-search-rhythm-ui")) { chosen = it }
+        rule.onNodeWithText("Закваска").performClick()
         rule.onNodeWithText("неделя").performScrollTo().performClick()
         assertEquals(168, chosen)
     }
@@ -68,11 +64,12 @@ class SettingsSearchUiTest {
             SettingsContent("Полина", {}, {}, {}, "Соня", {}, 3, 7, 24, {}, true, {}, true, {},
                 "Подпись книги", FamilyBookState.SignedOut, {}, {}, preferences = preferences)
         } }
+        rule.onNodeWithText("Внешний вид").performClick()
         rule.onNodeWithText("Ночь").performScrollTo().performClick()
         rule.waitForIdle()
         assertEquals(Atmosphere.NIGHT, current)
         assertEquals(Atmosphere.NIGHT, ReadingPreferences(app, "settings-search-theme-ui").atmosphere)
-        rule.onNodeWithText("Прокрутка").performScrollTo().performClick()
+        rule.onNodeWithText("Прокруткой").performScrollTo().performClick()
         assertEquals(ReadingMode.SCROLL, ReadingPreferences(app, "settings-search-theme-ui").mode)
     }
     @Test fun timerSoundOpensOnlyTheExistingBakingChannelForThisPackage() {
@@ -95,6 +92,7 @@ class SettingsSearchUiTest {
         assertSame(app,settings.getApplication<MadreApplication>())
         assertSame(app.bookDisplaySettings,settings.bookDisplaySettings)
         rule.setContent { RazvorotTheme { SettingsScreen("Полина", {}, {},familySettingsViewModel=settings,familyBookViewModel=books) } }
+        rule.onNodeWithText("Внешний вид").performClick()
         rule.onNodeWithContentDescription("Не гасить экран").performScrollTo().assertIsDisplayed().assertIsOn().performClick()
         try {
             rule.waitUntil(10_000) {
@@ -109,6 +107,11 @@ class SettingsSearchUiTest {
             throw AssertionError("Keep-screen action did not settle: persisted=$persisted published=${app.bookDisplaySettings.value}", failure)
         }
         rule.onNodeWithContentDescription("Не гасить экран").assertIsOff()
+        rule.onNodeWithContentDescription("Назад").performClick()
+        shadowOf(app).grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
+        shadowOf(app.getSystemService(android.app.NotificationManager::class.java)).setNotificationsEnabled(true)
+        assertTrue(com.polinalinen.madre.notifications.MadreNotifier(app).canPost())
+        rule.onNodeWithText("Уведомления и вибрация").performClick()
         rule.onNodeWithContentDescription("Ход выпечки на экране блокировки").performScrollTo().assertIsOff().performClick()
         rule.waitUntil(10_000) {
             rule.onNodeWithContentDescription("Ход выпечки на экране блокировки").fetchSemanticsNode()

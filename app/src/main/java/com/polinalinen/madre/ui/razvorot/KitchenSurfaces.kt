@@ -121,12 +121,13 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
         }
     }
 }
-@Composable fun StarterPaper(name:String,day:Int,phase:GrowthPhase,hours:Float?,hydration:Int?,onFeed:()->Unit,onDiary:()->Unit,onSettings:()->Unit,intervalHours:Int=24) {
+@Composable fun StarterPaper(name:String,day:Int,phase:GrowthPhase,hours:Float?,hydration:Int?,onFeed:()->Unit,onDiary:()->Unit,onSettings:()->Unit,intervalHours:Int=24,onStarterSettings:()->Unit={}) {
     val p=LocalPaper.current
     // Returning to this overview starts at its jar, not the old below-fold CTA.
     val scroll=remember { ScrollState(0) }
     Column(Modifier.fillMaxSize().paperContentInsets().testTag("starter-phase-${phase.name}").verticalScroll(scroll).padding(horizontal=22.dp)) {
-        BookHeader("ЗАКВАСКА · ДЕНЬ $day",onAa=onSettings)
+        BookHeader("ЗАКВАСКА · ДЕНЬ $day",onSettings=onSettings)
+        PaperTextAction("Настроить закваску",onStarterSettings)
         BookText(name,42);BookText("живая",42,italic=true,color=p.acc)
         SmallLabel("ЛЕВИТО МАДРЕ · ГИДРАТАЦИЯ ${hydration?.let{"$it%"}?:"—"}",Modifier.padding(top=8.dp))
         val profile=com.polinalinen.madre.sourdough.profileForInterval(intervalHours)

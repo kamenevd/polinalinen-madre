@@ -302,13 +302,9 @@ fun MadreNavHost(
     // «Спокойный режим» (Cycle 11) — там же, в madre_prefs. Значение раздаётся
     // вниз через LocalCalmMode: его читают и экраны, и модификаторы декораций
     // глубоко в чужих поддеревьях (Modifier.breathingPage).
-    val calmModeSetting = remember { CalmModeSetting(SharedPreferencesFlagStore(prefs)) }
-    var calmMode by remember { mutableStateOf(calmModeSetting.isCalm()) }
-    val setCalmMode: (Boolean) -> Unit = { calm ->
-        calmModeSetting.setCalm(calm)
-        calmMode = calm
-    }
-    readingPreferences.onReducedMotionChanged=setCalmMode
+    // One persisted choice for page motion and decorative animation after explicit-key migration.
+    val calmMode = readingPreferences.reducedMotion
+    val setCalmMode: (Boolean) -> Unit = readingPreferences::setReduced
 
     // Реальная история выпечек — питает Формуляр книги / хитмэп на Полке.
     val bakeRecords by app.bakeHistoryRepository.observeAll().collectAsState(initial = emptyList())
@@ -324,6 +320,7 @@ fun MadreNavHost(
     // расходится в дневник, на первую полосу, в подписи фотокарточек кормлений
     // и (через SourdoughViewModel.rescheduleReminder) в напоминание.
     val starterName = StarterName.sanitize(sourdoughConfig?.name.orEmpty())
+    var starterSettingsOpen by rememberSaveable { mutableStateOf(false) }
     val galleryPhotos = remember(feedingHistory, bakeRecords, starterName) {
         val all = mutableListOf<GalleryPhoto>()
         feedingHistory.forEach { feeding ->
@@ -370,7 +367,7 @@ fun MadreNavHost(
         ((System.currentTimeMillis() - oldest.timestampMillis) / 86_400_000L).toInt() + 1
     } ?: 1
 
-    CompositionLocalProvider(LocalCalmMode provides calmMode, LocalBookDisplaySettings provides displaySettings,
+    CompositionLocalProvider(LocalCalmMode provides calmMode, LocalSettingsName provides myName, LocalBookDisplaySettings provides displaySettings,
         LocalBakeActionBarHeight provides bakeActionBarHeight) {
         RazvorotTheme(readingPreferences) {
         Box(Modifier.fillMaxSize()) {
@@ -419,8 +416,10 @@ fun MadreNavHost(
                     onFeed = enterFeedingForm,
                     onDiary = { navController.navigate(MadreDestinations.STARTER_DETAIL) },
                     onSettings = { navController.navigate(MadreDestinations.SETTINGS) },
+                    onStarterSettings = { starterSettingsOpen=true },
                     shelf = { ShelfScreen(myName, bakeRecords, { navController.navigate(MadreDestinations.SETTINGS_SHELF) },
-                        { owner -> navController.navigate(MadreDestinations.bookStats(owner)) }, familyBookState.account, shelfViewModel, onOpenAlice = { navController.navigate(MadreDestinations.ALICE) }) },
+                        { owner -> navController.navigate(MadreDestinations.bookStats(owner)) }, familyBookState.account, shelfViewModel, onOpenAlice = { navController.navigate(MadreDestinations.ALICE) },
+                        onOpenSettings={navController.navigate(MadreDestinations.SETTINGS)}) },
                 )
             }
             composable(MadreDestinations.CHAPTER,arguments=listOf(
@@ -560,6 +559,7 @@ fun MadreNavHost(
                     onOpenAlice = { navController.navigate(MadreDestinations.ALICE) },
                     familyBookViewModel = familyBookViewModel,
                     readingPreferences = readingPreferences,
+                    onOpenStarterSettings = { starterSettingsOpen=true },
                 )
             }
             composable(MadreDestinations.ALICE) {
@@ -585,6 +585,7 @@ fun MadreNavHost(
                     shelfViewModel = shelfViewModel,
                     onOpenAlice = { navController.navigate(MadreDestinations.ALICE) },
                     onOpenFamilySettings = { navController.navigate(MadreDestinations.SETTINGS_SHELF) },
+                    onOpenSettings = { navController.navigate(MadreDestinations.SETTINGS) },
                 ) }
 
                 SpineBar(3) { section -> if(section!=3) {navController.previousBackStackEntry?.savedStateHandle?.set("home_section",section);navController.popBackStack()} }
@@ -678,6 +679,9 @@ fun MadreNavHost(
                         finally{planSaving=false}
                     }})
             } }
+            if (starterSettingsOpen) com.polinalinen.madre.ui.screens.StarterSettingsSheet(starterName,sourdoughViewModel::setStarterName,
+                sourdoughConfig?.intervalHours?:24,sourdoughViewModel::setIntervalHours,
+                sourdoughConfig?.remindersEnabled?:true,sourdoughViewModel::setRemindersEnabled) { starterSettingsOpen=false }
             if (aliceSheet) AliceSheet(bakingViewModel, app.voiceCoordinator,
                 currentSessionId = currentEntry?.arguments?.getString("sessionId")?.toLongOrNull(),
                 onDismiss = { aliceSheet = false }, onOpenSettings = {

@@ -17,6 +17,7 @@ fun ShelfScreen(
     shelfViewModel: ShelfViewModel = viewModel(),
     onOpenAlice: () -> Unit = {},
     onOpenFamilySettings: () -> Unit = onBack,
+    onOpenSettings: () -> Unit = onBack,
 ) {
     val familyModel = LocalFamilyLinkModel.current
     if (com.polinalinen.madre.config.FeatureFlags.FAMILY_ROSTER_V2 && familyModel != null) {
@@ -52,5 +53,5 @@ fun ShelfScreen(
         shelfViewModel.refresh(account, myName, localRecords)
     }
 
-    ShelfPaper(members, ledger, familyName, localRecords, unreachable, onBack, onOpenBook, onOpenAlice)
+    ShelfPaper(members, ledger, familyName, localRecords, unreachable, onOpenSettings, onOpenBook, onOpenAlice)
 }

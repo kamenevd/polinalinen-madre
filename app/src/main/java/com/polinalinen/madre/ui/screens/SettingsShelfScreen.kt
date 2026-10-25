@@ -159,42 +159,7 @@ fun SettingsShelfScreen(
                         members = members,
                         familyOwnerId = account.familyOwnerId,
                     )
-                    val code = account.inviteCode
-                    if (code != null) {
-                        val printedCode = InviteCode.format(code)
-                        Text(
-                            printedCode,
-                            color = colors.acc,style = PaperType.caption,
-                            fontSize = 17.sp,
-                            modifier = Modifier.padding(horizontal = 22.dp, vertical = 10.dp),
-                        )
-                        Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp)) {
-                            TextAction("Скопировать", onClick = {
-                                val clipboard = context.getSystemService(ClipboardManager::class.java)
-                                clipboard?.setPrimaryClip(ClipData.newPlainText("Код полки", printedCode))
-                                familyBookViewModel.clearInviteCode()
-                            }, modifier = Modifier.weight(1f))
-                            TextAction("Отправить", onClick = {
-                                val share = Intent(Intent.ACTION_SEND)
-                                    .setType("text/plain")
-                                    .putExtra(
-                                        Intent.EXTRA_TEXT,
-                                        "Вступите на полку «${account.familyName ?: "Мадре"}»: $printedCode",
-                                    )
-                                context.startActivity(Intent.createChooser(share, "Отправить приглашение"))
-                                familyBookViewModel.clearInviteCode()
-                            }, modifier = Modifier.weight(1f))
-                        }
-                    }
-                    if (account.isFamilyOwner) {
-                        Spacer(Modifier.height(8.dp))
-                        PaperButton(
-                            label = "Обновить код приглашения",
-                            variant = PaperButtonVariant.SECONDARY,
-                            onClick = familyBookViewModel::rotateInviteCode,
-                            modifier = Modifier.padding(horizontal = 22.dp),
-                        )
-                    }
+                    // Legacy server credentials remain readable, but invitation-code UI is retired.
                     HairRule(Modifier.padding(horizontal = 22.dp, vertical = 12.dp))
                     TextAction(
                         "Уйти с полки · можно вернуться",

@@ -69,6 +69,7 @@ class SettingsIaUiTest {
                     feedingCount = feedingCount,
                     intervalHours = intervalHours,
                     calmMode = calmMode,
+                    readingPreferences = androidx.compose.runtime.remember { ReadingPreferences(androidx.test.core.app.ApplicationProvider.getApplicationContext(),"ia-motion").apply{setReduced(calmMode)} },
                 )
             }
         }
@@ -82,17 +83,17 @@ class SettingsIaUiTest {
     @Test
     fun `the colophon has six named searchable sections`() {
         showSettings()
-        assertThat(Sections.ALL).hasSize(6)
-        Sections.ALL.forEach { title ->
-            rule.onNodeWithText(title.uppercase()).assertExists("нет раздела «$title»")
+        listOf("Семейная полка","Алиса","Закваска","Внешний вид","Уведомления и вибрация","О приложении").forEach { title ->
+            rule.onNodeWithText(title).assertExists("нет строки «$title»")
         }
+        rule.onAllNodes(hasSetTextAction()).assertCountEquals(0)
     }
 
     @Test
     fun `the page introduces itself as the settings, and says what they are`() {
         showSettings()
         rule.onNodeWithText("Настройки").assertExists()
-        rule.onNodeWithText("выходные данные книги").assertExists()
+        rule.onNodeWithText("выходные данные книги").assertDoesNotExist()
     }
 
     /**
@@ -109,6 +110,7 @@ class SettingsIaUiTest {
     @Test
     fun `the feeding rhythm is exposed as one accessible control`() {
         showSettings(intervalHours = 24)
+        rule.onNodeWithText("Закваска").performClick()
         val nodes = rule.onAllNodes(hasClickAction(), useUnmergedTree = true).fetchSemanticsNodes()
             .filter { it.config.getOrNull(SemanticsActions.OnClick)?.label?.startsWith("Ритм кормления:") == true }
         assertThat(nodes).hasSize(5)
@@ -130,22 +132,24 @@ class SettingsIaUiTest {
                     onMyNameChange = {},
                     onBack = {},
                     starterName = "Соня",
+                    readingPreferences = androidx.compose.runtime.remember { ReadingPreferences(androidx.test.core.app.ApplicationProvider.getApplicationContext(),"ia-toggle").apply{setReduced(true)} },
                     calmMode = calmMode.value,
                     onCalmModeChange = { calmMode.value = it },
                 )
             }
         }
-        rule.onNodeWithText("спокойное").assertExists()
-        val control = rule.onNodeWithContentDescription("Спокойный режим")
+        rule.onNodeWithText("Внешний вид").performClick()
+        val control = rule.onNodeWithContentDescription("Меньше движения")
         control.assertIsOn().performScrollTo().performClick()
         rule.waitForIdle()
         control.assertIsOff()
-        rule.onNodeWithText("живое").assertExists()
+        rule.onNodeWithText("Спокойный режим").assertDoesNotExist()
     }
 
     @Test
     fun `the journal counts bakes and feedings in one line`() {
         showSettings(bakeCount = 3, feedingCount = 7)
+        rule.onNodeWithText("О приложении").performScrollTo().performClick()
         rule.onNodeWithText("В журнале").assertExists()
         rule.onNodeWithText("3 выпечек · 7 кормлений").assertExists()
     }
@@ -173,14 +177,9 @@ class SettingsIaUiTest {
             }
         }
         rule.onAllNodes(hasSetTextAction()).assertCountEquals(0)
-        rule.onNodeWithText("Подключить полку…").assertExists()
-
-        rule.onNodeWithText("Подключить полку…").performClick()
-        rule.waitForIdle()
-
-        // Почта, пароль и подпись — три поля, и ни одного до просьбы.
-        rule.onAllNodes(hasSetTextAction()).assertCountEquals(3)
-        rule.onNodeWithText("ПОЧТА").assertExists()
+        rule.onNodeWithText("Вход недоступен в этой сборке.").assertExists()
+        rule.onNodeWithText("ПОЧТА").assertDoesNotExist()
+        rule.onNodeWithText("Код приглашения").assertDoesNotExist()
     }
 
     // ————— hard rule №9: язык кнопок на этой странице —————

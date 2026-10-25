@@ -46,10 +46,7 @@ import androidx.compose.ui.Alignment
        Column(Modifier.padding(bottom=8.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             SmallLabel("${LocalAtmosphere.current.label} · КНИГА СЕМЬИ", Modifier.weight(1f).padding(top = 18.dp))
-            PaperTextButton(onAa,label="Как читать") { BookText("Aa",21) }
-            PaperIconButton(onSettings, label = profile?.let{"Аккаунт Яндекса, ${it.displayName.ifBlank{it.login}}"} ?: "Настройки") {
-                if(profile!=null)YandexAccountPortrait(profile,30.dp) else Icon(Icons.Outlined.Settings, "Настройки")
-            }
+            SettingsMonogram(onSettings,nameOverride=profile?.displayName?.takeIf{LocalSettingsName.current.isBlank()})
         }
 
         BookText("Оглавление", 44, weight=androidx.compose.ui.text.font.FontWeight.Normal)
@@ -114,7 +111,7 @@ import androidx.compose.ui.Alignment
       item(key="oven-header",contentType="header") { Column(verticalArrangement=Arrangement.spacedBy(14.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             SmallLabel("ПЕЧЬ · ${java.time.Instant.ofEpochMilli(now).atZone(clock.zone).format(java.time.format.DateTimeFormatter.ofPattern("EEEE, d MMMM",Locale.forLanguageTag("ru")))}",Modifier.weight(1f).padding(top=16.dp))
-            PaperTextButton(onAa,label="Как читать") { BookText("Aa",21) }
+            SettingsMonogram(onSettings)
         }
         if(count>0)PaperCountHeading("Уже печём",count) else Text("Уже печём",style=PaperType.display,color=p.ink)
       } }

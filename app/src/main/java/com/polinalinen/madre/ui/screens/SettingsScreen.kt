@@ -112,6 +112,7 @@ fun SettingsScreen(
     familyBookViewModel: FamilyBookViewModel = viewModel(),
     onOpenAlice: () -> Unit = {},
     readingPreferences: ReadingPreferences = rememberReadingPreferences(),
+    onOpenStarterSettings:(()->Unit)?=null,
 ) {
     val colors = LocalPaper.current
     val familyName by familySettingsViewModel.familyName.collectAsState()
@@ -129,7 +130,8 @@ fun SettingsScreen(
         familyName, familyBookState, familySettingsViewModel::setFamilyName, familyBookViewModel::signOut, onOpenAlice,
         readingPreferences, displaySettings = displaySettings,
         onKeepScreenOnChange = { familySettingsViewModel.setKeepScreenOn(it) },
-        onLockScreenProgressChange = { familySettingsViewModel.setLockScreenProgress(it) }, displayError = displayError)
+        onLockScreenProgressChange = { familySettingsViewModel.setLockScreenProgress(it) }, displayError = displayError,
+        onOpenStarterSettings=onOpenStarterSettings)
 }
 
 /** Same production layout; fixtures can supply state without touching accounts/network. */
@@ -145,89 +147,14 @@ fun SettingsScreen(
     displaySettings: com.polinalinen.madre.model.BookDisplaySettings = LocalBookDisplaySettings.current,
     onKeepScreenOnChange: (Boolean) -> Unit = {}, onLockScreenProgressChange: (Boolean) -> Unit = {},
     displayError: String? = null,accountContent:(@Composable ()->Unit)?=null,
+    initialPage:String="root",onOpenStarterSettings:(()->Unit)?=null,
+    accountOverride:com.polinalinen.madre.account.yandex.YandexAccountState?=null,aliceStatusOverride:String?=null,
 ) {
-    val inFamily = familyBookState.account?.hasFamily == true
-    var query by rememberSaveable { mutableStateOf(initialSearch) }
-    var showReadingSettings by remember { mutableStateOf(false) }
-    val hasAccount = accountContent!=null || com.polinalinen.madre.account.yandex.LocalYandexAccountUi.current != null
-    val visible = remember(query, hasAccount, inFamily) { SettingsEntry.entries.filter {
-        (it != SettingsEntry.ACCOUNT || hasAccount) && (it != SettingsEntry.BOOKPLATE || !inFamily) && settingsMatches(it, query)
-    }.toSet() }
-    fun shown(vararg entries: SettingsEntry) = entries.any { it in visible }
-    PaperScaffold(contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) {
-        item {
-        Column(Modifier.padding(bottom = 16.dp)) {
-            PaperHeader("Настройки", onBack = onBack, overline = "Книга", modifier = Modifier.padding(horizontal = 22.dp))
-            Text("выходные данные книги", color = LocalPaper.current.ink2, style = PaperType.note,
-                modifier = Modifier.padding(horizontal = 22.dp, vertical = 4.dp))
-            PaperSearchField(query, { query = it }, Modifier.padding(horizontal = 22.dp, vertical = 8.dp))
-            if (displayError != null) PaperNote(displayError)
-            if (shown(SettingsEntry.ACCOUNT)) {
-                if(accountContent!=null)accountContent() else com.polinalinen.madre.account.yandex.YandexSettingsSection(myName,onMyNameChange,onOpenAlice)
-            }
-            if (visible.isEmpty()) PaperEmpty("Такой настройки нет", "Попробуй другое слово или очисти поиск.",
-                action = { PaperButton("Очистить поиск", { query = "" }, Modifier.padding(horizontal = 22.dp)) })
-            if (shown(SettingsEntry.NAME, SettingsEntry.BOOKPLATE)) SettingsSection(Sections.ME, first = true) {
-                if (shown(SettingsEntry.NAME)) SettingsField("Ваше имя", "появится на титульной странице и на Полке") {
-                    NameField(value = myName, onChange = onMyNameChange, placeholder = "впишите, как вас называть")
-                }
-                // Preserve the existing local ex libris; never replace the family's server-owned name.
-                if (shown(SettingsEntry.BOOKPLATE)) {
-                    Bookplate(familyName = familyName, onSetName = onSetFamilyName,
-                        modifier = Modifier.padding(vertical = 8.dp), label = "Как подписана книга")
-                }
-            }
-            if (shown(SettingsEntry.STARTER_NAME, SettingsEntry.RHYTHM, SettingsEntry.REMINDERS)) SettingsSection(Sections.STARTER) {
-                if (shown(SettingsEntry.STARTER_NAME)) SettingsField("Имя закваски", "в дневнике и напоминаниях") {
-                    StarterNameField(persisted = starterName, onChange = onStarterNameChange)
-                }
-                if (shown(SettingsEntry.RHYTHM)) FeedingRhythmRow(intervalHours, onIntervalHoursChange)
-                if (shown(SettingsEntry.REMINDERS)) RemindersRow(remindersEnabled, onRemindersEnabledChange)
-            }
-            if (shown(SettingsEntry.SHELF)) SettingsSection(Sections.FAMILY) {
-                val account = familyBookState.account
-                val shelfLabel = account?.takeIf { it.hasFamily }?.familyName?.ifBlank { null }
-                    ?: if (account != null) "Завести полку" else "Подключить полку"
-                SettingsRow(shelfLabel, "›", onOpenShelfSettings)
-                if (account != null) TextAction("Выйти · книга на телефоне останется", onClick = onSignOut)
-            }
-            if (shown(SettingsEntry.THEME, SettingsEntry.READING_MODE, SettingsEntry.TEXT_SIZE, SettingsEntry.KEEP_SCREEN, SettingsEntry.CALM,SettingsEntry.HAPTICS)) SettingsSection(Sections.LOOK) {
-                if (shown(SettingsEntry.THEME)) {
-                    SettingsCaption("Тема · ${preferences.atmosphere.label}")
-                    PaperAtmospherePicker(preferences)
-                }
-                if (shown(SettingsEntry.READING_MODE)) {
-                    SettingsCaption("Как читать рецепт")
-                    PaperSegmented(listOf("Листать страницы", "Прокрутка"), if (preferences.mode == ReadingMode.SCROLL) 1 else 0,
-                        { preferences.chooseMode(if (it == 0) ReadingMode.BOOK else ReadingMode.SCROLL) }, label = "Как читать рецепт")
-                }
-                if (shown(SettingsEntry.TEXT_SIZE)) SettingsRow("Размер текста", "${preferences.textSize.toInt()} · Аа", { showReadingSettings = true })
-                if (shown(SettingsEntry.KEEP_SCREEN)) PaperSettingSwitch("Не гасить экран", displaySettings.keepScreenOn,
-                    onKeepScreenOnChange, note = "Пока открыты рецепт или таймер")
-                if (shown(SettingsEntry.CALM)) {
-                    CalmModeRow(calmMode, onCalmModeChange)
-                    SettingsCaption("В спокойном режиме нет непрерывных декораций. Бумага, рамки и следы на страницах остаются.")
-                }
-                if(shown(SettingsEntry.HAPTICS)) {
-                    PaperHapticSettings(preferences)
-                }
-            }
-            if (shown(SettingsEntry.TIMER_SOUND, SettingsEntry.LOCK_PROGRESS)) SettingsSection(Sections.NOTIFICATIONS) {
-                val context = LocalContext.current
-                if (shown(SettingsEntry.LOCK_PROGRESS)) PaperSettingSwitch("Ход выпечки на экране блокировки",
-                    displaySettings.lockScreenProgress, onLockScreenProgressChange,
-                    note = "Текущий шаг и время без разблокировки. Если выключено — только «Выпечка идёт».")
-                if (shown(SettingsEntry.TIMER_SOUND)) SettingsRow("Звук таймера", "Настройки телефона", { openTimerSoundSettings(context) })
-            }
-            if (shown(SettingsEntry.ALICE, SettingsEntry.JOURNAL, SettingsEntry.VERSION)) SettingsSection(Sections.ABOUT) {
-                if (shown(SettingsEntry.ALICE)) SettingsRow("Алиса на кухне", "›", onOpenAlice)
-                if (shown(SettingsEntry.JOURNAL)) SettingsRow("В журнале", "$bakeCount выпечек · $feedingCount кормлений", null)
-                if (shown(SettingsEntry.VERSION)) SettingsRow("Версия", com.polinalinen.madre.BuildConfig.VERSION_NAME, null)
-            }
-        }
-        }
-    }
-    if (showReadingSettings) com.polinalinen.madre.ui.razvorot.ReadingSettings(preferences) { showReadingSettings = false }
+    LSettingsContent(myName,onMyNameChange,onBack,onOpenShelfSettings,onOpenAlice,
+        starterName,onStarterNameChange,intervalHours,onIntervalHoursChange,remindersEnabled,onRemindersEnabledChange,
+        bakeCount,feedingCount,preferences,familyBookState,displaySettings,onKeepScreenOnChange,onLockScreenProgressChange,
+        displayError,initialPage=initialPage,onStarterSettings=onOpenStarterSettings,
+        accountOverride=accountOverride,aliceStatusOverride=aliceStatusOverride)
 }
 
 /**
@@ -385,116 +312,12 @@ internal fun FamilyBookSection(
     passwordResetNotice: PasswordResetNotice = PasswordResetNotice.Idle,
     onRequestPasswordReset: (String) -> Unit = {},
 ) {
-    if (com.polinalinen.madre.config.FeatureFlags.FAMILY_ROSTER_V2) {
-        val sdk = com.polinalinen.madre.account.yandex.LocalYandexAccountUi.current
-        FamilyEmptyContent(com.polinalinen.madre.integration.v2.FamilyPanelState(migration = state.account != null),
-            { sdk?.signIn?.invoke(false) }, {}, sdkAvailable = sdk != null)
-        return
-    }
-    val colors = LocalPaper.current
-    // rememberSaveable, а не remember: пересоздание Activity не должно стирать
-    // набранные почту, пароль, подпись, название и код.
-    var email by rememberSaveable { mutableStateOf("") }
-    var password by rememberSaveable { mutableStateOf("") }
-    var displayName by rememberSaveable { mutableStateOf("") }
-    var familyName by rememberSaveable { mutableStateOf("") }
-    var inviteCode by rememberSaveable { mutableStateOf("") }
-    val failed = state as? FamilyBookState.Failed
-    val account = state.account
-    val loading = state is FamilyBookState.Loading
-    // Cycle 19: пока семья не подключена, форма входа не разворачивается сама.
-    // Почта, пароль и подпись занимали треть колофона у всех, включая тех, кто
-    // общей книгой не пользуется и не собирается: это одна строка и кнопка.
-    var showForm by rememberSaveable { mutableStateOf(false) }
-    // Неудачная попытка входа — не повод свернуть набранное обратно: сообщение
-    // об ошибке над пустым местом не объяснило бы ничего. Именно раскрыть, а не
-    // «считать раскрытым»: иначе «Не сейчас» под формой перестал бы работать.
-    LaunchedEffect(failed) { if (failed != null) showForm = true }
-
-    Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 8.dp)) {
-        Text(
-            "ваша книга остаётся на этом телефоне и открывается без аккаунта и сети. " +
-                "Полка — способ делиться выпечками с семьёй, а не условие работы.",
-            color = colors.ink2,style = PaperType.body,
-            fontStyle = FontStyle.Italic,
-            fontSize = 11.5.sp,
-            modifier = Modifier.padding(bottom = 10.dp),
-        )
-        if (failed != null) {
-            Text(
-                failed.failure.message,
-                color = colors.rib,style = PaperType.body,
-                fontSize = 13.sp,
-                modifier = Modifier.padding(bottom = 8.dp),
-            )
-        }
-        when {
-            loading -> Text("проверяем полку", color = colors.ink2,style = PaperType.body, fontStyle = FontStyle.Italic)
-            account == null && !showForm -> {
-                PaperButton(
-                    label = "Подключить полку…",
-                    variant = PaperButtonVariant.SECONDARY,
-                    onClick = { showForm = true },
-                )
-            }
-            account == null -> {
-                FamilyBookField("Почта", email) { email = it }
-                FamilyBookField("Пароль", password, masked = true) { password = it }
-                TextAction(
-                    PasswordReset.ACTION_LABEL,
-                    enabled = passwordResetNotice !is PasswordResetNotice.Sending,
-                    onClick = { onRequestPasswordReset(email) },
-                )
-                when (val notice = passwordResetNotice) {
-                    PasswordResetNotice.Sent -> Text(
-                        PasswordReset.SENT_LINE,
-                        color = colors.ink2,style = PaperType.body,
-                        fontStyle = FontStyle.Italic,
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(bottom = 8.dp),
-                    )
-                    is PasswordResetNotice.Failed -> Text(
-                        notice.message,
-                        color = colors.rib,style = PaperType.body,
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(bottom = 8.dp),
-                    )
-                    else -> Unit
-                }
-                FamilyBookField("Как подписать вас", displayName) { displayName = it }
-                Spacer(Modifier.height(8.dp))
-                PaperButton(
-                    label = "Войти",
-                    enabled = email.isNotBlank() && password.isNotBlank(),
-                    onClick = { onSignIn(email, password) },
-                )
-                Spacer(Modifier.height(8.dp))
-                PaperButton(
-                    label = "Зарегистрироваться",
-                    variant = PaperButtonVariant.SECONDARY,
-                    enabled = email.isNotBlank() && password.isNotBlank() && displayName.isNotBlank(),
-                    onClick = { onRegister(email, password, displayName) },
-                )
-                TextAction("Не сейчас", onClick = { showForm = false })
-            }
-            !account.hasFamily -> {
-                Text("вы вошли как ${account.displayName.ifBlank { account.email }}", color = colors.ink,style = PaperType.body)
-                FamilyBookField("Название полки", familyName) { familyName = it }
-                PaperButton(
-                    label = "Завести полку",
-                    enabled = familyName.isNotBlank(),
-                    onClick = { onCreateFamily(familyName) },
-                )
-                Spacer(Modifier.height(12.dp))
-                FamilyBookField("Код приглашения", inviteCode) { inviteCode = it }
-                PaperButton(
-                    label = "Вступить по коду",
-                    variant = PaperButtonVariant.SECONDARY,
-                    enabled = inviteCode.isNotBlank(),
-                    onClick = { onJoinFamily(inviteCode) },
-                )
-            }
-        }
+    val sdk = com.polinalinen.madre.account.yandex.LocalYandexAccountUi.current
+    Column(Modifier.padding(horizontal=22.dp,vertical=16.dp)) {
+        PaperNote(if(state.account!=null) "Прежний аккаунт сохранён. Войдите с Яндекс ID для переноса семейной полки. Книга и выпечки останутся на телефоне."
+            else "Семейная полка доступна после входа с Яндекс ID. Книга работает и без входа.")
+        if(sdk!=null) com.polinalinen.madre.ui.kit.YandexIdButton({sdk.signIn(false)})
+        else PaperNote("Вход недоступен в этой сборке.")
     }
 }
 

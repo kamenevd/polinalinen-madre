@@ -39,10 +39,11 @@ internal val BookRibbonHeight=44.dp
     val color = LocalPaper.current.ribbon
     Canvas(modifier.width(18.dp).height(BookRibbonHeight)) { drawPath(Path().apply { moveTo(0f,0f); lineTo(size.width,0f); lineTo(size.width,size.height); lineTo(size.width/2,size.height*.8f); lineTo(0f,size.height); close() }, color) }
 }
-@Composable fun BookHeader(title: String, onBack: (() -> Unit)? = null, onAa: (() -> Unit)? = null) {
+@Composable fun BookHeader(title: String, onBack: (() -> Unit)? = null, onAa: (() -> Unit)? = null, onSettings:(()->Unit)?=null) {
     Row(Modifier.fillMaxWidth().heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically) {
         if (onBack != null) PaperIconButton(onBack, label = "Назад") { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Назад") }
         SmallLabel(title, Modifier.weight(1f))
+        if(onSettings!=null)SettingsMonogram(onSettings)
         if(onAa!=null)PaperTextButton(onAa, Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp).testTag("reading-settings"), label = "Как читать") { BookText("Aa", 21) }
     }
 }
@@ -57,26 +58,14 @@ internal val BookRibbonHeight=44.dp
         Column(Modifier.padding(horizontal=22.dp).verticalScroll(rememberScrollState())) {
             BookText("Как читать",28)
             SmallLabel("АТМОСФЕРА",Modifier.padding(top=16.dp))
-            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
-                listOf(Atmosphere.DAWN,Atmosphere.DAY,Atmosphere.DUSK,Atmosphere.NIGHT).forEach { v ->
-                    val colors=paperAt(v)
-                    val selected=preferences.atmosphere==v || preferences.atmosphere==Atmosphere.AUTO && activeAtmosphere==v
-                    Column(Modifier.weight(1f).background(colors.bg,RoundedCornerShape(18.dp)).border(if(selected)2.dp else 1.dp,if(selected)LocalPaper.current.acc else LocalPaper.current.line,RoundedCornerShape(18.dp)).then(bookAction("Атмосфера: ${v.label}"){preferences.chooseAtmosphere(v)}).padding(vertical=12.dp),horizontalAlignment=Alignment.CenterHorizontally) {
-                        BookText("Aa",24,color=colors.ink)
-                        Text(v.label,style = PaperType.caption,fontSize=11.sp,color=colors.ink2)
-                    }
-                }
-            }
-            Row(Modifier.fillMaxWidth().heightIn(min=48.dp),verticalAlignment=Alignment.CenterVertically) {Text(paperControlText("По часам"),Modifier.weight(1f),style = PaperType.caption);PaperSwitch(preferences.atmosphere==Atmosphere.AUTO,{preferences.chooseAtmosphere(if(it)Atmosphere.AUTO else activeAtmosphere)})}
+            PaperAtmospherePicker(preferences)
+            PaperNote("Авто — по тёмной теме телефона.")
             SmallLabel("РАЗМЕР ТЕКСТА · ${preferences.textSize.toInt()}",Modifier.padding(top=14.dp))
             Row(verticalAlignment=Alignment.CenterVertically) {BookText("A",14);PaperSlider(preferences.textSize,preferences::setSize,valueRange=14f..22f,steps=7,modifier=Modifier.weight(1f).testTag("text-size"));BookText("A",24)}
 
             SmallLabel("ПЕРЕЛИСТЫВАНИЕ")
-            PaperSegmented(ReadingMode.entries.map { it.label }, ReadingMode.entries.indexOf(preferences.mode),
-                { preferences.chooseMode(ReadingMode.entries[it]) })
-            Row(Modifier.fillMaxWidth().heightIn(min=58.dp),verticalAlignment=Alignment.CenterVertically) { Text("Меньше движения",Modifier.weight(1f));PaperSwitch(preferences.reducedMotion||com.polinalinen.madre.ui.kit.LocalCalmMode.current,preferences::setReduced) }
-            PaperHapticSettings(preferences)
-            Text("На слабом устройстве и при выключенной системной анимации — плоский сдвиг.",style=PaperType.note,color=LocalPaper.current.ink2)
+            PaperSegmented(listOf("Страницами","Прокруткой"), if(preferences.mode==ReadingMode.SCROLL)1 else 0,
+                { preferences.chooseMode(if(it==0)ReadingMode.BOOK else ReadingMode.SCROLL) })
             Spacer(Modifier.height(24.dp))
         }
     }

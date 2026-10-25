@@ -64,18 +64,28 @@ import androidx.compose.ui.unit.Dp
 @Composable fun PaperAtmospherePicker(preferences: ReadingPreferences, modifier: Modifier = Modifier) {
     val p = LocalPaper.current
     Row(modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        Atmosphere.entries.forEachIndexed { index, choice ->
+        listOf(Atmosphere.DAWN,Atmosphere.NIGHT,Atmosphere.AUTO).forEachIndexed { index, choice ->
             val sample = paperAt(if (choice == Atmosphere.AUTO) LocalAtmosphere.current else choice)
-            Column(Modifier.weight(1f).heightIn(min = 76.dp)
-                .selectable(preferences.atmosphere == choice, role = Role.RadioButton,
-                    onClick = { preferences.chooseAtmosphere(choice) })
-                .semantics { onClick("Тема: ${choice.label}", null); stateDescription = "${index + 1} из 5" }
-                .padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(Modifier.size(32.dp).background(sample.bg, CircleShape)
-                    .border(if (preferences.atmosphere == choice) 2.dp else 1.dp,
-                        if (preferences.atmosphere == choice) p.acc else p.line, CircleShape))
-                Text(choice.label, color = p.ink2, style = PaperType.caption,
-                    modifier = Modifier.padding(top = 6.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            val selected=preferences.atmosphere == choice
+            val shape=RoundedCornerShape(16.dp)
+            Column(Modifier.weight(1f).heightIn(min = 108.dp).background(sample.bg,shape)
+                .border(if(selected)2.dp else 1.dp,if(selected)p.acc else p.line,shape)
+                .selectable(selected, role = Role.RadioButton,onClick = { preferences.chooseAtmosphere(choice) })
+                .semantics { onClick("Тема: ${choice.label}", null); stateDescription = "${index + 1} из 3" }
+                .padding(horizontal=10.dp,vertical = 12.dp), horizontalAlignment = Alignment.Start) {
+                Row(Modifier.fillMaxWidth().height(28.dp),horizontalArrangement=Arrangement.spacedBy(4.dp)) {
+                    val previews=if(choice==Atmosphere.AUTO)listOf(DawnPaper,NightPaper)else listOf(sample)
+                    previews.forEach { palette ->
+                        Column(Modifier.weight(1f).fillMaxHeight().background(palette.bg),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+                            Box(Modifier.fillMaxWidth(.7f).height(3.dp).background(palette.ink))
+                            Box(Modifier.fillMaxWidth().height(2.dp).background(palette.ink2))
+                            Box(Modifier.fillMaxWidth(.55f).height(3.dp).background(palette.acc))
+                        }
+                    }
+                }
+                Text(choice.label, color = sample.ink, style = PaperType.ui,modifier = Modifier.padding(top = 6.dp))
+                Text(when(choice){Atmosphere.DAWN->"Светлая";Atmosphere.NIGHT->"Тёплая тёмная";else->"Как в телефоне"},
+                    color=sample.ink2,style=PaperType.caption)
             }
         }
     }

@@ -36,7 +36,7 @@ class FamilyBookSectionUiTest {
     val rule = createComposeRule()
 
     @Test
-    fun `typed email survives a state restoration`() {
+    fun `retired credential form stays absent after state restoration`() {
         val restorationTester = StateRestorationTester(rule)
         restorationTester.setContent {
             MadreTheme {
@@ -50,21 +50,14 @@ class FamilyBookSectionUiTest {
             }
         }
 
-        // Cycle 19: форма больше не развёрнута с порога — сперва её просят.
-        // Проверяемое правило от этого не изменилось: набранное переживает
-        // пересоздание активити, потому что лежит на rememberSaveable.
-        rule.onNodeWithText("Подключить полку…").performClick()
-
-        rule.onAllNodes(hasSetTextAction())[0].performTextInput("anya@example.com")
-        rule.onNodeWithText("anya@example.com").assertIsDisplayed()
-
+        rule.onAllNodes(hasSetTextAction()).assertCountEquals(0)
         restorationTester.emulateSavedInstanceStateRestore()
-
-        rule.onNodeWithText("anya@example.com").assertIsDisplayed()
+        rule.onAllNodes(hasSetTextAction()).assertCountEquals(0)
+        rule.onNodeWithText("Семейная полка доступна после входа с Яндекс ID. Книга работает и без входа.").assertIsDisplayed()
     }
 
     @Test
-    fun `password reset sits under the password and uses the same email field`() {
+    fun `legacy password APIs do not expose a credential form`() {
         rule.setContent {
             MadreTheme {
                 FamilyBookSection(
@@ -76,8 +69,8 @@ class FamilyBookSectionUiTest {
                 )
             }
         }
-        rule.onNodeWithText("Подключить полку…").performClick()
-        rule.onNodeWithText(com.polinalinen.madre.account.PasswordReset.ACTION_LABEL).assertIsDisplayed()
-        rule.onAllNodes(hasSetTextAction()).assertCountEquals(3)
+        rule.onNodeWithText(com.polinalinen.madre.account.PasswordReset.ACTION_LABEL).assertDoesNotExist()
+        rule.onAllNodes(hasSetTextAction()).assertCountEquals(0)
+        rule.onNodeWithText("Вход недоступен в этой сборке.").assertIsDisplayed()
     }
 }

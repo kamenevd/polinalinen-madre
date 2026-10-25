@@ -32,10 +32,11 @@ class SettingsInputHintsTest {
         rule.runOnIdle{val info=EditorInfo();assertNotNull(view.onCreateInputConnection(info));bits=info.inputType}
         return bits
     }
-    @Test fun actualOwnNameFieldRequestsWordsWithoutRewritingItsValue() {
-        show{SettingsContent("полина",{},{},{},"Мадре",{},0,0,24,{},true,{},false,{},null,FamilyBookState.SignedOut,{},{},initialSearch="Ваше имя")}
-        assertTrue(flags("полина") and InputType.TYPE_TEXT_FLAG_CAP_WORDS!=0)
-        rule.onNodeWithText("полина").assertTextEquals("полина")
+    @Test fun actualOwnNameFieldRequestsSentencesWithoutRewritingItsValue() {
+        show{SettingsContent("полина",{},{},{},"Мадре",{},0,0,24,{},true,{},false,{},null,FamilyBookState.SignedOut,{},{},initialPage="profile")}
+        assertTrue(flags("полина") and InputType.TYPE_TEXT_FLAG_CAP_SENTENCES!=0)
+        rule.onNodeWithText("полина").assert(SemanticsMatcher.expectValue(
+            androidx.compose.ui.semantics.SemanticsProperties.EditableText,androidx.compose.ui.text.AnnotatedString("полина")))
     }
     @Test fun actualFamilyFieldRequestsWordsButCodeDoesNot() {
         show{FamilyBookField("Название полки","каменевы",onValueChange={});FamilyBookField("Код приглашения","abc123",onValueChange={})}
@@ -51,8 +52,9 @@ class SettingsInputHintsTest {
                 SettingsContent("Полина",{},{},{},"Мадре",{},3,7,24,{},true,{},false,{},"Семья Каменевых",FamilyBookState.SignedOut,{},{},preferences=prefs)
             }
         }
-        rule.onNodeWithText(com.polinalinen.madre.BuildConfig.VERSION_NAME).performScrollTo().assertIsDisplayed()
-        rule.onNodeWithContentDescription("Тактильный отклик").performScrollTo().assertIsDisplayed().assertIsOn().performClick().assertIsOff()
+        rule.onNodeWithText("О приложении").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Уведомления и вибрация").performScrollTo().performClick()
+        rule.onNodeWithContentDescription("Вибрация при касаниях").performScrollTo().assertIsDisplayed().assertIsOn().performClick().assertIsOff()
         rule.runOnIdle{assertFalse(ReadingPreferences(context,"settings15-large").haptics)}
         rule.onNodeWithText("Проверить").performScrollTo().assertIsEnabled().performClick()
         rule.runOnIdle{assertFalse(ReadingPreferences(context,"settings15-large").haptics)}

@@ -57,6 +57,9 @@ class VersionedBackendLayoutTests(unittest.TestCase):
         forbidden = ("superuser", "pb_data", "PASSWORD=", "password:")
         for path in list(MIGRATIONS.glob("*.js")) + list(HOOKS.glob("*.pb.js")):
             text = read(path).lower()
+            # Preserve the byte-exact public deployed schema exports. Their
+            # generated TypeScript reference is not a data/credential payload.
+            text = text.replace('/// <reference path="../pb_data/types.d.ts" />\n', '')
             for needle in forbidden:
                 self.assertNotIn(needle.lower(), text, f"{path.name}: {needle}")
 

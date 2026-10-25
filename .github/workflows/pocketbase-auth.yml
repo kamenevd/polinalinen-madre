@@ -1,0 +1,45 @@
+name: PocketBase auth
+
+on:
+  pull_request:
+    paths:
+      - 'backend/**'
+      - 'scripts/tests/test_family_backend_contract.py'
+      - '.github/workflows/pocketbase-auth.yml'
+  push:
+    branches: [feat/family-pb-auth-7-1-0]
+    paths:
+      - 'backend/**'
+      - 'scripts/tests/test_family_backend_contract.py'
+      - '.github/workflows/pocketbase-auth.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pocketbase-auth-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pocketbase-auth:
+    name: Real PB 0.39.11 JSVM and legacy regressions
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Prepare private local runtime and verify exact official test binary
+        run: |
+          export TMPDIR="$RUNNER_TEMP/madre-pb-isolated"
+          export MADRE_PB_BINARY="$RUNNER_TEMP/madre-pb-runtime/pocketbase"
+          printf 'TMPDIR=%s\nMADRE_PB_BINARY=%s\n' "$TMPDIR" "$MADRE_PB_BINARY" >> "$GITHUB_ENV"
+          mkdir -m 700 -p "$TMPDIR"
+          test -x /usr/bin/curl
+          python3 -m backend.tests.fetch_pocketbase "$MADRE_PB_BINARY"
+          "$MADRE_PB_BINARY" --version
+      - name: Exercise real isolated hooks, SQL, JWT, upgrade and external-only Yandex boundary
+        run: python3 -m unittest discover -s backend/tests -v
+      - name: Existing workflow and backend contract regressions
+        run: python3 -m unittest discover -s scripts/tests -v
+      # Never upload even synthetic DB dumps/logs: test summary is in job output.
+      # There are no deployment credentials or live endpoints in this job.

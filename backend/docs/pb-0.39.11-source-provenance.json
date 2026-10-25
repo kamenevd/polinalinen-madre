@@ -1,0 +1,23 @@
+{
+  "base_commit": "4e55c7a2b65bd44137e99ef83abd6a68fa0da487",
+  "pocketbase_version": "0.39.11",
+  "official_source_commit": "5d217ddb50cb144d80a5d0b0bdf11b52b2c3e457",
+  "binary_sha256": "88370d5f6fa4820cd2414fa53c6e168d3dd0e33b7a7fd9ff914265492a7aa3b6",
+  "deployed_family_git_commit": "15adb6359f1c83900aeaa068333187de0facbc38",
+  "deployed_family_sha256": "d03c7381e9e999faa5c4fc7bece59ec35bbdfc26244136491d550474cdfb70d3",
+  "candidate_family_sha256": "96debd46afdcb6b547bee5ede088df16d9ef33881a1f23c70499b38cf7715338",
+  "deployed_code": {
+    "pb_hooks/madre_family.pb.js": "d03c7381e9e999faa5c4fc7bece59ec35bbdfc26244136491d550474cdfb70d3",
+    "pb_hooks/madre_stats.pb.js": "ba9214249e9d60299ec9f79eeb24dd1475ceb0d3c36f8f8fdd9738cbaa002325",
+    "pb_migrations/1784928893_created_bake_stats.js": "cf3673a9c6ed8bbe52eea230e9639bfed72fe0c2c9f878c51a09f50b7d701254",
+    "pb_migrations/1784928893_created_feeding_stats.js": "25980663a5f99dff5730c96affbda8b19aa7d0f5c53458c061836b1463ba12d8",
+    "pb_migrations/1784928893_created_margin_notes_sync.js": "a24db7bc3caf1b8b84c7f780f8fe822e82b41c5375e895a63224cd3fa5afe8f6",
+    "pb_migrations/1784937600_lock_legacy_collections.js": "c6e8823b7eb697d7b581ba83840c4900b7163453f7dd29ac2589f58849ca2ef8",
+    "pb_migrations/1784937660_created_families.js": "be8567e46777fc799bc8caf39517c48ab6d3b2ad559a70b1358df096ce7c0a34",
+    "pb_migrations/1784937720_users_family_relation.js": "e341e680383cb0d74d275eb5d82d7b1f54cbd520494423c5e19901d2fd779062",
+    "pb_migrations/1784937780_family_rules_for_stats.js": "1d0256eaaa33f41e9e4048d778daa24f3cf029fa009f85c19ec0b2ecba5d3e0a",
+    "pb_migrations/1784960882_created_guest_notes.js": "1e039c2edd7fb8a142bfa0fbb4f7e6715611efb5f3c425a04c3ba718fbb8c459",
+    "pb_migrations/1787164800_bake_stats_shelf.js": "a2dc6ae81f8bd8a07326cbac89a194be1a8cf8a397ffcd98c4556c8baf7beef7"
+  },
+  "private_receipt_not_in_git": true
+}

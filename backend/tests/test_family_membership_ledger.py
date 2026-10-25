@@ -190,7 +190,7 @@ class FamilyMembershipLedgerContracts(unittest.TestCase):
         response = self.handler("/api/madre/family/join")
         self.assertNotIn(
             "invite_code",
-            response[response.index("return e.json"):],
+            response[response.rindex("return e.json"):],
             "join не должен отдавать открытый код приглашения",
         )
 

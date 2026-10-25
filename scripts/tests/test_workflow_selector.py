@@ -149,8 +149,8 @@ class WorkflowSelectorTests(unittest.TestCase):
             self.assertEqual(self.guard_step, steps[GUARD])
             self.assertIsNone(scalar(steps[GUARD], "if", 8))
             self.assertIsNone(scalar(steps[GUARD], "continue-on-error", 8))
-        expected = {"android-quality": None, "android-acceptance": "workflow-contract", "lint-report": "workflow-contract",
-                    "instrumented-smoke": "android-acceptance", "required-7015-performance": "workflow-contract"}
+        expected = {"android-quality": None, "android-acceptance": "[workflow-contract, android-quality]", "lint-report": "workflow-contract",
+                    "instrumented-smoke": "[android-acceptance, qa-regression]", "qa-regression": "workflow-contract", "required-7015-performance": "workflow-contract"}
         self.assertEqual({"workflow-contract", *expected}, set(self.jobs))
         for job, dependency in expected.items():
             self.assertEqual(dependency, scalar(self.jobs[job], "needs", 4))
@@ -167,13 +167,16 @@ class WorkflowSelectorTests(unittest.TestCase):
         self.assertIsNone(scalar(short, "needs", 4))
         self.assertIsNone(scalar(short, "continue-on-error", 4))
         command = scalar(self.short_steps["Short APK gate - compile, executed units and ordinary QA"], "run", 8)
-        self.assertEqual("./gradlew :app:compileDebugKotlin :app:compileDebugUnitTestKotlin :app:testDebugUnitTest :app:assembleDebug :app:assembleQa -Pmadre.shortApkGate=true --no-daemon --stacktrace --no-configuration-cache", command)
+        self.assertEqual("./gradlew :app:compileDebugKotlin :app:compileDebugUnitTestKotlin :app:testDebugUnitTest :app:assembleDebug :app:assembleQa -Pmadre.shortApkGate=true --stacktrace --no-configuration-cache", command)
         for forbidden in ("qaRegression", "verifyRoborazzi", "AndroidTest", "emulator", "RenderTest"):
             self.assertNotIn(forbidden, short)
         for event in ("pull_request", "push", "workflow_dispatch", "schedule"):
             self.assertFalse(condition(scalar(self.jobs["android-acceptance"], "if", 4), event, flags))
         self.assertFalse(condition(scalar(self.jobs["android-acceptance"], "if", 4), "pull_request", {}))
         self.assertTrue(condition(scalar(self.jobs["android-acceptance"], "if", 4), "workflow_dispatch", {}))
+        for event in ("pull_request", "push", "workflow_dispatch", "schedule"):
+            for name in ("qa-regression", "instrumented-smoke", "required-7015-performance"):
+                self.assertFalse(condition(scalar(self.jobs[name], "if", 4), event, flags))
         for name in ("Verify stable QA APK identity before any APK upload",
                      "Verify actual QA APK account flag and approved public client without exposing values",
                      "Verify ordinary nondebug R8 QA and permanent certificate"):
@@ -208,7 +211,7 @@ class WorkflowSelectorTests(unittest.TestCase):
                             branch.startswith("feat/") or (event != "pull_request" and branch == "main"))
                         with self.subTest(event=event, branch=branch, fork=fork):
                             self.assertEqual(expected, condition(expression, event, {}, context=context))
-        self.assertEqual(5, len(found))
+        self.assertEqual(6, len(found))
 
     def test_docs_only_filters_and_wip_auto_heavy_exclusion(self):
         import fnmatch
@@ -314,11 +317,12 @@ class WorkflowSelectorTests(unittest.TestCase):
         }
         flags = {"critical_only": True}
         for name, verifiers in artifact_steps.items():
-            expression = scalar(self.steps[name], "if", 8)
+            step = self.steps.get(name) or step_blocks(self.jobs["qa-regression"])[name]
+            expression = scalar(step, "if", 8)
             outcomes = dict.fromkeys(verifiers, "success")
             self.assertTrue(condition(expression, "workflow_dispatch", flags, outcomes=outcomes))
-            self.assertEqual("error", scalar(self.steps[name], "if-no-files-found", 10))
-            self.assertIsNone(scalar(self.steps[name], "continue-on-error", 8))
+            self.assertEqual("error", scalar(step, "if-no-files-found", 10))
+            self.assertIsNone(scalar(step, "continue-on-error", 8))
             self.assertFalse(condition(expression, "workflow_dispatch", flags, success=False, outcomes=outcomes))
             for verifier in verifiers:
                 for outcome in ("failure", "skipped", "cancelled"):

@@ -29,6 +29,7 @@ import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.CornerRadius
@@ -181,6 +182,7 @@ fun FeedingFormScreen(
 
             GramCard(
                 label = FeedingMassCopy.STARTER,
+                icon = PaperFeedingMassIconKind.JAR,
                 accessibleLabel = "Оставленная закваска",
                 range = FeedingInput.STARTER,
                 grams = starterGrams,
@@ -190,6 +192,7 @@ fun FeedingFormScreen(
             )
             GramCard(
                 label = FeedingMassCopy.FLOUR,
+                icon = PaperFeedingMassIconKind.WHEAT,
                 accessibleLabel = "Добавленная мука",
                 range = FeedingInput.FLOUR,
                 grams = flourGrams,
@@ -199,6 +202,7 @@ fun FeedingFormScreen(
             )
             GramCard(
                 label = FeedingMassCopy.WATER,
+                icon = PaperFeedingMassIconKind.DROP,
                 accessibleLabel = "Добавленная вода",
                 range = FeedingInput.WATER,
                 grams = waterGrams,
@@ -360,6 +364,7 @@ fun FeedingFormScreen(
 @Composable
 private fun GramCard(
     label: String,
+    icon: PaperFeedingMassIconKind,
     accessibleLabel: String,
     range: FeedingInput.Range,
     grams: Int,
@@ -371,7 +376,14 @@ private fun GramCard(
     var typing by rememberSaveable(presetGeneration) { mutableStateOf(false) }
 
     PaperCard(Modifier.padding(horizontal = 22.dp, vertical = 8.dp)) {
-        PageLabel(label, color = colors.ink2)
+        Row(
+            Modifier.testTag("feeding-mass-header-${icon.name}"),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            PaperFeedingMassIcon(icon)
+            SmallLabel(label, color = colors.ink2)
+        }
         if (typing) {
             GramNumberField(
                 accessibleLabel = accessibleLabel,
@@ -393,9 +405,8 @@ private fun GramCard(
                 ) {
                     Text(
                         "$grams г",
-                        color = colors.ink,style = PaperType.number,
-                        fontWeight = FontWeight.ExtraLight,
-                        fontSize = 44.sp,
+                        color = colors.ink,
+                        style = PaperType.number.copy(fontSize = 38.sp, fontWeight = FontWeight.ExtraLight),
                         // Иначе TalkBack прочитает «50 г» и промолчит о том, чего
                         // именно 50: на странице таких чисел три.
                         modifier = Modifier.semantics { contentDescription = "$accessibleLabel: $grams г" },

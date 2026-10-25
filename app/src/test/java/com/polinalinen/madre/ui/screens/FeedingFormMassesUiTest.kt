@@ -1,6 +1,15 @@
 package com.polinalinen.madre.ui.screens
 
 import com.polinalinen.madre.ui.kit.*
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.*
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.polinalinen.madre.sourdough.FeedingMassCopy
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasContentDescription
@@ -91,6 +100,52 @@ class FeedingFormMassesUiTest {
         // По кнопке «+5 г» у каждой массы — своя.
         rule.onAllNodesWithText("+5 г").assertCountEquals(3)
         rule.onAllNodesWithText("−5 г").assertCountEquals(3)
+    }
+
+    @Test fun `mass cards use local Manrope38 overlines and correctly mapped decorative icons`() {
+        show()
+        val cards = listOf(
+            Triple("JAR", FeedingMassCopy.STARTER, "Оставленная закваска: 50 г"),
+            Triple("WHEAT", FeedingMassCopy.FLOUR, "Добавленная мука: 100 г"),
+            Triple("DROP", FeedingMassCopy.WATER, "Добавленная вода: 50 г"),
+        )
+        cards.forEach { (kind, label, value) ->
+            val header = rule.onNodeWithTag("feeding-mass-header-$kind").performScrollTo()
+            header.assertHasNoClickAction()
+            val icon = rule.onNodeWithTag("feeding-mass-icon-$kind", useUnmergedTree = true)
+            icon.assertHasNoClickAction()
+                .assert(hasParent(hasTestTag("feeding-mass-header-$kind")))
+            assertThat(icon.fetchSemanticsNode().config.getOrNull(SemanticsProperties.ContentDescription)).isNull()
+            val heading = rule.onNodeWithText(label.uppercase(java.util.Locale.forLanguageTag("ru")), useUnmergedTree = true)
+            heading.assertHasNoClickAction().assert(hasParent(hasTestTag("feeding-mass-header-$kind")))
+            val overline = layout(heading).layoutInput.style
+            assertThat(overline.fontFamily).isEqualTo(Manrope)
+            assertThat(overline.fontSize).isEqualTo(PaperType.overline.fontSize)
+            assertThat(overline.fontWeight).isEqualTo(PaperType.overline.fontWeight)
+            assertThat(overline.lineHeight).isEqualTo(PaperType.overline.lineHeight)
+            assertThat(overline.letterSpacing).isEqualTo(PaperType.overline.letterSpacing)
+            val number = rule.onNodeWithContentDescription(value, useUnmergedTree = true).performScrollTo()
+            val style = layout(number).layoutInput.style
+            assertThat(style.fontFamily).isEqualTo(Manrope)
+            assertThat(style.fontSize).isEqualTo(38.sp)
+            assertThat(style.fontWeight).isEqualTo(FontWeight.ExtraLight)
+            assertThat(style.lineHeight).isEqualTo(PaperType.number.lineHeight)
+            assertThat(style.fontFeatureSettings).isEqualTo("tnum")
+            val accessibleLabel = value.substringBefore(":")
+            listOf("Убавить на 5 граммов: ", "Прибавить 5 граммов: ").forEach { action ->
+                rule.onNode(SemanticsMatcher("$action$accessibleLabel") {
+                    it.config.getOrNull(SemanticsActions.OnClick)?.label == "$action$accessibleLabel"
+                }).performScrollTo().assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
+            }
+        }
+        // The shared token and therefore other screens keep their existing number size.
+        assertThat(PaperType.number.fontSize).isEqualTo(44.sp)
+    }
+
+    private fun layout(node: SemanticsNodeInteraction): TextLayoutResult {
+        val layouts = mutableListOf<TextLayoutResult>()
+        node.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { assertThat(it(layouts)).isTrue() }
+        return layouts.single()
     }
 
     @Test fun `plus five changes only its own mass`() {

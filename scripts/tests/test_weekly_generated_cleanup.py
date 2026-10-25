@@ -238,9 +238,26 @@ class CleanupTests(unittest.TestCase):
         self.assertTrue(p.exists())
 
     def test_process_probe_real(self):
-        active, daemon = c.process_state()
-        self.assertIn(Path.cwd(), active)
-        self.assertIsInstance(daemon, bool)
+        try:
+            active, daemon = c.process_state()
+        except RuntimeError as exc:
+            # Hosted CI is non-root and cannot inspect root-owned /proc entries.
+            # Refusing admission there is the required fail-closed result, not a skip.
+            self.assertNotEqual(os.geteuid(), 0)
+            self.assertIn('cannot prove process inactivity', str(exc))
+        else:
+            self.assertIn(Path.cwd(), active)
+            self.assertIsInstance(daemon, bool)
+
+    def test_unreadable_process_refuses_admission(self):
+        original = Path.read_bytes
+        def denied(path):
+            if str(path).startswith('/proc/') and path.name == 'cmdline':
+                raise PermissionError('fixture denied')
+            return original(path)
+        with patch.object(Path, 'read_bytes', denied):
+            with self.assertRaisesRegex(RuntimeError, 'cannot prove process inactivity'):
+                c.process_state()
 
 
 if __name__ == '__main__':

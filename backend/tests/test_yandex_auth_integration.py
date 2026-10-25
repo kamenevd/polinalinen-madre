@@ -271,7 +271,7 @@ class YandexAuthIntegration(unittest.TestCase):
         for before, after in zip(self.before_users, rows):
             self.assertEqual(before, {k: after[k] for k in before})
             self.assertEqual("", after["yandex_uid_hash"])
-        self.assertEqual(self.before_families, self.sql("SELECT * FROM families"))
+        self.assertEqual(self.before_families, [{k: row[k] for k in self.before_families[0]} for row in self.sql("SELECT * FROM families")])
         self.assertEqual(self.before_bakes, self.sql("SELECT * FROM bake_stats"))
         before = self.before_schema
         after = self.sql("SELECT * FROM _collections WHERE name='users'")[0]
@@ -312,7 +312,7 @@ class YandexAuthIntegration(unittest.TestCase):
         for key in before:
             if key not in {"yandex_uid_hash", "updated"}:
                 self.assertEqual(before[key], after[key], key)
-        self.assertEqual(self.before_families, self.sql("SELECT * FROM families"))
+        self.assertEqual(self.before_families, [{k: row[k] for k in self.before_families[0]} for row in self.sql("SELECT * FROM families")])
         self.assertEqual(self.before_bakes, self.sql("SELECT * FROM bake_stats"))
         self.assertEqual(200, self.auth(token, self.owner["token"])[0])
         self.assertEqual(result["record"], self.auth(token)[1]["record"])
@@ -563,7 +563,7 @@ class YandexAuthIntegration(unittest.TestCase):
     def test_18_non_destructive_schema_rollback_and_reupgrade_keeps_bindings(self):
         before = self.sql("SELECT * FROM users ORDER BY id")
         self.stop()
-        args = [str(self.binary), "migrate", "down", "1", f"--dir={self.data}",
+        args = [str(self.binary), "migrate", "down", "2", f"--dir={self.data}",
             f"--hooksDir={self.hooks}", f"--migrationsDir={self.migrations}", "--automigrate=false"]
         result = subprocess.run(args, input=b"y\n", stdout=self.log, stderr=self.log,
             env=self.env, cwd=self.work, timeout=15)

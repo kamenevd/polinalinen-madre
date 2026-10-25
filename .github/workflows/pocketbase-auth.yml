@@ -7,7 +7,7 @@ on:
       - 'scripts/tests/test_family_backend_contract.py'
       - '.github/workflows/pocketbase-auth.yml'
   push:
-    branches: [feat/family-pb-auth-7-1-0]
+    branches: [feat/family-pb-auth-7-1-0, feat/family-pb-membership-7-1-0]
     paths:
       - 'backend/**'
       - 'scripts/tests/test_family_backend_contract.py'

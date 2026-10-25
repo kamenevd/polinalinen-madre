@@ -101,8 +101,11 @@ import com.polinalinen.madre.voice.VoiceStatus
                         }
                     }
                     Spacer(Modifier.height(12.dp))
-                    if(owner!=null) YandexAccountPanel(account,pending,owner.signIn,{page="profile"},owner.model::retryPendingUnbind)
-                    else { YandexIdButton({},enabled=false);PaperNote("Вход недоступен в этой сборке. Книга работает без аккаунта.") }
+                    if(owner!=null) {
+                        YandexAccountPanel(account,pending,owner.signIn,{page="profile"},owner.model::retryPendingUnbind)
+                        if(account is YandexAccountState.Error && !pending)
+                            PaperTextAction("Отключить аккаунт на этом телефоне",{confirmOut=true},destructive=true)
+                    } else { YandexIdButton({},enabled=false);PaperNote("Вход недоступен в этой сборке. Книга работает без аккаунта.") }
                 }
                 LSettingsGroup {
                     LSettingsRow(Icons.Outlined.PeopleOutline,familyTitle,familyStatus,onFamily,true)
@@ -128,7 +131,11 @@ import com.polinalinen.madre.voice.VoiceStatus
                     PaperNote("Это имя появится в книге и на семейной полке.")
                 }
                 if(profile!=null && owner!=null) PaperTextAction("Выйти из Яндекс ID",{confirmOut=true},destructive=true)
-                else if(owner!=null)YandexAccountPanel(account,pending,owner.signIn,{ },owner.model::retryPendingUnbind)
+                else if(owner!=null) {
+                    YandexAccountPanel(account,pending,owner.signIn,{ },owner.model::retryPendingUnbind)
+                    if(account is YandexAccountState.Error && !pending)
+                        PaperTextAction("Отключить аккаунт на этом телефоне",{confirmOut=true},destructive=true)
+                }
                 notice?.let{PaperNote(it)}
             }
             "look" -> LLookContent(preferences,display,onKeepScreen)

@@ -77,7 +77,8 @@ class WorkflowSelectorTests(unittest.TestCase):
     def setUpClass(cls):
         cls.text = (ROOT / ".github/workflows/quality-gates.yml").read_text()
         cls.jobs = sections(cls.text.split("\njobs:\n", 1)[1], r"^  ([a-z0-9-]+):\n")
-        cls.steps = step_blocks(cls.jobs["android-quality"])
+        cls.steps = step_blocks(cls.jobs["android-acceptance"])
+        cls.short_steps = step_blocks(cls.jobs["android-quality"])
         cls.guard_step = step_blocks(cls.jobs["workflow-contract"])[GUARD]
         cls.guard_shell = textwrap.dedent(cls.guard_step.split("        run: |\n", 1)[1]).strip()
         match = re.fullmatch(r"python3 - <<'PY'\n(.*)\nPY", cls.guard_shell, re.DOTALL)
@@ -140,8 +141,8 @@ class WorkflowSelectorTests(unittest.TestCase):
         self.assertIsNone(scalar(self.guard_step, "if", 8))
         self.assertIsNone(scalar(self.guard_step, "continue-on-error", 8))
         self.assertIsNone(scalar(self.jobs["workflow-contract"], "continue-on-error", 4))
-        expected = {"android-quality": "workflow-contract", "lint-report": "workflow-contract",
-                    "instrumented-smoke": "android-quality", "required-7015-performance": "workflow-contract"}
+        expected = {"android-quality": "workflow-contract", "android-acceptance": "workflow-contract", "lint-report": "workflow-contract",
+                    "instrumented-smoke": "android-acceptance", "required-7015-performance": "workflow-contract"}
         self.assertEqual({"workflow-contract", *expected}, set(self.jobs))
         for job, dependency in expected.items():
             self.assertEqual(dependency, scalar(self.jobs[job], "needs", 4))
@@ -149,32 +150,51 @@ class WorkflowSelectorTests(unittest.TestCase):
             self.assertNotIn("always()", expression)
             self.assertNotIn("failure()", expression)
 
-    def test_critical_only_runs_the_unchanged_required_pr_path(self):
-        flags = dict.fromkeys(ACCEPTANCE, False) | {"critical_only": True}
+    def test_short_gate_is_independent_of_optional_acceptance(self):
+        flags = {"critical_only": True}
         self.execute_guard(flags)
-        self.assertIsNone(scalar(self.jobs["android-quality"], "if", 4))
-        self.assertIsNone(scalar(self.jobs["android-quality"], "continue-on-error", 4))
-        self.assertEqual("30", scalar(self.jobs["android-quality"], "timeout-minutes", 4))
-        self.assertEqual(
-            "./gradlew compileDebugKotlin compileReleaseKotlin testDebugUnitTest assembleDebug assembleQa --no-daemon --stacktrace --no-configuration-cache",
-            scalar(self.steps[CRITICAL], "run", 8))
-        required = (
-            "Restore private stable QA signing", CRITICAL,
-            "Freeze ordinary delivery QA before building the test-only persistence ABI",
-            "Build minified QA instrumentation separately without displacing debug domain and render tests",
-            "Verify stable QA APK identity before any APK upload",
-            "Verify actual QA APK account flag and approved public client without exposing values",
-            "Verify real release-like QA binary, stable certificate, R8 mapping and packed ART",
-        )
-        for name in required:
-            with self.subTest(step=name):
-                self.assertIsNone(scalar(self.steps[name], "if", 8))
-                self.assertIsNone(scalar(self.steps[name], "continue-on-error", 8))
-                self.assertTrue(condition(scalar(self.steps[name], "if", 8), "workflow_dispatch", flags))
-        for name in (EXTENDED, FIXES, BASELINE):
-            self.assertFalse(condition(scalar(self.steps[name], "if", 8), "workflow_dispatch", flags))
-        for name in ("instrumented-smoke", "required-7015-performance"):
-            self.assertFalse(condition(scalar(self.jobs[name], "if", 4), "workflow_dispatch", flags))
+        short = self.jobs["android-quality"]
+        self.assertIn("ref: ${{ github.event.pull_request.head.sha || github.sha }}", short)
+        self.assertIsNone(scalar(short, "if", 4))
+        self.assertEqual("workflow-contract", scalar(short, "needs", 4))
+        self.assertIsNone(scalar(short, "continue-on-error", 4))
+        command = scalar(self.short_steps["Short APK gate - compile, executed units and ordinary QA"], "run", 8)
+        self.assertEqual("./gradlew :app:compileDebugKotlin :app:compileDebugUnitTestKotlin :app:testDebugUnitTest :app:assembleDebug :app:assembleQa -Pmadre.shortApkGate=true --no-daemon --stacktrace --no-configuration-cache", command)
+        for forbidden in ("qaRegression", "verifyRoborazzi", "AndroidTest", "emulator", "RenderTest"):
+            self.assertNotIn(forbidden, short)
+        for event in ("pull_request", "push", "workflow_dispatch", "schedule"):
+            self.assertFalse(condition(scalar(self.jobs["android-acceptance"], "if", 4), event, flags))
+        self.assertFalse(condition(scalar(self.jobs["android-acceptance"], "if", 4), "pull_request", {}))
+        self.assertTrue(condition(scalar(self.jobs["android-acceptance"], "if", 4), "workflow_dispatch", {}))
+        for name in ("Verify stable QA APK identity before any APK upload",
+                     "Verify actual QA APK account flag and approved public client without exposing values",
+                     "Verify ordinary nondebug R8 QA and permanent certificate"):
+            self.assertIsNone(scalar(self.short_steps[name], "if", 8))
+            self.assertIsNone(scalar(self.short_steps[name], "continue-on-error", 8))
+        upload = self.short_steps["Upload verified short QA and provenance"]
+        for outcome in ("failure", "skipped", "cancelled"):
+            self.assertFalse(condition(scalar(upload, "if", 8), "pull_request", {}, outcomes={"verify_real_qa": outcome}))
+        self.assertTrue(condition(scalar(upload, "if", 8), "pull_request", {}, outcomes={"verify_real_qa": "success"}))
+
+    def test_short_selector_excludes_only_exact_visual_classes_and_keeps_critical_units(self):
+        gradle = (ROOT / "app/build.gradle.kts").read_text()
+        names = []
+        for variable in ("shortApkVisualTests", "extendedOnlyTests"):
+            body = gradle.split(f"val {variable} = listOf(\n", 1)[1].split("\n)", 1)[0]
+            names += re.findall(r'"([^"]+)"', body)
+        names.append("com.polinalinen.madre.familyui.FamilyLinkRenderTest")
+        for name in names:
+            self.assertNotIn("*", name)
+            self.assertTrue(name.endswith(("RenderTest", "GoldenTest", "MaterialExtendedTest", "StaticFontCompatibilityTest")), name)
+            self.assertTrue((ROOT / "app/src/test/java" / (name.replace(".", "/") + ".kt")).is_file())
+        for source in (ROOT / "app/src/test/java").rglob("*Test.kt"):
+            qualified = str(source.relative_to(ROOT / "app/src/test/java")).removesuffix(".kt").replace("/", ".")
+            if any(marker in source.read_text() for marker in ("captureRoboImage", "captureScreenRoboImage", "captureToImage")):
+                self.assertIn(qualified, names)
+            if any(marker in source.stem for marker in ("Migration", "AccountRecovery", "Controller", "DataSurvival", "Privacy", "Persistence", "Planning")):
+                self.assertNotIn(qualified, names)
+        self.assertIn('if (shortApkGate) it.filter {', gradle)
+        self.assertIn('.forEach { name -> excludeTestsMatching(name) }', gradle)
 
     def test_default_manual_nightly_pr_push_and_rc_selection_is_preserved(self):
         for values in itertools.product((False, True), repeat=len(ACCEPTANCE)):
@@ -210,7 +230,8 @@ class WorkflowSelectorTests(unittest.TestCase):
         self.assertIn("critical-before-family-render", step)
         self.assertIn("-Pmadre.familyLinkRender=true", step)
         self.assertIn("--tests 'com.polinalinen.madre.familyui.FamilyLinkRenderTest'", step)
-        self.assertIn("family-k-", scalar(self.text.split("concurrency:\n", 1)[1], "group", 2) or "")
+        self.assertEqual("quality-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}", scalar(self.text.split("concurrency:\n", 1)[1], "group", 2))
+        self.assertIn("cancel-in-progress: true", self.text)
         self.assertFalse(condition(scalar(self.jobs["instrumented-smoke"], "if", 4),
                                    "workflow_dispatch", {"family_link_render": True}))
         gradle = (ROOT / "app/build.gradle.kts").read_text()

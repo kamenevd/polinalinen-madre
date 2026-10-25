@@ -50,7 +50,7 @@ class WorkflowContractTests(unittest.TestCase):
         smoke = text.split("  instrumented-smoke:\n", 1)[1]
         self.assertIn("name: Instrumented smoke", smoke)
         self.assertIn("if: (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && !inputs.critical_only && !inputs.family_link_render", smoke)
-        quality = text.split("  android-quality:\n", 1)[1].split("  lint-report:\n", 1)[0]
+        quality = text.split("  android-acceptance:\n", 1)[1].split("  lint-report:\n", 1)[0]
         self.assertIn("needs: workflow-contract", quality)
         critical = next(line for line in quality.splitlines() if "run: ./gradlew compileDebugKotlin" in line)
         self.assertIn("testDebugUnitTest assembleDebug", critical)
@@ -87,7 +87,7 @@ class WorkflowContractTests(unittest.TestCase):
 
     def test_qa_signing_is_verified_before_upload_without_a_fallback(self):
         text = self.read(".github/workflows/quality-gates.yml")
-        quality = text.split("  android-quality:\n", 1)[1].split("  lint-report:\n", 1)[0]
+        quality = text.split("  android-acceptance:\n", 1)[1].split("  lint-report:\n", 1)[0]
         restore = quality.index("run: python3 scripts/restore_qa_signing.py\n")
         build = quality.index("run: ./gradlew compileDebugKotlin")
         verify = quality.index("id: verify_qa_signature")

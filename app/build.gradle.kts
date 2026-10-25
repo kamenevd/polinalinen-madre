@@ -38,7 +38,14 @@ val hasCompleteQaSigning = qaSigningInputs.all { !it.isNullOrBlank() }
 if (qaSigningInputs.any { !it.isNullOrBlank() } && !hasCompleteQaSigning) {
     throw GradleException("QA signing inputs are incomplete")
 }
-// PR keeps domain/interaction tests + 20 key frames. Opt-in is mandatory for RC.
+// Delivery runs all non-render unit tests; visual capture remains opt-in acceptance.
+val shortApkGate = providers.gradleProperty("madre.shortApkGate").map { it.toBoolean() }.getOrElse(false)
+val shortApkVisualTests = listOf(
+    "com.polinalinen.madre.ui.razvorot.RazvorotV3RenderTest",
+    "com.polinalinen.madre.ui.razvorot.BakeNumberRenderTest",
+    "com.polinalinen.madre.ui.screens.LSettingsRenderTest",
+    "com.polinalinen.madre.integration.v2.RosterAliceRenderTest",
+)
 val extendedVerification = providers.gradleProperty("madre.extendedVerification")
     .map { it.toBoolean() }.getOrElse(false)
 // New K renders are deliberately opt-in, never added to core20 or old baseline verification.
@@ -183,6 +190,10 @@ android {
         unitTests.isIncludeAndroidResources = true
         unitTests.all {
             it.maxHeapSize = "2048m"
+            if (shortApkGate) it.filter {
+                (shortApkVisualTests + extendedOnlyTests + "com.polinalinen.madre.familyui.FamilyLinkRenderTest")
+                    .forEach { name -> excludeTestsMatching(name) }
+            }
             if (!familyLinkRender) it.filter { excludeTestsMatching("com.polinalinen.madre.familyui.FamilyLinkRenderTest") }
             if (!extendedVerification) {
                 it.filter { extendedOnlyTests.forEach { name -> excludeTestsMatching(name) } }

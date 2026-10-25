@@ -690,7 +690,7 @@ class HttpFixture(unittest.TestCase):
         before = self.command_count()
         status, _, turn1, _ = self.webhook("пауза", access)
         self.assertEqual(status, 200, turn1)
-        self.assertIn("Скажи да", turn1["response"]["text"])
+        self.assertIn("Скажите да", turn1["response"]["text"])
         self.assertIn("Хлебушек", turn1["response"]["text"])
         self.assertNotIn("Мадре", turn1["response"]["text"])
         self.assertFalse(turn1["response"]["end_session"])
@@ -716,7 +716,7 @@ class HttpFixture(unittest.TestCase):
         time.sleep(0.25)
         status, _, unknown, _ = self.webhook("да", access, timeout=8)
         self.assertEqual(status, 200, unknown)
-        self.assertEqual(unknown["response"]["text"], "Результат неизвестен, проверь телефон.")
+        self.assertEqual(unknown["response"]["text"], "Результат неизвестен, проверьте телефон.")
         worker.join(timeout=4)
         self.assertTrue(holder.is_set())
         self.assertEqual(late.get("poll_status"), 200)
@@ -867,7 +867,7 @@ class HttpFixture(unittest.TestCase):
         killed = self.sql_one("SELECT state FROM commands WHERE id=?", (pending[0],))
         self.assertEqual(killed[0], "killed")
         confirmer.join(timeout=4)
-        self.assertEqual(confirm_box["speech"]["response"]["text"], "Результат неизвестен, проверь телефон.")
+        self.assertEqual(confirm_box["speech"]["response"]["text"], "Результат неизвестен, проверьте телефон.")
         status, _, old_poll, _ = self.poll(credential, connection, generation, bake)
         self.assertEqual(status, 200, old_poll)
         self.assertIsNone(old_poll["command"])
@@ -1320,7 +1320,7 @@ class HttpFixture(unittest.TestCase):
             self.bearer_header(access),
             port=port,
         )
-        self.assertIn("Скажи да", turn1["response"]["text"])
+        self.assertIn("Скажите да", turn1["response"]["text"])
         box: dict = {}
 
         def confirm() -> None:

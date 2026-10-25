@@ -25,22 +25,22 @@ from .scale import (
 RECIPES = load_recipes()
 
 GREET = (
-    "Это голос закваски из книги Мадре. Руки в муке — просто спрашивай. "
-    "Назови рецепт: хлебушек, чиабатта, пирожки. Скажи «список рецептов» — прочитаю все одиннадцать. "
+    "Это голос закваски из книги Мадре. Руки в муке — просто спрашивайте. "
+    "Назовите рецепт: хлебушек, чиабатта, пирожки. Скажите «список рецептов» — прочитаю все одиннадцать. "
     "Можно «на двоих», до пяти порций. Внутри: «дальше», «повтори», «сколько муки». "
-    "«Стоп» выключает навык — на телефон это не влияет. Скажи «помощь» — подробнее."
+    "«Стоп» выключает навык — на телефон это не влияет. Скажите «помощь» — подробнее."
 )
 HELP = (
     "Пока печём. «Дальше» — следующий шаг. «Что дальше» — только читает следующий, шаг не двигает. "
     "«Повтори» — текущий. «Назад» — на шаг раньше. "
     "«Сколько муки», «сколько воды», «сколько соли» — сначала вес на этом шаге, если тут нет — по всему рецепту. "
     "«Сколько ждать» — время шага, от порций оно не меняется. «Другой рецепт» и «с начала» — переспрошу. "
-    "На долгом ожидании выхожу, чтобы можно было поставить таймер на колонке; вернёшься — продолжим с того же шага. "
+    "На долгом ожидании выхожу, чтобы можно было поставить таймер на колонке; вернётесь — продолжим с того же шага. "
     "Таймер не ставлю, «Испечено» не отмечаю, полку и фото не публикую — это в телефоне. "
     "«Стоп» — выход из навыка, а не пауза выпечки."
 )
 NOT_PAUSE = "Паузы выпечки здесь нет. Таймер в телефоне не трогаю. Чтобы выйти — «стоп»."
-UNKNOWN = "Не разобрать. Скажи «дальше», «повтори» или «помощь»."
+UNKNOWN = "Не разобрать. Скажите «дальше», «повтори» или «помощь»."
 UNKNOWN2 = "Пока не выходит. Команды: «дальше», «повтори», «сколько муки», «сколько ждать»."
 STALE_SEC = 24 * 3600
 WAIT_EXIT_MIN = 5
@@ -71,14 +71,14 @@ def handle(body: dict[str, Any]) -> dict[str, Any]:
 
     if intent.name == "list_recipes":
         return reply(
-            catalog_names(RECIPES) + ". Назови любой.",
+            catalog_names(RECIPES) + ". Назовите любой.",
             session_state=sess or {"m": "idle"},
             application_state=_app(sess, app),
             buttons=_idle_buttons(),
         )
 
     if intent.name == "timer_unsupported":
-        return reply("Таймер не ставлю. Скажи «стоп», потом попроси таймер у колонки.", end=False, session_state=sess or {"m": "idle"})
+        return reply("Таймер не ставлю. Скажите «стоп», потом попросите таймер у колонки.", end=False, session_state=sess or {"m": "idle"})
 
     if intent.name == "app_only":
         return reply("Это только в телефоне. Здесь читаю рецепт.", session_state=sess or {"m": "idle"}, application_state=_app(sess, app))
@@ -117,14 +117,14 @@ def handle(body: dict[str, Any]) -> dict[str, Any]:
 
     if intent.name == "talk" and recipe_id is None and sess.get("m") != "bake":
         if is_new and intent.ingredient:
-            return reply("Назови рецепт: " + catalog_names(RECIPES) + ".", end=True)
+            return reply("Назовите рецепт: " + catalog_names(RECIPES) + ".", end=True)
         return reply(UNKNOWN if text else GREET, buttons=_idle_buttons(), session_state=sess or {"m": "idle"})
 
     if sess.get("m") == "bake":
         return _in_bake(intent, sess, app)
 
     if intent.name in {"repeat", "peek", "advance", "back", "duration", "ingredient", "outline", "set_portions", "restart"}:
-        return reply("Сначала назови рецепт.", buttons=_idle_buttons(), session_state={"m": "idle"})
+        return reply("Сначала назовите рецепт.", buttons=_idle_buttons(), session_state={"m": "idle"})
 
     if is_new:
         return reply(GREET, end=False, buttons=_idle_buttons(), session_state={"m": "idle"})
@@ -200,7 +200,7 @@ def _in_bake(intent: Intent, sess: dict, app: dict) -> dict[str, Any]:
             buttons=[{"title": "Да", "hide": True}, {"title": "Нет", "hide": True}],
         )
     if intent.name == "switch":
-        return reply("Назови другой рецепт.", session_state=sess, application_state=_app(sess, app))
+        return reply("Назовите другой рецепт.", session_state=sess, application_state=_app(sess, app))
     if intent.name == "repeat" or intent.name == "empty":
         return _speak_step(sess, app)
     if intent.name == "peek":
@@ -219,7 +219,7 @@ def _in_bake(intent: Intent, sess: dict, app: dict) -> dict[str, Any]:
         return reply(_outline(recipe), session_state=sess, application_state=_app(sess, app))
     if intent.name == "talk":
         return reply(
-            "Скажи «повтори», «дальше», «что дальше» или «сколько муки».",
+            "Скажите «повтори», «дальше», «что дальше» или «сколько муки».",
             session_state=sess,
             application_state=_app(sess, app),
             buttons=_bake_buttons(sess),
@@ -235,7 +235,7 @@ def _confirm_switch(intent: Intent, recipe_id: str | None, sess: dict, app: dict
     target = recipe_id or sess.get("pr")
     if intent.yes is True or intent.name == "yes" or target:
         if not target:
-            return reply("Назови рецепт.", session_state=sess)
+            return reply("Назовите рецепт.", session_state=sess)
         return _start_bake(str(target), int(sess.get("p") or 1), app)
     return reply("Да или нет?", session_state=sess)
 
@@ -318,7 +318,7 @@ def _speak_step(sess: dict, app: dict, prefix: str = "", from_start: bool = Fals
         elif minutes >= WAIT_EXIT_MIN:
             parts.append(
                 "Выхожу, чтобы можно было поставить таймер на колонке. "
-                "Потом запусти навык голос закваски — продолжим с этого шага."
+                "Потом запустите навык «Голос закваски» — продолжим с этого шага."
             )
             text = " ".join(parts)
             return reply(text, end=True, application_state=_stamp(sess))
@@ -327,7 +327,7 @@ def _speak_step(sess: dict, app: dict, prefix: str = "", from_start: bool = Fals
     weigh = _step_weigh(step, scale, bindings)
     if weigh:
         parts.append("На весы: " + weigh + ".")
-    parts.append("Когда сделаешь — «дальше». Только услышать следующий — «что дальше».")
+    parts.append("Когда сделаете — «дальше». Только услышать следующий — «что дальше».")
     return reply(
         " ".join(parts),
         end=False,
@@ -433,7 +433,7 @@ def _ask_stale(app: dict) -> dict[str, Any]:
     sess = {"m": "confirm_stale", "r": app["r"], "i": i, "p": app.get("p") or 1}
     return reply(
         f"В прошлый раз остановились на {spoken_name(recipe)}, шаг {i + 1}. "
-        "Продолжить? Скажи «да» или назови другой рецепт.",
+        "Продолжить? Скажите «да» или назовите другой рецепт.",
         session_state=sess,
         application_state=app,
     )
@@ -448,7 +448,7 @@ def _confirm_stale(intent: Intent, recipe_id: str | None, sess: dict, app: dict)
         fresh = dict(app)
         fresh["ts"] = int(time.time())
         return _resume(fresh, sess)
-    return reply("Скажи «да» или назови рецепт.", session_state=sess, application_state=app)
+    return reply("Скажите «да» или назовите рецепт.", session_state=sess, application_state=app)
 
 
 def _app(sess: dict, app: dict) -> dict:

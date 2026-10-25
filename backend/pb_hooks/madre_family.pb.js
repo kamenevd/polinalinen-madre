@@ -26,6 +26,7 @@ $app.store().set("madre:invite:length", INVITE_CODE_LENGTH);
 $app.store().set("madre:invite:alphabet", INVITE_CODE_ALPHABET);
 
 routerAdd("POST", "/api/madre/family/create", (e) => {
+    if (e.request.header.values("X-Madre-Family-Version").length) { return require(__hooks + "/lib/family_v2.js").handle(e, "create"); }
     const pepper = $os.getenv("MADRE_INVITE_PEPPER");
     if (!pepper) {
         throw new ApiError(500, "Семейная книга на сервере ещё не настроена.", null);
@@ -51,7 +52,7 @@ routerAdd("POST", "/api/madre/family/create", (e) => {
     let created = null;
 
     $app.runInTransaction((txApp) => {
-        const member = txApp.findRecordById("users", e.auth.id);
+        const member = require(__hooks + "/lib/family_v2.js").legacyGuard(txApp, e);
         // Проверка e.auth.family снаружи транзакции гонку не закрывает: два
         // параллельных create проходят её оба. Перечитываем членство здесь и
         // до создания книги — иначе второй запрос оставит осиротевшую family
@@ -77,6 +78,7 @@ routerAdd("POST", "/api/madre/family/create", (e) => {
         row.set("user", e.auth.id);
         row.set("status", "active");
         txApp.save(row);
+        require(__hooks + "/lib/family_v2.js").legacySynced(txApp, created, member);
     });
 
     // Открытый код показывается ровно один раз — второго шанса нет, дальше
@@ -86,9 +88,10 @@ routerAdd("POST", "/api/madre/family/create", (e) => {
         family_name: created.getString("name"),
         invite_code: code,
     });
-}, $apis.requireAuth());
+}, $apis.requireAuth(), $apis.bodyLimit(65536));
 
 routerAdd("POST", "/api/madre/family/join", (e) => {
+    if (e.request.header.values("X-Madre-Family-Version").length) { return e.json(426, {error: "unsupported_protocol"}); }
     // Один и тот же ответ на любой отказ: по нему нельзя понять, есть ли
     // вообще такая книга, поэтому коды нельзя перебирать «на ощупь».
     const JOIN_FAILURE = "Приглашение не подошло.";
@@ -172,7 +175,8 @@ routerAdd("POST", "/api/madre/family/join", (e) => {
             throw new BadRequestError(JOIN_FAILURE, null);
         }
 
-        const member = txApp.findRecordById("users", e.auth.id);
+        const member = require(__hooks + "/lib/family_v2.js").legacyGuard(txApp, e);
+        require(__hooks + "/lib/family_v2.js").legacyJoin(txApp, joined, member);
         // Та же гонка, что в create: внешняя проверка пропускает два
         // параллельных join. Перечитываем членство до записи и отвечаем тем же
         // JOIN_FAILURE, чтобы не перезаписать уже проставленную книгу и не
@@ -195,6 +199,7 @@ routerAdd("POST", "/api/madre/family/join", (e) => {
             txApp.save(row);
         }
 
+        require(__hooks + "/lib/family_v2.js").legacySynced(txApp, joined, member);
         if (dormant) {
             joined.set("owner", e.auth.id);
             joined.set("invite_code_hash", $security.hs256(
@@ -212,9 +217,10 @@ routerAdd("POST", "/api/madre/family/join", (e) => {
         family_id: joined.id,
         family_name: joined.getString("name"),
     });
-}, $apis.requireAuth());
+}, $apis.requireAuth(), $apis.bodyLimit(65536));
 
 routerAdd("POST", "/api/madre/family/invite", (e) => {
+    if (e.request.header.values("X-Madre-Family-Version").length) { return require(__hooks + "/lib/family_v2.js").handle(e, "rotate"); }
     const pepper = $os.getenv("MADRE_INVITE_PEPPER");
     if (!pepper) {
         throw new ApiError(500, "Семейная книга на сервере ещё не настроена.", null);
@@ -234,10 +240,13 @@ routerAdd("POST", "/api/madre/family/invite", (e) => {
 
     $app.runInTransaction((txApp) => {
         rotated = txApp.findRecordById("families", familyId);
+        const principal = require(__hooks + "/lib/family_v2.js").legacyGuard(txApp, e);
+        if (principal.getString("family") !== familyId || rotated.getString("deleted_at")) { throw new ForbiddenError("Membership required.", null); }
         if (rotated.getString("owner") !== e.auth.id) {
             throw new ForbiddenError("Код приглашения меняет только владелец книги.", null);
         }
 
+        require(__hooks + "/lib/family_v2.js").legacyRevoke(txApp, rotated);
         rotated.set("invite_code_hash", $security.hs256(code, pepper));
         txApp.save(rotated);
     });
@@ -247,9 +256,10 @@ routerAdd("POST", "/api/madre/family/invite", (e) => {
         family_name: rotated.getString("name"),
         invite_code: code,
     });
-}, $apis.requireAuth());
+}, $apis.requireAuth(), $apis.bodyLimit(65536));
 
 routerAdd("PATCH", "/api/madre/family/rename", (e) => {
+    if (e.request.header.values("X-Madre-Family-Version").length) { return e.json(426, {error: "unsupported_protocol"}); }
     const familyId = e.auth.getString("family");
     if (!familyId) {
         throw new BadRequestError("Полка ещё не заведена.", null);
@@ -266,6 +276,8 @@ routerAdd("PATCH", "/api/madre/family/rename", (e) => {
 
     $app.runInTransaction((txApp) => {
         renamed = txApp.findRecordById("families", familyId);
+        const principal = require(__hooks + "/lib/family_v2.js").legacyGuard(txApp, e);
+        if (principal.getString("family") !== familyId || renamed.getString("deleted_at")) { throw new ForbiddenError("Membership required.", null); }
         if (renamed.getString("owner") !== e.auth.id) {
             throw new ForbiddenError("Название полки меняет только тот, кто её завёл.", null);
         }
@@ -277,16 +289,17 @@ routerAdd("PATCH", "/api/madre/family/rename", (e) => {
         family_id: renamed.id,
         family_name: renamed.getString("name"),
     });
-}, $apis.requireAuth());
+}, $apis.requireAuth(), $apis.bodyLimit(65536));
 
 routerAdd("POST", "/api/madre/family/leave", (e) => {
+    if (e.request.header.values("X-Madre-Family-Version").length) { return require(__hooks + "/lib/family_v2.js").handle(e, "leave"); }
     const familyId = e.auth.getString("family");
     if (!familyId) {
         throw new BadRequestError("Полка ещё не заведена.", null);
     }
 
     $app.runInTransaction((txApp) => {
-        const member = txApp.findRecordById("users", e.auth.id);
+        const member = require(__hooks + "/lib/family_v2.js").legacyGuard(txApp, e);
         if (member.getString("family") !== familyId) {
             throw new BadRequestError("Полка ещё не заведена.", null);
         }
@@ -301,6 +314,7 @@ routerAdd("POST", "/api/madre/family/leave", (e) => {
             { family: familyId, id: e.auth.id },
         );
 
+        require(__hooks + "/lib/family_v2.js").legacyDeparture(txApp, family, member, others);
         member.set("family", "");
         txApp.save(member);
 
@@ -331,11 +345,8 @@ routerAdd("POST", "/api/madre/family/leave", (e) => {
             txApp.save(row);
         }
 
-        if (others && others.length > 0 && family.getString("owner") === e.auth.id) {
-            family.set("owner", others[0].id);
-            txApp.save(family);
-        }
+        // No silent oldest-member ownership transfer, including old clients.
     });
 
     return e.json(200, { ok: true });
-}, $apis.requireAuth());
+}, $apis.requireAuth(), $apis.bodyLimit(65536));

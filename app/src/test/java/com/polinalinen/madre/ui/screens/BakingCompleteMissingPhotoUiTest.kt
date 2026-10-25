@@ -65,7 +65,11 @@ class BakingCompleteMissingPhotoUiTest {
         }
         val ledger = FakeBakeSessionLedger().apply { put(sessionId = 12L, recordId = 99L) }
         val sync=FakeShelfSync()
-        val vm = BakingViewModel(app, history, sync, ledger)
+        val vm = rule.runOnIdle { BakingViewModel(app, history, sync, ledger) }
+        rule.waitUntil(5_000) {
+            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+            vm.restoreReady.value
+        }
 
         assertThat(vm.session(12L)).isNull()
 
@@ -86,12 +90,37 @@ class BakingCompleteMissingPhotoUiTest {
             }
         }
         rule.waitForIdle()
+        rule.waitUntil(5_000) {
+            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+            vm.completions.value[12L]?.recordId?.isCompleted == true
+        }
+        assertThat(kotlinx.coroutines.runBlocking { vm.completions.value.getValue(12L).recordId.await() })
+            .isEqualTo(99L)
 
-        rule.onNodeWithText("На главную").assertIsDisplayed().performClick()
-        rule.waitForIdle()
+        // Force the real durable-cleanup lock to suspend finish, as Room/restore can in CI.
+        // Unlock posts its continuation to Robolectric's paused Main, outside Compose's frame clock.
+        val durableGate = (app as MadreApplication).plannedBakeOperationGate
+        kotlinx.coroutines.runBlocking { durableGate.lock() }
+        try {
+            rule.onNodeWithText("На главную").assertIsDisplayed().performClick()
+            rule.waitForIdle()
+            assertThat(vm.finishing.value).contains(12L)
+            assertThat(exited).isFalse()
+            assertThat(ledger.recordIdFor(12L)).isEqualTo(99L)
+        } finally {
+            Thread { durableGate.unlock() }.apply { start(); join() }
+        }
 
-        rule.waitUntil(5_000){exited}
+        rule.waitUntil(5_000) {
+            // waitForIdle can finish before IO unlock queues durable cleanup back on Main.
+            // Advancing Compose frames alone cannot run that paused Android-looper continuation.
+            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+            exited
+        }
         assertThat(exited).isTrue()
+        assertThat(ledger.recordIdFor(12L)).isNull()
+        assertThat(vm.completions.value).doesNotContainKey(12L)
+        assertThat(history.attachCalls).isEmpty()
         assertThat(history.recordCalls).isEmpty()
         assertThat(sync.calls).isEmpty()
         rule.onNodeWithText("ушли с экрана").assertExists()

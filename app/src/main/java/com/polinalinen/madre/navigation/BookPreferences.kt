@@ -30,7 +30,7 @@ object BookStartup {
         if (saved in 0..3 && now - lastVisit in 0 until RECENT_MILLIS) saved else 0
 }
 
-class BookPreferences(context: Context, namespace: String = "madre_prefs", private val rosterEnabled: () -> Boolean = { com.polinalinen.madre.config.FeatureFlags.FAMILY_ROSTER_V2 }) : AutoCloseable {
+class BookPreferences @JvmOverloads constructor(context: Context, namespace: String = "madre_prefs", private val rosterEnabled: () -> Boolean = { com.polinalinen.madre.config.FeatureFlags.FAMILY_ROSTER_V2 }) : AutoCloseable {
     private val prefs = context.getSharedPreferences(namespace, Context.MODE_PRIVATE)
     private val gson = Gson()
     var plansReadError by mutableStateOf<String?>(null)

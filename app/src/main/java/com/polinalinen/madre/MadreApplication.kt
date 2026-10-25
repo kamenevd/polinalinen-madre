@@ -112,5 +112,18 @@ class MadreApplication : Application() {
             tokens = authTokenStore,
         )
     }
+    /** No restore/login side effects: only the explicit SDK callback can invoke this adapter. */
+    internal val foregroundFamilyProvisioning: com.polinalinen.madre.account.yandex.ForegroundFamilyProvisioning? by lazy {
+        if (!com.polinalinen.madre.config.FeatureFlags.FAMILY_ROSTER_V2) null else {
+            val auth = com.polinalinen.madre.integration.v2.HttpsFamilyLinkApi()
+            object : com.polinalinen.madre.account.yandex.ForegroundFamilyProvisioning {
+                override suspend fun authenticate(token: com.polinalinen.madre.account.yandex.YandexLoginToken,
+                    isCurrent: () -> Boolean) {
+                    familyAccountRepository.authenticateYandex(token, auth, isCurrent)
+                }
+                override fun signOut() { familyAccountRepository.signOut() }
+            }
+        }
+    }
     val syncRepository: SyncRepository by lazy { SyncRepository(this) }
 }

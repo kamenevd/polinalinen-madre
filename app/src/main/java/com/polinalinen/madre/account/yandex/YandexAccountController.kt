@@ -26,12 +26,15 @@ class YandexAccountController(
     private val scope: CoroutineScope,
     private val storage: YandexAccountStorage,
     private val api: YandexAccountApi,
+    private val family: ForegroundFamilyProvisioning? = null,
 ) : AutoCloseable {
     private val stateLock = Mutex()
     private val apiLock = Mutex()
     private val submissions = ConcurrentHashMap.newKeySet<Job>()
     private val _state = MutableStateFlow<YandexAccountState>(YandexAccountState.SignedOut)
     val state = _state.asStateFlow()
+    private val _provisioning = MutableStateFlow(ForegroundProvisioningState())
+    val provisioning = _provisioning.asStateFlow()
     // Retained across Activity rotation, but deliberately changes after process death.
     val requestOwnerId: String = UUID.randomUUID().toString()
     @Volatile private var closed = false
@@ -48,6 +51,10 @@ class YandexAccountController(
             val saved = storage.read()
             stateLock.withLock {
                 unbindPending = saved.unbindPending
+                if (family != null && saved.foregroundRetryRequired && !saved.unbindPending) {
+                    _provisioning.value = ForegroundProvisioningState(
+                        ForegroundProvisioningState.Phase.RETRY_REQUIRED, aliceBound = saved.profile != null)
+                }
                 _state.value = when {
                     saved.unbindPending -> YandexAccountState.SignedOut
                     saved.foregroundRetryRequired -> YandexAccountState.Error(YandexAccountError.SERVER)
@@ -103,32 +110,58 @@ class YandexAccountController(
     fun submitSdkToken(attempt: Long, token: YandexLoginToken): Job {
         val job = scope.launch(start = CoroutineStart.LAZY) {
             try {
-                withTimeout(BIND_TIMEOUT_MILLIS) {
+                withTimeout(if (family == null) BIND_TIMEOUT_MILLIS else PROVISION_TIMEOUT_MILLIS) {
                     val accepted = stateLock.withLock {
                         val active = _state.value as? YandexAccountState.SigningIn
                         if (closed || active?.attempt != attempt || unbindPending) false
                         else {
                             signInTimeout?.cancel()
                             _state.value = YandexAccountState.Binding(attempt)
+                            if (family != null) _provisioning.value = ForegroundProvisioningState(
+                                ForegroundProvisioningState.Phase.BINDING_ALICE)
                             // Must precede the request: process death cannot reconstruct its bearer.
                             metadata { storage.requireForegroundRetry() }
                             true
                         }
                     }
                     if (!accepted) return@withTimeout
-                    val profile = apiLock.withLock { api.bind(token) }
-                    stateLock.withLock {
-                        val active = _state.value as? YandexAccountState.Binding
-                        if (sequence == attempt && active?.attempt == attempt && !unbindPending) {
-                            metadata { storage.storeVerified(profile) }
-                            _state.value = YandexAccountState.SignedIn(profile)
+                    // Keep the whole sequence in the same lane as remote unbind.
+                    apiLock.withLock {
+                        if (!isBinding(attempt)) return@withLock
+                        val profile = api.bind(token)
+                        if (family != null) {
+                            val proceed = stateLock.withLock {
+                                if (!isBinding(attempt)) false else {
+                                    _provisioning.value = ForegroundProvisioningState(
+                                        ForegroundProvisioningState.Phase.AUTHENTICATING_POCKETBASE, aliceBound = true)
+                                    metadata { storage.storeAliceBound(profile) }
+                                    true
+                                }
+                            }
+                            if (!proceed) return@withLock
+                            family.authenticate(token) { isBinding(attempt) }
+                            stateLock.withLock {
+                                if (isBinding(attempt)) _provisioning.value = _provisioning.value.copy(pocketBaseAuthenticated = true)
+                            }
+                        }
+                        stateLock.withLock {
+                            if (isBinding(attempt)) {
+                                metadata { storage.storeVerified(profile) }
+                                _state.value = YandexAccountState.SignedIn(profile)
+                                if (family != null) _provisioning.value = ForegroundProvisioningState(
+                                    ForegroundProvisioningState.Phase.COMPLETE, aliceBound = true, pocketBaseAuthenticated = true)
+                            }
                         }
                     }
                 }
             } catch (_: TimeoutCancellationException) {
                 failBinding(attempt, YandexAccountError.SERVER)
-            } catch (cancelled: CancellationException) { throw cancelled }
-            catch (failure: YandexAccountFailure) { failBinding(attempt, failure.kind) }
+            } catch (cancelled: CancellationException) {
+                withContext(NonCancellable) { failBinding(attempt, YandexAccountError.SERVER) }
+                throw cancelled
+            } catch (failure: com.polinalinen.madre.integration.v2.ContractFailure) {
+                failBinding(attempt, YandexAccountError.SERVER, failure.kind)
+            } catch (failure: YandexAccountFailure) { failBinding(attempt, failure.kind) }
             catch (_: Exception) { failBinding(attempt, YandexAccountError.SERVER) }
             finally { token.close() }
         }
@@ -138,10 +171,18 @@ class YandexAccountController(
         return job
     }
 
-    private suspend fun failBinding(attempt: Long, kind: YandexAccountError) {
+    private fun isBinding(attempt: Long): Boolean = !closed && !unbindPending &&
+        (_state.value as? YandexAccountState.Binding)?.attempt == attempt
+
+    private suspend fun failBinding(attempt: Long, kind: YandexAccountError,
+        familyError: com.polinalinen.madre.integration.v2.ContractFailure.Kind? = null) {
         stateLock.withLock {
             if (sequence != attempt) return@withLock
-            if (_state.value is YandexAccountState.Binding) _state.value = YandexAccountState.Error(kind)
+            if (_state.value is YandexAccountState.Binding) {
+                _state.value = YandexAccountState.Error(kind)
+                if (family != null) _provisioning.value = _provisioning.value.copy(
+                    phase = ForegroundProvisioningState.Phase.RETRY_REQUIRED, familyError = familyError)
+            }
         }
     }
 
@@ -149,6 +190,7 @@ class YandexAccountController(
     suspend fun signOut(onLocalAccountCleared: (VerifiedYandexProfile?) -> Unit = {}) {
         if (closed || !scope.isActive) return
         initialization.join()
+        var familyClearFailed = false
         val revocation = stateLock.withLock {
             ++sequence
             signInTimeout?.cancel()
@@ -159,6 +201,10 @@ class YandexAccountController(
             val binding = _state.value is YandexAccountState.Binding
             var portrait = (_state.value as? YandexAccountState.SignedIn)?.profile
             _state.value = YandexAccountState.SignedOut
+            if (family != null) _provisioning.value = ForegroundProvisioningState()
+            // Fence and clear PB credentials/cache before any suspending metadata read.
+            // A local PB cleanup failure must not prevent the independent Alice revoke.
+            try { family?.signOut() } catch (_: Exception) { familyClearFailed = true }
             val remoteRequired = try {
                 val saved = storage.read()
                 if (portrait == null) portrait = saved.profile
@@ -170,6 +216,7 @@ class YandexAccountController(
             try { storage.clearAccount(unbindPending = remoteRequired) }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { _state.value = YandexAccountState.Error(YandexAccountError.STORAGE) }
+            if (familyClearFailed) _state.value = YandexAccountState.Error(YandexAccountError.STORAGE)
             Triple(sequence, remoteRequired, portrait)
         }
         // The attempt is already fenced and local metadata cleared. The caller
@@ -178,6 +225,9 @@ class YandexAccountController(
         catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { /* Cache cleanup cannot invent or prevent a remote ACK. */ }
         if (revocation.second) revokePending(revocation.first)
+        if (familyClearFailed) stateLock.withLock {
+            if (sequence == revocation.first) _state.value = YandexAccountState.Error(YandexAccountError.STORAGE)
+        }
     }
 
     suspend fun retryPendingUnbind() {
@@ -222,5 +272,6 @@ class YandexAccountController(
     companion object {
         const val SIGN_IN_TIMEOUT_MILLIS = 60_000L
         const val BIND_TIMEOUT_MILLIS = 10_000L
+        const val PROVISION_TIMEOUT_MILLIS = 30_000L
     }
 }

@@ -13,6 +13,12 @@ interface YandexAccountStorage {
     suspend fun read(): YandexAccountSnapshot
     suspend fun markOfferSeen()
     suspend fun storeVerified(profile: VerifiedYandexProfile)
+    /** Atomically retain retry until PB also succeeds; stores only verified Alice metadata. */
+    suspend fun storeAliceBound(profile: VerifiedYandexProfile) {
+        // Phase-A-only stores must fail closed instead of losing the partial-success marker.
+        // The production DataStore implementation below writes profile+retry atomically.
+        throw YandexAccountFailure(YandexAccountError.STORAGE)
+    }
     suspend fun requireForegroundRetry()
     suspend fun clearAccount(unbindPending: Boolean)
     suspend fun acknowledgeUnbind()
@@ -40,14 +46,17 @@ class YandexAccountPrefs internal constructor(private val store: DataStore<Prefe
 
     override suspend fun markOfferSeen() = update { this[OFFER_SEEN] = true }
 
-    override suspend fun storeVerified(profile: VerifiedYandexProfile) = update {
+    override suspend fun storeVerified(profile: VerifiedYandexProfile) = storeProfile(profile, retry = false)
+    override suspend fun storeAliceBound(profile: VerifiedYandexProfile) = storeProfile(profile, retry = true)
+
+    private suspend fun storeProfile(profile: VerifiedYandexProfile, retry: Boolean) = update {
         this[UID_HASH] = profile.uidHash
         this[LOGIN] = profile.login
         this[DISPLAY_NAME] = profile.displayName
         profile.avatarId?.let { this[AVATAR_ID] = it } ?: remove(AVATAR_ID)
         this[AVATAR_EMPTY] = profile.avatarEmpty
         this[BOUND_AT] = profile.boundAtMillis
-        this[RETRY_REQUIRED] = false
+        this[RETRY_REQUIRED] = retry
         this[UNBIND_PENDING] = false
     }
 

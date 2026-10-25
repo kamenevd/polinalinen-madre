@@ -1,6 +1,6 @@
 # Madre 7.1 / family-v2 + roster-v2 — HTTP/DTO contract, revision 1
 
-Статус: первый Android domain/transport срез, НЕ действующий сервер и НЕ приёмка K1–K10/B7–B10.
+Статус: Android domain/transport + foreground provisioning K2/K10 за default-false flag; НЕ действующий сервер и НЕ приёмка K1–K10/B7–B10.
 Владелец согласования — контроллер; отдельные writer: PocketBase family/auth, Alice roster/NLU; веб/edge только parent.
 Каноны FAMILY-LINK §§0–7 / BAKE-NUMBERS §§4–8, свежий handoff 25.10 supersede исторические same-writer/удалить старые API строки.
 Все примеры ниже — типы/синтетические формы, не записи пользователей. Room остаётся 12.
@@ -21,14 +21,14 @@
 | POST `/api/madre/auth/yandex` | отсутствует | `{yandex_token:string}` | `FamilyAuth` |
 | POST `/api/madre/auth/yandex/link` | живой старый PB email token | `{yandex_token:string}` | `FamilyAuth`, record.id строго прежний |
 
-`FamilyAuth = {token:string, record:{id:string,name:string,family:string|null}}`; пустая relation family `""` также читается как null.
+`FamilyAuth = {token:string, record:{id:string,name:string,family:string|null}}`; пустая relation family `""` также читается как null. Auth `name` может честно быть пустой строкой, если first_name отсутствует; missing/null/non-string name не принимается. Непустые ID/token и тип/непустое значение заданного family не ослабляются.
 Для first_name/name разрешено хранение только family-доменом; не email/phone/avatar/raw UID/OAuth.
 Сервер каждый раз вызывает официальный Yandex `/info`, сверяет наш client_id и использует HMAC-SHA256(uid, отдельный secret salt), unique UID index.
 Не merge по email/имени, не присвоение чужой записи. Link конфликт UID →409 без изменения records/family/bakes/password/code. Auth и link race-safe.
-Будущий foreground coordinator: explicit SDK result → существующий Alice bind → PB auth/link последовательно одним RAM-owned `YandexLoginToken` → close в finally.
+Действующий за `FAMILY_ROSTER_V2=false` foreground controller: explicit SDK result → существующий Alice bind → PB auth/link последовательно одним RAM-owned `YandexLoginToken` → close в finally и completion callback (включая cancel-before-body). Никакого нового SDK launch из init/profile restore/upgrade.
 До первого запроса записывается только boolean retry marker; после process death НОВЫЙ foreground вход по действию, не реконструкция токена из profile/UID, не worker/автологин при upgrade.
 Частичный успех Alice не означает PB login; PB failure не рисует общую готовность и не откатывает/не удаляет аккаунт неявно. Оба результата подтверждаются отдельно.
-Android `HttpsFamilyLinkApi.authenticate` строит настоящий PB request; сам по себе не присоединяет к семье и не сохраняет токен. SDK orchestration/token-store — явный остаток K2/K5.
+Android `HttpsFamilyLinkApi.authenticate` строит настоящий PB request; сам по себе не присоединяет к семье. `MadreApplication` → Activity-owned `YandexAccountViewModel` → существующий SDK controller → `ForegroundFamilyProvisioning` → общий `FamilyAccountRepository` подключены за false-флагом. Наличие saved PB credential требует pinned POST `/api/collections/users/auth-refresh` и link к точно тому же record.id; refresh failure НЕ превращается в auth нового аккаунта. Repo mutex сериализует с legacy операциями; revision/current-attempt/cancellation fence не даёт позднему ответу воскресить logout. Только PB credential сохраняется в существующий `SecureTokenStore`, не OAuth. Alice profile + boolean retry пишутся атомарно до PB; retry сбрасывается лишь после обоих успешных ответов и metadata commit. `provisioning` отдельно сообщает Alice-bound, PB-authenticated, retry/conflict; один частичный успех не COMPLETE. Старый flag-off Alice-only путь сохранён. До завершения UI/AppLinks и server enable gate этот код не включать.
 Выход чистит локальный PB session и family cache, не серверное членство/Room; текст «Полка семьи станет недоступна на этом телефоне до входа».
 7.1 сохраняет ВСЕ email записи/passwordAuth/старый code join. Parent перед закрытием ТОЛЬКО новой регистрации пересчитывает и сообщает число (предыдущий read 24.10 14:49:35 МСК: 2, оба с семьёй; не вечная константа). 7.2 отключение пароля/кода НЕ разрешено этим контрактом.
 
@@ -120,5 +120,5 @@ Android `RosterCommandPolicy` проверяет attach + installation consent, 
 1. Изолированные реальные PB hooks/DB tests: client_id/uid isolation/link conflicts, отсутствие OAuth в DB/logs; concurrent max8/accept/rotate/restore/transfer, photo/privacy, existing records/password/code14/16.
 2. Реальный Alice server CI: isolation/consent scopes/replay/revoke/lease/roster revisions/atomic replacement/expiry/cleanup, full NLU matrix, pinned confirmations, old poll/select/bind/unbind14/16.
 3. Parent-only: fresh full DB+storage+code+env/keys+config/unit/edge backups, hashes/integrity и изолированный tested rollback сохраняющий последние записи/отзывы; fresh email count/report. Уже полученное deploy-да не означает readiness и не расширяет lifecycle helper.
-4. Android next slices: foreground sequential provisioning + retry marker/token-store; UI/App Links/SavedState/K01–K11; real roster adapter/executor/lease/receipt; native states/QA e2e. Держать default false до этих проверок.
+4. Android remaining slices: UI/App Links/SavedState/K01–K11, invitation-return/session integration; real roster adapter/executor/lease/receipt; native states/QA e2e. Foreground sequential provisioning + retry marker/protected token-store реализованы и проверяются synthetic JVM/serialized boundary, НЕ живым входом. Держать default false до полной приёмки и server gate.
 5. Public assetlinks обоих действительных cert без redirects, K11 escaped names/no trackers/no clipboard/open-redirect, no-store/no-referrer, Huawei owner «Открыть в Мадре» и реальный K5; никакого phone/login/QR от этого writer.

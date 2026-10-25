@@ -12,6 +12,8 @@ import com.polinalinen.madre.data.remote.RenameFamilyRequest
 import com.polinalinen.madre.data.remote.UserRecord
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -158,10 +160,44 @@ class FamilyAccountRepository(
         synchronized(authGate) {
             revision.incrementAndGet()
             token.set(null)
-            tokens.clear()
             _state.value = FamilyBookState.SignedOut
+            tokens.clear()
             FamilyBookState.SignedOut
         }
+
+    /**
+     * Foreground-only v2 authentication, serialized with legacy account operations.
+     * A saved PB session always links that exact live record; never silently creates
+     * an unrelated account after refresh/link failure. No Room or server leave call.
+     */
+    suspend fun authenticateYandex(
+        bearer: com.polinalinen.madre.account.yandex.YandexLoginToken,
+        auth: com.polinalinen.madre.integration.v2.FamilyAuthenticationApi,
+        isCurrent: () -> Boolean,
+    ) = mutex.withLock {
+        val seen = revision.get()
+        if (!isCurrent()) throw kotlinx.coroutines.CancellationException()
+        val saved = tokens.read()
+        val existing = saved?.let { auth.refreshSession(it) }
+        currentCoroutineContext().ensureActive()
+        if (!isCurrent() || revision.get() != seen) throw kotlinx.coroutines.CancellationException()
+        val result = auth.authenticate(bearer, existing)
+        currentCoroutineContext().ensureActive()
+        synchronized(authGate) {
+            if (!isCurrent() || revision.get() != seen) throw kotlinx.coroutines.CancellationException()
+            require(existing == null || result.userId == existing.userId)
+            val old = _state.value.account?.takeIf { it.userId == result.userId }
+            // The protected store is shared with shelf/sync; never persist Yandex OAuth.
+            tokens.write(result.credential)
+            token.set(result.credential)
+            publishFreshUnderGate(seen, FamilyBookState.SignedIn(FamilyAccount(
+                result.userId, old?.email.orEmpty(), result.name, result.familyId,
+                old?.familyName?.takeIf { old.familyId == result.familyId },
+                familyOwnerId = old?.familyOwnerId?.takeIf { old.familyId == result.familyId },
+            )))
+        }
+        Unit
+    }
 
     fun currentAccount(): FamilyAccount? = _state.value.account
 

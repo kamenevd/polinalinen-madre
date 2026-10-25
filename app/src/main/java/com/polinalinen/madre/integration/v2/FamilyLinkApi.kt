@@ -56,8 +56,13 @@ interface FamilyLinkApi {
     suspend fun family(session: FamilySession): FamilyRoster
 }
 
-/** Real request builder/parser; not connected to legacy UI until parent/backend acceptance. */
-class HttpsFamilyLinkApi internal constructor(private val http: ContractHttp, private val enabled: () -> Boolean) : FamilyLinkApi {
+interface FamilyAuthenticationApi {
+    suspend fun authenticate(token: YandexLoginToken, existingEmailSession: FamilySession? = null): FamilySession
+    suspend fun refreshSession(credential: String): FamilySession
+}
+
+/** Pinned transport. Foreground provisioning is wired behind the default-false flag. */
+class HttpsFamilyLinkApi internal constructor(private val http: ContractHttp, private val enabled: () -> Boolean) : FamilyLinkApi, FamilyAuthenticationApi {
     constructor() : this(ContractHttp(), { FeatureFlags.FAMILY_ROSTER_V2 })
     internal constructor(client: OkHttpClient, enabled: () -> Boolean) : this(ContractHttp(client), enabled)
 
@@ -67,14 +72,35 @@ class HttpsFamilyLinkApi internal constructor(private val http: ContractHttp, pr
     }
 
     /** Token remains owned by the foreground caller and must close after BOTH provisioning calls. */
-    suspend fun authenticate(token: YandexLoginToken, existingEmailSession: FamilySession? = null): FamilySession = safe {
+    override suspend fun authenticate(token: YandexLoginToken, existingEmailSession: FamilySession?): FamilySession = safe {
         val reply = request("POST", if (existingEmailSession == null) "auth/yandex" else "auth/yandex/link",
             existingEmailSession?.credential, json { addProperty("yandex_token", token.forVerificationRequest()) })
-        val record = reply.getAsJsonObject("record")
-        val family = record.get("family").let { if (it == null || it.isJsonNull || it.asString.isEmpty()) null else record.string("family") }
-        FamilySession(record.string("id"), record.string("name"), family, reply.string("token")).also {
+        parseAuth(reply).also {
             require(existingEmailSession == null || it.userId == existingEmailSession.userId)
         }
+    }
+
+    /** A saved PB credential must be verified; failure never falls back to creating another account. */
+    override suspend fun refreshSession(credential: String): FamilySession = safe {
+        if (!enabled()) throw ContractFailure(ContractFailure.Kind.DISABLED)
+        parseAuth(http.request("POST", "https://madre-api.kdnfx.space/api/collections/users/auth-refresh",
+            credential, json {}))
+    }
+
+    private fun parseAuth(reply: JsonObject): FamilySession {
+        val record = reply.getAsJsonObject("record")
+        val relation = record.get("family")
+        val family = when {
+            relation == null || relation.isJsonNull -> null
+            else -> {
+                require(relation.isJsonPrimitive && relation.asJsonPrimitive.isString)
+                if (relation.asString.isEmpty()) null else record.string("family")
+            }
+        }
+        // Missing first_name is an honest empty name, NEVER an invented identity.
+        val name = record.get("name")
+        require(name != null && name.isJsonPrimitive && name.asJsonPrimitive.isString && name.asString.length <= 4096)
+        return FamilySession(record.string("id"), name.asString, family, reply.string("token"))
     }
 
     override suspend fun preview(invite: FamilyInvitation): InvitePreview = safe {

@@ -18,8 +18,10 @@ import coil.memory.MemoryCache
 class YandexAccountViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as MadreApplication
     private val storage = app.yandexAccountStorage
-    internal val controller = YandexAccountController(viewModelScope, storage, app.yandexAccountApi)
+    internal val controller = YandexAccountController(viewModelScope, storage, app.yandexAccountApi,
+        app.foregroundFamilyProvisioning)
     val state = controller.state
+    val provisioning = controller.provisioning
     val pendingUnbind = controller.pendingUnbind
     internal val callbackScope get() = viewModelScope
     private val _offerPending = MutableStateFlow(false)

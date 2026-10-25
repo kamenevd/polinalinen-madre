@@ -8,7 +8,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.StateRestorationTester
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.text.AnnotatedString
 import androidx.navigation.NavHostController
@@ -152,6 +152,92 @@ class BookNavigationUiTest {
         assertEquals(MadreDestinations.HOME,nav.currentDestination?.route)
         assertEquals(0,nav.currentBackStackEntry?.savedStateHandle?.get<Int>("home_section"))
         rule.onNodeWithTag("toc-search").assertIsDisplayed()
+    }
+
+    @Test fun graphInitializesFromDefaultAndRestoresManualReaderAmount() {
+        val recipe=recipes.first()
+        BookPreferences(app).use{it.savePortions(recipe.id,3);it.saveDefaultPortions(4)}
+        lateinit var nav:NavHostController
+        val restoration=StateRestorationTester(rule)
+        restoration.setContent{nav=rememberNavController();MadreNavHost(nav)}
+        rule.waitUntil(10_000){rule.onAllNodesWithTag(Home.chapterRowTag(recipe.id)).fetchSemanticsNodes().isNotEmpty()}
+        rule.onNodeWithTag(Home.chapterRowTag(recipe.id)).performScrollTo().performClick()
+        rule.onNodeWithText("Испечь · ×4",ignoreCase=true).assertExists()
+        rule.onNodeWithText("+").performClick()
+        rule.runOnIdle{BookPreferences(app).use{it.saveDefaultPortions(1)}}
+        rule.onNodeWithText("Испечь · ×5",ignoreCase=true).assertExists()
+        restoration.emulateSavedInstanceStateRestore();rule.waitForIdle()
+        rule.onNodeWithText("Испечь · ×5",ignoreCase=true).assertExists()
+        assertEquals(MadreDestinations.CHAPTER,nav.currentDestination?.route)
+        assertTrue(runBlocking{app.activeBakeRepository.all()}.isEmpty())
+        BookPreferences(app).use{assertEquals(1,it.defaultPortions);assertEquals(1,it.portions(recipe.id))}
+        assertEquals(5,app.getSharedPreferences("madre_prefs",0).getInt("chapter_portions_${recipe.id}",-1))
+        rule.onNodeWithContentDescription("В оглавление").performClick()
+        rule.onNodeWithTag(Home.chapterRowTag(recipe.id)).performScrollTo().performClick()
+        rule.onNodeWithText("Испечь · ×1",ignoreCase=true).assertExists()
+    }
+
+    @Test fun historicalSheetAmountDoesNotOverrideNewOvenActionsAndLiveSheetKeepsManualAmount() {
+        val recipe=recipes.first()
+        val raw=app.getSharedPreferences("madre_prefs",0)
+        val key="chapter_portions_${recipe.id}"
+        BookPreferences(app).use{it.saveDefaultPortions(4);it.visit(1)}
+        val controller=bindRealController()
+        lateinit var nav:NavHostController
+        val restoration=StateRestorationTester(rule)
+        restoration.setContent{nav=rememberNavController();MadreNavHost(nav)}
+        val configure=SemanticsMatcher("configure actual oven tile"){
+            it.config.getOrNull(SemanticsActions.OnClick)?.label=="Настроить выпечку: ${recipe.name}"
+        }
+        fun openSheet() {
+            rule.waitUntil(10_000){rule.onAllNodes(configure).fetchSemanticsNodes().isNotEmpty()}
+            rule.onNode(configure).performScrollTo().performClick()
+        }
+        fun startSheet(amount:Int) {
+            rule.onNode(hasText("Начать",substring=true) and hasText("· ×$amount",substring=true))
+                .performScrollTo().performClick()
+        }
+        fun awaitBakes(count:Int) {
+            rule.waitUntil(10_000){
+                val ready=rule.onAllNodesWithText("Дальше →").fetchSemanticsNodes().isNotEmpty()
+                ready && controller.sessions.value.size==count
+            }
+            assertEquals(MadreDestinations.BAKE,nav.currentDestination?.route)
+        }
+        fun returnToOven() {
+            rule.runOnIdle{assertTrue(nav.popBackStack())};rule.waitForIdle()
+            assertEquals(MadreDestinations.HOME,nav.currentDestination?.route)
+        }
+        openSheet()
+        rule.onNodeWithText("×4").assertExists()
+        startSheet(4) // No stepper interaction: the real success path still auto-saves chapter_portions.
+        awaitBakes(1)
+        val old=controller.sessions.value.single()
+        assertEquals(4,old.trustedPortions);assertEquals(4,raw.getInt(key,-1))
+        returnToOven()
+        rule.runOnIdle{BookPreferences(app).use{it.saveDefaultPortions(1)}}
+        openSheet();rule.onNodeWithText("×1").assertExists()
+        androidx.test.espresso.Espresso.pressBack();rule.waitForIdle()
+        BookPreferences(app).use {
+            it.saveDefaultPortions(null)
+            assertEquals(4,it.portions(recipe.id));assertEquals(4,raw.getInt(key,-1))
+            it.saveDefaultPortions(1)
+        }
+        rule.onNodeWithContentDescription("Испечь ${recipe.name} сейчас").performScrollTo().performClick()
+        awaitBakes(2)
+        assertEquals(listOf(1,4),controller.sessions.value.map{requireNotNull(it.trustedPortions)}.sorted())
+        assertEquals(4,raw.getInt(key,-1))
+        returnToOven()
+        openSheet();rule.onNodeWithText("×1").assertExists()
+        rule.onNodeWithText("+").performClick()
+        rule.runOnIdle{BookPreferences(app).use{it.saveDefaultPortions(5)}}
+        rule.onNodeWithText("×2").assertExists()
+        restoration.emulateSavedInstanceStateRestore();rule.waitForIdle()
+        rule.onNodeWithText("×2").assertExists()
+        startSheet(2);awaitBakes(3)
+        assertEquals(listOf(1,2,4),controller.sessions.value.map{requireNotNull(it.trustedPortions)}.sorted())
+        assertEquals(listOf(1.0,2.0,4.0),runBlocking{app.activeBakeRepository.all()}.map{it.scaleFactor}.sortedBy{it})
+        assertEquals(4,controller.session(old.id)!!.trustedPortions)
     }
 
     @Test fun chapterPlusUpdatesActualIngredientWithoutTurningThePage() {

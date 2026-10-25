@@ -89,6 +89,30 @@ class LSettingsContractTest {
         rule.runOnIdle{assertEquals("Соня",name);assertEquals(168,interval);assertTrue(done)}
     }
 
+    @Test fun inlineDefaultStepperUsesCurrentRecipeAndPersistsBothBoundsAndReset() {
+        val book=com.polinalinen.madre.navigation.BookPreferences(context,"l-default-portions")
+        try {
+            book.savePortions("bread",3)
+            book.saveBookmark(com.polinalinen.madre.navigation.BookBookmark("bread",0))
+            rule.setContent { RazvorotTheme(force=Atmosphere.DAWN) { DefaultPortionsSettingRow(book) } }
+            rule.onNodeWithText("Порции по умолчанию").assertExists()
+            rule.onNodeWithText("×3").assertExists()
+            rule.onNodeWithText("Как в рецепте").assertExists()
+            repeat(2){rule.onNodeWithText("+").performClick()}
+            rule.onNodeWithText("×5").assertExists()
+            rule.onNodeWithText("+").assertIsNotEnabled()
+            repeat(4){rule.onNodeWithText("−").performClick()}
+            rule.onNodeWithText("−").assertIsNotEnabled()
+            com.polinalinen.madre.navigation.BookPreferences(context,"l-default-portions").use {
+                assertEquals(1,it.defaultPortions);assertEquals(1,it.portions("bread"))
+                assertEquals(3,context.getSharedPreferences("l-default-portions",0).getInt("chapter_portions_bread",-1))
+            }
+            rule.onNodeWithText("Как в рецепте").performClick()
+            rule.onNodeWithText("×3").assertExists()
+            rule.runOnIdle{assertNull(book.defaultPortions)}
+        } finally { book.close() }
+    }
+
     @Test fun readerQuickSheetDoesNotDuplicateHapticsOrMotionSwitch() {
         val preferences=ReadingPreferences(context,"l-quick-contract")
         rule.setContent { RazvorotTheme(force=Atmosphere.DAWN) {

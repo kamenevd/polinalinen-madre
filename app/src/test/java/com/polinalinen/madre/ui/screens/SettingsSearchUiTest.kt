@@ -64,7 +64,7 @@ class SettingsSearchUiTest {
             SettingsContent("Полина", {}, {}, {}, "Соня", {}, 3, 7, 24, {}, true, {}, true, {},
                 "Подпись книги", FamilyBookState.SignedOut, {}, {}, preferences = preferences)
         } }
-        rule.onNodeWithText("Внешний вид").performClick()
+        rule.onNodeWithText("Внешний вид").performScrollTo().performClick()
         rule.onNodeWithText("Ночь").performScrollTo().performClick()
         rule.waitForIdle()
         assertEquals(Atmosphere.NIGHT, current)
@@ -92,7 +92,7 @@ class SettingsSearchUiTest {
         assertSame(app,settings.getApplication<MadreApplication>())
         assertSame(app.bookDisplaySettings,settings.bookDisplaySettings)
         rule.setContent { RazvorotTheme { SettingsScreen("Полина", {}, {},familySettingsViewModel=settings,familyBookViewModel=books) } }
-        rule.onNodeWithText("Внешний вид").performClick()
+        rule.onNodeWithText("Внешний вид").performScrollTo().performClick()
         rule.onNodeWithContentDescription("Не гасить экран").performScrollTo().assertIsDisplayed().assertIsOn().performClick()
         try {
             rule.waitUntil(10_000) {
@@ -111,7 +111,7 @@ class SettingsSearchUiTest {
         shadowOf(app).grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
         shadowOf(app.getSystemService(android.app.NotificationManager::class.java)).setNotificationsEnabled(true)
         assertTrue(com.polinalinen.madre.notifications.MadreNotifier(app).canPost())
-        rule.onNodeWithText("Уведомления и вибрация").performClick()
+        rule.onNodeWithText("Уведомления и вибрация").performScrollTo().performClick()
         rule.onNodeWithContentDescription("Ход выпечки на экране блокировки").performScrollTo().assertIsOff().performClick()
         rule.waitUntil(10_000) {
             rule.onNodeWithContentDescription("Ход выпечки на экране блокировки").fetchSemanticsNode()

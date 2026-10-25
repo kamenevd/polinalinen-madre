@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.google.gson.Gson
+import com.polinalinen.madre.model.RecipeScale
 
 
 /** Navigation-only state. Existing family/notes/Room keys are never replaced. */
@@ -39,9 +40,12 @@ class BookPreferences @JvmOverloads constructor(context: Context, namespace: Str
         private set
     var plans by mutableStateOf(runCatching { readPlans() }.getOrDefault(emptyList()))
         private set
+    var defaultPortions by mutableStateOf(readDefaultPortions())
+        private set
     private val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == "bookmark" || key?.startsWith("bookmark_")==true) bookmark = readBookmark()
         if (key == "planned_bakes") runCatching { readPlans() }.onSuccess { plans = it }
+        if (key == DEFAULT_PORTIONS || key == null) defaultPortions = readDefaultPortions()
     }
     init { prefs.registerOnSharedPreferenceChangeListener(listener) }
     fun initialTab(now: Long = System.currentTimeMillis()) = BookStartup.tab(
@@ -60,9 +64,20 @@ class BookPreferences @JvmOverloads constructor(context: Context, namespace: Str
         return if(prefs.getString("bookmark_detail_key",null)==saved.encode())saved.copy(
             section=prefs.getString("bookmark_section",null),step=prefs.getInt("bookmark_step",-1).takeIf{it>=0}) else saved
     }
-    fun portions(recipeId: String) = prefs.getInt("chapter_portions_$recipeId", 2).coerceIn(1, 5)
+    private fun readDefaultPortions(): Int? = if (prefs.contains(DEFAULT_PORTIONS))
+        RecipeScale.clampPortions(prefs.getInt(DEFAULT_PORTIONS, RecipeScale.MIN_PORTIONS)) else null
+    fun saveDefaultPortions(value: Int?) {
+        val edit = prefs.edit()
+        if (value == null) edit.remove(DEFAULT_PORTIONS) else edit.putInt(DEFAULT_PORTIONS, RecipeScale.clampPortions(value))
+        edit.apply()
+        defaultPortions = readDefaultPortions()
+    }
+    // Initialize NEW entries only; current/restored reader, sheet, plan and bake keep their own amount.
+    // An explicit global wins over historical chapter values without rewriting them.
+    fun portions(recipeId: String) = RecipeScale.clampPortions(
+        readDefaultPortions() ?: prefs.getInt("chapter_portions_$recipeId", 2))
     fun savePortions(recipeId: String, value: Int) {
-        prefs.edit().putInt("chapter_portions_$recipeId", value.coerceIn(1, 5)).apply()
+        prefs.edit().putInt("chapter_portions_$recipeId", RecipeScale.clampPortions(value)).apply()
     }
     /** Transactions read committed prefs, not an Activity listener's possibly queued presentation state. */
     fun currentPlan(id:String):PlannedBake? = synchronized(PLANS_LOCK){readPlans().firstOrNull{it.id==id}}
@@ -127,6 +142,7 @@ class BookPreferences @JvmOverloads constructor(context: Context, namespace: Str
     }
     override fun close() { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     companion object {
+        private const val DEFAULT_PORTIONS = "default_portions"
         private val PLANS_LOCK=Any()
         const val PLANS_READ_ERROR="Не удалось прочитать планы. Исходные данные сохранены без изменений."
     }

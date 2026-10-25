@@ -30,6 +30,8 @@ import com.polinalinen.madre.MadreApplication
 import com.polinalinen.madre.account.FamilyBookState
 import com.polinalinen.madre.account.yandex.*
 import com.polinalinen.madre.model.BookDisplaySettings
+import com.polinalinen.madre.model.RecipeScale
+import com.polinalinen.madre.navigation.BookPreferences
 import com.polinalinen.madre.notifications.MadreNotifier
 import com.polinalinen.madre.ui.components.bookAction
 import com.polinalinen.madre.ui.kit.*
@@ -50,6 +52,8 @@ import com.polinalinen.madre.voice.VoiceStatus
     val notice=owner?.model?.offerError?.collectAsState()?.value
     val profile=(account as? YandexAccountState.SignedIn)?.profile
     val context=LocalContext.current
+    val bookPreferences=remember(context){BookPreferences(context)}
+    DisposableEffect(bookPreferences){onDispose{bookPreferences.close()}}
     val app=context.applicationContext as? MadreApplication
     val voice=app?.voiceCoordinator?.state?.collectAsState()?.value
     val family=LocalFamilyLinkModel.current?.state?.collectAsState()?.value
@@ -113,6 +117,7 @@ import com.polinalinen.madre.voice.VoiceStatus
                 }
                 LSettingsGroup {
                     LSettingsRow(Icons.Outlined.Science,"Закваска","$starterName · ${feedingRhythmStatus(intervalHours)}",{onStarterSettings?.invoke() ?: run{starter=true}})
+                    DefaultPortionsSettingRow(bookPreferences)
                     LSettingsRow(Icons.Outlined.LightMode,"Внешний вид","${preferences.atmosphere.label} · текст ${preferences.textSize.toInt()}",{page="look"})
                     val allowed=notificationAccess()
                     LSettingsRow(Icons.Outlined.NotificationsNone,"Уведомления и вибрация",
@@ -157,6 +162,23 @@ import com.polinalinen.madre.voice.VoiceStatus
 }
 
 internal fun feedingRhythmStatus(hours:Int)=when(hours){12->"кормить каждые 12 ч";24->"кормить раз в сутки";48->"кормить раз в 2 дня";72->"кормить раз в 3 дня";168->"кормить раз в неделю";else->"кормить каждые $hours ч"}
+
+@Composable internal fun DefaultPortionsSettingRow(preferences:BookPreferences) {
+    val chosen=preferences.defaultPortions
+    val amount=chosen ?: preferences.portions(preferences.bookmark?.recipeId.orEmpty())
+    Column(Modifier.padding(horizontal=14.dp,vertical=8.dp).testTag("default-portions")) {
+        Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text("Порции по умолчанию",style=PaperType.ui,color=LocalPaper.current.ink)
+                Text(if(chosen==null)"Как в рецепте" else "Для новых выпечек",style=PaperType.caption,color=LocalPaper.current.ink2)
+            }
+            PaperStepper("×$amount",{preferences.saveDefaultPortions(amount-1)},
+                {preferences.saveDefaultPortions(amount+1)},Modifier.width(152.dp),
+                minusEnabled=amount>RecipeScale.MIN_PORTIONS,plusEnabled=amount<RecipeScale.MAX_PORTIONS)
+        }
+        if(chosen!=null)PaperTextAction("Как в рецепте",{preferences.saveDefaultPortions(null)})
+    }
+}
 
 @Composable internal fun LSettingsPage(title:String,onBack:()->Unit,content:@Composable ColumnScope.()->Unit) {
     Column(Modifier.fillMaxSize().paperBackground().paperContentInsets().imePadding()) {

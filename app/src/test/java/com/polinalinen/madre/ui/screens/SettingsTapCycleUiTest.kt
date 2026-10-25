@@ -77,7 +77,7 @@ class SettingsTapCycleUiTest {
             }
         }
 
-        rule.onNodeWithText("Внешний вид").performClick()
+        rule.onNodeWithText("Внешний вид").performScrollTo().performClick()
         val control = rule.onNodeWithContentDescription("Меньше движения")
         control.assertIsOn().performScrollTo().performClick()
         rule.waitForIdle()

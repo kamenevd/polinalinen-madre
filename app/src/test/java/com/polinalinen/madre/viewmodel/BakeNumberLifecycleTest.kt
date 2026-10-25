@@ -44,6 +44,33 @@ class BakeNumberLifecycleTest {
         Dispatchers.resetMain()
     }
     private val clock get()=Clock.fixed(Instant.ofEpochMilli(System.currentTimeMillis()),ZoneId.of("Europe/Moscow"))
+    @Test fun newBakeUsesDefaultButActiveRestoredManualAndPlannedPortionsRemainAuthoritative()=runBlocking {
+        val recipe=app.recipeRepository.getRecipes().first()
+        var vm=controller()
+        BookPreferences(app).use { book ->
+            book.saveDefaultPortions(4)
+            val id=vm.startBakingWithUndo(recipe,book.portions(recipe.id).toDouble())!!
+            assertEquals(4,vm.session(id)!!.trustedPortions)
+            book.saveDefaultPortions(5)
+            assertEquals(4,vm.session(id)!!.trustedPortions)
+            assertEquals(4.0,app.activeBakeRepository.all().single().scaleFactor!!,0.0)
+            close(vm);vm=controller()
+            withTimeout(10_000){while(!vm.restoreReady.value){dispatcher.scheduler.runCurrent();delay(1)}}
+            assertEquals(4,vm.session(id)!!.trustedPortions)
+            book.savePortions(recipe.id,3)
+            // A live reader/sheet passes its own manual amount, never reinitializes from prefs.
+            val manual=vm.startBakingWithUndo(recipe,3.0)!!
+            assertEquals(3,vm.session(manual)!!.trustedPortions)
+            vm.plannedBakes.save(PlannedBake(recipe.id,2,clock.millis()+60_000L),clock)
+            val plan=book.snapshotPlans().single()
+            book.saveDefaultPortions(1)
+            val planned=vm.plannedBakes.start(plan.id,expected=plan)!!
+            assertEquals(2,vm.session(planned)!!.trustedPortions)
+            assertEquals(4,vm.session(id)!!.trustedPortions)
+            assertEquals(3,vm.session(manual)!!.trustedPortions)
+            assertTrue(history.recordCalls.isEmpty())
+        }
+    }
     @Test fun concurrentStartAndPlanShareNineSlotsAndRejectTenthWithoutWriting()=runBlocking {
         val vm=controller();val recipe=sampleRecipe()
         coroutineScope {

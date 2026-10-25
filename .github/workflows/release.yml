@@ -106,7 +106,7 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.MADRE_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.MADRE_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.MADRE_KEY_PASSWORD }}
-        run: ./gradlew testDebugUnitTest lintRelease assembleRelease --no-daemon --stacktrace
+        run: ./gradlew testDebugUnitTest lintRelease assembleRelease --stacktrace
 
       - name: Remove release keystore
         if: always()

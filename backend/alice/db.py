@@ -9,6 +9,7 @@ from pathlib import Path
 
 from config import SQLITE_BUSY_MS, SQLITE_TIMEOUT_S
 from roster_store import SCHEMA as ROSTER_V2_SCHEMA
+from installation_pair import SCHEMA as INSTALLATION_PAIR_SCHEMA
 
 _SHARED_PARENTS = {
     Path("/"),
@@ -229,7 +230,7 @@ UPDATE auth_codes SET used_at=COALESCE(used_at,0)
     WHERE challenge_id IN (SELECT challenge_id FROM yandex_code_authority);
 UPDATE yandex_epochs SET epoch=epoch+1;
 """ if version < 3 else ""
-        conn.executescript("BEGIN IMMEDIATE;\n" + SCHEMA + ROSTER_V2_SCHEMA + upgrade_fence + "\nPRAGMA user_version=3;\nCOMMIT;")
+        conn.executescript("BEGIN IMMEDIATE;\n" + SCHEMA + ROSTER_V2_SCHEMA + INSTALLATION_PAIR_SCHEMA + upgrade_fence + "\nPRAGMA user_version=3;\nCOMMIT;")
     finally:
         conn.close()
     os.chmod(path, 0o600)

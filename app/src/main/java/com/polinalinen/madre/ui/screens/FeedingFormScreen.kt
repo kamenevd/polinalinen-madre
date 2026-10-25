@@ -54,8 +54,6 @@ import com.polinalinen.madre.ui.components.AgedPhoto
 import com.polinalinen.madre.ui.components.BackLabel
 import com.polinalinen.madre.ui.components.MinTouchTarget
 import com.polinalinen.madre.ui.components.PageLabel
-import com.polinalinen.madre.ui.components.TapCycle
-import com.polinalinen.madre.ui.components.TapCycleRow
 import com.polinalinen.madre.ui.components.TextAction
 import com.polinalinen.madre.ui.components.bookAction
 import com.polinalinen.madre.ui.components.drawPhotoHolders
@@ -197,20 +195,17 @@ fun FeedingFormScreen(
                 )
             }
 
-            TapCycleRow(
-                label = "Где стоит закваска",
-                value = when (location) {
-                    StorageLocation.KITCHEN -> "Кухня"
-                    StorageLocation.FRIDGE -> "Холод"
-                },
-                modifier = Modifier.padding(vertical = 2.dp),
-                onClick = {
-                    location = TapCycle.next(
-                        options = listOf(StorageLocation.KITCHEN, StorageLocation.FRIDGE),
-                        current = location,
-                    )
-                },
-            )
+            Column(Modifier.padding(horizontal = 22.dp, vertical = 2.dp)) {
+                PageLabel("Где стоит", color = colors.ink2)
+                val locations = listOf(StorageLocation.KITCHEN, StorageLocation.FRIDGE)
+                PaperSegmented(
+                    labels = listOf("Кухня", "Холодильник"),
+                    selectedIndex = locations.indexOf(location),
+                    onSelect = { location = locations[it] },
+                    label = "Где стоит",
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
 
             // Слот фотокарточки:
             //  - пустой — нажимаемый (bookAction: роль, подпись, мишень 48dp)

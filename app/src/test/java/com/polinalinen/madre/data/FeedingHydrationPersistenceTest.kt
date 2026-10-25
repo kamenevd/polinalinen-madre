@@ -89,6 +89,22 @@ class FeedingHydrationPersistenceTest {
     )
 
     @Test
+    fun `fridge storage survives a real save and database reopen`() = runTest {
+        val repository = openBook()
+        val config = repository.getOrCreateDefaultConfig()
+        val saved = repository.saveFeeding(
+            saveRequest(config.id, config.intervalHours, 1_000L)
+                .copy(storageLocation = StorageLocation.FRIDGE)
+        )
+        assertThat(saved.feeding.storageLocation).isEqualTo(StorageLocation.FRIDGE)
+        closeBook()
+
+        val persisted = openBook().lastFeeding(config.id)
+        assertThat(persisted?.id).isEqualTo(saved.feedingId)
+        assertThat(persisted?.storageLocation).isEqualTo(StorageLocation.FRIDGE)
+    }
+
+    @Test
     fun `a saved feeding supplies the next feeding's prior hydration`() = runTest {
         val repository = openBook()
         val config = repository.getOrCreateDefaultConfig()

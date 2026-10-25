@@ -91,6 +91,12 @@ class AuthTransportSourceContract(unittest.TestCase):
         self.assertNotIn("$os.getenv", source)
         self.assertNotIn("--location", source)
         self.assertNotIn("--insecure", source)
+        workflow = (ROOT / ".github/workflows/pocketbase-auth.yml").read_text()
+        # runner context is not available in jobs.<job>.env. Resolve the path
+        # in the actual runner step and export it for later steps instead.
+        self.assertNotIn("${{ runner.temp }}", workflow)
+        self.assertIn('export TMPDIR="$RUNNER_TEMP/madre-pb-isolated"', workflow)
+        self.assertIn('>> "$GITHUB_ENV"', workflow)
 
     def test_auth_implementation_is_not_an_alice_or_identity_shortcut(self):
         source = (ROOT / "backend/pb_hooks/lib/madre_auth.js").read_text()

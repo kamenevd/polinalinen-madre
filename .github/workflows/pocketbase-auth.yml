@@ -26,13 +26,13 @@ jobs:
     name: Real PB 0.39.11 JSVM and legacy regressions
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    env:
-      TMPDIR: ${{ runner.temp }}/madre-pb-isolated
-      MADRE_PB_BINARY: ${{ runner.temp }}/madre-pb-runtime/pocketbase
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Prepare private local runtime and verify exact official test binary
         run: |
+          export TMPDIR="$RUNNER_TEMP/madre-pb-isolated"
+          export MADRE_PB_BINARY="$RUNNER_TEMP/madre-pb-runtime/pocketbase"
+          printf 'TMPDIR=%s\nMADRE_PB_BINARY=%s\n' "$TMPDIR" "$MADRE_PB_BINARY" >> "$GITHUB_ENV"
           mkdir -m 700 -p "$TMPDIR"
           test -x /usr/bin/curl
           python3 -m backend.tests.fetch_pocketbase "$MADRE_PB_BINARY"

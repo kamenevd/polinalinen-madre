@@ -56,7 +56,7 @@ PB suite checks same-database historical migration, additive down/up, legacy
 password/code, same-record identity binding, current-membership photo ACLs,
 restored isolated synthetic backup and secret-canary scans.
 
-## Discovered rollback blocker — do not deploy
+## Old-writer rollback fence — review/deployment gates still apply
 
 PB's inherited `test_98_executable_rollback...` only removes a migration receipt
 and restarts **new hooks**. It does not establish old-hook rollback safety.
@@ -76,18 +76,34 @@ MADRE_PB_BINARY=<verified-scratch-binary> python3 -m backend.tests.probe_old_pb_
   --reader-source <full-source-commit> --evidence <private-evidence>/pb-old-reader.json
 ```
 
-Until an independently reviewed rollback fence or retained compatible security
-layer is implemented and tested against this probe, reverting the whole PB hook
-tree is forbidden. Do not work around this by restoring an old DB, clearing old
-codes/passwords/accounts, calling a migration receipt test a rollback pass, or
-loosening the assertion. No production safety behavior was rewritten as part of
-the source transplant.
+The additive `1792886600_family_rollback_fence.js` now retains a SQL security
+floor across executable rollback. A `users.family` transition into a family with
+`removed_once` is denied unless the validated v2 transaction mints a one-save
+permit. An AFTER trigger consumes it on the user save, BEFORE the normal ledger
+save. This deliberately does not trust ledger `active` state: approval followed
+by a later old-hook leave must not leave reusable authorization. SQL failure
+rolls back both the permit and membership. The private SQL table has no API
+collection, and no old hook bytes or probe assertions are changed.
+
+Migration down retains both triggers, the permit table and all latest rows;
+re-up is idempotent. **A rollback artifact MUST retain this database security
+floor and additive schema/ACLs.** Do not drop triggers/table, restore an old DB,
+clear codes/passwords/accounts, or treat migration receipt removal alone as a
+security pass. Old code without this retained database fence remains unsafe.
+
+Real pinned PB tests run the unchanged negative-before probe against both exact
+old hooks above: fenced-after returns HTTP 400, retains removal and latest name,
+and reports `passed` / integrity `ok`. Additional tests exercise owner restore,
+forced SQL failure/permit rollback, owner-approved pending acceptance, both old
+leave orderings followed by denied rejoin, working historical password and
+legitimate legacy email-code joins. Fresh joins remain enabled. Evidence lives
+in the private `fence-stage` directory; parent independent review is still due.
 
 ## Remaining parent-owned gates
 
 - Integrated-head CI and independent review; source PR green is insufficient.
-- Resolve the demonstrated PB old-writer rollback issue; then repeat latest-data
-  and revocation tests for the exact deployment/rollback artifact.
+- Independently review the retained PB fence; repeat latest-data and revocation
+  tests for the exact deployment/rollback artifact before deployment approval.
 - Genuine PocketBase lifecycle remains unresolved. Alice may use only the
   existing exact `madre-alice-voice` helper; neither service was touched here.
 - Before a later deployment: fresh complete DB/storage/code/config/env/keys/unit/

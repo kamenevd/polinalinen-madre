@@ -34,6 +34,7 @@ class FamilyMembershipIntegration(unittest.TestCase):
     before_families: list[dict]
     before_bakes: list[dict]
     users: list[dict]
+    invite_code: str
     binary: Path
     data: Path
     hooks: Path
@@ -123,6 +124,56 @@ class FamilyMembershipIntegration(unittest.TestCase):
         for u in p:
             self.assertEqual(200, self.join(u, self.t)[0])
         return p
+
+    def test_98b_retained_fence_exact_old_writers_approved_rejoin_and_later_leave(self):
+        import shutil
+        owner, target, fresh = self.users[0], self.users[2], self.users[3]
+        for u in (owner, target):
+            type(self).serial += 1
+            oauth, _ = self.profile(type(self).serial)
+            self.assertEqual(200, self.auth(oauth, u["token"])[0])
+        self.assertEqual(200, self.request("/api/madre/family/join", {"code": self.invite_code}, target["token"])[0])
+        status, undo = self.remove(owner, target, False)
+        self.assertEqual(200, status, undo)
+        before = self.sql("SELECT * FROM users WHERE id=?", (target["record"]["id"],))
+        self.sql("CREATE TRIGGER isolated_permit_abort BEFORE INSERT ON family_events WHEN NEW.kind='joined' BEGIN SELECT RAISE(ABORT, 'synthetic join failure'); END")
+        try:
+            self.assertEqual(503, self.restore(owner, target, undo["restore_token"])[0])
+            self.assertEqual(before, self.sql("SELECT * FROM users WHERE id=?", (target["record"]["id"],)))
+            self.assertEqual([], self.sql("SELECT * FROM _madre_family_join_permits"))
+        finally:
+            self.sql("DROP TRIGGER isolated_permit_abort")
+        self.assertEqual(200, self.restore(owner, target, undo["restore_token"])[0])
+        self.assertEqual([], self.sql("SELECT * FROM _madre_family_join_permits"))
+        original = type(self).hooks
+        try:
+            for revision, digest in (
+                ("7af7c3297acb3e41b77491c0c42c0a4c8e396072", "96debd46afdcb6b547bee5ede088df16d9ef33881a1f23c70499b38cf7715338"),
+                ("15adb6359f1c83900aeaa068333187de0facbc38", "d03c7381e9e999faa5c4fc7bece59ec35bbdfc26244136491d550474cdfb70d3"),
+            ):
+                old = self.work / ("fenced-old-" + revision[:7]); old.mkdir()
+                source = subprocess.check_output(["git", "show", revision+":backend/pb_hooks/madre_family.pb.js"], cwd=runtime.ROOT)
+                self.assertEqual(digest, hashlib.sha256(source).hexdigest())
+                (old / "madre_family.pb.js").write_bytes(source)
+                shutil.copy2(original / "madre_stats.pb.js", old)
+                self.stop(); type(self).hooks = old; self.start()
+                # Old leave can run before its ledger write. No reusable grant
+                # survives an approved restoration or approval followed by leave.
+                self.assertEqual(200, self.request("/api/madre/family/leave", {}, target["token"])[0])
+                self.assertNotEqual(200, self.request("/api/madre/family/join", {"code": self.invite_code}, target["token"])[0])
+                self.assertEqual("", self.sql("SELECT family FROM users WHERE id=?", (target["record"]["id"],))[0]["family"])
+                self.assertEqual(200, self.request("/api/collections/users/auth-with-password", {"identity": "synthetic-0@example.invalid", "password": "SyntheticOnlyPassword_123!"})[0])
+                self.assertEqual(200, self.request("/api/madre/family/join", {"code": self.invite_code}, fresh["token"])[0])
+                self.assertEqual(200, self.request("/api/madre/family/leave", {}, fresh["token"])[0])
+                self.stop(); type(self).hooks = original; self.start()
+                token = self.rotate(owner)
+                status, pending = self.join(target, token)
+                self.assertEqual(200, status, pending)
+                self.assertEqual("pending", pending["status"])
+                self.assertEqual(200, self.decide(owner, pending["request_id"])[0])
+                self.assertEqual([], self.sql("SELECT * FROM _madre_family_join_permits"))
+        finally:
+            self.stop(); type(self).hooks = original; self.start()
 
     def test_01_same_historical_db_upgraded_without_record_loss_or_registration_closure(self):
         after = {r["id"]: r for r in self.sql("SELECT * FROM users")}
@@ -636,9 +687,12 @@ class FamilyMembershipIntegration(unittest.TestCase):
     def test_98_executable_rollback_retains_latest_records_invites_revocations_and_reupgrade(self):
         before = {t: self.sql("SELECT * FROM "+t+" ORDER BY id") for t in ["users", "families", "family_members", "family_invites", "family_requests", "family_events"]}
         self.stop()
-        r = subprocess.run([str(self.binary), "migrate", "down", "1", f"--dir={self.data}", f"--hooksDir={self.hooks}", f"--migrationsDir={self.migrations}", "--automigrate=false"], input=b"y\n", stdout=self.log, stderr=self.log, env=self.env, cwd=self.work, timeout=15)
+        r = subprocess.run([str(self.binary), "migrate", "down", "2", f"--dir={self.data}", f"--hooksDir={self.hooks}", f"--migrationsDir={self.migrations}", "--automigrate=false"], input=b"y\n", stdout=self.log, stderr=self.log, env=self.env, cwd=self.work, timeout=15)
         self.assertEqual(0, r.returncode)
         self.assertEqual([], self.sql("SELECT * FROM _migrations WHERE file='1792886500_family_v2.js'"))
+        self.assertEqual([], self.sql("SELECT * FROM _migrations WHERE file='1792886600_family_rollback_fence.js'"))
+        self.assertEqual(2, len(self.sql("SELECT name FROM sqlite_master WHERE type='trigger' AND name IN ('madre_family_removed_join_fence', 'madre_family_join_permit_consume')")))
+        self.assertEqual([], self.sql("SELECT * FROM _madre_family_join_permits"))
         self.start()
         for t, b in before.items(): self.assertEqual(b, self.sql("SELECT * FROM "+t+" ORDER BY id"), t)
 

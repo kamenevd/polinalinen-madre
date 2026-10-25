@@ -496,5 +496,5 @@ private fun GramNumberField(
 /** Кнопка на пять граммов: рамка книги, мишень 48dp, подпись для TalkBack. */
 @Composable
 private fun StepButton(symbol: String, label: String, enabled: Boolean, onClick: () -> Unit) {
-    PaperStepButton(symbol, label, enabled, onClick)
+    PaperStepButton(symbol, label, enabled, onClick, accelerateOnHold = true)
 }

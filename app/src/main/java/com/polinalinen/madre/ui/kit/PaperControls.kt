@@ -7,6 +7,15 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
@@ -185,10 +194,49 @@ enum class PaperButtonVariant { PRIMARY, ACCENT, SECONDARY, TEXT }
         })
 }
 
-@Composable fun PaperStepButton(symbol: String, label: String, enabled: Boolean = true, onClick: () -> Unit, visibleEdge:Boolean=false) {
+@Composable fun PaperStepButton(symbol: String, label: String, enabled: Boolean = true, onClick: () -> Unit, visibleEdge:Boolean=false,
+    accelerateOnHold: Boolean = false) {
     val p = LocalPaper.current
+    val latestClick by rememberUpdatedState(onClick)
+    val interactions = remember { MutableInteractionSource() }
+    // Only opted-in pointer gestures repeat. Clickable keeps keyboard/TalkBack single-step.
+    val hold = if (accelerateOnHold && enabled) Modifier.pointerInput(enabled) {
+        coroutineScope {
+            awaitEachGesture {
+                val down = awaitFirstDown()
+                down.consume()
+                val press = PressInteraction.Press(down.position)
+                interactions.tryEmit(press)
+                var released = false
+                var repeated = false
+                val repeats = launch {
+                    delay(300)
+                    var ticks = 0
+                    while (true) {
+                        repeated = true
+                        latestClick()
+                        delay(if (++ticks < 3) 100 else 50)
+                    }
+                }
+                try {
+                    val up = waitForUpOrCancellation()
+                    if (up != null) {
+                        up.consume()
+                        released = true
+                        interactions.tryEmit(PressInteraction.Release(press))
+                        if (!repeated) latestClick()
+                    }
+                } finally {
+                    repeats.cancel()
+                    if (!released) interactions.tryEmit(PressInteraction.Cancel(press))
+                }
+            }
+        }
+    } else Modifier
     Box(Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp)
-        .clickable(enabled = enabled, role = Role.Button, onClickLabel = label, onClick = onClick),
+        .clickable(interactionSource = interactions, indication = LocalIndication.current,
+            enabled = enabled, role = Role.Button, onClickLabel = label, onClick = onClick)
+        .then(hold),
         contentAlignment = Alignment.Center) {
         Box(Modifier.size(46.dp).clip(CircleShape).background(p.card)
             .then(if(visibleEdge)Modifier.border(1.dp,p.line.copy(alpha=if(enabled)1f else .4f),CircleShape) else Modifier),contentAlignment=Alignment.Center) {

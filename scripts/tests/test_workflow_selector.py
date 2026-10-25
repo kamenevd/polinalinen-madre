@@ -141,7 +141,7 @@ class WorkflowSelectorTests(unittest.TestCase):
         self.assertIsNone(scalar(self.guard_step, "if", 8))
         self.assertIsNone(scalar(self.guard_step, "continue-on-error", 8))
         self.assertIsNone(scalar(self.jobs["workflow-contract"], "continue-on-error", 4))
-        expected = {"android-quality": "workflow-contract", "android-acceptance": "workflow-contract", "lint-report": "workflow-contract",
+        expected = {"bake-back-frame": "workflow-contract", "android-quality": "workflow-contract", "android-acceptance": "workflow-contract", "lint-report": "workflow-contract",
                     "instrumented-smoke": "android-acceptance", "required-7015-performance": "workflow-contract"}
         self.assertEqual({"workflow-contract", *expected}, set(self.jobs))
         for job, dependency in expected.items():

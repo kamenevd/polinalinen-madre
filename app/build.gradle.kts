@@ -80,8 +80,8 @@ android {
         minSdk = 26
         targetSdk = 35
         // versionCode is monotonic over the latest published release; release_cycle.py enforces it.
-        versionCode = 56
-        versionName = "7.1.3"
+        versionCode = 57
+        versionName = "7.1.4"
 
         testInstrumentationRunner = if (qaRegression) "com.polinalinen.madre.MinifiedPlanInstrumentation" else "androidx.test.runner.AndroidJUnitRunner"
         if (qaRegression) testProguardFile("qa-test-rules.pro")
@@ -92,6 +92,8 @@ android {
         buildConfigField("String", "MADRE_API_URL", "\"https://madre-api.kdnfx.space\"")
         buildConfigField("String", "YANDEX_CLIENT_ID", "\"$yandexClientId\"")
         buildConfigField("boolean", "QA_DIAGNOSTICS", "false")
+        // Production and debug transport stay legacy; only the selected QA candidate opts in.
+        buildConfigField("boolean", "FAMILY_ROSTER_V2", "false")
         // Explicit disabled manifest namespace, NOT an issued/fabricated OAuth client id.
         manifestPlaceholders["YANDEX_CLIENT_ID"] = yandexClientId.ifEmpty { "disabled-madre-id" }
     }
@@ -147,6 +149,9 @@ android {
         if (providers.gradleProperty("madre.qaRegression").getOrElse("false").toBoolean()) proguardFile("qa-persistence-api.pro")
         buildConfigField("boolean", "YANDEX_ID", qaYandexActivationApproved.toString())
         buildConfigField("boolean", "QA_DIAGNOSTICS", "true")
+        // Candidate only: PB activation/security and owner Station acceptance are still pending.
+        // This single flag is consumed by both family and Alice roster-v2 UI/transport callers.
+        buildConfigField("boolean", "FAMILY_ROSTER_V2", "true")
         resValue("string", "app_name", "Мадре QA")
         matchingFallbacks.add("release")
     }

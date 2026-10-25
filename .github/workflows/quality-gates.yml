@@ -93,6 +93,56 @@ jobs:
           python3 -m unittest discover -s scripts/tests -v
           python3 scripts/cycle.py validate
 
+  # Feature pushes already synchronize PR61: use that single automatic run, not a second push/dispatch.
+  bake-back-frame:
+    name: Optional bake-back frame
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    needs: workflow-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Select only a marked exact head
+        id: select
+        run: |
+          if git log -1 --format=%B | grep -Fq '[bake-back-frame]'; then
+            echo 'capture=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'capture=false' >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        if: steps.select.outputs.capture == 'true'
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+      - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+        if: steps.select.outputs.capture == 'true'
+        with:
+          packages: platform-tools
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+        if: steps.select.outputs.capture == 'true'
+      - name: Capture only the requested bake-back method
+        if: steps.select.outputs.capture == 'true'
+        run: ./gradlew :app:testDebugUnitTest --tests 'com.polinalinen.madre.ui.razvorot.BakeNumberRenderTest.bakingPreviousStepFooter' --rerun-tasks --no-daemon --stacktrace --no-configuration-cache
+      - name: Upload bake-back PNG
+        if: always() && steps.select.outputs.capture == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: bake-back-frame-png
+          path: app/build/outputs/roborazzi/bake-back/bake-back-dawn.png
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload raw bake-back JUnit
+        if: always() && steps.select.outputs.capture == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: bake-back-frame-junit
+          path: app/build/test-results/testDebugUnitTest/
+          if-no-files-found: error
+          retention-days: 14
+
   android-quality:
     name: Android quality
     needs: workflow-contract

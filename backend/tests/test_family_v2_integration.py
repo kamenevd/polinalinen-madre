@@ -225,6 +225,12 @@ class FamilyMembershipIntegration(unittest.TestCase):
         status, web = self.preview(self.t, web=True)
         self.assertEqual(200, status, web)
         self.assertEqual({"family_name", "inviter_name"}, set(web))
+        from backend.web.invite_page import render_invite
+        from backend.tests.test_invite_page import Page
+        rendered = render_invite(self.t, web, package="com.polinalinen.madre")
+        self.assertEqual(200, rendered.status)
+        self.assertIn(web["family_name"], Page(rendered.body).text)
+        self.assertIn("Вас приглашает " + web["inviter_name"], Page(rendered.body).text)
         status, preview = self.preview(self.t)
         self.assertEqual(200, status, preview)
         self.assertEqual({"family_name", "inviter_name", "members_count", "bakes_count", "initials", "approval_required"}, set(preview))

@@ -15,3 +15,15 @@ X-Madre-Family-Version: 2
 - Web writer must escape both untrusted labels, keep no-store/no-referrer/no trackers, package-allowlisted explicit «Открыть в Мадре» plus real RuStore fallback, no auto-open loop/open redirect/clipboard/deferred install tracking. Assetlinks/certificates/Huawei acceptance stay outside this backend slice. If same-origin hosting needs a scoped proxy, request parent implementation/review; do not invent an administrative allowlist.
 
 Proof is the real pinned-PB test `test_04_web_preview_exact_two_fields_no_ids_people_counts_or_bakes`, shared rate/rotation/expiry/privacy regressions and SQL-bake-read-failure test proving this web path does not query bake data. Synthetic server tests are not public K11/Huawei acceptance.
+
+## Renderer-only artifact
+`backend.web.invite_page.render_invite` is a pure stdlib HTML/status/header renderer,
+not a deployed route, HTTP client, proxy or hosting change. Callers supply the exact
+two-field successful DTO and explicitly select a trusted release/QA package constant
+(never query/user input); Preview delivery belongs to Designer, not this allowlist.
+Labels are limited to 256 characters each and HTML to 16 KiB. Invalid DTOs return
+generic 503; unavailable/invalid tokens return uniform 404; 429/503 remain truthful.
+Only clicking the intent link launches; its encoded fallback is the same canonical
+page, with a separate RuStore link and no deferred install or automatic retry loop.
+Deployment, edge log masking, assetlinks/certificates and Huawei acceptance remain
+later gates; renderer tests do not claim any of those gates passed.

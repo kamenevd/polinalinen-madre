@@ -7,6 +7,10 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
+      family_link_render:
+        description: Render only the additional K01-K10 Compose fixtures after the unchanged critical gate; no emulator/Huawei claim
+        type: boolean
+        default: false
       critical_only:
         description: Run the unchanged critical PR gate and verified artifacts only; incompatible with acceptance flags
         type: boolean
@@ -52,7 +56,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: ${{ (inputs.bake_numbers_native || inputs.exact_qa_timing) && format('native-{0}-', github.sha) || '' }}quality-${{ github.workflow }}-${{ github.ref }}
+  group: ${{ (inputs.bake_numbers_native || inputs.exact_qa_timing) && format('native-{0}-', github.sha) || inputs.family_link_render && format('family-k-{0}-', github.sha) || '' }}quality-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -77,6 +81,11 @@ jobs:
                                  if name != 'critical_only' and enabled)
               if conflicts:
                   raise SystemExit('critical_only cannot be mixed with: ' + ', '.join(conflicts))
+          if inputs.get('family_link_render', False):
+              conflicts = sorted(name for name, enabled in inputs.items()
+                                 if name != 'family_link_render' and enabled)
+              if conflicts:
+                  raise SystemExit('family_link_render cannot be mixed with: ' + ', '.join(conflicts))
           PY
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Validate workflow state and control plane
@@ -141,8 +150,22 @@ jobs:
           python3 scripts/verify_qa_release_like.py .ci-delivery/outputs/apk/qa/app-qa.apk --mapping .ci-delivery/outputs/mapping/qa/mapping.txt > .ci-delivery/reports/qa-binary-provenance.json
           ! grep -Fq 'qa-persistence-api.pro' .ci-delivery/outputs/mapping/qa/configuration.txt
       - name: Extended visual verification (manual, nightly and RC)
-        if: (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && !inputs.critical_only && !inputs.fixes_7013_acceptance && !inputs.fixes_7014_acceptance && !inputs.fixes_7014_instrumented && !inputs.fixes_7015_huawei && !inputs.bake_numbers_native && !inputs.exact_qa_timing
+        if: (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && !inputs.critical_only && !inputs.family_link_render && !inputs.fixes_7013_acceptance && !inputs.fixes_7014_acceptance && !inputs.fixes_7014_instrumented && !inputs.fixes_7015_huawei && !inputs.bake_numbers_native && !inputs.exact_qa_timing
         run: ./gradlew testDebugUnitTest verifyRoborazziDebug -Pmadre.extendedVerification=true --no-daemon --stacktrace --no-configuration-cache
+      - name: Optional family K Compose renders (manual only)
+        if: github.event_name == 'workflow_dispatch' && inputs.family_link_render
+        run: |
+          mkdir -p app/build/reports/critical-before-family-render
+          cp -R app/build/test-results/testDebugUnitTest app/build/reports/critical-before-family-render/
+          ./gradlew :app:testDebugUnitTest --tests 'com.polinalinen.madre.familyui.FamilyLinkRenderTest' -Pmadre.familyLinkRender=true --no-daemon --stacktrace --no-configuration-cache
+      - name: Upload optional family K PNG (not e2e or Huawei)
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.family_link_render
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: family-k-compose-png
+          path: app/build/outputs/roborazzi/family-link/
+          if-no-files-found: error
+          retention-days: 14
       - name: FIXES frozen-head native acceptance (manual only)
         if: github.event_name == 'workflow_dispatch' && (inputs.fixes_7013_acceptance || inputs.fixes_7014_acceptance)
         run: |
@@ -250,7 +273,7 @@ jobs:
     needs: android-quality
     # Keep the protected check name; PR/push is SKIPPED, not a passed smoke.
     # RC release gate still requires a real success at this exact SHA.
-    if: (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && !inputs.critical_only
+    if: (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && !inputs.critical_only && !inputs.family_link_render
     runs-on: ubuntu-latest
     timeout-minutes: ${{ inputs.exact_qa_timing && 90 || 45 }}
     env:

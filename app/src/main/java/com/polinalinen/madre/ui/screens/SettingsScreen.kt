@@ -385,6 +385,12 @@ internal fun FamilyBookSection(
     passwordResetNotice: PasswordResetNotice = PasswordResetNotice.Idle,
     onRequestPasswordReset: (String) -> Unit = {},
 ) {
+    if (com.polinalinen.madre.config.FeatureFlags.FAMILY_ROSTER_V2) {
+        val sdk = com.polinalinen.madre.account.yandex.LocalYandexAccountUi.current
+        FamilyEmptyContent(com.polinalinen.madre.integration.v2.FamilyPanelState(migration = state.account != null),
+            { sdk?.signIn?.invoke(false) }, {}, sdkAvailable = sdk != null)
+        return
+    }
     val colors = LocalPaper.current
     // rememberSaveable, а не remember: пересоздание Activity не должно стирать
     // набранные почту, пароль, подпись, название и код.

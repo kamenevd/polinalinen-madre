@@ -42,6 +42,9 @@ class MainActivity : ComponentActivity(), ImmersiveHost {
     private val accountModel: YandexAccountViewModel by viewModels {
         ViewModelProvider.AndroidViewModelFactory(application)
     }
+    private val familyModel: com.polinalinen.madre.viewmodel.FamilyLinkViewModel by viewModels()
+    private val familyInviteQueue = com.polinalinen.madre.integration.v2.FamilyInviteRouting.Queue { FeatureFlags.FAMILY_ROSTER_V2 }
+    private val pendingInvitation = familyInviteQueue.pending
     private var yandexBridge: YandexSdkResultBridge? = null
     private var qaFrameMonitor:com.polinalinen.madre.performance.QaFrameMonitor?=null
 
@@ -91,6 +94,7 @@ class MainActivity : ComponentActivity(), ImmersiveHost {
         if(savedInstanceState==null)readIntent(intent) else {
             pendingSessionId.value=savedInstanceState.getLong("madre.pending_session",-1).takeIf{it>=0}
             pendingFeeding.value=savedInstanceState.getBoolean("madre.pending_feeding",false)
+            familyInviteQueue.restore(savedInstanceState.getString(KEY_FAMILY_INVITE))
             val id=savedInstanceState.getString("madre.pending_plan")
             val action=runCatching { com.polinalinen.madre.notifications.PlannedBakeAction.valueOf(savedInstanceState.getString("madre.pending_plan_action").orEmpty()) }.getOrNull()
             if(id!=null && action!=null)pendingPlanned.value=com.polinalinen.madre.notifications.PlannedBakeRequest(id,action)
@@ -104,11 +108,13 @@ class MainActivity : ComponentActivity(), ImmersiveHost {
             } else null
             androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) {
             CompositionLocalProvider(LocalYandexAccountUi provides account,
+                com.polinalinen.madre.ui.screens.LocalFamilyLinkModel provides if (FeatureFlags.FAMILY_ROSTER_V2) familyModel else null,
                 com.polinalinen.madre.performance.LocalQaFrameMonitor provides qaFrameMonitor) {
             MadreNavHost(
                 pendingSessionId = pendingSessionId,
                 pendingFeeding = pendingFeeding,
                 pendingPlanned = pendingPlanned,
+                pendingInvitation = pendingInvitation,
             )
             }
             qaFrameMonitor?.takeIf{it.enabled}?.let{QaFpsOverlay(it,androidx.compose.ui.Modifier.align(androidx.compose.ui.Alignment.TopEnd).safeDrawingPadding())}
@@ -135,6 +141,7 @@ class MainActivity : ComponentActivity(), ImmersiveHost {
 
     override fun onSaveInstanceState(outState: Bundle) {
         yandexBridge?.let{outState.putStringArrayList(KEY_YANDEX_REQUESTS,it.requestKeysForSavedState())}
+        if (FeatureFlags.FAMILY_ROSTER_V2) outState.putString(KEY_FAMILY_INVITE, pendingInvitation.value)
         outState.putLong("madre.pending_session",pendingSessionId.value?:-1)
         outState.putBoolean("madre.pending_feeding",pendingFeeding.value)
         outState.putString("madre.pending_plan",pendingPlanned.value?.id)
@@ -143,6 +150,7 @@ class MainActivity : ComponentActivity(), ImmersiveHost {
     }
 
     private fun readIntent(intent: Intent?) {
+        familyInviteQueue.accept(intent)
         val id = intent?.getLongExtra(EXTRA_SESSION_ID, -1L) ?: -1L
         if (id >= 0L) pendingSessionId.value = id
         if (intent?.getBooleanExtra(EXTRA_OPEN_FEEDING, false) == true) pendingFeeding.value = true
@@ -176,6 +184,7 @@ class MainActivity : ComponentActivity(), ImmersiveHost {
 
         private const val KEY_NOTIFICATIONS_ASKED = "notifications_permission_asked"
         private const val KEY_NOTIFICATIONS_GRANTED = "notifications_permission_granted"
+        private const val KEY_FAMILY_INVITE = "madre.family.pending_invite"
         private const val KEY_YANDEX_REQUESTS = "madre.yandex.request_keys"
     }
 }

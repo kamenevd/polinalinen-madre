@@ -62,13 +62,13 @@ interface FamilyAuthenticationApi {
 }
 
 /** Pinned transport. Foreground provisioning is wired behind the default-false flag. */
-class HttpsFamilyLinkApi internal constructor(private val http: ContractHttp, private val enabled: () -> Boolean) : FamilyLinkApi, FamilyAuthenticationApi {
+class HttpsFamilyLinkApi internal constructor(private val http: ContractHttp, private val enabled: () -> Boolean) : FamilyLinkApi, FamilyAuthenticationApi, FamilyManagementApi {
     constructor() : this(ContractHttp(), { FeatureFlags.FAMILY_ROSTER_V2 })
     internal constructor(client: OkHttpClient, enabled: () -> Boolean) : this(ContractHttp(client), enabled)
 
-    private suspend fun request(method: String, path: String, credential: String? = null, body: JsonObject? = null): JsonObject {
+    private suspend fun request(method: String, path: String, credential: String? = null, body: JsonObject? = null, noContent: Boolean = false): JsonObject {
         if (!enabled()) throw ContractFailure(ContractFailure.Kind.DISABLED)
-        return http.request(method, "https://madre-api.kdnfx.space/api/madre/$path", credential, body)
+        return http.request(method, "https://madre-api.kdnfx.space/api/madre/$path", credential, body, noContent = noContent)
     }
 
     /** Token remains owned by the foreground caller and must close after BOTH provisioning calls. */
@@ -121,19 +121,69 @@ class HttpsFamilyLinkApi internal constructor(private val http: ContractHttp, pr
         parseJoin(request("GET", "family/requests/$requestId/status", session.credential))
     }
     override suspend fun family(session: FamilySession): FamilyRoster = safe {
-        val body = request("GET", "family", session.credential)
+        parseRoster(request("GET", "family", session.credential))
+    }
+    private fun parseRoster(body: JsonObject): FamilyRoster {
         fun members(key: String): List<FamilyMember> = body.getAsJsonArray(key).map { value ->
             val member = value.asJsonObject
-            FamilyMember(member.string("id"), member.string("name"), FamilyRole.valueOf(member.string("role").uppercase()),
-                MembershipStatus.valueOf(member.string("status").uppercase()), member.string("joined_at"), member.integer("bakes_count"))
+            FamilyMember(member.string("id"), member.string("name"), FamilyRole.valueOf(member.string("role").also {
+                require(it == "owner" || it == "member") }.uppercase()),
+                MembershipStatus.valueOf(member.string("status").also { require(it == "joined") }.uppercase()),
+                member.string("joined_at").also { utc(it) }, member.integer("bakes_count"))
         }
-        FamilyRoster(body.string("id"), body.string("name"), body.string("owner"), body.boolean("approval_required"),
+        return FamilyRoster(body.string("id"), body.string("name"), body.string("owner"), body.boolean("approval_required"),
             members("members"), body.getAsJsonArray("pending").map { value ->
                 val item = value.asJsonObject
                 require(item.string("status") == "pending")
-                FamilyRequest(item.string("id"), item.string("user_id"), item.string("name"), item.string("requested_at"))
+                FamilyRequest(item.string("id"), item.string("user_id"), item.string("name"), item.string("requested_at").also { utc(it) })
             })
     }
-    private fun parseJoin(body: JsonObject): JoinReply = JoinReply(JoinStatus.valueOf(body.string("status").uppercase()),
+    private fun segment(id: String): String = id.also { require(it.matches(Regex("[A-Za-z0-9_-]{1,64}"))) }
+    private fun label(value: String): String = value.also { require(it.isNotBlank() && it.length <= 120) }
+    override suspend fun create(session: FamilySession, name: String): FamilyRoster = safe {
+        parseRoster(request("POST", "family/create", session.credential, json { addProperty("name", label(name)) }))
+    }
+    override suspend fun update(session: FamilySession, name: String?, approvalRequired: Boolean?): FamilyRoster = safe {
+        require(name != null || approvalRequired != null)
+        parseRoster(request("PATCH", "family", session.credential, json {
+            name?.let { addProperty("name", label(it)) }; approvalRequired?.let { addProperty("approval_required", it) }
+        }))
+    }
+    override suspend fun invite(session: FamilySession, rotate: Boolean): ActiveFamilyInvite = safe {
+        val body = request(if (rotate) "POST" else "GET", "family/invite", session.credential, if (rotate) json {} else null)
+        val invitation = requireNotNull(FamilyInvitation.parse(body.string("url")))
+        val expiry = body.string("expires_at").also { utc(it) }
+        val seats = if (rotate) body.integer("seats_left").also { require(it <= 7) }.toInt() else null
+        ActiveFamilyInvite(invitation, expiry, seats)
+    }
+    override suspend fun revokeInvite(session: FamilySession) = safe {
+        request("DELETE", "family/invite", session.credential, noContent = true); Unit
+    }
+    override suspend fun renameMember(session: FamilySession, memberId: String, name: String): FamilyRoster = safe {
+        parseRoster(request("PATCH", "family/members/${segment(memberId)}", session.credential,
+            json { addProperty("display_name", label(name)) }))
+    }
+    override suspend fun remove(session: FamilySession, memberId: String, rotate: Boolean): RemovedFamilyMember = safe {
+        val body = request("DELETE", "family/members/${segment(memberId)}?rotate_invite=${if (rotate) 1 else 0}", session.credential)
+        RemovedFamilyMember(body.string("restore_token"), body.string("restore_until").also { utc(it) }, body.integer("removal_revision"))
+    }
+    override suspend fun restoreMember(session: FamilySession, memberId: String, receipt: RemovedFamilyMember): FamilyRoster = safe {
+        parseRoster(request("POST", "family/members/${segment(memberId)}/restore", session.credential,
+            json { addProperty("restore_token", receipt.restoreToken) }))
+    }
+    override suspend fun decide(session: FamilySession, requestId: String, accept: Boolean): FamilyRoster = safe {
+        parseRoster(request("POST", "family/requests/${segment(requestId)}", session.credential, json { addProperty("accept", accept) }))
+    }
+    override suspend fun transfer(session: FamilySession, memberId: String): FamilyRoster = safe {
+        parseRoster(request("POST", "family/owner", session.credential, json { addProperty("member_id", segment(memberId)) }))
+    }
+    override suspend fun leave(session: FamilySession, newOwnerId: String?) = safe {
+        val body = request("POST", "family/leave", session.credential, json { newOwnerId?.let { addProperty("new_owner_id", segment(it)) } })
+        require(body.boolean("ok")); Unit
+    }
+    override suspend fun delete(session: FamilySession) = safe {
+        request("DELETE", "family", session.credential, noContent = true); Unit
+    }
+    private fun parseJoin(body: JsonObject): JoinReply = JoinReply(JoinStatus.valueOf(body.string("status").also { require(it in listOf("joined", "pending", "declined")) }.uppercase()),
         body.string("family_id"), body.get("request_id").let { if (it == null || it.isJsonNull) null else body.string("request_id") })
 }

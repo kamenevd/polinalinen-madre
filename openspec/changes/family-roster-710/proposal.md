@@ -19,10 +19,14 @@ Roster: полный allowlist до 9, уникальные номер и UUID b
 Существующий SDK callback/controller реально подключён к Alice → PB auth/link одним RAM owner, за тем же false-флагом. Boolean retry до сети, атомарные Alice metadata + retry на partial, отдельные Alice/PB фазы, cancellation/logout/revision fences. Сохранённый PB token сначала проверяется pinned refresh; link обязан сохранить record.id; ошибки/conflict не создают новый аккаунт и не откатывают Alice неявно. PB credential идёт в прежний защищённый store; logout чистит local family account/cache, не leave и не Room. Auth name допускает пустую строку без fake identity; остальные ID/JSON guards сохранены.
 Приёмка этого среза: реальное выполнение новых behavior/cancellation/race/process-death/link-conflict и serialized transport/persistence тестов плюс прежних account/AuthSDK/style/core regressions, compile + unit compile timeout ≥900 перед push. Это НЕ завершение всех K/B критериев.
 
+## Android family UI срез (отдельный от roster executor)
+K01–K10 Compose/HTTP/repository/ViewModel, owner/self actions, explicit join/pending/SDK return и INVITE-only SavedState подключены за false.
+MainActivity cold/warm strict routing + manifest autoVerify объявлены; public verification/Huawei не утверждаются. Undo8s/rotation, transfer/leave/solo delete требуют auth+roster readback.
+Focused serialized controller/socket/Compose tests и отдельный opt-in K render suite; core20/старые baselines/Room/issued16 без изменений. Доказательства и ограничения: `docs/family-link-ui.md`.
 ## Флаг
 `FeatureFlags.FAMILY_ROSTER_V2 = false` во всех вариантах; новые public transport entrypoints отказывают до сети.
 Включение — отдельный будущий change после готовности обоих backend, совместимости 14/16 и Android/e2e/native приёмки.
-## Остаток всей 7.1 (14 открытых критериев, ни один не закрыт этим срезом)
+## Общие критерии 7.1 (code-ready Android UI не означает backend/native/e2e PASS)
 - K1: Yandex-only UI K01/K02, migration card, убрать email/password/code только из нового UI после gate; legacy оставить до 7.2.
 - K2: backend candidate HMAC uid/client_id + DB/log tests отдельно; Android foreground Alice→PB/RAM-only/retry/protected-store/signout реализованы, остаются server enable и native/e2e acceptance.
 - K3: backend hashed/derived invites, 7 days/one active/rotate/revoke/rate limits + K03/share UI.

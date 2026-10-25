@@ -41,6 +41,8 @@ if (qaSigningInputs.any { !it.isNullOrBlank() } && !hasCompleteQaSigning) {
 // PR keeps domain/interaction tests + 20 key frames. Opt-in is mandatory for RC.
 val extendedVerification = providers.gradleProperty("madre.extendedVerification")
     .map { it.toBoolean() }.getOrElse(false)
+// New K renders are deliberately opt-in, never added to core20 or old baseline verification.
+val familyLinkRender = providers.gradleProperty("madre.familyLinkRender").map { it.toBoolean() }.getOrElse(false)
 // Same-certificate instrumentation of the deliverable minified variant; ordinary smoke stays debug.
 val qaRegression = providers.gradleProperty("madre.qaRegression").map { it.toBoolean() }.getOrElse(false)
 val extendedOnlyTests = listOf(
@@ -181,6 +183,7 @@ android {
         unitTests.isIncludeAndroidResources = true
         unitTests.all {
             it.maxHeapSize = "2048m"
+            if (!familyLinkRender) it.filter { excludeTestsMatching("com.polinalinen.madre.familyui.FamilyLinkRenderTest") }
             if (!extendedVerification) {
                 it.filter { extendedOnlyTests.forEach { name -> excludeTestsMatching(name) } }
             }

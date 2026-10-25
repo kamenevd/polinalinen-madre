@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[2]
 ACCEPTANCE = (
     "capture_baseline", "fixes_7013_acceptance", "fixes_7014_acceptance",
     "fixes_7014_instrumented", "fixes_7015_huawei", "perf_compare",
-    "bake_numbers_native", "exact_qa_timing",
+    "bake_numbers_native", "exact_qa_timing", "family_link_render",
 )
 GUARD = "Reject conflicting manual selectors before any build or acceptance work"
 EXTENDED = "Extended visual verification (manual, nightly and RC)"
@@ -113,8 +113,14 @@ class WorkflowSelectorTests(unittest.TestCase):
     def test_all_acceptance_combinations_fail_closed_only_when_mixed(self):
         for values in itertools.product((False, True), repeat=len(ACCEPTANCE)):
             flags = dict(zip(ACCEPTANCE, values))
-            self.execute_guard(flags)  # unchanged default/manual acceptance combinations
-            self.execute_guard(flags | {"critical_only": False})
+            # The new family-only renderer cannot silently mask another native acceptance selector.
+            family_mixed = flags["family_link_render"] and any(enabled for name, enabled in flags.items() if name != "family_link_render")
+            for selected in (flags, flags | {"critical_only": False}):
+                if family_mixed:
+                    with self.assertRaises(SystemExit):
+                        self.execute_guard(selected)
+                else:
+                    self.execute_guard(selected)
             with self.subTest(flags=flags):
                 if any(values):
                     with self.assertRaises(SystemExit) as failure:
@@ -183,7 +189,7 @@ class WorkflowSelectorTests(unittest.TestCase):
                 for name, expected in expected_steps.items():
                     with self.subTest(event=event, flags=flags, step=name):
                         self.assertEqual(expected, condition(scalar(self.steps[name], "if", 8), event, flags))
-                self.assertEqual(event in ("workflow_dispatch", "schedule"),
+                self.assertEqual(event in ("workflow_dispatch", "schedule") and not flags["family_link_render"],
                                  condition(scalar(self.jobs["instrumented-smoke"], "if", 4), event, flags))
                 self.assertEqual(manual and flags["fixes_7015_huawei"],
                                  condition(scalar(self.jobs["required-7015-performance"], "if", 4), event, flags))
@@ -193,6 +199,22 @@ class WorkflowSelectorTests(unittest.TestCase):
         for event in ("workflow_dispatch", "schedule"):
             self.assertTrue(condition(scalar(self.steps[EXTENDED], "if", 8), event, {}))
             self.assertTrue(condition(scalar(self.jobs["instrumented-smoke"], "if", 4), event, {}))
+
+    def test_family_render_selector_is_optional_and_does_not_replace_core_or_run_native(self):
+        step = self.steps["Optional family K Compose renders (manual only)"]
+        for event in ("pull_request", "push", "schedule", "workflow_dispatch"):
+            for enabled in (False, True):
+                flags = {"family_link_render": enabled}
+                self.assertEqual(event == "workflow_dispatch" and enabled,
+                                 condition(scalar(step, "if", 8), event, flags))
+        self.assertIn("critical-before-family-render", step)
+        self.assertIn("-Pmadre.familyLinkRender=true", step)
+        self.assertIn("--tests 'com.polinalinen.madre.familyui.FamilyLinkRenderTest'", step)
+        self.assertIn("family-k-", scalar(self.text.split("concurrency:\n", 1)[1], "group", 2) or "")
+        self.assertFalse(condition(scalar(self.jobs["instrumented-smoke"], "if", 4),
+                                   "workflow_dispatch", {"family_link_render": True}))
+        gradle = (ROOT / "app/build.gradle.kts").read_text()
+        self.assertIn('if (!familyLinkRender) it.filter { excludeTestsMatching("com.polinalinen.madre.familyui.FamilyLinkRenderTest") }', gradle)
 
     def test_critical_artifacts_require_successful_verification_not_skips_or_cancellation(self):
         artifact_steps = {

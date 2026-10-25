@@ -21,6 +21,9 @@ interface AuthTokenStore {
     fun read(): String?
     fun write(token: String)
     fun clear()
+    /** Routing metadata only; NEVER grants access without server refresh and roster verification. */
+    fun isYandexVerified(): Boolean = false
+    fun writeYandex(token: String) { write(token) }
 }
 
 /** Шифр токена. Отделён от хранилища, чтобы хранилище можно было проверить. */
@@ -57,11 +60,19 @@ class SecureTokenStore(
 
     override fun write(token: String) {
         val sealed = cipher.encrypt(token.toByteArray(Charsets.UTF_8))
-        prefs.edit().putString(KEY, Base64.encodeToString(sealed, Base64.NO_WRAP)).apply()
+        prefs.edit().putString(KEY, Base64.encodeToString(sealed, Base64.NO_WRAP)).remove("family_yandex_verified").apply()
+    }
+
+    override fun isYandexVerified() = read() != null && prefs.getBoolean("family_yandex_verified", false)
+
+    override fun writeYandex(token: String) {
+        val sealed = cipher.encrypt(token.toByteArray(Charsets.UTF_8))
+        check(prefs.edit().putString(KEY, Base64.encodeToString(sealed, Base64.NO_WRAP))
+            .putBoolean("family_yandex_verified", true).commit())
     }
 
     override fun clear() {
-        prefs.edit().remove(KEY).apply()
+        prefs.edit().remove(KEY).remove("family_yandex_verified").apply()
     }
 
     companion object {

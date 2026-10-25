@@ -86,6 +86,7 @@ fun MadreNavHost(
     pendingSessionId: MutableStateFlow<Long?>? = null,
     pendingFeeding: MutableStateFlow<Boolean>? = null,
     pendingPlanned: MutableStateFlow<com.polinalinen.madre.notifications.PlannedBakeRequest?>? = null,
+    pendingInvitation: MutableStateFlow<String?>? = null,
 ) {
     val context = LocalContext.current
     val readingPreferences = rememberReadingPreferences()
@@ -262,6 +263,17 @@ fun MadreNavHost(
         val now=com.polinalinen.madre.model.BakingClock.elapsed()
         bakingViewModel.sessions.value.filter { !it.isCompleted && !it.isPaused && it.restoredStepValid && it.remainingSeconds(now)==0L }
             .minByOrNull { it.stepEndsAtElapsed(now) }?.let { showHome(1);navController.navigate(MadreDestinations.bake(it.id.toString())) }
+    }
+    val familyLinkModel = com.polinalinen.madre.ui.screens.LocalFamilyLinkModel.current
+    if (pendingInvitation != null && familyLinkModel != null) {
+        val requested by pendingInvitation.collectAsState()
+        LaunchedEffect(requested) {
+            requested?.let { url ->
+                startupHandled = true
+                familyLinkModel.openInvitation(url)
+                if (pendingInvitation.value == url) pendingInvitation.value = null
+            }
+        }
     }
     val undo by bakingViewModel.undo.collectAsState()
     val undoScope = rememberCoroutineScope()
@@ -572,6 +584,7 @@ fun MadreNavHost(
                     account = familyBookState.account,
                     shelfViewModel = shelfViewModel,
                     onOpenAlice = { navController.navigate(MadreDestinations.ALICE) },
+                    onOpenFamilySettings = { navController.navigate(MadreDestinations.SETTINGS_SHELF) },
                 ) }
 
                 SpineBar(3) { section -> if(section!=3) {navController.previousBackStackEntry?.savedStateHandle?.set("home_section",section);navController.popBackStack()} }
@@ -581,6 +594,20 @@ fun MadreNavHost(
                 val ownerId = backStackEntry.arguments?.getString("ownerId").orEmpty()
                 val myUserId by shelfViewModel.myUserId.collectAsState()
                 val own = FamilyShelf.isOwnBook(ownerId, myUserId)
+                val familyModel = com.polinalinen.madre.ui.screens.LocalFamilyLinkModel.current
+                val access = familyModel?.state?.collectAsState()?.value
+                if (com.polinalinen.madre.config.FeatureFlags.FAMILY_ROSTER_V2 && !own && familyModel != null) {
+                    androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                        familyModel.refresh()
+                        shelfViewModel.refresh(familyBookState.account, myName, bakeRecords)
+                    }
+                    if (access?.busy != false || access.failure != null || access.family?.members?.none { it.id == ownerId } != false) {
+                        PaperScaffold(header = { PaperHeader("Книга семьи", { navController.popBackStack() }) }) {
+                            item { PaperNote("Доступ к этой книге не подтверждён. Обновите семью.") }
+                        }
+                        return@composable
+                    }
+                }
                 BookStatsScreen(
                     ownerLabel = if (own) {
                         myName.ifBlank { "вы" }
@@ -599,6 +626,7 @@ fun MadreNavHost(
                 )
             }
         }
+            if (familyLinkModel != null) com.polinalinen.madre.ui.screens.FamilyInvitationRoute()
             PaperSnackbar(navSnackbar,Modifier.align(Alignment.BottomCenter).padding(horizontal=12.dp)
                 .padding(bottom=if(bakeActionBarHeight.value>0.dp)bakeActionBarHeight.value+12.dp else 80.dp))
         }

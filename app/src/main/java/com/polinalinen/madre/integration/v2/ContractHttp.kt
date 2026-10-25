@@ -14,7 +14,7 @@ import java.util.concurrent.TimeUnit
 
 /** No URL, body, credential or upstream exception escapes this boundary. */
 class ContractFailure(val kind: Kind) : IOException("Integration v2: ${kind.name}") {
-    enum class Kind { DISABLED, NETWORK, UNAUTHORIZED, DEAD_INVITE, FAMILY_FULL, OTHER_FAMILY, CONFLICT, SERVER, INVALID }
+    enum class Kind { DISABLED, NETWORK, UNAUTHORIZED, DEAD_INVITE, FAMILY_FULL, OTHER_FAMILY, CONFLICT, RATE_LIMITED, UNSUPPORTED_PROTOCOL, SERVER, INVALID }
 }
 
 /** Same OkHttp/Gson stack as phase A; pinned callers, no cache/logger/cookies/redirects. */
@@ -25,7 +25,7 @@ internal class ContractHttp(private val client: OkHttpClient = client()) {
     }
 
     suspend fun request(method: String, url: String, credential: String? = null,
-                        body: JsonObject? = null, installation: Boolean = false): JsonObject = safe {
+                        body: JsonObject? = null, installation: Boolean = false, noContent: Boolean = false): JsonObject = safe {
         val encoded = body?.toString()
         require(encoded == null || encoded.toByteArray(Charsets.UTF_8).size <= 65_536)
         val builder = Request.Builder().url(url).header("Accept", "application/json")
@@ -41,7 +41,11 @@ internal class ContractHttp(private val client: OkHttpClient = client()) {
                 source.request(65_537)
                 require(source.buffer.size <= 65_536)
                 val text = source.readUtf8()
-                if (response.code != 200) {
+                if (response.code == 204 && noContent) {
+                    require(text.isEmpty())
+                    return@withContext JsonObject()
+                }
+                if (response.code != 200 || noContent) {
                     val kind = when (response.code) {
                         401, 403 -> ContractFailure.Kind.UNAUTHORIZED
                         404 -> ContractFailure.Kind.DEAD_INVITE
@@ -50,6 +54,8 @@ internal class ContractHttp(private val client: OkHttpClient = client()) {
                             "already_in_family" -> ContractFailure.Kind.OTHER_FAMILY
                             else -> ContractFailure.Kind.CONFLICT
                         }
+                        426 -> ContractFailure.Kind.UNSUPPORTED_PROTOCOL
+                        429 -> ContractFailure.Kind.RATE_LIMITED
                         else -> ContractFailure.Kind.SERVER
                     }
                     throw ContractFailure(kind)

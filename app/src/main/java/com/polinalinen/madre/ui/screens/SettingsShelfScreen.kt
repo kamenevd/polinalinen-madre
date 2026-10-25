@@ -59,6 +59,10 @@ fun SettingsShelfScreen(
     familyBookViewModel: FamilyBookViewModel = viewModel(),
     shelfViewModel: ShelfViewModel = viewModel(),
 ) {
+    if (com.polinalinen.madre.config.FeatureFlags.FAMILY_ROSTER_V2) {
+        FamilyLinkRoute(onBack)
+        return
+    }
     val colors = LocalPaper.current
     val context = LocalContext.current
     val familyBookState by familyBookViewModel.state.collectAsState()

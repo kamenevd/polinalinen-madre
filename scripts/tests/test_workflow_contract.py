@@ -49,7 +49,7 @@ class WorkflowContractTests(unittest.TestCase):
         text = self.read(".github/workflows/quality-gates.yml")
         smoke = text.split("  instrumented-smoke:\n", 1)[1]
         self.assertIn("name: Instrumented smoke", smoke)
-        self.assertIn("if: (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && !inputs.critical_only", smoke)
+        self.assertIn("if: (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && !inputs.critical_only && !inputs.family_link_render", smoke)
         quality = text.split("  android-quality:\n", 1)[1].split("  lint-report:\n", 1)[0]
         self.assertIn("needs: workflow-contract", quality)
         critical = next(line for line in quality.splitlines() if "run: ./gradlew compileDebugKotlin" in line)

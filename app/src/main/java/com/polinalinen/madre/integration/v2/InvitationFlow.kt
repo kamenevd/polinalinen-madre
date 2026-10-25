@@ -11,7 +11,10 @@ class InvitationFlow(private val api: FamilyLinkApi) {
     private var invite: FamilyInvitation? = null
     private var session: FamilySession? = null
     private var pending: JoinReply? = null
+    private val observable = kotlinx.coroutines.flow.MutableStateFlow(State())
+    val states: kotlinx.coroutines.flow.StateFlow<State> = observable
     private var current = State()
+        set(value) { field = value; observable.value = value }
     @Synchronized fun state(): State = current
     @Synchronized fun savedInviteUrl(): String? = invite?.savedInviteUrl()
 

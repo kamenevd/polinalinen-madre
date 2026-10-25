@@ -52,6 +52,17 @@ class FamilyLinkUiTest {
         rule.onNodeWithText("После входа вернёмся к этому приглашению.").assertExists()
         rule.onNodeWithText("Почта").assertDoesNotExist(); rule.onNodeWithText("Пароль").assertDoesNotExist()
     }
+    @Test fun acceptedInvitationOpensFamilyListInsteadOfOnlyDismissing() {
+        var opened = 0; var closed = 0
+        rule.setContent { FamilyFixtureTheme {
+            FamilyInvitationContent(InvitationFlow.State(phase = InvitationFlow.Phase.MEMBER, family = familyFixture()),
+                "Марина", {}, {}, {}, {}, {}, { closed++ }, openFamily = { opened++ })
+        } }
+        assertEquals(0, opened)
+        rule.onNodeWithText("К семье").performClick()
+        assertEquals(1, opened); assertEquals(0, closed)
+    }
+
     @Test fun pendingHasSingleForegroundRefreshAndNoAccessOrJoinButton() {
         var refresh = 0
         rule.setContent { FamilyFixtureTheme { FamilyInvitationContent(InvitationFlow.State(InvitationFlow.Phase.PENDING, previewFixture()), "Марина", {}, {}, {}, { refresh++ }, {}, {}) } }

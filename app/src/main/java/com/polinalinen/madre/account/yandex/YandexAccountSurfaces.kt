@@ -127,7 +127,7 @@ private const val ALICE_PRIVACY="Только имя, портрет и номе
 
 @Composable internal fun YandexSignOutDialog(onConfirm:()->Unit,onDismiss:()->Unit) {
     PaperConfirmDialog("Выйти из Яндекс ID?",
-        if (com.polinalinen.madre.config.FeatureFlags.FAMILY_ROSTER_V2)
+        if (com.polinalinen.madre.config.FeatureFlags.V2_ACCOUNT)
             "Книга, закваска, дневник, выпечки и фото останутся на этом телефоне. Алиса перестанет узнавать вас. Полка семьи станет недоступна на этом телефоне до входа. Членство в семье сохранится."
         else "Книга, закваска, дневник, выпечки и фото останутся на этом телефоне. Алиса перестанет узнавать вас. Аккаунт и семья Полки не меняются.",
         "Выйти","Остаться",onConfirm=onConfirm,onDismiss=onDismiss,destructive=true)

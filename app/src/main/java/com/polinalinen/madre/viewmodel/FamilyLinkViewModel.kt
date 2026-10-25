@@ -27,7 +27,7 @@ sealed interface FamilyOverlay {
 /** Activity-owned, retained across rotation. SavedState whitelists only validated INVITE. */
 class FamilyLinkViewModel internal constructor(app: Application, private val saved: SavedStateHandle,
     private val repository: FamilyLinkRepository, private val accounts: FamilyAccountRepository,
-    enabled: Boolean = com.polinalinen.madre.config.FeatureFlags.FAMILY_ROSTER_V2,
+    private val enabled: Boolean = com.polinalinen.madre.config.FeatureFlags.FAMILY_LINK_UI,
 ) : AndroidViewModel(app) {
     constructor(app: Application, saved: SavedStateHandle) : this(app, saved,
         (app as MadreApplication).familyLinkRepository, app.familyAccountRepository)
@@ -51,15 +51,24 @@ class FamilyLinkViewModel internal constructor(app: Application, private val sav
                     }
                 }
             }
+        } else {
+            saved.remove<String>(INVITE)
+            repository.clear()
+            repository.fail(ContractFailure.Kind.DISABLED)
         }
     }
-    fun show(overlay: FamilyOverlay?) { mutableOverlay.value = overlay }
+    fun show(overlay: FamilyOverlay?) { if (enabled) mutableOverlay.value = overlay }
     fun refresh() = run {
         if (mutableOverlay.value == FamilyOverlay.CreatedInvite || mutableOverlay.value == FamilyOverlay.Invite)
             repository.loadInvite()
         else repository.refresh()
     }
     fun openInvitation(url: String): Job {
+        if (!enabled) {
+            saved.remove<String>(INVITE)
+            repository.clear(); repository.fail(ContractFailure.Kind.DISABLED)
+            return Job().apply { complete() }
+        }
         val validated = FamilyInvitation.parse(url)
         workGeneration++; work?.cancel(); flight.set(false); repository.invitation.clear(); mutableOverlay.value = null
         if (validated == null) saved.remove<String>(INVITE) else saved[INVITE] = validated.savedInviteUrl()
@@ -112,7 +121,7 @@ class FamilyLinkViewModel internal constructor(app: Application, private val sav
     fun revoke() = run { repository.revokeInvite() }
     private fun dismissOnSuccess() { if (state.value.failure == null) mutableOverlay.value = null }
     private fun run(action: suspend () -> Unit): Job? {
-        if (!flight.compareAndSet(false, true)) return null
+        if (!enabled || !flight.compareAndSet(false, true)) return null
         val generation = ++workGeneration
         return viewModelScope.launch(start = CoroutineStart.LAZY) {
             try { action() }

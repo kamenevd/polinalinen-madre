@@ -59,8 +59,14 @@ fun SettingsShelfScreen(
     familyBookViewModel: FamilyBookViewModel = viewModel(),
     shelfViewModel: ShelfViewModel = viewModel(),
 ) {
-    if (com.polinalinen.madre.config.FeatureFlags.FAMILY_ROSTER_V2) {
+    if (com.polinalinen.madre.config.FeatureFlags.FAMILY_LINK_UI) {
         FamilyLinkRoute(onBack)
+        return
+    }
+    if (com.polinalinen.madre.config.FeatureFlags.FAMILY_ROSTER_V2) {
+        PaperScaffold(header = { PaperHeader("Семейная полка", onBack) }) {
+            item { FamilyFailure(com.polinalinen.madre.integration.v2.ContractFailure.Kind.DISABLED, {}, showRetry = false) }
+        }
         return
     }
     val colors = LocalPaper.current

@@ -20,7 +20,7 @@ fun ShelfScreen(
     onOpenSettings: () -> Unit = onBack,
 ) {
     val familyModel = LocalFamilyLinkModel.current
-    if (com.polinalinen.madre.config.FeatureFlags.FAMILY_ROSTER_V2 && familyModel != null) {
+    if (com.polinalinen.madre.config.FeatureFlags.FAMILY_LINK_UI && familyModel != null) {
         val verified by familyModel.state.collectAsState()
         val sdk = com.polinalinen.madre.account.yandex.LocalYandexAccountUi.current
         val sdkState = sdk?.model?.state?.collectAsState()?.value

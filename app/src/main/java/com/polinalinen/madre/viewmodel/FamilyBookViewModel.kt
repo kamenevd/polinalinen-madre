@@ -53,6 +53,7 @@ class FamilyBookViewModel internal constructor(
      * на месте, а локальная книга — не дёрнуться.
      */
     fun requestPasswordReset(email: String) {
+        if (com.polinalinen.madre.config.FeatureFlags.V2_ACCOUNT) return
         if (!inFlight.compareAndSet(false, true)) return
         _passwordReset.value = PasswordResetNotice.Sending
         viewModelScope.launch {
@@ -89,6 +90,8 @@ class FamilyBookViewModel internal constructor(
     }
 
     private fun runNetwork(action: suspend () -> FamilyBookState) {
+        // Shared PB/Yandex credentials must never enter the legacy email/code lane.
+        if (com.polinalinen.madre.config.FeatureFlags.V2_ACCOUNT) return
         // Взвести флаг до launch: compareAndSet впускает ровно первого и не
         // даёт отправить второй такой же запрос, пока первый ещё в пути.
         if (!inFlight.compareAndSet(false, true)) return

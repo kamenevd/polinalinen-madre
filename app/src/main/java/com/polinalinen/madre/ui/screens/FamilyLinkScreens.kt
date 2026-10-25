@@ -62,6 +62,7 @@ internal fun familyDate(value: String): String = runCatching {
 }.getOrDefault("")
 
 @Composable fun FamilyLinkRoute(onBack: () -> Unit) {
+    if (!com.polinalinen.madre.config.FeatureFlags.FAMILY_LINK_UI) return
     val model = LocalFamilyLinkModel.current ?: return
     val state by model.state.collectAsState()
     val overlay by model.overlay.collectAsState()
@@ -355,7 +356,8 @@ internal fun familyDate(value: String): String = runCatching {
     }
 }
 
-@Composable fun FamilyInvitationRoute() {
+@Composable fun FamilyInvitationRoute(onOpenFamily: () -> Unit) {
+    if (!com.polinalinen.madre.config.FeatureFlags.FAMILY_LINK_UI) return
     val model = LocalFamilyLinkModel.current ?: return
     val invite by model.invitation.collectAsState()
     val panel by model.state.collectAsState()
@@ -370,12 +372,14 @@ internal fun familyDate(value: String): String = runCatching {
     FamilyInvitationContent(invite, panel.accountName, { sdk?.signIn?.invoke(false) },
         { model.join() }, { model.join(true) }, { model.refreshPending() }, model::retryInvitation, model::closeInvitation,
         sdkAvailable = sdk != null, sdkBusy = sdkState is YandexAccountState.SigningIn || sdkState is YandexAccountState.Binding,
-        sdkError = (sdkState as? YandexAccountState.Error)?.kind?.let { "Вход не завершён. Повторите вход с Яндекс ID — приглашение сохранено." })
+        sdkError = (sdkState as? YandexAccountState.Error)?.kind?.let { "Вход не завершён. Повторите вход с Яндекс ID — приглашение сохранено." },
+        openFamily = { model.closeInvitation(); onOpenFamily() })
 }
 
 @Composable fun FamilyInvitationContent(state: InvitationFlow.State, accountName: String,
     signIn: () -> Unit, join: () -> Unit, switch: () -> Unit, refreshPending: () -> Unit,
-    retry: () -> Unit, close: () -> Unit, sdkAvailable: Boolean = true, sdkBusy: Boolean = false, sdkError: String? = null) {
+    retry: () -> Unit, close: () -> Unit, sdkAvailable: Boolean = true, sdkBusy: Boolean = false, sdkError: String? = null,
+    openFamily: () -> Unit = close) {
     val p = LocalPaper.current
     val preview = state.preview
     PaperScaffold(header = { PaperHeader("", close, "Приглашение", Modifier.padding(horizontal = 22.dp)) }, bottom = {
@@ -384,7 +388,7 @@ internal fun familyDate(value: String): String = runCatching {
                 InvitationFlow.Phase.SIGN_IN -> YandexIdButton(signIn, size = YandexIdButtonSize.L, enabled = sdkAvailable && !sdkBusy)
                 InvitationFlow.Phase.READY -> PaperButton("Присоединиться", join, variant = PaperButtonVariant.ACCENT, icon = Icons.Outlined.GroupAdd)
                 InvitationFlow.Phase.PENDING -> PaperButton("Проверить подтверждение", refreshPending, variant = PaperButtonVariant.SECONDARY)
-                InvitationFlow.Phase.MEMBER -> PaperButton("К семье", close, variant = PaperButtonVariant.ACCENT)
+                InvitationFlow.Phase.MEMBER -> PaperButton("К семье", openFamily, variant = PaperButtonVariant.ACCENT)
                 InvitationFlow.Phase.ERROR -> if (state.failure != ContractFailure.Kind.DEAD_INVITE) PaperButton("Повторить", retry, variant = PaperButtonVariant.SECONDARY)
                 else -> Unit
             }

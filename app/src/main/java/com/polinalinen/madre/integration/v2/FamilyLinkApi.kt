@@ -62,19 +62,21 @@ interface FamilyAuthenticationApi {
 }
 
 /** Pinned transport. Foreground provisioning is wired behind the default-false flag. */
-class HttpsFamilyLinkApi internal constructor(private val http: ContractHttp, private val enabled: () -> Boolean) : FamilyLinkApi, FamilyAuthenticationApi, FamilyManagementApi {
-    constructor() : this(ContractHttp(), { FeatureFlags.FAMILY_ROSTER_V2 })
+class HttpsFamilyLinkApi internal constructor(private val http: ContractHttp, private val enabled: () -> Boolean,
+    private val accountEnabled: () -> Boolean) : FamilyLinkApi, FamilyAuthenticationApi, FamilyManagementApi {
+    constructor() : this(ContractHttp(), { FeatureFlags.FAMILY_LINK_UI }, { FeatureFlags.V2_ACCOUNT })
+    internal constructor(http: ContractHttp, enabled: () -> Boolean) : this(http, enabled, enabled)
     internal constructor(client: OkHttpClient, enabled: () -> Boolean) : this(ContractHttp(client), enabled)
 
-    private suspend fun request(method: String, path: String, credential: String? = null, body: JsonObject? = null, noContent: Boolean = false): JsonObject {
-        if (!enabled()) throw ContractFailure(ContractFailure.Kind.DISABLED)
+    private suspend fun request(method: String, path: String, credential: String? = null, body: JsonObject? = null, noContent: Boolean = false, authentication: Boolean = false): JsonObject {
+        if (!(if (authentication) accountEnabled() else enabled())) throw ContractFailure(ContractFailure.Kind.DISABLED)
         return http.request(method, "https://madre-api.kdnfx.space/api/madre/$path", credential, body, noContent = noContent)
     }
 
     /** Token remains owned by the foreground caller and must close after BOTH provisioning calls. */
     override suspend fun authenticate(token: YandexLoginToken, existingEmailSession: FamilySession?): FamilySession = safe {
         val reply = request("POST", if (existingEmailSession == null) "auth/yandex" else "auth/yandex/link",
-            existingEmailSession?.credential, json { addProperty("yandex_token", token.forVerificationRequest()) })
+            existingEmailSession?.credential, json { addProperty("yandex_token", token.forVerificationRequest()) }, authentication = true)
         parseAuth(reply).also {
             require(existingEmailSession == null || it.userId == existingEmailSession.userId)
         }
@@ -82,7 +84,7 @@ class HttpsFamilyLinkApi internal constructor(private val http: ContractHttp, pr
 
     /** A saved PB credential must be verified; failure never falls back to creating another account. */
     override suspend fun refreshSession(credential: String): FamilySession = safe {
-        if (!enabled()) throw ContractFailure(ContractFailure.Kind.DISABLED)
+        if (!accountEnabled()) throw ContractFailure(ContractFailure.Kind.DISABLED)
         parseAuth(http.request("POST", "https://madre-api.kdnfx.space/api/collections/users/auth-refresh",
             credential, json {}))
     }

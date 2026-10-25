@@ -43,7 +43,7 @@ class MainActivity : ComponentActivity(), ImmersiveHost {
         ViewModelProvider.AndroidViewModelFactory(application)
     }
     private val familyModel: com.polinalinen.madre.viewmodel.FamilyLinkViewModel by viewModels()
-    private val familyInviteQueue = com.polinalinen.madre.integration.v2.FamilyInviteRouting.Queue { FeatureFlags.FAMILY_ROSTER_V2 }
+    private val familyInviteQueue = com.polinalinen.madre.integration.v2.FamilyInviteRouting.Queue { FeatureFlags.FAMILY_LINK_UI }
     private val pendingInvitation = familyInviteQueue.pending
     private var yandexBridge: YandexSdkResultBridge? = null
     private var qaFrameMonitor:com.polinalinen.madre.performance.QaFrameMonitor?=null
@@ -108,7 +108,7 @@ class MainActivity : ComponentActivity(), ImmersiveHost {
             } else null
             androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) {
             CompositionLocalProvider(LocalYandexAccountUi provides account,
-                com.polinalinen.madre.ui.screens.LocalFamilyLinkModel provides if (FeatureFlags.FAMILY_ROSTER_V2) familyModel else null,
+                com.polinalinen.madre.ui.screens.LocalFamilyLinkModel provides if (FeatureFlags.FAMILY_LINK_UI) familyModel else null,
                 com.polinalinen.madre.performance.LocalQaFrameMonitor provides qaFrameMonitor) {
             MadreNavHost(
                 pendingSessionId = pendingSessionId,
@@ -153,7 +153,7 @@ class MainActivity : ComponentActivity(), ImmersiveHost {
 
     override fun onSaveInstanceState(outState: Bundle) {
         yandexBridge?.let{outState.putStringArrayList(KEY_YANDEX_REQUESTS,it.requestKeysForSavedState())}
-        if (FeatureFlags.FAMILY_ROSTER_V2) outState.putString(KEY_FAMILY_INVITE, pendingInvitation.value)
+        if (FeatureFlags.FAMILY_LINK_UI) outState.putString(KEY_FAMILY_INVITE, pendingInvitation.value)
         outState.putLong("madre.pending_session",pendingSessionId.value?:-1)
         outState.putBoolean("madre.pending_feeding",pendingFeeding.value)
         outState.putString("madre.pending_plan",pendingPlanned.value?.id)

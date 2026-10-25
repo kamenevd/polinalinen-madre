@@ -265,7 +265,7 @@ fun MadreNavHost(
             .minByOrNull { it.stepEndsAtElapsed(now) }?.let { showHome(1);navController.navigate(MadreDestinations.bake(it.id.toString())) }
     }
     val familyLinkModel = com.polinalinen.madre.ui.screens.LocalFamilyLinkModel.current
-    if (pendingInvitation != null && familyLinkModel != null) {
+    if (com.polinalinen.madre.config.FeatureFlags.FAMILY_LINK_UI && pendingInvitation != null && familyLinkModel != null) {
         val requested by pendingInvitation.collectAsState()
         LaunchedEffect(requested) {
             requested?.let { url ->
@@ -597,7 +597,7 @@ fun MadreNavHost(
                 val own = FamilyShelf.isOwnBook(ownerId, myUserId)
                 val familyModel = com.polinalinen.madre.ui.screens.LocalFamilyLinkModel.current
                 val access = familyModel?.state?.collectAsState()?.value
-                if (com.polinalinen.madre.config.FeatureFlags.FAMILY_ROSTER_V2 && !own && familyModel != null) {
+                if (com.polinalinen.madre.config.FeatureFlags.FAMILY_LINK_UI && !own && familyModel != null) {
                     androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
                         familyModel.refresh()
                         shelfViewModel.refresh(familyBookState.account, myName, bakeRecords)
@@ -627,7 +627,10 @@ fun MadreNavHost(
                 )
             }
         }
-            if (familyLinkModel != null) com.polinalinen.madre.ui.screens.FamilyInvitationRoute()
+            if (com.polinalinen.madre.config.FeatureFlags.FAMILY_LINK_UI && familyLinkModel != null)
+                com.polinalinen.madre.ui.screens.FamilyInvitationRoute {
+                    navController.navigate(MadreDestinations.SETTINGS_SHELF) { launchSingleTop = true }
+                }
             PaperSnackbar(navSnackbar,Modifier.align(Alignment.BottomCenter).padding(horizontal=12.dp)
                 .padding(bottom=if(bakeActionBarHeight.value>0.dp)bakeActionBarHeight.value+12.dp else 80.dp))
         }

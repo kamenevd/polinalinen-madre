@@ -21,7 +21,7 @@ METHOD = "com.polinalinen.madre.ui.razvorot.BakeNumberRenderTest.bakingPreviousS
 
 
 class Qa714CandidateTests(unittest.TestCase):
-    def test_only_qa_overrides_the_legacy_default_and_real_callers_share_the_gate(self):
+    def test_qa_alice_and_default_off_family_have_independent_callers(self):
         gradle = (ROOT / "app/build.gradle.kts").read_text()
         flag = 'buildConfigField("boolean", "FAMILY_ROSTER_V2", '
         self.assertEqual(1, gradle.count(flag + '"false")'))
@@ -35,10 +35,37 @@ class Qa714CandidateTests(unittest.TestCase):
             self.assertNotIn('FAMILY_ROSTER_V2', match.group(1))
         flags = (ROOT / 'app/src/main/java/com/polinalinen/madre/config/FeatureFlags.kt').read_text()
         self.assertIn('const val FAMILY_ROSTER_V2 = com.polinalinen.madre.BuildConfig.FAMILY_ROSTER_V2', flags)
-        for caller in ('ui/screens/ShelfScreen.kt', 'ui/screens/AliceScreen.kt',
-                       'ui/razvorot/AliceSheet.kt', 'integration/v2/FamilyLinkApi.kt',
-                       'integration/v2/RosterV2.kt', 'MadreApplication.kt'):
-            self.assertIn('FeatureFlags.FAMILY_ROSTER_V2', (ROOT / 'app/src/main/java/com/polinalinen/madre' / caller).read_text())
+        family_flag = 'buildConfigField("boolean", "FAMILY_LINK_UI", '
+        self.assertEqual(1, gradle.count(family_flag + '"false")'))
+        self.assertEqual(1, gradle.count(family_flag))  # No QA/preview override.
+        self.assertIn(family_flag + '"false")', gradle.split('defaultConfig {', 1)[1].split('signingConfigs {', 1)[0])
+        self.assertIn('const val V2_ACCOUNT = FAMILY_LINK_UI || FAMILY_ROSTER_V2', flags)
+        source = ROOT / 'app/src/main/java/com/polinalinen/madre'
+        for caller in ('ui/screens/AliceScreen.kt', 'ui/razvorot/AliceSheet.kt',
+                       'integration/v2/RosterV2.kt', 'account/yandex/YandexAccountViewModel.kt',
+                       'voice/VoiceCoordinator.kt', 'MadreApplication.kt'):
+            self.assertIn('FeatureFlags.FAMILY_ROSTER_V2', (source / caller).read_text())
+        for caller in ('ui/screens/ShelfScreen.kt', 'ui/screens/SettingsShelfScreen.kt',
+                       'ui/screens/FamilyLinkScreens.kt', 'viewmodel/FamilyLinkViewModel.kt',
+                       'integration/v2/FamilyLinkApi.kt', 'navigation/MadreNavHost.kt'):
+            self.assertIn('FeatureFlags.FAMILY_LINK_UI', (source / caller).read_text())
+        activity = (source / 'MainActivity.kt').read_text()
+        self.assertIn('Queue { FeatureFlags.FAMILY_LINK_UI }', activity)
+        self.assertIn('provides if (FeatureFlags.FAMILY_LINK_UI) familyModel else null', activity)
+        self.assertIn('if (FeatureFlags.FAMILY_LINK_UI) outState.putString(KEY_FAMILY_INVITE', activity)
+        self.assertIn('if (FeatureFlags.FAMILY_ROSTER_V2) rosterJob', activity)
+        self.assertIn('if (!com.polinalinen.madre.config.FeatureFlags.V2_ACCOUNT) null',
+                      (source / 'MadreApplication.kt').read_text())
+
+    def test_invite_success_opens_existing_family_list_and_qa_cannot_use_legacy_requests(self):
+        source = ROOT / 'app/src/main/java/com/polinalinen/madre'
+        screens = (source / 'ui/screens/FamilyLinkScreens.kt').read_text()
+        self.assertIn('Phase.MEMBER -> PaperButton("К семье", openFamily,', screens)
+        self.assertIn('openFamily = { model.closeInvitation(); onOpenFamily() }', screens)
+        nav = (source / 'navigation/MadreNavHost.kt').read_text()
+        self.assertIn('FamilyInvitationRoute {\n                    navController.navigate(MadreDestinations.SETTINGS_SHELF)', nav)
+        legacy = (source / 'viewmodel/FamilyBookViewModel.kt').read_text()
+        self.assertEqual(2, legacy.count('if (com.polinalinen.madre.config.FeatureFlags.V2_ACCOUNT) return'))
 
     def test_optional_frame_uses_exact_trusted_head_and_existing_automatic_pr_run(self):
         text = (ROOT / '.github/workflows/quality-gates.yml').read_text()

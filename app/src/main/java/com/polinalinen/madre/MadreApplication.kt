@@ -126,7 +126,7 @@ class MadreApplication : Application() {
         familyAccountRepository, familyLinkApi, familyLinkApi, familyLinkApi) }
     /** No restore/login side effects: only the explicit SDK callback can invoke this adapter. */
     internal val foregroundFamilyProvisioning: com.polinalinen.madre.account.yandex.ForegroundFamilyProvisioning? by lazy {
-        if (!com.polinalinen.madre.config.FeatureFlags.FAMILY_ROSTER_V2) null else {
+        if (!com.polinalinen.madre.config.FeatureFlags.V2_ACCOUNT) null else {
             val auth = familyLinkApi
             object : com.polinalinen.madre.account.yandex.ForegroundFamilyProvisioning {
                 override suspend fun authenticate(token: com.polinalinen.madre.account.yandex.YandexLoginToken,

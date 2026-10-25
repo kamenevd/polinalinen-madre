@@ -26,8 +26,27 @@ class FamilyLinkViewModelTest {
     @Before fun main() { Dispatchers.setMain(UnconfinedTestDispatcher()) }
     @After fun reset() { Dispatchers.resetMain() }
     private val app get() = ApplicationProvider.getApplicationContext<Application>()
-    private fun model(f: FamilyWireFixture, handle: SavedStateHandle = SavedStateHandle(), autoRestore: Boolean = false) =
-        FamilyLinkViewModel(app, handle, f.repository, f.accounts, autoRestore)
+    private fun model(f: FamilyWireFixture, handle: SavedStateHandle = SavedStateHandle(), enabled: Boolean = true) =
+        FamilyLinkViewModel(app, handle, f.repository, f.accounts, enabled)
+
+    @Test fun disabledDefaultRejectsRestoredAndDirectEntrypointsWithoutAnyRequests() = runBlocking {
+        FamilyWireFixture().use { f ->
+            val saved = SavedStateHandle(mapOf(FamilyLinkViewModel.INVITE to f.url))
+            val vm = FamilyLinkViewModel(app, saved, f.repository, f.accounts)
+            vm.openInvitation(f.url).join()
+            vm.show(FamilyOverlay.Invite)
+            listOf(vm.refresh(), vm.signedInReturned(), vm.join(), vm.join(true), vm.refreshPending(),
+                vm.create("Семья"), vm.rename("Другая"), vm.approval(true), vm.invite(), vm.invite(true), vm.revoke(),
+                vm.renameMember("member2", "Имя"), vm.remove("member2", true), vm.undo(), vm.transfer("member2"),
+                vm.decide("request1", true), vm.leave(), vm.delete()).forEach { it?.join() }
+            vm.retryInvitation()
+            assertTrue(f.calls.isEmpty()); assertTrue(saved.keys().isEmpty())
+            assertNull(vm.overlay.value); assertNull(vm.state.value.family)
+            assertEquals(ContractFailure.Kind.DISABLED, vm.state.value.failure)
+            assertEquals(InvitationFlow.Phase.EMPTY, vm.invitation.value.phase)
+            assertNotNull(f.tokens.read())
+        }
+    }
 
     @Test fun createReadbackAutomaticallyLoadsInviteAndRetryNeverCreatesAnotherFamily() = runBlocking {
         FamilyWireFixture().use { f ->

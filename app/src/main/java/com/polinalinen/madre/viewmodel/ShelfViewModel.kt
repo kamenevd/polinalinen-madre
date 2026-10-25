@@ -51,7 +51,9 @@ class ShelfViewModel(app: Application) : AndroidViewModel(app) {
 
             _myUserId.value = account?.userId
             _familyName.value = account?.familyName
-            if (account == null || !account.hasFamily) {
+            if (account == null || !account.hasFamily ||
+                (com.polinalinen.madre.config.FeatureFlags.FAMILY_ROSTER_V2 && !com.polinalinen.madre.config.FeatureFlags.FAMILY_LINK_UI)) {
+                _familyName.value = null
                 val mine = FamilyShelf.localMember(localName)
                 _members.value = listOf(mine)
                 _ledger.value = FamilyShelf.ledgerFromLocal(localRecords, mine.displayName)
@@ -71,7 +73,7 @@ class ShelfViewModel(app: Application) : AndroidViewModel(app) {
                 _unreachable.value = false
                 return@launch
             }
-            if (com.polinalinen.madre.config.FeatureFlags.FAMILY_ROSTER_V2) {
+            if (com.polinalinen.madre.config.FeatureFlags.FAMILY_LINK_UI) {
                 // No stale/offline family data. Personal Room records remain available independently.
                 remoteBakes = emptyList(); lastConfirmedMembers = emptyList()
                 _members.value = listOf(FamilyShelf.localMember(localName))
@@ -135,7 +137,8 @@ class ShelfViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun recordsFor(ownerId: String): List<BakeRecordEntity> {
-        if (com.polinalinen.madre.config.FeatureFlags.FAMILY_ROSTER_V2) {
+        if (com.polinalinen.madre.config.FeatureFlags.FAMILY_ROSTER_V2 && !com.polinalinen.madre.config.FeatureFlags.FAMILY_LINK_UI) return emptyList()
+        if (com.polinalinen.madre.config.FeatureFlags.FAMILY_LINK_UI) {
             val state = madreApp.familyLinkRepository.state.value
             if (state.busy || state.failure != null || state.family?.members?.none { it.id == ownerId } != false) return emptyList()
         }

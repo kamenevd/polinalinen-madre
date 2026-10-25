@@ -80,8 +80,8 @@ android {
         minSdk = 26
         targetSdk = 35
         // versionCode is monotonic over the latest published release; release_cycle.py enforces it.
-        versionCode = 57
-        versionName = "7.1.4"
+        versionCode = 58
+        versionName = "7.1.5"
 
         testInstrumentationRunner = if (qaRegression) "com.polinalinen.madre.MinifiedPlanInstrumentation" else "androidx.test.runner.AndroidJUnitRunner"
         if (qaRegression) testProguardFile("qa-test-rules.pro")
@@ -94,6 +94,8 @@ android {
         buildConfigField("boolean", "QA_DIAGNOSTICS", "false")
         // Production and debug transport stay legacy; only the selected QA candidate opts in.
         buildConfigField("boolean", "FAMILY_ROSTER_V2", "false")
+        // Family invitations/list are independent of the QA Alice roster/control lane.
+        buildConfigField("boolean", "FAMILY_LINK_UI", "false")
         // Explicit disabled manifest namespace, NOT an issued/fabricated OAuth client id.
         manifestPlaceholders["YANDEX_CLIENT_ID"] = yandexClientId.ifEmpty { "disabled-madre-id" }
     }

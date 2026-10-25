@@ -28,20 +28,28 @@ Do not treat candidate byte sizes as actual freed bytes (hardlinks/sparse files)
 
 * Keep newest five regular APKs by mtime plus every INDEX/flat receipt basename,
   absolute/relative path or SHA reference, regardless of accepted/unclear status.
-  Keep latest symlink/target, all 7.1 artifacts/candidates and unknown names.
+  Keep latest symlink/target, exact current canonical-head candidate and unknown names.
   Missing/ambiguous INDEX, opaque metadata or evidence subdirectory keeps all APKs.
-  Non-APK files are never candidates; metadata and retained artifacts are hashed
+  Known PNG and versioned *-png*.zip previews are preserved payloads, not ambiguous
+  metadata. INDEX backups and flat receipts still contribute every reference; malformed
+  JSON and unknown metadata remain fail-closed. Historical candidates/7.1 files are
+  not protected just by their name. Non-APK files are never candidates; metadata and retained artifacts are hashed
   before/after. Evidence directories are opaque, never recursively inspected.
 * Cache candidates are **only** immutable dependency payload files at the exact
   `modules-2/files-2.1/group/module/version/hash/file` depth, with recognized
   jar/aar/pom/module suffixes and max(atime,mtime,ctime) strictly older than 14 days.
-  Existing cache locks or any Gradle daemon/worker retain the entire cache.
+  Kernel-owned cache locks (POSIX/OFD/flock via /proc/locks), BUSY/unknown daemons
+  and workers retain the cache. Persistent unlocked lockfiles and explicitly IDLE
+  daemons do not. The last daemon-log busy/idle transition proves idle; missing or
+  unreadable state fails closed. Current/open/mapped payloads remain protected.
   Journals, daemon state, transforms and unknown cache layouts are retained.
   No process is killed; no blanket cache directory deletion exists.
 * Build candidates are only `build`, `app/build`, `benchmark/build` in known,
   hook-registered clean Android clones whose HEAD is provably an ancestor of the
-  current canonical integrator HEAD. ci/*, wip/*, canonical feature/integrator,
-  tool runtime, dirty/unmerged/locked/open work are retained. Tracked contents in
+  current canonical integrator HEAD, using the canonical object store (not a stale
+  clone's missing successor). HEAD equal to current is retained. ci/*, wip/*, integrator,
+  current madre-711-alice-ui-20261025, tool runtime, dirty/unmerged/locked/open work
+  are retained. A clean inactive feature-branch predecessor is eligible. Tracked contents in
   generated paths disqualify deletion. Track source hashes/status before/after.
 * All clones and linked worktrees are retained as source trees; worktree removals
   are deliberately **zero**, not inferred from standalone clones. This narrower

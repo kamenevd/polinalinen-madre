@@ -65,6 +65,9 @@ class CleanupTests(unittest.TestCase):
         (path / '.git/madre-ci/gradlew.original').write_text('fixture registration')
         (path / 'app/build').mkdir()
         (path / 'app/build/generated.bin').write_text('generated')
+        (self.l.integrator / 'advance.txt').write_text(str(time.time_ns()))
+        self.cmd(self.l.integrator, 'add', '.')
+        self.cmd(self.l.integrator, 'commit', '-qm', 'canonical successor')
         return path
 
     def plan(self, **kw):
@@ -95,13 +98,14 @@ class CleanupTests(unittest.TestCase):
 
     def test_latest_and_current_candidate(self):
         (self.l.apk / 'latest.apk').symlink_to('6.0.0.apk')
-        for name in ('7.1.0.apk', '7.1.1-7af-candidate.apk', 'mystery.apk'):
+        current = '7.1.1-' + self.cmd(self.l.integrator, 'rev-parse', 'HEAD')[:7] + '-candidate.apk'
+        for name in ('7.1.0.apk', current, 'mystery.apk'):
             p = self.l.apk / name
             p.write_text('protected')
             os.utime(p, (0, 0))
         self.assertNotIn('6.0.0.apk', self.targets())
-        self.assertNotIn('7.1.0.apk', self.targets())
-        self.assertNotIn('7.1.1-7af-candidate.apk', self.targets())
+        self.assertIn('7.1.0.apk', self.targets())
+        self.assertNotIn(current, self.targets())
         self.assertNotIn('mystery.apk', self.targets())
 
     def test_receipts_and_non_apk_survive_apply(self):
@@ -145,9 +149,101 @@ class CleanupTests(unittest.TestCase):
         os.utime(p, (boundary - 1, boundary - 1))
         lock = self.l.cache / 'modules-2/modules-2.lock'
         lock.write_text('lock')
-        self.assertNotIn('file.jar', self.targets())
+        self.assertIn('file.jar', self.targets())
         lock.unlink()
         self.assertNotIn('file.jar', self.targets(c.plan(self.l, active=set(), daemon=True, now=self.now)))
+
+    def test_retired_feature_uses_canonical_object_store(self):
+        repo = self.clone()
+        self.cmd(repo, 'checkout', 'feat/razvorot-7-0-1')
+        (self.l.integrator / 'next.txt').write_text('new head only in canonical')
+        self.cmd(self.l.integrator, 'add', '.')
+        self.cmd(self.l.integrator, 'commit', '-qm', 'advance canonical')
+        self.assertEqual(self.plan()['counts']['build'], 1)
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.cmd(repo, 'cat-file', '-e', self.cmd(self.l.integrator, 'rev-parse', 'HEAD'))
+
+    def test_flat_previews_do_not_poison_retention(self):
+        for name in ('7.0.14-png.zip', '7.1.0-preview.png'):
+            (self.l.apk / name).write_bytes(b'\x00\xff preview')
+        self.assertIn('6.0.0.apk', self.targets())
+        result = c.run(self.l, apply=True, active=set(), daemon=False, now=self.now)
+        self.assertFalse(result['errors'])
+        self.assertTrue((self.l.apk / '7.0.14-png.zip').exists())
+
+    def test_historical_candidates_not_blanket_protected(self):
+        for name in ('7.1.0-123abcd-candidate.apk', '7.0.16-abc1234-candidate.apk'):
+            p = self.l.apk / name
+            p.write_text('retired unreferenced')
+            os.utime(p, (0, 0))
+            self.assertIn(name, self.targets())
+        (self.l.apk / 'retention-receipt.bin').write_bytes(b'unknown')
+        self.assertFalse(self.targets())
+
+    def test_current_head_candidate_protected_exactly(self):
+        head = self.cmd(self.l.integrator, 'rev-parse', 'HEAD')[:7]
+        name = f'7.1.1-{head}-candidate.apk'
+        p = self.l.apk / name
+        p.write_text('current')
+        os.utime(p, (0, 0))
+        self.assertNotIn(name, self.targets())
+
+    def test_posix_and_flock_ownership_separate_process(self):
+        p = self.l.cache / 'modules-2/files-2.1/group/name/1/hash/file.jar'
+        p.parent.mkdir(parents=True)
+        p.write_text('dependency')
+        lock = self.l.cache / 'modules-2/modules-2.lock'
+        lock.write_text('persistent')
+        for method in ('lockf', 'flock'):
+            code = ('import fcntl,sys; f=open(sys.argv[1],"r+"); '
+                    f'fcntl.{method}(f,fcntl.LOCK_EX); '
+                    'print("ready",flush=True); sys.stdin.read()')
+            child = subprocess.Popen([sys.executable, '-c', code, str(lock)],
+                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+            try:
+                assert child.stdout is not None
+                self.assertEqual(child.stdout.readline().strip(), 'ready')
+                self.assertNotIn('file.jar', self.targets())
+            finally:
+                child.communicate('done', timeout=10)
+            self.assertIn('file.jar', self.targets())
+
+    def test_open_cache_payload_kept_with_idle_daemon(self):
+        p = self.l.cache / 'modules-2/files-2.1/group/name/1/hash/file.jar'
+        p.parent.mkdir(parents=True)
+        p.write_text('dependency')
+        result = c.plan(self.l, active={p}, daemon=False, now=self.now)
+        self.assertNotIn('file.jar', self.targets(result))
+
+    def test_daemon_busy_idle_unknown(self):
+        log = Path(self.tmp.name) / 'daemon.out.log'
+        log.write_text('Marking the daemon as idle, address: fixture\n')
+        self.assertFalse(c.daemon_log_busy(log))
+        with log.open('a') as f:
+            f.write('Marking the daemon as busy, address: fixture\n')
+        self.assertTrue(c.daemon_log_busy(log))
+        log.write_text('unknown state\n')
+        self.assertTrue(c.daemon_log_busy(log))
+
+    def test_current_head_and_named_current_workspace_kept(self):
+        repo = self.clone()
+        self.cmd(repo, 'fetch', '-q', str(self.l.integrator), 'HEAD')
+        self.cmd(repo, 'reset', '--hard', 'FETCH_HEAD')
+        self.assertEqual(self.plan()['counts']['build'], 0)
+        current = self.l.work / 'madre-711-alice-ui-20261025'
+        self.repo(current)
+        self.assertEqual(c.workspace_reason(current, self.l, 'unused', set()), 'integrator/tool runtime')
+
+    def test_malformed_actual_metadata_keeps_all(self):
+        for text in ('{bad json 6.0.0.apk', '{"status":"accepted"}'):
+            (self.l.apk / 'receipt.json').write_text(text)
+            self.assertFalse(self.targets())
+
+    def test_active_path_index_is_equivalent(self):
+        paths = {self.l.work / 'madre-old/app/build/open.jar', self.l.apk / '6.0.0.apk'}
+        indexed = c.ActivePaths(paths)
+        for p in (self.l.work, self.l.apk, self.l.apk / '6.0.0.apk', self.l.cache):
+            self.assertEqual(c.busy(p, paths), c.busy(p, indexed))
 
     def test_cache_non_payload_paths_never_traversed(self):
         p = self.l.cache / 'daemon/state.bin'

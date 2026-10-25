@@ -73,6 +73,45 @@ def tree(path, root):
                      'dir' if p.is_dir() else digest(p)] for p in sorted(items)}
 
 
+def daemon_log_busy(path):
+    """Only an explicit last IDLE transition proves a daemon idle; unknown is busy."""
+    state = None
+    try:
+        with path.open() as stream:
+            for line in stream:
+                if 'Marking the daemon as busy' in line:
+                    state = True
+                elif 'Marking the daemon as idle' in line:
+                    state = False
+    except (OSError, UnicodeError):
+        return True
+    return state is not False
+
+
+def cache_lock_reason(layout):
+    """Read actual kernel owners (POSIX FileLock, OFD and flock), never alter locks."""
+    locks = list(layout.cache.glob('*.lock')) + list((layout.cache / 'modules-2').glob('*.lock'))
+    identities = set()
+    for p in locks:
+        if not safe(p, layout.cache) or not p.is_file():
+            return 'unsafe/unknown cache lock'
+        s = p.stat()
+        identities.add((os.major(s.st_dev), os.minor(s.st_dev), s.st_ino))
+    try:
+        for line in Path('/proc/locks').read_text().splitlines():
+            parts = line.split()
+            # Blocked waiters have an extra -> token; owners have the same dev:inode field.
+            token = next((x for x in parts if re.fullmatch(r'[0-9a-fA-F]+:[0-9a-fA-F]+:\d+', x)), None)
+            if token is None:
+                return 'unknown kernel lock format'
+            major, minor, inode = token.split(':')
+            if (int(major, 16), int(minor, 16), int(inode)) in identities:
+                return 'kernel-owned cache lock'
+    except OSError:
+        return 'cannot prove cache locks unowned'
+    return None
+
+
 def process_state():
     """All visible cwd/fd/maps targets; unreadable live processes abort admission."""
     paths, daemon = set(), False
@@ -81,7 +120,11 @@ def process_state():
             continue
         try:
             cmd = (proc / 'cmdline').read_bytes()
-            daemon |= b'GradleDaemon' in cmd or b'GradleWorkerMain' in cmd
+            if b'GradleWorkerMain' in cmd:
+                daemon = True
+            if b'GradleDaemon' in cmd:
+                logs = list((Path.home() / '.gradle/daemon').glob(f'*/daemon-{proc.name}.out.log'))
+                daemon |= len(logs) != 1 or daemon_log_busy(logs[0])
             for p in [proc / 'cwd', *(proc / 'fd').iterdir()]:
                 try:
                     target = os.readlink(p).removesuffix(' (deleted)')
@@ -100,7 +143,16 @@ def process_state():
     return paths, daemon
 
 
+class ActivePaths(set):
+    """Index identical ancestry predicates once, not once per generated file."""
+    def __init__(self, paths):
+        super().__init__(paths)
+        self.occupied = {parent for p in self for parent in (p, *p.parents)}
+
+
 def busy(path, active):
+    if isinstance(active, ActivePaths):
+        return path in active.occupied
     return any(p == path or p.is_relative_to(path) for p in active)
 
 
@@ -110,7 +162,8 @@ def old(path, now):
 
 
 def workspace_reason(repo, layout, canonical, active):
-    if repo == layout.integrator or repo == Path(__file__).resolve().parents[1]:
+    if repo in (layout.integrator, layout.work / 'madre-711-alice-ui-20261025',
+                Path(__file__).resolve().parents[1]):
         return 'integrator/tool runtime'
     if not safe(repo, layout.work) or not (repo / 'app/src/main/AndroidManifest.xml').is_file():
         return 'not a known Android workspace'
@@ -119,17 +172,21 @@ def workspace_reason(repo, layout, canonical, active):
     if not (gd / 'madre-ci/gradlew.original').is_file():
         return 'unregistered workspace'
     branch = git(repo, 'symbolic-ref', '--quiet', '--short', 'HEAD')
-    if branch.startswith(('ci/', 'wip/')) or branch == 'feat/razvorot-7-0-1':
+    if branch.startswith(('ci/', 'wip/')):
         return 'active writer branch'
     if busy(repo, active):
         return 'open file/cwd/mapping'
     if git(repo, 'status', '--porcelain', '--untracked-files=all'):
         return 'dirty'
-    if any((gd / name).exists() for name in ('index.lock', 'MERGE_HEAD', 'rebase-merge', 'rebase-apply', 'locked')):
+    if any((gd / name).exists() for name in ('index.lock', 'MERGE_HEAD', 'CHERRY_PICK_HEAD',
+                                            'REVERT_HEAD', 'sequencer', 'BISECT_LOG',
+                                            'rebase-merge', 'rebase-apply', 'locked')):
         return 'locked/integration in flight'
     head = git(repo, 'rev-parse', 'HEAD')
+    if head == canonical:
+        return 'current canonical HEAD'
     # Missing canonical object and unmerged commits both fail closed.
-    git(repo, 'merge-base', '--is-ancestor', head, canonical)
+    git(layout.integrator, 'merge-base', '--is-ancestor', head, canonical)
     return None
 
 
@@ -145,6 +202,8 @@ def plan(layout=Layout(), *, active=None, daemon=None, now=None):
     now = time.time() if now is None else now
     if active is None:
         active, daemon = process_state()
+    active = ActivePaths(active)
+    canonical = git(layout.integrator, 'rev-parse', 'HEAD')
     result = {'schema': 1, 'mode': 'dry-run', 'created': now, 'candidates': [],
               'kept': [], 'sources': {}, 'preserved': {}, 'worktree_removals': 0,
               'worktree_policy': 'retain all source trees; no worktree removal enabled', 'errors': []}
@@ -158,6 +217,9 @@ def plan(layout=Layout(), *, active=None, daemon=None, now=None):
             keep(path, 'open file/cwd/mapping')
             return
         result['candidates'].append({'path': str(path), 'root': str(root), 'kind': kind,
+                                     'reason': {'apk': 'unreferenced recognized artifact outside top5/latest/current',
+                                                'cache': 'immutable payload unused and unchanged >14 days; no owner/open use',
+                                                'build': 'registered clean inactive predecessor; canonical ancestry proven'}[kind],
                                      'manifest': manifest,
                                      'bytes': sum(v[2] for v in manifest.values() if v[5] != 'dir')})
 
@@ -176,17 +238,31 @@ def plan(layout=Layout(), *, active=None, daemon=None, now=None):
                     unclear = True  # opaque receipt/evidence directory: retain all APKs
                 continue
             if p.suffix != '.apk':
+                # Known preview payloads and historical latest links are not retention metadata.
+                if (p.suffix.lower() == '.png' or
+                        (p.suffix.lower() == '.zip' and re.fullmatch(r'\d+\.\d+\.\d+.*-png(?:-ci-red)?\.zip', p.name))):
+                    keep(p, 'preview payload (not retention metadata)')
+                    result['preserved'][str(p)] = digest(p)
+                    continue
                 # Unknown/binary metadata => protect every artifact, not guess.
-                if p.suffix not in ('.txt', '.json', '.sha256') or p.stat().st_size > 2 * 1024 * 1024:
+                is_index = p.name.startswith(('INDEX.txt', 'INDEX-before-'))
+                if (not is_index and p.suffix not in ('.txt', '.json', '.sha256')) or p.stat().st_size > 2 * 1024 * 1024:
                     unclear = True
                     continue
                 try:
                     text = p.read_text()
+                    if p.suffix == '.json':
+                        json.loads(text)
                 except (UnicodeError, OSError):
+                    unclear = True
+                    continue
+                except ValueError:
                     unclear = True
                     continue
                 metadata += '\n' + text
                 result['preserved'][str(p)] = digest(p)
+                if not is_index and text.strip() and not re.search(r'[^\s|]+\.apk|(?i:\b[0-9a-f]{64}\b)', text):
+                    unclear = True
                 if p == index and any(line.strip() and not re.search(r'[^\s|]+\.apk', line)
                                       for line in text.splitlines()):
                     unclear = True
@@ -205,9 +281,9 @@ def plan(layout=Layout(), *, active=None, daemon=None, now=None):
                 reason = 'latest target'
             elif p.name in metadata or str(p) in metadata or sha in referenced_hashes:
                 reason = 'INDEX/receipt path, basename or SHA (any status)'
-            elif p.name.startswith('7.1.') or 'candidate' in p.name or '7af' in p.name:
-                reason = 'current 7.1 / candidate'
-            elif not re.fullmatch(r'\d+\.\d+\.\d+\.apk', p.name):
+            elif re.fullmatch(r'\d+\.\d+\.\d+-' + canonical[:7] + r'(?:-candidate)?\.apk', p.name):
+                reason = 'exact current canonical candidate'
+            elif not re.fullmatch(r'\d+\.\d+\.\d+(?:-[0-9a-f]{7,40}(?:-candidate)?)?\.apk', p.name):
                 reason = 'unrecognized artifact name'
             elif busy(p, active):
                 reason = 'open artifact'
@@ -226,9 +302,9 @@ def plan(layout=Layout(), *, active=None, daemon=None, now=None):
             raise RuntimeError('unsafe cache root')
         # Only immutable dependency payloads, not daemon/transforms/journal/current caches.
         root = layout.cache / 'modules-2/files-2.1'
-        locks = list(layout.cache.glob('*.lock')) + list((layout.cache / 'modules-2').glob('*.lock'))
-        if daemon or locks:
-            keep(layout.cache, 'daemon/worker present or cache lock exists')
+        lock_reason = cache_lock_reason(layout)
+        if daemon or lock_reason:
+            keep(layout.cache, lock_reason or 'busy/unknown Gradle daemon or worker')
         elif root.is_dir() and safe(root, layout.cache):
             # Exactly group/module/version/hash/file; no general cache recursion.
             level = [root]
@@ -243,8 +319,8 @@ def plan(layout=Layout(), *, active=None, daemon=None, now=None):
                         else:
                             keep(p, 'recent access/change or open')
 
-    canonical = git(layout.integrator, 'rev-parse', 'HEAD')
     result['canonical_integrator'] = canonical
+    result['linked_worktree_inventory'] = git(layout.integrator, 'worktree', 'list', '--porcelain')
     # Listing immediate names is not traversal of any unapproved workspace.
     for repo in sorted(layout.work.iterdir()):
         if not repo.name.startswith('madre-') or repo == layout.apk or not repo.is_dir() or repo.is_symlink():
@@ -346,8 +422,12 @@ def run(layout=Layout(), *, apply=False, wait=0, active=None, daemon=None, now=N
                 for c in result['candidates']:
                     # Recheck writers and metadata before EACH mutation.
                     paths, running = process_state() if active is None else (active, daemon)
-                    if busy(Path(c['root']), paths) or (c['kind'] == 'cache' and running):
+                    if busy(Path(c['path']), paths) or (c['kind'] == 'build' and busy(Path(c['root']), paths)) or (c['kind'] == 'cache' and (running or cache_lock_reason(layout))):
                         raise RuntimeError('activity appeared before apply')
+                    if git(layout.integrator, 'rev-parse', 'HEAD') != result['canonical_integrator']:
+                        raise RuntimeError('canonical HEAD changed before apply')
+                    if c['kind'] == 'build' and workspace_reason(Path(c['root']), layout, result['canonical_integrator'], paths):
+                        raise RuntimeError('workspace protection changed before apply')
                     preserved(result)
                     remove(c)
                     result['deleted'].append(c['path'])

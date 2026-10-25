@@ -3,8 +3,10 @@ name: Quality gates
 on:
   pull_request:
     branches: [main]
+    paths-ignore: ['**/*.md', 'docs/**', 'design/**']
   push:
     branches: [main]
+    paths-ignore: ['**/*.md', 'docs/**', 'design/**']
   workflow_dispatch:
     inputs:
       family_link_render:
@@ -71,11 +73,17 @@ jobs:
       - name: Reject conflicting manual selectors before any build or acceptance work
         env:
           WORKFLOW_INPUTS_JSON: ${{ toJSON(inputs) }}
+          WORKFLOW_EVENT_NAME: ${{ github.event_name }}
+          WORKFLOW_REF_NAME: ${{ github.ref_name }}
         run: |
           python3 - <<'PY'
           import json
           import os
           inputs = json.loads(os.environ['WORKFLOW_INPUTS_JSON']) or {}
+          if (os.environ.get('WORKFLOW_EVENT_NAME') == 'workflow_dispatch'
+                  and os.environ.get('WORKFLOW_REF_NAME', '').startswith('wip/')
+                  and not inputs.get('critical_only', False)):
+              raise SystemExit('wip branches require manual critical_only')
           if inputs.get('critical_only', False):
               conflicts = sorted(name for name, enabled in inputs.items()
                                  if name != 'critical_only' and enabled)
@@ -95,7 +103,8 @@ jobs:
 
   android-quality:
     name: Android quality
-    needs: workflow-contract
+    # Independent short path; repeat the cheap selector guard before setup.
+    if: github.event_name != 'pull_request' || !startsWith(github.head_ref, 'wip/')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -106,6 +115,31 @@ jobs:
       MADRE_YANDEX_CLIENT_ID: ${{ secrets.MADRE_YANDEX_CLIENT_ID }}
       MADRE_BUILD_TOOLS_VERSION: "36.0.0"
     steps:
+      - name: Reject conflicting manual selectors before any build or acceptance work
+        env:
+          WORKFLOW_INPUTS_JSON: ${{ toJSON(inputs) }}
+          WORKFLOW_EVENT_NAME: ${{ github.event_name }}
+          WORKFLOW_REF_NAME: ${{ github.ref_name }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          inputs = json.loads(os.environ['WORKFLOW_INPUTS_JSON']) or {}
+          if (os.environ.get('WORKFLOW_EVENT_NAME') == 'workflow_dispatch'
+                  and os.environ.get('WORKFLOW_REF_NAME', '').startswith('wip/')
+                  and not inputs.get('critical_only', False)):
+              raise SystemExit('wip branches require manual critical_only')
+          if inputs.get('critical_only', False):
+              conflicts = sorted(name for name, enabled in inputs.items()
+                                 if name != 'critical_only' and enabled)
+              if conflicts:
+                  raise SystemExit('critical_only cannot be mixed with: ' + ', '.join(conflicts))
+          if inputs.get('family_link_render', False):
+              conflicts = sorted(name for name, enabled in inputs.items()
+                                 if name != 'family_link_render' and enabled)
+              if conflicts:
+                  raise SystemExit('family_link_render cannot be mixed with: ' + ', '.join(conflicts))
+          PY
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -116,7 +150,10 @@ jobs:
       - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
         with:
           packages: platform-tools
-      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+        with:
+          cache-read-only: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) || (github.event.repository != null && github.ref_name != github.event.repository.default_branch && !startsWith(github.head_ref || github.ref_name, 'feat/')) }}
+          cache-cleanup: on-success
       - name: Install pinned QA verification tools
         run: sdkmanager "build-tools;${MADRE_BUILD_TOOLS_VERSION}"
       # Current parent authority: stable QA identity approved from7.0.8 onward.
@@ -189,7 +226,10 @@ jobs:
       - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
         with:
           packages: platform-tools
-      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+        with:
+          cache-read-only: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) || (github.event.repository != null && github.ref_name != github.event.repository.default_branch && !startsWith(github.head_ref || github.ref_name, 'feat/')) }}
+          cache-cleanup: on-success
       - name: Install pinned QA verification tools
         run: sdkmanager "build-tools;${MADRE_BUILD_TOOLS_VERSION}"
       # Current parent authority: stable QA identity approved from7.0.8 onward.
@@ -317,6 +357,7 @@ jobs:
 
   lint-report:
     name: Lint (report only)
+    if: github.event_name != 'pull_request' || !startsWith(github.head_ref, 'wip/')
     needs: workflow-contract
     continue-on-error: true
     runs-on: ubuntu-latest
@@ -330,7 +371,10 @@ jobs:
       - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
         with:
           packages: platform-tools
-      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+        with:
+          cache-read-only: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) || (github.event.repository != null && github.ref_name != github.event.repository.default_branch && !startsWith(github.head_ref || github.ref_name, 'feat/')) }}
+          cache-cleanup: on-success
       - name: Lint warnings do not block PR or APK
         continue-on-error: true
         run: ./gradlew lintDebug --no-daemon --stacktrace
@@ -373,7 +417,10 @@ jobs:
       - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
         with:
           packages: platform-tools
-      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+        with:
+          cache-read-only: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) || (github.event.repository != null && github.ref_name != github.event.repository.default_branch && !startsWith(github.head_ref || github.ref_name, 'feat/')) }}
+          cache-cleanup: on-success
       - name: Enable KVM
         # The optional device job must use the same QA identity, never an ephemeral debug key.
         run: |
@@ -515,6 +562,9 @@ jobs:
         with:
           packages: platform-tools
       - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+        with:
+          cache-read-only: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) || (github.event.repository != null && github.ref_name != github.event.repository.default_branch && !startsWith(github.head_ref || github.ref_name, 'feat/')) }}
+          cache-cleanup: on-success
       - name: Restore same QA key for isolated measurement APKs only
         env:
           QA_KEYSTORE_BASE64: ${{ secrets.MADRE_QA_KEYSTORE_BASE64 }}

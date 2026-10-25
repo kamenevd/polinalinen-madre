@@ -45,11 +45,12 @@ def step_blocks(job):
     return sections(job, r"^      - (?:name|uses): (.+)\n")
 
 
-def condition(expression, event, flags, success=True, outcomes=None):
+def condition(expression, event, flags, success=True, outcomes=None, context=None):
     # Execute the actual workflow if-expression. Reject syntax outside the
     # deliberately small boolean-expression subset used by these selectors.
     if expression is None:
         return success
+    expression = expression.removeprefix("${{ ").removesuffix(" }}")
     source = expression.replace("&&", " and ").replace("||", " or ")
     source = re.sub(r"!(?!=)", " not ", source).strip()
     tree = ast.parse(source, mode="eval")
@@ -60,15 +61,16 @@ def condition(expression, event, flags, success=True, outcomes=None):
         if not isinstance(node, allowed):
             raise AssertionError(f"unsupported workflow condition: {ast.dump(node)}")
         if isinstance(node, ast.Call) and not (
-                isinstance(node.func, ast.Name) and node.func.id in ("success", "always")
-                and not node.args and not node.keywords):
+                isinstance(node.func, ast.Name) and node.func.id in ("success", "always", "startsWith")
+                and not node.keywords):
             raise AssertionError("unexpected workflow condition call")
     inputs = SimpleNamespace(**dict.fromkeys(("critical_only", *ACCEPTANCE), False) | flags)
     steps = SimpleNamespace(**{name: SimpleNamespace(outcome=value)
                               for name, value in (outcomes or {}).items()})
     return bool(eval(compile(tree, "<actual-workflow-condition>", "eval"),
                      {"__builtins__": {}},
-                     {"github": SimpleNamespace(event_name=event), "inputs": inputs,
+                     {"github": SimpleNamespace(**({"event_name": event, "head_ref": ""} | (context or {}))), "inputs": inputs,
+                      "null": None, "startsWith": lambda value, prefix: value.lower().startswith(prefix.lower()),
                       "steps": steps, "success": lambda: success, "always": lambda: True}))
 
 
@@ -141,7 +143,13 @@ class WorkflowSelectorTests(unittest.TestCase):
         self.assertIsNone(scalar(self.guard_step, "if", 8))
         self.assertIsNone(scalar(self.guard_step, "continue-on-error", 8))
         self.assertIsNone(scalar(self.jobs["workflow-contract"], "continue-on-error", 4))
-        expected = {"android-quality": "workflow-contract", "android-acceptance": "workflow-contract", "lint-report": "workflow-contract",
+        for name in ("workflow-contract", "android-quality"):
+            steps = step_blocks(self.jobs[name])
+            self.assertEqual(GUARD, next(iter(steps)))
+            self.assertEqual(self.guard_step, steps[GUARD])
+            self.assertIsNone(scalar(steps[GUARD], "if", 8))
+            self.assertIsNone(scalar(steps[GUARD], "continue-on-error", 8))
+        expected = {"android-quality": None, "android-acceptance": "workflow-contract", "lint-report": "workflow-contract",
                     "instrumented-smoke": "android-acceptance", "required-7015-performance": "workflow-contract"}
         self.assertEqual({"workflow-contract", *expected}, set(self.jobs))
         for job, dependency in expected.items():
@@ -155,8 +163,8 @@ class WorkflowSelectorTests(unittest.TestCase):
         self.execute_guard(flags)
         short = self.jobs["android-quality"]
         self.assertIn("ref: ${{ github.event.pull_request.head.sha || github.sha }}", short)
-        self.assertIsNone(scalar(short, "if", 4))
-        self.assertEqual("workflow-contract", scalar(short, "needs", 4))
+        self.assertTrue(condition(scalar(short, "if", 4), "pull_request", {}))
+        self.assertIsNone(scalar(short, "needs", 4))
         self.assertIsNone(scalar(short, "continue-on-error", 4))
         command = scalar(self.short_steps["Short APK gate - compile, executed units and ordinary QA"], "run", 8)
         self.assertEqual("./gradlew :app:compileDebugKotlin :app:compileDebugUnitTestKotlin :app:testDebugUnitTest :app:assembleDebug :app:assembleQa -Pmadre.shortApkGate=true --no-daemon --stacktrace --no-configuration-cache", command)
@@ -175,6 +183,66 @@ class WorkflowSelectorTests(unittest.TestCase):
         for outcome in ("failure", "skipped", "cancelled"):
             self.assertFalse(condition(scalar(upload, "if", 8), "pull_request", {}, outcomes={"verify_real_qa": outcome}))
         self.assertTrue(condition(scalar(upload, "if", 8), "pull_request", {}, outcomes={"verify_real_qa": "success"}))
+
+    def test_cache_policy_for_default_feature_other_and_fork_branches(self):
+        action = "gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a"
+        found = []
+        for job in self.jobs.values():
+            steps = step_blocks(job)
+            if action not in steps:
+                continue
+            step = steps[action]
+            found.append(step)
+            self.assertEqual("on-success", scalar(step, "cache-cleanup", 10))
+            self.assertNotIn("gradle-home-cache-cleanup:", step)
+            expression = scalar(step, "cache-read-only", 10)
+            for event in ("push", "workflow_dispatch", "schedule", "pull_request"):
+                for branch in ("main", "feat/one", "fix/one", "ci/one", "wip/one", "feature/not-feat"):
+                    for fork in (False, True):
+                        context = dict(repository="owner/repo", ref_name="123/merge" if event == "pull_request" else branch,
+                                       head_ref=branch if event == "pull_request" else "",
+                                       event=SimpleNamespace(repository=SimpleNamespace(default_branch="main"),
+                                           pull_request=SimpleNamespace(head=SimpleNamespace(repo=SimpleNamespace(
+                                               full_name="fork/repo" if fork else "owner/repo")))))
+                        expected = (event == "pull_request" and fork) or not (
+                            branch.startswith("feat/") or (event != "pull_request" and branch == "main"))
+                        with self.subTest(event=event, branch=branch, fork=fork):
+                            self.assertEqual(expected, condition(expression, event, {}, context=context))
+        self.assertEqual(5, len(found))
+
+    def test_docs_only_filters_and_wip_auto_heavy_exclusion(self):
+        import fnmatch
+        triggers = self.text.split("on:\n", 1)[1].split("  workflow_dispatch:", 1)[0]
+        for event, block in sections(triggers, r"^  (pull_request|push):\n").items():
+            self.assertEqual("[main]", scalar(block, "branches", 4))
+            pattern_text = scalar(block, "paths-ignore", 4)
+            assert pattern_text is not None
+            patterns = ast.literal_eval(pattern_text)
+            self.assertEqual(["**/*.md", "docs/**", "design/**"], patterns)
+            def ignored(path):
+                return any(fnmatch.fnmatchcase(path, pattern) or
+                           (pattern.startswith("**/") and fnmatch.fnmatchcase(path, pattern[3:]))
+                           for pattern in patterns)
+            for paths, skip in [(["README.md"], True), (["docs/guide.txt", "design/art.svg"], True),
+                                (["docs/guide.md", "app/src/Main.kt"], False),
+                                ([".github/workflows/quality-gates.yml"], False)]:
+                self.assertEqual(skip, all(map(ignored, paths)), (event, paths))
+        for name in ("android-quality", "lint-report"):
+            expression = scalar(self.jobs[name], "if", 4)
+            for branch in ("wip/task", "feat/task", "ci/task"):
+                self.assertEqual(not branch.startswith("wip/"), condition(expression, "pull_request", {},
+                                 context={"head_ref": branch}))
+                self.assertTrue(condition(expression, "workflow_dispatch", {}, context={"head_ref": branch}))
+        for event, branch, flags, valid in [
+                ("workflow_dispatch", "wip/task", {}, False),
+                ("workflow_dispatch", "wip/task", {"critical_only": True}, True),
+                ("workflow_dispatch", "wip/task", {"family_link_render": True}, False),
+                ("workflow_dispatch", "feat/task", {}, True),
+                ("pull_request", "123/merge", {}, True)]:
+            result = subprocess.run(["bash", "-e", "-c", self.guard_shell], capture_output=True, text=True,
+                env=os.environ | {"WORKFLOW_INPUTS_JSON": json.dumps(flags),
+                                  "WORKFLOW_EVENT_NAME": event, "WORKFLOW_REF_NAME": branch}, timeout=10)
+            self.assertEqual(valid, result.returncode == 0, result.stderr)
 
     def test_short_selector_excludes_only_exact_visual_classes_and_keeps_critical_units(self):
         gradle = (ROOT / "app/build.gradle.kts").read_text()

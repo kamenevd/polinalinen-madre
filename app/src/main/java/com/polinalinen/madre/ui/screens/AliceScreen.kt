@@ -34,8 +34,13 @@ fun AliceScreen(viewModel: BakingViewModel, coordinator: VoiceCoordinator, onBac
         val app = androidx.compose.ui.platform.LocalContext.current.applicationContext as com.polinalinen.madre.MadreApplication
         val roster by app.rosterCoordinator.state.collectAsState()
         val scope = rememberCoroutineScope()
+        val account = LocalYandexAccountUi.current
+        val accountState = account?.model?.state?.collectAsState()?.value
         RosterAlicePage(roster, onBack, { scope.launch { app.rosterCoordinator.consentFromExplicitTap() } },
-            app::disconnectVoice, app.rosterCoordinator::retry)
+            app::disconnectVoice, { scope.launch { app.rosterCoordinator.checkFromExplicitTap() } },
+            onContinue = { scope.launch { app.rosterCoordinator.continuePairFromExplicitTap() } },
+            identityReady = accountState is YandexAccountState.SignedIn,
+            accountStep = { com.polinalinen.madre.account.yandex.YandexAliceAccountStep(onBack) })
         return
     }
     val state by coordinator.state.collectAsState()

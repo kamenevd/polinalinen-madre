@@ -45,6 +45,14 @@ function clearRestore(m) {
     m.set("restore_security_revision", 0); m.set("restore_user_revision", 0);
 }
 function joined(app, f, u) {
+    // Caller has already validated the owner restore/accept (or a fresh join).
+    // A one-save SQL permit, not ledger status, allows the retained fence to
+    // distinguish this transaction from byte-exact legacy rollback writers.
+    const previous = proof(app, f, u, false);
+    if (previous && previous.getBool("removed_once")) {
+        app.db().newQuery("INSERT INTO _madre_family_join_permits (user, family) VALUES ({:u}, {:f})")
+            .bind({u: u.id, f: f.id}).execute();
+    }
     u.set("family", f.id); bump(app, u);
     const m = proof(app, f, u, true);
     m.set("status", "active"); m.set("role", f.getString("owner") === u.id ? "owner" : "member");

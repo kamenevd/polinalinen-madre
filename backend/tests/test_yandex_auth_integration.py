@@ -563,7 +563,7 @@ class YandexAuthIntegration(unittest.TestCase):
     def test_18_non_destructive_schema_rollback_and_reupgrade_keeps_bindings(self):
         before = self.sql("SELECT * FROM users ORDER BY id")
         self.stop()
-        args = [str(self.binary), "migrate", "down", "2", f"--dir={self.data}",
+        args = [str(self.binary), "migrate", "down", "3", f"--dir={self.data}",
             f"--hooksDir={self.hooks}", f"--migrationsDir={self.migrations}", "--automigrate=false"]
         result = subprocess.run(args, input=b"y\n", stdout=self.log, stderr=self.log,
             env=self.env, cwd=self.work, timeout=15)

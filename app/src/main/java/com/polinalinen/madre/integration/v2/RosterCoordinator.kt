@@ -12,7 +12,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 internal data class RosterConnection(val credentialHash: String, val connection: String?, val consent: Boolean,
-    val revision: Long = 0, val revokePending: Boolean = false)
+    val revision: Long = 0, val revokePending: Boolean = false, val bindingKey: String? = null)
 
 /** Only scoped consent/technical metadata; identity bearer remains in its existing protected store. */
 class RosterConnectionStore(private val prefs: SharedPreferences, private val cipher: TokenCipher) {
@@ -24,6 +24,22 @@ class RosterConnectionStore(private val prefs: SharedPreferences, private val ci
             require(it.connection == null || uuid(it.connection))
         }
     }
+    internal fun readAttempt(): PairAttempt? {
+        val raw = prefs.getString("pair_attempt", null) ?: return null
+        val plain = requireNotNull(cipher.decrypt(Base64.decode(raw, Base64.NO_WRAP)))
+        return com.google.gson.Gson().fromJson(String(plain, Charsets.UTF_8), PairAttempt::class.java).also {
+            require(uuid(it.requestId) && uuid(it.process) && it.createdAt > 0 && it.deadline >= it.createdAt)
+            require(it.deadline - it.createdAt <= 300_000 && it.stage != null)
+        }
+    }
+    internal fun writeAttempt(value: PairAttempt?) {
+        val editor = prefs.edit()
+        if (value == null) editor.remove("pair_attempt") else {
+            val sealed = cipher.encrypt(com.google.gson.Gson().toJson(value).toByteArray(Charsets.UTF_8))
+            editor.putString("pair_attempt", Base64.encodeToString(sealed, Base64.NO_WRAP))
+        }
+        check(editor.commit())
+    }
     internal fun write(value: RosterConnection) {
         val sealed = cipher.encrypt(com.google.gson.Gson().toJson(value).toByteArray(Charsets.UTF_8))
         check(prefs.edit().putString("connection", Base64.encodeToString(sealed, Base64.NO_WRAP)).commit())
@@ -31,13 +47,36 @@ class RosterConnectionStore(private val prefs: SharedPreferences, private val ci
 }
 
 enum class RosterStatus { UNLINKED, ATTACHING, ATTACHED, CONNECTED, OFFLINE, REVOKE_PENDING, ERROR }
+/** Data-only pairing detail; frozen screens keep their accepted status vocabulary. */
+enum class InstallationPairStatus { NONE, NEEDS_IDENTITY, AUTHORIZATION_PENDING, EXPIRED, INTERRUPTED }
 data class RosterUiState(val status: RosterStatus = RosterStatus.UNLINKED, val bakes: List<RosterBake> = emptyList(),
-    val consent: Boolean = false, val message: String? = null)
+    val consent: Boolean = false, val message: String? = null, val pendingExpiresAt: Long? = null,
+    val retryPair: Boolean = false, val pairStatus: InstallationPairStatus = InstallationPairStatus.NONE)
 
-/** Foreground-only transport; never selects a bake, enrolls, pairs, or upgrades legacy consent. */
+/** Foreground-only explicit installation consent. No provider launch, bake selection or implicit renewal. */
 class RosterCoordinator(private val identities: VoiceIdentityStore, private val store: RosterConnectionStore,
     private val api: RosterV2Api, private val fence: Any, private val enabled: () -> Boolean) {
     private val actions = Mutex()
+    private val process = java.util.UUID.randomUUID().toString()
+    @Volatile private var binding: String? = null
+    @Volatile private var attempt: PairAttempt? = null
+    private var loaded = false
+    // Revision provenance only, never authority. A pending attempt still has no live connection.
+    private var previousAttachment: RosterConnection? = null
+    /** Called by the existing verified SDK owner, synchronously before account replacement/logout. */
+    fun accountChanged(key: String?) = synchronized(fence) {
+        if (binding == key) return@synchronized
+        val initialIdentity = binding == null && attempt?.stage == PairStage.IDENTITY && attempt?.binding == null
+        binding = key; epoch++; suspended = true; previousAttachment = null
+        if (!initialIdentity && attempt != null) {
+            attempt = attempt?.copy(stage = PairStage.TERMINAL)
+            try { store.writeAttempt(attempt) } catch (_: Exception) { /* RAM fence still wins. */ }
+            mutable.value = mutable.value.copy(status = RosterStatus.ERROR, pairStatus = InstallationPairStatus.INTERRUPTED, consent = false,
+                message = "Аккаунт изменился. Отмените прежнюю попытку и разрешите подключение заново.", retryPair = false)
+        } else if (saved?.consent == true) {
+            mutable.value = mutable.value.copy(status = RosterStatus.OFFLINE, consent = false)
+        }
+    }
     @Volatile private var controller: RosterController? = null
     @Volatile private var saved: RosterConnection? = null
     @Volatile private var epoch = 0L
@@ -54,76 +93,203 @@ class RosterCoordinator(private val identities: VoiceIdentityStore, private val 
     }
     fun stopForeground() = synchronized(fence) { foreground = false; foregroundGeneration++; epoch++; offline() }
     private fun offline() { if (mutable.value.status in setOf(RosterStatus.CONNECTED, RosterStatus.ATTACHED, RosterStatus.ATTACHING)) mutable.value = mutable.value.copy(status = RosterStatus.OFFLINE) }
-    fun retry() = synchronized(fence) { epoch++; suspended = false }
+    fun retry() = synchronized(fence) { epoch++; if (attempt == null) suspended = false }
     suspend fun load() = actions.withLock {
         if (!enabled()) return@withLock
         try {
             synchronized(fence) {
-                if (saved == null) saved = store.read()
+                if (loaded) return@synchronized
+                saved = store.read(); attempt = store.readAttempt(); loaded = true; suspended = true
                 val current = saved
                 mutable.value = mutable.value.copy(status = when {
                     current?.revokePending == true -> RosterStatus.REVOKE_PENDING
+                    attempt != null -> RosterStatus.ERROR
                     current?.consent == true && current.connection != null -> RosterStatus.OFFLINE
                     else -> RosterStatus.UNLINKED
-                }, consent = current?.consent == true)
+                }, consent = current?.consent == true && attempt == null,
+                    pairStatus = if (attempt != null) InstallationPairStatus.INTERRUPTED else InstallationPairStatus.NONE, message = if (attempt != null)
+                    "Попытка прервана. После перезапуска приложение не возобновляет согласие или вход. Отмените её перед новой попыткой." else null)
             }
         } catch (_: Exception) { mutable.value = RosterUiState(RosterStatus.ERROR) }
     }
 
-    /** Called only by an explicit scope switch/tap following its full warning, not load/SDK/restore. */
+    /** One UUID per explicit consent. SDK completion/return/retry never calls this method. */
     suspend fun consentFromExplicitTap() = actions.withLock {
+        if (!enabled() || !foreground || saved?.revokePending == true || attempt != null) return@withLock
+        val now = BakingClock.wallClock()
+        synchronized(fence) {
+            epoch++; suspended = true
+            previousAttachment = saved
+            val pending = PairAttempt(java.util.UUID.randomUUID().toString(), process, now, now + 300_000)
+            store.writeAttempt(pending); attempt = pending
+        }
+        continuePairLocked()
+    }
+    /** Explicit continuation after SDK bind, or same-ID transport retry. No login side effect. */
+    suspend fun continuePairFromExplicitTap() = actions.withLock {
         if (!enabled() || !foreground) return@withLock
+        continuePairLocked()
+    }
+    private fun saveAttempt(value: PairAttempt) { store.writeAttempt(value); attempt = value }
+    private fun terminal(message: String, pairStatus: InstallationPairStatus = InstallationPairStatus.EXPIRED) {
+        attempt?.let { saveAttempt(it.copy(stage = PairStage.TERMINAL)) }
+        epoch++; suspended = true
+        mutable.value = mutable.value.copy(status = RosterStatus.ERROR, pairStatus = pairStatus, consent = false, message = message, retryPair = false)
+    }
+    private suspend fun continuePairLocked() {
+        var pending = attempt ?: return
+        if (pending.process != process || pending.stage == PairStage.TERMINAL) return
+        if (!pending.valid(BakingClock.wallClock())) {
+            synchronized(fence) { terminal("Время попытки истекло. Отмените её и дайте согласие заново.") }; return
+        }
+        val key = binding
+        if (key == null) {
+            mutable.value = mutable.value.copy(status = RosterStatus.ERROR, pairStatus = InstallationPairStatus.NEEDS_IDENTITY, consent = false,
+                message = "Для подключения нужен проверенный аккаунт Яндекс ID. Вход сам по себе не даёт Алисе доступ.")
+            return
+        }
         val e = synchronized(fence) { epoch++; epoch }
         try {
-            val identity = requireNotNull(identities.read())
-            check(!identity.revokePending)
-            check(saved?.revokePending != true)
+            val identity = requireNotNull(identities.read()); check(!identity.revokePending && saved?.revokePending != true)
             val credential = identity.credential
-            val before = saved?.takeIf { it.credentialHash == hash(credential) }
-            val candidate = RosterConnection(hash(credential), before?.connection, false, before?.revision ?: 0)
-            synchronized(fence) { check(epoch == e && foreground); store.write(candidate); saved = candidate
-                mutable.value = RosterUiState(RosterStatus.ATTACHING) }
-            val connection = api.attach(credential) // producer independently requires a confirmed paired grant
             synchronized(fence) {
-                check(epoch == e && foreground && identities.read() == identity)
-                val attached = candidate.copy(connection = connection, consent = true, revision = if (connection == before?.connection) before.revision else 0)
-                store.write(attached); saved = attached; suspended = false
-                mutable.value = RosterUiState(RosterStatus.ATTACHED, consent = true) // NOT CONNECTED until exact poll
+                check(epoch == e && foreground && binding == key)
+                check(pending.binding == null || pending.binding == key)
+                check(pending.credentialHash == null || pending.credentialHash == hash(credential))
+                pending = pending.copy(binding = key, credentialHash = hash(credential),
+                    stage = if (pending.stage == PairStage.IDENTITY) PairStage.PROBE else pending.stage)
+                saveAttempt(pending)
+                // A pending challenge never inherits a previous attached connection.
+                val local = RosterConnection(hash(credential), null, false)
+                store.write(local); saved = local
+                mutable.value = mutable.value.copy(status = RosterStatus.ATTACHING, consent = false, message = null, retryPair = false, pairStatus = InstallationPairStatus.NONE)
             }
-        } catch (e: CancellationException) { throw e }
-        catch (_: Exception) { synchronized(fence) { if (epoch == e) mutable.value = RosterUiState(RosterStatus.ERROR,
-            message = "Подключение не подтверждено. Нужна действующая подтверждённая пара навыка; входа в Яндекс ID недостаточно.") } }
+            fun live() = epoch == e && foreground && binding == key && identities.read() == identity &&
+                attempt?.requestId == pending.requestId && pending.valid(BakingClock.wallClock())
+            if (pending.stage == PairStage.PROBE) {
+                try {
+                    val connection = api.attach(credential)
+                    synchronized(fence) { check(live()); acceptAttach(connection, credential) }
+                    return
+                } catch (failure: ContractFailure) {
+                    if (failure.kind != ContractFailure.Kind.PAIR_REQUIRED) throw failure
+                    synchronized(fence) { check(live()); pending = pending.copy(stage = PairStage.CONSENT); saveAttempt(pending) }
+                }
+            }
+            if (pending.stage == PairStage.CONSENT) {
+                val reply = try { api.pairConsent(credential, InstallationPairConsent(pending.requestId)) }
+                catch (failure: ContractFailure) {
+                    if (failure.kind != ContractFailure.Kind.ALREADY_PAIRED) throw failure
+                    val connection = api.attach(credential)
+                    synchronized(fence) { check(live()); acceptAttach(connection, credential) }; return
+                }
+                synchronized(fence) {
+                    check(live()); require(reply.requestId == pending.requestId)
+                    val now = BakingClock.wallClock()
+                    require(reply.expiresAt > now && reply.expiresAt - now <= 300_000)
+                    pending = pending.copy(stage = PairStage.PENDING, consentExpiresAt = reply.expiresAt,
+                        deadline = minOf(pending.deadline, reply.expiresAt))
+                    saveAttempt(pending); showPending()
+                }
+            } else if (pending.stage == PairStage.PENDING) {
+                // Returning from Dialogs is explicit. Only confirmed attach followed by validated poll earns CONNECTED.
+                try {
+                    val connection = api.attach(credential)
+                    synchronized(fence) { check(live()); acceptAttach(connection, credential) }
+                } catch (failure: ContractFailure) {
+                    if (failure.kind != ContractFailure.Kind.PAIR_REQUIRED) throw failure
+                    synchronized(fence) { check(live()); showPending("Привязка навыка ещё не подтверждена. Завершите её в Диалогах и проверьте снова.") }
+                }
+            }
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (failure: Exception) {
+            synchronized(fence) {
+                if (epoch == e) {
+                    val kind = (failure as? ContractFailure)?.kind
+                    if (!pending.valid(BakingClock.wallClock())) {
+                        terminal("Время попытки истекло. Отмените её и дайте согласие заново.")
+                    } else if (kind in setOf(ContractFailure.Kind.CHALLENGE_CONSUMED, ContractFailure.Kind.BINDING_CHANGED,
+                            ContractFailure.Kind.BINDING_REQUIRED, ContractFailure.Kind.UNAUTHORIZED)) {
+                        terminal("Попытка больше недействительна. Отмените её; затем проверьте аккаунт и разрешите подключение заново.", InstallationPairStatus.INTERRUPTED)
+                    } else mutable.value = mutable.value.copy(status = RosterStatus.ERROR, consent = false,
+                        message = "Подключение не подтверждено. Повторите проверку с интернетом: номер и срок этой попытки не изменятся.",
+                        retryPair = true)
+                }
+            }
+        }
+    }
+    private fun showPending(message: String? = null) {
+        mutable.value = mutable.value.copy(status = RosterStatus.ERROR, pairStatus = InstallationPairStatus.AUTHORIZATION_PENDING, consent = false,
+            message = message, pendingExpiresAt = attempt?.deadline, retryPair = false)
+    }
+    private fun acceptAttach(connection: String, credential: String) {
+        val attached = RosterConnection(hash(credential), connection, true,
+            revision = listOfNotNull(saved, previousAttachment)
+                .filter { it.connection == connection && it.credentialHash == hash(credential) }
+                .maxOfOrNull { it.revision } ?: 0, bindingKey = binding)
+        store.write(attached); store.writeAttempt(null); saved = attached; attempt = null; previousAttachment = null; suspended = false
+        mutable.value = mutable.value.copy(status = RosterStatus.ATTACHED, consent = true, message = null,
+            pendingExpiresAt = null, retryPair = false, pairStatus = InstallationPairStatus.NONE)
+    }
+    /** Reattach stable permission only on an explicit check; never silently start a new consent. */
+    suspend fun checkFromExplicitTap() {
+        if (attempt != null) { continuePairFromExplicitTap(); return }
+        actions.withLock {
+            if (!enabled() || !foreground || saved?.consent != true || saved?.revokePending == true) return@withLock
+            val e = synchronized(fence) { epoch++; epoch }
+            val key = binding ?: return@withLock
+            try {
+                check(saved?.bindingKey == key)
+                val identity = requireNotNull(identities.read()); check(!identity.revokePending)
+                check(saved?.credentialHash == hash(identity.credential))
+                val connection = api.attach(identity.credential)
+                synchronized(fence) { check(epoch == e && foreground && binding == key && identities.read() == identity)
+                    acceptAttach(connection, identity.credential) }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { synchronized(fence) { if (epoch == e) {
+                suspended = true; mutable.value = mutable.value.copy(status = RosterStatus.ERROR,
+                    message = "Разрешение или связь не подтверждены. Повторите проверку либо отключите Алису перед новым согласием.")
+            } } }
+        }
     }
 
     /** Same commitFence as SQLite. Local refusal wins before the network, even if persistence fails. */
     fun revokeLocally() = synchronized(fence) {
         if (!enabled()) return@synchronized
-        epoch++; suspended = true
+        epoch++; suspended = true; previousAttachment = null
         try {
+            attempt = (attempt ?: store.readAttempt())?.copy(stage = PairStage.TERMINAL)
+            store.writeAttempt(attempt)
             val old = saved ?: store.read()
             saved = old?.copy(consent = false, revokePending = true)
             saved?.let(store::write)
-            mutable.value = RosterUiState(if (old?.connection == null) RosterStatus.UNLINKED else RosterStatus.REVOKE_PENDING)
+            mutable.value = RosterUiState(if (old == null && attempt?.credentialHash == null) RosterStatus.UNLINKED else RosterStatus.REVOKE_PENDING)
         } catch (_: Exception) { mutable.value = RosterUiState(RosterStatus.ERROR,
             message = "Не удалось сохранить отзыв. Управление на телефоне остановлено; повторите отключение.") }
     }
     suspend fun disconnect() {
         revokeLocally()
         actions.withLock {
-            val old = saved ?: return@withLock
-            val conn = old.connection ?: return@withLock
+            val old = saved
+            val conn = old?.connection
+            if (old == null && attempt?.credentialHash == null) {
+                synchronized(fence) { store.writeAttempt(null); attempt = null; mutable.value = RosterUiState() }
+                return@withLock
+            }
+            val e = epoch
             try {
                 val identity = requireNotNull(identities.read())
-                check(hash(identity.credential) == old.credentialHash)
-                api.disconnect(identity.credential, conn)
+                check(hash(identity.credential) == (old?.credentialHash ?: attempt?.credentialHash))
+                if (conn != null) api.disconnect(identity.credential, conn) else api.cancelPair(identity.credential)
                 synchronized(fence) {
-                    check(saved == old)
-                    val disabled = old.copy(connection = null, consent = false, revokePending = false)
-                    store.write(disabled); saved = disabled; mutable.value = RosterUiState()
+                    check(saved == old && epoch == e && identities.read() == identity)
+                    val disabled = (old ?: RosterConnection(hash(identity.credential), null, false))
+                        .copy(connection = null, consent = false, revokePending = false)
+                    store.write(disabled); store.writeAttempt(null); attempt = null; saved = disabled; mutable.value = RosterUiState()
                 }
             } catch (e: CancellationException) { throw e }
-            catch (_: Exception) { mutable.value = RosterUiState(RosterStatus.REVOKE_PENDING,
-                message = "На телефоне отключено. Серверный отзыв не подтверждён; повторите с интернетом.") }
+            catch (_: Exception) { synchronized(fence) { if (epoch == e) mutable.value = RosterUiState(RosterStatus.REVOKE_PENDING,
+                message = "На телефоне отключено. Серверный отзыв не подтверждён; повторите с интернетом.") } }
         }
     }
 
@@ -131,7 +297,7 @@ class RosterCoordinator(private val identities: VoiceIdentityStore, private val 
     suspend fun runForeground() {
         if (!enabled()) return
         load()
-        val owner = synchronized(fence) { foreground = true; suspended = false; epoch++; foregroundGeneration++; foregroundGeneration }
+        val owner = synchronized(fence) { foreground = true; epoch++; foregroundGeneration++; foregroundGeneration }
         try {
             while (currentCoroutineContext().isActive) {
                 pollOnce()
@@ -140,8 +306,12 @@ class RosterCoordinator(private val identities: VoiceIdentityStore, private val 
         } finally { synchronized(fence) { if (owner == foregroundGeneration) stopForeground() } }
     }
     internal suspend fun pollOnce() = actions.withLock {
-        val c = controller ?: return@withLock
         if (!foreground || !enabled()) return@withLock
+        synchronized(fence) {
+            attempt?.takeIf { it.process == process && it.stage != PairStage.TERMINAL && !it.valid(BakingClock.wallClock()) }
+                ?.let { terminal("Время попытки истекло. Отмените её и дайте согласие заново.") }
+        }
+        val c = controller ?: return@withLock
         val viewEpoch = epoch
         try {
             // This UUID is only a local DTO envelope, never persisted/attached/sent as authority.
@@ -155,7 +325,7 @@ class RosterCoordinator(private val identities: VoiceIdentityStore, private val 
         fun live(): Boolean {
             val identity = identities.read()
             return enabled() && foreground && !suspended && epoch == e && controller === c && saved?.connection == conn &&
-                saved?.consent == true && saved?.revokePending == false && identity != null && !identity.revokePending &&
+                saved?.consent == true && saved?.revokePending == false && binding != null && binding == current.bindingKey && identity != null && !identity.revokePending &&
                 hash(identity.credential) == current.credentialHash
         }
         try {

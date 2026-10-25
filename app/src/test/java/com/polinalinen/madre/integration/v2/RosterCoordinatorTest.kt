@@ -22,6 +22,8 @@ class RosterCoordinatorTest {
     private val store by lazy {RosterConnectionStore(app.getSharedPreferences("roster",0),cipher)}
     private class Api: RosterV2Api {
         var attaches=0;var polls=0;var acks=0
+        override suspend fun pairConsent(credential:String,request:InstallationPairConsent):PendingPairConsent = error("Unexpected consent")
+        override suspend fun cancelPair(credential:String) {}
         val connection=UUID.randomUUID().toString()
         var attachBlock:(suspend()->Unit)?=null
         var pollBlock:(suspend()->Unit)?=null
@@ -36,7 +38,7 @@ class RosterCoordinatorTest {
     }
     private suspend fun waitFor(check:()->Boolean) {withTimeout(5000){while(!check())delay(10)}}
     @Test fun restoreAndLegacyIdentityDoNotCreateConsentOrAttach()=runBlocking {
-        val api=Api();val c=RosterCoordinator(identities,store,api,Any()){true};c.attachController(controller)
+        val api=Api();val c=RosterCoordinator(identities,store,api,Any()){true};c.accountChanged("fixture-verified");c.attachController(controller)
         val job=launch{c.runForeground()}
         try {delay(100);assertEquals(0,api.attaches);assertEquals(0,api.polls);assertFalse(c.state.value.consent)
             c.consentFromExplicitTap();waitFor{c.state.value.status==RosterStatus.CONNECTED}
@@ -49,7 +51,7 @@ class RosterCoordinatorTest {
     @Test fun stoppedForegroundWinsAgainstLateAttachAndCannotPersistConnected()=runBlocking {
         val entered=CompletableDeferred<Unit>();val release=CompletableDeferred<Unit>()
         val api=Api().apply{attachBlock={entered.complete(Unit);release.await()}}
-        val c=RosterCoordinator(identities,store,api,Any()){true};c.attachController(controller)
+        val c=RosterCoordinator(identities,store,api,Any()){true};c.accountChanged("fixture-verified");c.attachController(controller)
         val job=launch{c.runForeground()};val tap=launch{delay(20);c.consentFromExplicitTap()}
         try {entered.await();c.stopForeground();release.complete(Unit);tap.join()
             assertFalse(store.read()!!.consent);assertNull(store.read()!!.connection);assertEquals(0,api.polls)
@@ -59,7 +61,7 @@ class RosterCoordinatorTest {
     @Test fun logoutAndControllerDetachFenceLatePollAndNoAck()=runBlocking {
         val entered=CompletableDeferred<Unit>();val release=CompletableDeferred<Unit>()
         val api=Api().apply{pollBlock={entered.complete(Unit);release.await()}}
-        val c=RosterCoordinator(identities,store,api,Any()){true};c.attachController(controller)
+        val c=RosterCoordinator(identities,store,api,Any()){true};c.accountChanged("fixture-verified");c.attachController(controller)
         val job=launch{c.runForeground()}
         try {delay(20);c.consentFromExplicitTap();entered.await()
             c.revokeLocally();identities.revoke();c.detachController(controller);release.complete(Unit)
@@ -69,7 +71,7 @@ class RosterCoordinatorTest {
     }
     @Test fun disabledGateDoesNotEvenReadCredentialOrInvokeTransport()=runBlocking {
         val api=Api();val c=RosterCoordinator(identities,store,api,Any()){false}
-        c.attachController(controller);c.load();c.consentFromExplicitTap();c.runForeground();c.disconnect()
+        c.accountChanged("fixture-verified");c.attachController(controller);c.load();c.consentFromExplicitTap();c.runForeground();c.disconnect()
         assertEquals(0,api.attaches);assertEquals(0,api.polls);assertEquals(0,api.acks);assertNull(store.read())
     }
 }

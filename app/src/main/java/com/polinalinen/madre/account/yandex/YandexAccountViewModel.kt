@@ -19,7 +19,11 @@ class YandexAccountViewModel(application: Application) : AndroidViewModel(applic
     private val app = application as MadreApplication
     private val storage = app.yandexAccountStorage
     internal val controller = YandexAccountController(viewModelScope, storage, app.yandexAccountApi,
-        app.foregroundFamilyProvisioning)
+        app.foregroundFamilyProvisioning) { profile ->
+            if (com.polinalinen.madre.config.FeatureFlags.FAMILY_ROSTER_V2) {
+                app.rosterCoordinator.accountChanged(profile?.let { "${it.uidHash}:${it.boundAtMillis}" })
+            }
+        }
     val state = controller.state
     val provisioning = controller.provisioning
     val pendingUnbind = controller.pendingUnbind

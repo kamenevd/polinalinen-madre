@@ -173,6 +173,36 @@ class YandexAccountControllerTest {
         c.close()
     }
 
+    @Test fun pairingIdentityObserverFencesReplacementBeforeTransportAndOnlyRestoresVerifiedMetadata()=runTest {
+        val storage=Storage(YandexAccountSnapshot(profile=profile))
+        val api=Api(profile)
+        val identities=mutableListOf<VerifiedYandexProfile?>()
+        val c=YandexAccountController(backgroundScope,storage,api,onIdentityChanged={identities+=it})
+        runCurrent();assertEquals(listOf(profile),identities)
+        val cancelled=requireNotNull(c.beginSignIn())
+        assertNull(identities.last());assertTrue(api.events.isEmpty())
+        c.cancelSignIn(cancelled);assertEquals(profile,identities.last())
+        val attempt=requireNotNull(c.beginSignIn())
+        val reply=CompletableDeferred<VerifiedYandexProfile>()
+        api.binding={assertNull(identities.last());reply.await()}
+        val bearer=token();val bind=c.submitSdkToken(attempt,bearer);runCurrent()
+        assertNull(identities.last())
+        reply.complete(profile);bind.join();assertEquals(profile,identities.last());assertTrue(bearer.isClosed)
+        api.unbinding={assertNull(identities.last())}
+        c.signOut();assertNull(identities.last());assertNull(storage.snapshot.profile)
+        c.close();assertNull(identities.last())
+    }
+    @Test fun coldRetryOrPendingUnbindMetadataNeverProvidesPairingIdentity()=runTest {
+        for(snapshot in listOf(YandexAccountSnapshot(profile=profile,foregroundRetryRequired=true),
+            YandexAccountSnapshot(profile=profile,unbindPending=true))) {
+            val identities=mutableListOf<VerifiedYandexProfile?>()
+            val api=Api(profile)
+            val c=YandexAccountController(backgroundScope,Storage(snapshot),api,onIdentityChanged={identities+=it})
+            runCurrent();assertEquals(listOf<VerifiedYandexProfile?>(null),identities)
+            assertTrue(api.events.isEmpty());c.close()
+        }
+    }
+
     @Test fun aResultDeliveredAfterOwnerCancellationIsStillReleasedWithoutRunningItsBody()=runTest {
         val owner=CoroutineScope(SupervisorJob()+StandardTestDispatcher(testScheduler))
         val storage=Storage();val api=Api(profile);val c=YandexAccountController(owner,storage,api)

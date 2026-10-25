@@ -88,6 +88,8 @@ object RosterCommandPolicy {
 }
 
 interface RosterV2Api {
+    suspend fun pairConsent(credential: String, request: InstallationPairConsent): PendingPairConsent
+    suspend fun cancelPair(credential: String)
     suspend fun attach(credential: String): String
     suspend fun poll(installationCredential: String, roster: BakeRoster): RosterPollReply
     suspend fun disconnect(credential: String, connection: String)
@@ -102,6 +104,23 @@ class HttpsRosterV2Api internal constructor(private val http: ContractHttp, priv
         require(credential.matches(Regex("[A-Za-z0-9_-]{43}")))
         return http.request("POST", "https://kdnfx.space/alice/madre/voice/phone/v2/$path", credential,
             payload, installation = true, noContent = empty, strict = true)
+    }
+    override suspend fun pairConsent(credential: String, request: InstallationPairConsent): PendingPairConsent = safe {
+        val body = request("pair-consent", credential, request.payload())
+        require(body.keySet() == setOf("request_id", "consent_scope", "status", "expires_at"))
+        require(body.string("request_id") == request.requestId && body.string("consent_scope") == PAIR_SCOPE)
+        require(body.string("status") == "pending")
+        val now = System.currentTimeMillis()
+        PendingPairConsent(body.string("request_id"), body.integer("expires_at")).also {
+            require(it.expiresAt > now && it.expiresAt - now <= 300_000)
+        }
+    }
+    override suspend fun cancelPair(credential: String): Unit = safe {
+        if (!enabled()) throw ContractFailure(ContractFailure.Kind.DISABLED)
+        require(credential.matches(Regex("[A-Za-z0-9_-]{43}")))
+        val body = http.request("POST", "https://kdnfx.space/alice/madre/voice/phone/disconnect", credential,
+            json {}, installation = true, strict = true)
+        require(body.keySet() == setOf("revoked") && body.boolean("revoked"))
     }
     override suspend fun attach(credential: String): String = safe {
         val body = request("attach", credential, json {

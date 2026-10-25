@@ -27,6 +27,7 @@ class YandexAccountController(
     private val storage: YandexAccountStorage,
     private val api: YandexAccountApi,
     private val family: ForegroundFamilyProvisioning? = null,
+    private val onIdentityChanged: (VerifiedYandexProfile?) -> Unit = {},
 ) : AutoCloseable {
     private val stateLock = Mutex()
     private val apiLock = Mutex()
@@ -55,6 +56,7 @@ class YandexAccountController(
                     _provisioning.value = ForegroundProvisioningState(
                         ForegroundProvisioningState.Phase.RETRY_REQUIRED, aliceBound = saved.profile != null)
                 }
+                onIdentityChanged(saved.profile.takeUnless { saved.unbindPending || saved.foregroundRetryRequired })
                 _state.value = when {
                     saved.unbindPending -> YandexAccountState.SignedOut
                     saved.foregroundRetryRequired -> YandexAccountState.Error(YandexAccountError.SERVER)
@@ -76,6 +78,7 @@ class YandexAccountController(
             if (_state.value !is YandexAccountState.SigningIn) {
                 previousState = (_state.value as? YandexAccountState.SignedIn) ?: YandexAccountState.SignedOut
             }
+            onIdentityChanged(null)
             val attempt = ++sequence
             _state.value = YandexAccountState.SigningIn(attempt, browser)
             signInTimeout = scope.launch {
@@ -92,6 +95,7 @@ class YandexAccountController(
             if (active.attempt != attempt) return@withLock
             ++sequence
             signInTimeout?.cancel()
+            onIdentityChanged((previousState as? YandexAccountState.SignedIn)?.profile)
             _state.value = previousState
         }
     }
@@ -147,6 +151,7 @@ class YandexAccountController(
                         stateLock.withLock {
                             if (isBinding(attempt)) {
                                 metadata { storage.storeVerified(profile) }
+                                onIdentityChanged(profile)
                                 _state.value = YandexAccountState.SignedIn(profile)
                                 if (family != null) _provisioning.value = ForegroundProvisioningState(
                                     ForegroundProvisioningState.Phase.COMPLETE, aliceBound = true, pocketBaseAuthenticated = true)
@@ -200,6 +205,7 @@ class YandexAccountController(
             // the old installation credential and a real server ACK, even when lost.
             val binding = _state.value is YandexAccountState.Binding
             var portrait = (_state.value as? YandexAccountState.SignedIn)?.profile
+            onIdentityChanged(null)
             _state.value = YandexAccountState.SignedOut
             if (family != null) _provisioning.value = ForegroundProvisioningState()
             // Fence and clear PB credentials/cache before any suspending metadata read.
@@ -264,6 +270,7 @@ class YandexAccountController(
 
     override fun close() {
         closed = true
+        onIdentityChanged(null)
         initialization.cancel()
         signInTimeout?.cancel()
         submissions.toList().forEach { it.cancel() }

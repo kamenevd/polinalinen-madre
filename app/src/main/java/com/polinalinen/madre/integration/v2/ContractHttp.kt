@@ -14,7 +14,7 @@ import java.util.concurrent.TimeUnit
 
 /** No URL, body, credential or upstream exception escapes this boundary. */
 class ContractFailure(val kind: Kind) : IOException("Integration v2: ${kind.name}") {
-    enum class Kind { DISABLED, NETWORK, UNAUTHORIZED, DEAD_INVITE, FAMILY_FULL, OTHER_FAMILY, CONFLICT, RATE_LIMITED, UNSUPPORTED_PROTOCOL, SERVER, INVALID }
+    enum class Kind { DISABLED, NETWORK, UNAUTHORIZED, DEAD_INVITE, FAMILY_FULL, OTHER_FAMILY, CONFLICT, RATE_LIMITED, UNSUPPORTED_PROTOCOL, SERVER, INVALID, PAIR_REQUIRED, BINDING_REQUIRED, BINDING_CHANGED, CHALLENGE_CONSUMED, ALREADY_PAIRED }
 }
 
 /** Same OkHttp/Gson stack as phase A; pinned callers, no cache/logger/cookies/redirects. */
@@ -49,7 +49,16 @@ internal class ContractHttp(private val client: OkHttpClient = client()) {
                     val kind = when (response.code) {
                         401, 403 -> ContractFailure.Kind.UNAUTHORIZED
                         404 -> ContractFailure.Kind.DEAD_INVITE
-                        409 -> when (runCatching { JsonParser.parseString(text).asJsonObject.string("error") }.getOrNull()) {
+                        409 -> when (runCatching {
+                            val body = if (installation) strictObject(text).also { require(it.keySet() == setOf("error")) }
+                                else JsonParser.parseString(text).asJsonObject // preserve existing PB error details
+                            body.string("error")
+                        }.getOrNull()) {
+                            "pair_required" -> ContractFailure.Kind.PAIR_REQUIRED
+                            "binding_required" -> ContractFailure.Kind.BINDING_REQUIRED
+                            "binding_changed" -> ContractFailure.Kind.BINDING_CHANGED
+                            "challenge_consumed" -> ContractFailure.Kind.CHALLENGE_CONSUMED
+                            "already_paired" -> ContractFailure.Kind.ALREADY_PAIRED
                             "family_full" -> ContractFailure.Kind.FAMILY_FULL
                             "already_in_family" -> ContractFailure.Kind.OTHER_FAMILY
                             else -> ContractFailure.Kind.CONFLICT

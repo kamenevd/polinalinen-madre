@@ -1,5 +1,6 @@
 package com.polinalinen.madre.integration.v2
 
+import androidx.lifecycle.viewModelScope
 import androidx.test.core.app.ApplicationProvider
 import com.polinalinen.madre.MadreApplication
 import com.polinalinen.madre.model.BakingClock
@@ -26,15 +27,26 @@ class RosterExecutorIntegrationTest {
     private val app get() = ApplicationProvider.getApplicationContext<MadreApplication>()
     private val history = FakeBakeHistory()
     private lateinit var vm: BakingViewModel
+    private val dispatcher=UnconfinedTestDispatcher()
     private val connection = UUID.randomUUID().toString()
     @Before fun setup() = runBlocking {
-        Dispatchers.setMain(UnconfinedTestDispatcher())
+        Dispatchers.setMain(dispatcher)
         runCatching { androidx.work.WorkManager.initialize(app, androidx.work.Configuration.Builder().build()) }
         vm = BakingViewModel(app, history, FakeShelfSync(), FakeBakeSessionLedger(), rosterEnabled={true})
         withTimeout(15000) { vm.restoreReady.first { it } }; Unit
     }
-    @After fun cleanup() {
+    @After fun cleanup() = runBlocking {
+        val owner=vm.viewModelScope.coroutineContext[Job]!!
         androidx.lifecycle.ViewModelStore().apply { put("bake", vm); clear() }
+        // Cancellation is not completion: drain real IO -> Main/timer children before sandbox teardown.
+        withTimeout(15000) {
+            while(!owner.isCompleted) {
+                dispatcher.scheduler.runCurrent()
+                org.robolectric.shadows.ShadowLooper.idleMainLooper()
+                delay(1)
+            }
+        }
+        assertTrue(owner.isCompleted)
         Dispatchers.resetMain()
     }
     private suspend fun start() = requireNotNull(vm.startBaking(vm.recipes.value.first(), 2.0))

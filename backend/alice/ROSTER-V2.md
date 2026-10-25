@@ -1,5 +1,11 @@
 # Roster-v2 — code-only B8–B10 backend slice
 
+Installation-pair addendum (B10): `docs/contracts/madre-7.1-installation-pair.md`
+adds a separate OAuth-confirmed installation authority for new/empty/planned-only
+phones. The legacy paired-grant bootstrap described below remains unchanged for
+compatibility; it is no longer the only possible source of a v2 connection.
+The new namespace never writes or widens a legacy grant.
+
 Base: deployed/reference source `d4999178a53571304642486c13388460cfa1ec86`.
 This branch is additive to PR #62; it does not replace that PR or the issued
 7.0.16 Android build. No deployment, real provider login, Station or phone tests

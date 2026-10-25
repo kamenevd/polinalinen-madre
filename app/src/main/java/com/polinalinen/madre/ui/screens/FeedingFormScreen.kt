@@ -16,13 +16,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,8 +49,10 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.polinalinen.madre.data.db.entities.StorageLocation
+import com.polinalinen.madre.data.db.entities.FeedingEntity
 import com.polinalinen.madre.sourdough.FeedingInput
 import com.polinalinen.madre.sourdough.FeedingMassCopy
+import com.polinalinen.madre.sourdough.FeedingPresets
 import com.polinalinen.madre.sourdough.HydrationMath
 import com.polinalinen.madre.viewmodel.FeedingSaveState
 import com.polinalinen.madre.ui.components.AgedPhoto
@@ -85,6 +90,7 @@ fun FeedingFormScreen(
     onBack: () -> Unit,
     saveState: FeedingSaveState = FeedingSaveState.Idle,
     priorHydrationPercent: Int? = null,
+    lastFeeding: FeedingEntity? = null,
 ) {
     val colors = LocalPaper.current
     val isSaving = saveState is FeedingSaveState.Saving
@@ -97,6 +103,26 @@ fun FeedingFormScreen(
     var location by rememberSaveable { mutableStateOf(StorageLocation.KITCHEN) }
     var note by rememberSaveable { mutableStateOf("") }
     var photoPath by rememberSaveable { mutableStateOf<String?>(null) }
+    val lastMasses = FeedingPresets.last(lastFeeding)
+    // A restored draft is authoritative, even when history arrives afterwards.
+    var acceptHistory by rememberSaveable(stateSaver = Saver<Boolean, Boolean>(
+        save = { false }, restore = { false },
+    )) { mutableStateOf(true) }
+    var selectedPreset by rememberSaveable { mutableStateOf(-1) }
+    var presetGeneration by rememberSaveable { mutableStateOf(0) }
+    fun applyMasses(masses: FeedingPresets.Masses, preset: Int) {
+        starterGrams = masses.starter
+        flourGrams = masses.flour
+        waterGrams = masses.water
+        selectedPreset = preset
+        // Explicit application replaces pending exact input, even for unchanged masses.
+        presetGeneration++
+        acceptHistory = false
+    }
+    fun editMasses() { acceptHistory = false; selectedPreset = -1 }
+    LaunchedEffect(lastMasses) {
+        if (acceptHistory && !isSaving) lastMasses?.let { applyMasses(it, 0) }
+    }
 
     val priorHydration = priorHydrationPercent ?: HydrationMath.INITIAL_LEVITO_HYDRATION_PERCENT
     val finalHydration = HydrationMath.finalHydrationPercent(
@@ -129,27 +155,55 @@ fun FeedingFormScreen(
             BackHandler(enabled = isSaving) {}
             PaperHeader("Новая запись", onBack = { if (!isSaving) onBack() }, overline = "Закваска · дневник", modifier = Modifier.padding(horizontal = 22.dp))
 
+            val ratios = listOf(1, 2, 5).map { FeedingPresets.ratio(starterGrams, it) }
+            val labels = listOf("Как в прошлый раз", "1 : 1 : 1", "1 : 2 : 2", "1 : 5 : 5 · в холод")
+            Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 22.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                labels.forEachIndexed { index, label ->
+                    val masses = if (index == 0) lastMasses else ratios[index - 1]
+                    PaperChip(label, selectedPreset == index &&
+                        masses == FeedingPresets.Masses(starterGrams, flourGrams, waterGrams),
+                        enabled = masses != null && !isSaving,
+                        onClick = { masses?.let { applyMasses(it, index) }
+                            if (index == 3) location = StorageLocation.FRIDGE },
+                        modifier = Modifier.semantics { contentDescription = label })
+                }
+            }
+            Text(
+                listOfNotNull(
+                    if (lastMasses == null) "Прошлые массы недоступны: нет записи с тремя допустимыми массами." else null,
+                    "Мука и вода округляются до 5 г. Недоступные соотношения выходят за пределы: мука 10–500 г, вода 5–300 г. Измените массу закваски.",
+                ).joinToString(" "),
+                style = PaperType.caption, color = colors.ink2,
+                modifier = Modifier.padding(horizontal = 22.dp, vertical = 4.dp),
+            )
 
             GramCard(
                 label = FeedingMassCopy.STARTER,
                 accessibleLabel = "Оставленная закваска",
                 range = FeedingInput.STARTER,
                 grams = starterGrams,
-                onChange = { starterGrams = it },
+                presetGeneration = presetGeneration,
+                onEdit = ::editMasses,
+                onChange = { editMasses(); starterGrams = it },
             )
             GramCard(
                 label = FeedingMassCopy.FLOUR,
                 accessibleLabel = "Добавленная мука",
                 range = FeedingInput.FLOUR,
                 grams = flourGrams,
-                onChange = { flourGrams = it },
+                presetGeneration = presetGeneration,
+                onEdit = ::editMasses,
+                onChange = { editMasses(); flourGrams = it },
             )
             GramCard(
                 label = FeedingMassCopy.WATER,
                 accessibleLabel = "Добавленная вода",
                 range = FeedingInput.WATER,
                 grams = waterGrams,
-                onChange = { waterGrams = it },
+                presetGeneration = presetGeneration,
+                onEdit = ::editMasses,
+                onChange = { editMasses(); waterGrams = it },
             )
 
             // Не поле, а результат: книга показывает, что получилось из
@@ -181,7 +235,7 @@ fun FeedingFormScreen(
             )
             Text(
                 "Удобный стартовый набор (редактируемый): 50/100/50 — это просто " +
-                    "начальные значения, а не формула.",
+                    "начальные значения без истории, а не формула.",
                 color = colors.ink2,style = PaperType.body,
                 fontSize = 13.sp,
                 lineHeight = 19.sp,
@@ -201,7 +255,8 @@ fun FeedingFormScreen(
                 PaperSegmented(
                     labels = listOf("Кухня", "Холодильник"),
                     selectedIndex = locations.indexOf(location),
-                    onSelect = { location = locations[it] },
+                    onSelect = { location = locations[it]
+                        if (selectedPreset == 3 && location != StorageLocation.FRIDGE) selectedPreset = -1 },
                     label = "Где стоит",
                     modifier = Modifier.padding(top = 8.dp),
                 )
@@ -309,10 +364,12 @@ private fun GramCard(
     accessibleLabel: String,
     range: FeedingInput.Range,
     grams: Int,
+    presetGeneration: Int,
+    onEdit: () -> Unit,
     onChange: (Int) -> Unit,
 ) {
     val colors = LocalPaper.current
-    var typing by rememberSaveable { mutableStateOf(false) }
+    var typing by rememberSaveable(presetGeneration) { mutableStateOf(false) }
 
     PaperCard(Modifier.padding(horizontal = 22.dp, vertical = 8.dp)) {
         PageLabel(label, color = colors.ink2)
@@ -331,7 +388,7 @@ private fun GramCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     Modifier
-                        .then(bookAction("Указать точный вес: $accessibleLabel") { typing = true })
+                        .then(bookAction("Указать точный вес: $accessibleLabel") { onEdit(); typing = true })
                         .padding(vertical = 4.dp),
                     contentAlignment = Alignment.CenterStart,
                 ) {

@@ -9,6 +9,7 @@ import com.polinalinen.madre.data.db.entities.StorageLocation
 import com.polinalinen.madre.data.repository.SourdoughFeedingSaveRequest
 import com.polinalinen.madre.data.repository.SourdoughRepository
 import com.polinalinen.madre.sourdough.HydrationMath
+import com.polinalinen.madre.sourdough.FeedingPresets
 import com.polinalinen.madre.notifications.FeedingSchedule
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -87,6 +88,20 @@ class FeedingHydrationPersistenceTest {
         photoPath = null,
         weather = weather,
     )
+
+    @Test
+    fun `cold preset exact masses and enum survive real save and database reopen`() = runTest {
+        val repository = openBook()
+        val config = repository.getOrCreateDefaultConfig()
+        val masses = FeedingPresets.ratio(47, 5)!!
+        repository.saveFeeding(saveRequest(config.id, config.intervalHours, 1_000L,
+            retainedStarterGrams = masses.starter, flourGrams = masses.flour, waterGrams = masses.water)
+            .copy(storageLocation = StorageLocation.FRIDGE))
+        closeBook()
+        val persisted = openBook().lastFeeding(config.id)
+        assertThat(FeedingPresets.last(persisted)).isEqualTo(FeedingPresets.Masses(47, 235, 235))
+        assertThat(persisted?.storageLocation).isEqualTo(StorageLocation.FRIDGE)
+    }
 
     @Test
     fun `fridge storage survives a real save and database reopen`() = runTest {

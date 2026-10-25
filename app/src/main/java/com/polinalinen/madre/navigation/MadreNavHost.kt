@@ -526,6 +526,7 @@ fun MadreNavHost(
                     // свежая посчитанная. null — их ещё нет, и форма вслух
                     // назовёт стартовую 50% из буклета.
                     priorHydrationPercent = latestFinalHydration,
+                    lastFeeding = latestHistoryFeeding,
                 )
                 LaunchedEffect(saveState) {
                     when (saveState) {

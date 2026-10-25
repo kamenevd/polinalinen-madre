@@ -53,6 +53,8 @@ data class RosterCommand(val id: String, val connectionId: String, val bakeKey: 
                          val expectedRevision: Long, val recipeRevision: String, val operation: RosterOperation,
                          val issuedAt: Long, val expiresAt: Long, val leaseId: String,
                          val expectedStep: Int, val expectedPaused: Boolean) {
+    fun fingerprint(): String = java.security.MessageDigest.getInstance("SHA-256")
+        .digest(com.google.gson.Gson().toJson(this).toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
     init {
         require(uuid(id) && uuid(connectionId) && uuid(bakeKey) && bakeNumber in 1..9 && expectedRevision >= 0)
         require(uuid(leaseId) && expectedStep >= 0)
@@ -61,7 +63,7 @@ data class RosterCommand(val id: String, val connectionId: String, val bakeKey: 
 }
 data class RosterPollReply(val serverTime: Long, val commands: List<RosterCommand>)
 
-/** Eligibility is NOT execution/APPLIED. Durable receipt+lease commit remains a separate next slice. */
+/** Eligibility is NOT execution/APPLIED. RosterController performs the separate durable lease/receipt commit. */
 object RosterCommandPolicy {
     enum class Decision { ELIGIBLE_FOR_COMMIT, REJECTED, EXPIRED, STALE, READ_ONLY }
     fun check(command: RosterCommand, roster: BakeRoster, installationConsent: Boolean,
@@ -85,18 +87,57 @@ object RosterCommandPolicy {
     }
 }
 
-class HttpsRosterV2Api internal constructor(private val http: ContractHttp, private val enabled: () -> Boolean) {
+interface RosterV2Api {
+    suspend fun attach(credential: String): String
+    suspend fun poll(installationCredential: String, roster: BakeRoster): RosterPollReply
+    suspend fun disconnect(credential: String, connection: String)
+    suspend fun acknowledge(credential: String, command: RosterCommand, receipt: com.polinalinen.madre.data.db.entities.VoiceCommandReceiptEntity)
+}
+
+class HttpsRosterV2Api internal constructor(private val http: ContractHttp, private val enabled: () -> Boolean) : RosterV2Api {
     constructor() : this(ContractHttp(), { FeatureFlags.FAMILY_ROSTER_V2 })
     internal constructor(client: OkHttpClient, enabled: () -> Boolean) : this(ContractHttp(client), enabled)
-    suspend fun poll(installationCredential: String, roster: BakeRoster): RosterPollReply = safe {
+    private suspend fun request(path: String, credential: String, payload: com.google.gson.JsonObject, empty: Boolean = false): com.google.gson.JsonObject {
+        if (!enabled()) throw ContractFailure(ContractFailure.Kind.DISABLED)
+        require(credential.matches(Regex("[A-Za-z0-9_-]{43}")))
+        return http.request("POST", "https://kdnfx.space/alice/madre/voice/phone/v2/$path", credential,
+            payload, installation = true, noContent = empty, strict = true)
+    }
+    override suspend fun attach(credential: String): String = safe {
+        val body = request("attach", credential, json {
+            addProperty("protocol_version", 2); addProperty("consent_scope", "installation_current_bakes"); addProperty("consent", true)
+        })
+        require(body.keySet() == setOf("connection_id", "consent_scope", "attached"))
+        require(body.boolean("attached") && body.string("consent_scope") == "installation_current_bakes")
+        body.string("connection_id").also { require(uuid(it)) }
+    }
+    override suspend fun disconnect(credential: String, connection: String): Unit = safe {
+        require(uuid(connection))
+        request("disconnect", credential, json { addProperty("connection_id", connection) }, true)
+        Unit
+    }
+    override suspend fun acknowledge(credential: String, command: RosterCommand, receipt: com.polinalinen.madre.data.db.entities.VoiceCommandReceiptEntity): Unit = safe {
+        require(receipt.commandId == command.id && receipt.fingerprint == command.fingerprint())
+        require(receipt.outcome in setOf("APPLIED", "STALE", "EXPIRED", "REJECTED", "PHONE_REQUIRED"))
+        val body = request("ack", credential, json {
+            addProperty("connection_id", command.connectionId); addProperty("command_id", command.id)
+            addProperty("lease_id", command.leaseId); addProperty("outcome", receipt.outcome.lowercase(java.util.Locale.ROOT))
+            if (receipt.outcome == "APPLIED") addProperty("resulting_revision", receipt.newRevision)
+            else add("resulting_revision", com.google.gson.JsonNull.INSTANCE)
+        })
+        require(body.keySet() == setOf("acknowledged") && body.boolean("acknowledged"))
+    }
+    override suspend fun poll(installationCredential: String, roster: BakeRoster): RosterPollReply = safe {
         if (!enabled()) throw ContractFailure(ContractFailure.Kind.DISABLED)
         require(installationCredential.matches(Regex("[A-Za-z0-9_-]{43}")))
-        val body = http.request("POST", "https://kdnfx.space/alice/madre/voice/phone/v2/poll",
-            installationCredential, roster.payload(), installation = true)
+        val body = request("poll", installationCredential, roster.payload())
+        require(body.keySet() == setOf("protocol_version", "connection_id", "roster_revision", "server_time", "commands"))
         require(body.integer("protocol_version") == 2L && body.string("connection_id") == roster.connectionId)
         require(body.integer("roster_revision") == roster.revision)
         val commands = body.getAsJsonArray("commands").also { require(it.size() <= 9) }.map { value ->
             val item = value.asJsonObject
+            require(item.keySet() == setOf("id", "connection_id", "bake_key", "bake_number", "expected_revision",
+                "recipe_revision", "operation", "issued_at", "expires_at", "lease_id", "expected_step", "expected_paused"))
             RosterCommand(item.string("id"), item.string("connection_id"), item.string("bake_key"),
                 item.integer("bake_number").also { require(it in 1..9) }.toInt(), item.integer("expected_revision"),
                 item.string("recipe_revision"), RosterOperation.valueOf(item.string("operation")),
@@ -104,6 +145,7 @@ class HttpsRosterV2Api internal constructor(private val http: ContractHttp, priv
                 item.integer("expected_step").also { require(it <= Int.MAX_VALUE) }.toInt(), item.boolean("expected_paused")).also { require(it.connectionId == roster.connectionId) }
         }
         require(commands.map { it.id }.distinct().size == commands.size)
+        require(commands.map { it.leaseId }.distinct().size == commands.size)
         RosterPollReply(body.integer("server_time").also { require(it > 0) }, commands)
     }
 }

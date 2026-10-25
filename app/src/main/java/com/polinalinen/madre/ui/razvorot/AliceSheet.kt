@@ -28,7 +28,21 @@ internal fun aliceSheetMode(state: VoiceUiState): AliceSheetMode = when {
 
 /** Not a simulated voice agent: CONNECTED is only the coordinator's acknowledged poll state. */
 @Composable fun AliceSheet(viewModel: BakingViewModel, coordinator: VoiceCoordinator,
-    onDismiss: () -> Unit, onOpenSettings: () -> Unit) {
+    onDismiss: () -> Unit, onOpenSettings: () -> Unit, currentSessionId: Long? = null) {
+    if (com.polinalinen.madre.config.FeatureFlags.FAMILY_ROSTER_V2) {
+        val app = androidx.compose.ui.platform.LocalContext.current.applicationContext as com.polinalinen.madre.MadreApplication
+        val roster by app.rosterCoordinator.state.collectAsState()
+        val sessions by viewModel.sessions.collectAsState()
+        val current = sessions.singleOrNull { it.id == currentSessionId }
+        var station by remember { mutableStateOf(false) }
+        val remaining = current?.let { viewModel.remainingFor(it.id).collectAsState().value } ?: 0L
+        PaperSheet(onDismiss) {
+            com.polinalinen.madre.ui.screens.RosterAliceSheetContent(roster, current?.bakeNumber, onOpenSettings,
+                if (current != null) ({ station = true }) else null)
+        }
+        if (station && current != null) com.polinalinen.madre.account.yandex.StationTimerSheet(remaining, current.bakeNumber) { station = false }
+        return
+    }
     val state by coordinator.state.collectAsState()
     val sessions by viewModel.sessions.collectAsState()
     val selected = sessions.find { it.bakeKey == state.selectedBake }

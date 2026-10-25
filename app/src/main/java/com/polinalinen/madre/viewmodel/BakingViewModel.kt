@@ -74,7 +74,8 @@ class BakingViewModel @JvmOverloads constructor(
     private val sessionLedger: BakeSessionLedger = PrefsBakeSessionLedger(
         app.getSharedPreferences("madre_prefs", android.content.Context.MODE_PRIVATE),
     ),
-) : AndroidViewModel(app), VoiceController {
+    private val rosterEnabled: () -> Boolean = { com.polinalinen.madre.config.FeatureFlags.FAMILY_ROSTER_V2 },
+) : AndroidViewModel(app), VoiceController, com.polinalinen.madre.integration.v2.RosterController {
 
     private val madreApp = app as MadreApplication
     private val recipeRepository = madreApp.recipeRepository
@@ -83,7 +84,7 @@ class BakingViewModel @JvmOverloads constructor(
     private val transitionGate = Mutex()
     private val plannedBakesOwner=lazy {
         com.polinalinen.madre.navigation.PlannedBakeOwner(madreApp,viewModelScope,madreApp.plannedBakeOperationGate,
-            awaitReady={sessionIdsReady.await()},sessionForPlan={sessionForPlan(it)?.id},startBake={plan,portions->
+            awaitReady={sessionIdsReady.await()},sessionForPlan={sessionForPlan(it)?.id},rosterEnabled=rosterEnabled,startBake={plan,portions->
                 _recipes.value.firstOrNull{it.id==plan.recipeId}?.let{startPlannedBakeUnderGate(it,portions.toDouble(),plan.id)}
             })
     }
@@ -285,6 +286,7 @@ class BakingViewModel @JvmOverloads constructor(
             sessionIdsReady.complete(Unit)
             _restoreReady.value = true
             madreApp.voiceCoordinator.attach(this@BakingViewModel)
+            if (com.polinalinen.madre.config.FeatureFlags.FAMILY_ROSTER_V2) madreApp.rosterCoordinator.attachController(this@BakingViewModel)
         }
         // Токен под Keystore — диск, читаем на IO.
         viewModelScope.launch {
@@ -326,7 +328,7 @@ class BakingViewModel @JvmOverloads constructor(
         startBakingInternal(recipe,scaleFactor,true,plannedBakeKey(planId),planId)
     }.await()
     fun sessionForPlan(planId: String): BakingSession? = _sessions.value.firstOrNull{it.bakeKey==plannedBakeKey(planId)}
-    private fun plannedBakeKey(planId: String)=java.util.UUID.nameUUIDFromBytes(("planned-bake:$planId").toByteArray(Charsets.UTF_8)).toString()
+    private fun plannedBakeKey(planId: String)=com.polinalinen.madre.navigation.BookPreferences(madreApp).use { it.voicePlanIdentity(planId).first }
 
     private suspend fun startBakingInternal(recipe: Recipe, scaleFactor: Double, withUndo: Boolean, dedupeKey: String? = null, planId: String? = null): Long? {
         sessionIdsReady.await()
@@ -352,7 +354,9 @@ class BakingViewModel @JvmOverloads constructor(
                 val id = maxOf(nextSessionId,durable.maxOfOrNull{it.sessionId+1}?:1L)
                 nextSessionId=id+1
                 val started=BakingSession.start(id,recipe,scaleFactor)
-                val next=started.copy(recipeRevision=recipeRepository.revision,bakeKey=dedupeKey?:started.bakeKey,bakeNumber=number)
+                val planRevision = if (planId != null && rosterEnabled())
+                    com.polinalinen.madre.navigation.BookPreferences(madreApp).use { Math.addExact(it.voicePlanIdentity(planId).second, 1L) } else 0L
+                val next=started.copy(recipeRevision=recipeRepository.revision,bakeKey=dedupeKey?:started.bakeKey,bakeNumber=number,revision=planRevision)
                 activeBakeRepository.commit(id, null, next.activeSnapshot(), valid = { controllerLive })
                 numberStore.reserve(id,number)
                 sessionLedger.forget(id)
@@ -481,7 +485,8 @@ class BakingViewModel @JvmOverloads constructor(
     /** All local mutations and voice use this same durable-before-publish path. Caller owns transitionGate. */
     private suspend fun persistTransition(old: BakingSession, next: BakingSession?, resetNotifications: Boolean = false) {
         if(next?.isCompleted==true)numberStore.rememberFinale(com.polinalinen.madre.navigation.BakeNumberStore.Finale(
-            old.id,old.recipe.id,old.recipe.name,requireNotNull(old.trustedPortions),requireNotNull(next.completedAt),old.bakeNumber))
+            old.id,old.recipe.id,old.recipe.name,requireNotNull(old.trustedPortions),requireNotNull(next.completedAt),old.bakeNumber,
+            bakeKey=old.bakeKey,revision=next.revision,recipeRevision=old.recipeRevision))
         try { activeBakeRepository.commit(old.id, if (old.isCompleted) null else old.activeSnapshot(),
             next?.takeUnless { it.isCompleted }?.activeSnapshot(),
             preserveUnknownStep = !old.restoredStepValid, valid = { controllerLive }) }
@@ -782,7 +787,66 @@ class BakingViewModel @JvmOverloads constructor(
         cleanExitedSession(id)
     }
 
-    /** The only voice write entry. Network code cannot write Room or mint an APPLIED acknowledgement. */
+    override suspend fun persistedRoster(connection: String, revision: Long): com.polinalinen.madre.integration.v2.BakeRoster {
+        sessionIdsReady.await()
+        return madreApp.plannedBakeOperationGate.withLock { transitionGate.withLock {
+            check(controllerLive)
+            com.polinalinen.madre.navigation.BookPreferences(madreApp).use { book ->
+                com.polinalinen.madre.integration.v2.PersistedBakeRoster.read(connection, revision,
+                    activeBakeRepository.all(), book, numberStore.strictFinales(), _recipes.value, voiceRecipeRevision(),
+                    BakingClock.elapsed(), BakingClock.wallClock(), _sessions.value)
+            }
+        } }
+    }
+
+    /** V2 policy is only a proposal. Re-read Room, then CAS + lease + receipt in one actual SQL commit. */
+    override suspend fun executeRoster(command: com.polinalinen.madre.integration.v2.RosterCommand,
+        serverTime: Long, receivedElapsed: Long, authority: () -> Boolean): VoiceCommandReceiptEntity? {
+        sessionIdsReady.await()
+        return madreApp.plannedBakeOperationGate.withLock { transitionGate.withLock {
+            try {
+                if (!controllerLive || !authority()) return@withLock null
+                val fingerprint = command.fingerprint()
+                val prior = activeBakeRepository.receipt(command.id)
+                if (prior != null) {
+                    if (prior.fingerprint != fingerprint) return@withLock null
+                    return@withLock activeBakeRepository.commitRoster(null, null, prior, command.leaseId) { controllerLive && authority() }
+                }
+                val row = activeBakeRepository.all().singleOrNull { it.bakeKey == command.bakeKey }
+                val old = row?.let { com.polinalinen.madre.integration.v2.PersistedBakeRoster.session(it,
+                    _recipes.value, voiceRecipeRevision(), BakingClock.elapsed(), BakingClock.wallClock(), _sessions.value.singleOrNull { s -> s.id == it.sessionId }) }
+                val legacy = VoiceCommand(command.id, VoiceOperation.valueOf(command.operation.name), command.bakeKey,
+                    command.recipeRevision, command.connectionId, command.connectionId, command.expectedRevision,
+                    command.expectedStep, command.expectedPaused, command.issuedAt, command.expiresAt)
+                fun decide(): com.polinalinen.madre.voice.VoiceDecision {
+                    if (old == null || row == null || row.bakeNumber != command.bakeNumber) return com.polinalinen.madre.voice.VoiceDecision(VoiceOutcome.STALE)
+                    return VoiceCommandPolicy.decide(legacy, old, VoiceAuthority(authority(), controllerLive,
+                        command.bakeKey, command.connectionId, command.connectionId, voiceRecipeRevision(), serverTime),
+                        BakingClock.elapsed(), BakingClock.wallClock(), receivedElapsed)
+                }
+                val decision = decide()
+                val next = if (decision.outcome == VoiceOutcome.APPLIED) decision.candidate else old
+                val receipt = VoiceCommandReceiptEntity(command.id, fingerprint, command.bakeKey, command.expectedRevision,
+                    decision.outcome.name, if (decision.outcome == VoiceOutcome.APPLIED) Math.addExact(command.expectedRevision, 1) else command.expectedRevision,
+                    command.expiresAt, command.operation.name, row?.recipeId ?: "unknown")
+                val stored = activeBakeRepository.commitRoster(row,
+                    if (decision.outcome == VoiceOutcome.APPLIED) next?.activeSnapshot() else row, receipt, command.leaseId) {
+                    controllerLive && authority() && decide().outcome == decision.outcome
+                }
+                if (decision.outcome == VoiceOutcome.APPLIED && old != null) {
+                    publishTransition(old, next)
+                    if (next == null) {
+                        numberStore.release(old.id); _cancelledCount.update { it + 1 }; cleanExitedSession(old.id)
+                        recoverCancellationEffects()
+                    }
+                }
+                stored
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { null } // No successful durable commit = NO ACK, including SQL/disk/fence failures.
+        } }
+    }
+
+    /** The only legacy voice write entry. Network code cannot write Room or mint an APPLIED acknowledgement. */
     suspend fun applyVoiceCommand(
         command: VoiceCommand,
         receivedElapsed: Long,
@@ -964,6 +1028,7 @@ class BakingViewModel @JvmOverloads constructor(
         synchronized(activeBakeRepository.commitFence) {
             controllerLive = false
             madreApp.voiceCoordinator.detach(this)
+            if (com.polinalinen.madre.config.FeatureFlags.FAMILY_ROSTER_V2) madreApp.rosterCoordinator.detachController(this)
         }
         timerJobs.values.forEach { it.cancel() }
         timerJobs.clear()

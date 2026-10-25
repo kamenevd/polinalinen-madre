@@ -78,6 +78,11 @@ class MadreApplication : Application() {
             com.polinalinen.madre.voice.HttpsVoiceApi(), activeBakeRepository.commitFence, yandexTransport,
         )
     }
+    val rosterCoordinator by lazy { com.polinalinen.madre.integration.v2.RosterCoordinator(
+        voiceIdentityStore,
+        com.polinalinen.madre.integration.v2.RosterConnectionStore(getSharedPreferences("madre_roster_v2", MODE_PRIVATE), KeystoreTokenCipher()),
+        com.polinalinen.madre.integration.v2.HttpsRosterV2Api(), activeBakeRepository.commitFence,
+        { com.polinalinen.madre.config.FeatureFlags.FAMILY_ROSTER_V2 }) }
     val yandexAccountStorage: com.polinalinen.madre.account.yandex.YandexAccountStorage by lazy {
         com.polinalinen.madre.account.yandex.YandexAccountPrefs(this)
     }
@@ -89,7 +94,11 @@ class MadreApplication : Application() {
     val yandexAccountApi: com.polinalinen.madre.account.yandex.YandexAccountApi get() = yandexTransport
     fun disconnectVoice() {
         voiceCoordinator.revokeLocally()
-        appScope.launch { voiceCoordinator.disconnect() }
+        if (com.polinalinen.madre.config.FeatureFlags.FAMILY_ROSTER_V2) rosterCoordinator.revokeLocally()
+        appScope.launch {
+            if (com.polinalinen.madre.config.FeatureFlags.FAMILY_ROSTER_V2) rosterCoordinator.disconnect()
+            voiceCoordinator.disconnect()
+        }
     }
     val familySettingsRepository: FamilySettingsRepository by lazy { FamilySettingsRepository(database) }
     val bookDisplaySettings: StateFlow<BookDisplaySettings> by lazy {

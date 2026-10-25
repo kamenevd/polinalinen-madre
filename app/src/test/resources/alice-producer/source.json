@@ -1,0 +1,5 @@
+{
+  "source_commit": "f1380c21665ebd51fff1da856cdd3164ad36ba9c",
+  "archive_sha256": "4e3e4ac7e73922d588d8a71a203562b508dfe72cca0eb04a7773d9082e6bc172",
+  "scope": "unchanged isolated Alice producer, synthetic fixtures only; no live grant/provider"
+}

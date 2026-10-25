@@ -122,6 +122,18 @@ class MainActivity : ComponentActivity(), ImmersiveHost {
         }
     }
 
+    private var rosterJob: kotlinx.coroutines.Job? = null
+    override fun onStart() {
+        super.onStart()
+        if (FeatureFlags.FAMILY_ROSTER_V2) rosterJob = lifecycleScope.launch {
+            (application as MadreApplication).rosterCoordinator.runForeground()
+        }
+    }
+    override fun onStop() {
+        if (FeatureFlags.FAMILY_ROSTER_V2) (application as MadreApplication).rosterCoordinator.stopForeground()
+        rosterJob?.cancel(); rosterJob = null
+        super.onStop()
+    }
     override fun onResume() {
         super.onResume(); immersiveController.reapply(window);qaFrameMonitor?.resume()
         if(accountEnabled)accountModel.retryPendingUnbind()

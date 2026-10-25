@@ -223,6 +223,7 @@ class VoiceCoordinator(private val store: VoiceIdentityStore, private val api: V
 
     /** Called exclusively by the already-foreground timer service, cancelled with its lifecycle. */
     suspend fun runForeground() {
+        if (com.polinalinen.madre.config.FeatureFlags.FAMILY_ROSTER_V2) return // never parallel legacy/v2 command lanes
         load()
         synchronized(fence) { foreground = true; epoch++; connection = UUID.randomUUID().toString() }
         var failedConnection: String? = null

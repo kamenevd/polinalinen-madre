@@ -61,6 +61,56 @@ class ActiveBakeRepository(private val db: MadreDatabase) {
         }
     }
 
+    /** V2 durable lease consumption uses the existing Room12 receipt table, not a second state DB.
+     * Namespaced lease row + command row + state/revision are a single SQLite transaction.
+     * A lease cannot be reused with another command, even after reconnect/process recreation. */
+    suspend fun commitRoster(previous: ActiveBakeEntity?, next: ActiveBakeEntity?,
+        receipt: VoiceCommandReceiptEntity, leaseId: String, valid: () -> Boolean): VoiceCommandReceiptEntity = withContext(Dispatchers.IO) {
+        synchronized(commitFence) {
+            var result = receipt
+            rosterTransaction {
+                check(valid())
+                val oldReceipt = receipts.getNow(receipt.commandId)
+                val lease = receipts.getNow("roster-lease:$leaseId")
+                if (oldReceipt != null) {
+                    check(oldReceipt.fingerprint == receipt.fingerprint && lease?.fingerprint == receipt.fingerprint)
+                    result = oldReceipt
+                } else {
+                    check(lease == null)
+                    val current = allNow().singleOrNull { it.bakeKey == receipt.bakeKey }
+                    check(current == previous) { "Persisted bake changed" }
+                    if (receipt.outcome == "APPLIED") {
+                        checkNotNull(previous)
+                        check(receipt.expectedRevision == previous.revision && previous.revision < Long.MAX_VALUE)
+                        check(receipt.newRevision == previous.revision + 1)
+                        if (next == null) dao.deleteNow(previous.sessionId) else {
+                            check(next.bakeKey == previous.bakeKey && next.bakeNumber == previous.bakeNumber && next.revision == receipt.newRevision)
+                            dao.upsertNow(next)
+                        }
+                    }
+                    receipts.insertNow(receipt)
+                    // Sentinel is technical dedup evidence, never a cancellation side effect.
+                    receipts.insertNow(receipt.copy(commandId = "roster-lease:$leaseId", operation = "LEASE", effectApplied = true))
+                }
+                check(valid()) // expiry/disk delay at the final SQL boundary rolls EVERYTHING back
+            }
+            result
+        }
+    }
+
+    /** SQLite may auto-rollback on SQLITE_FULL. Room's finally must not replace
+     * the primary disk failure with a secondary 'no transaction active' error. */
+    private fun rosterTransaction(block: () -> Unit) {
+        db.beginTransaction()
+        var primary: Throwable? = null
+        try { block(); db.setTransactionSuccessful() }
+        catch (failure: Throwable) { primary = failure; throw failure }
+        finally {
+            try { db.endTransaction() }
+            catch (cleanup: Throwable) { if (primary == null) throw cleanup else primary.addSuppressed(cleanup) }
+        }
+    }
+
     suspend fun initializeLegacyKeys(): List<ActiveBakeEntity> = withContext(Dispatchers.IO) {
         synchronized(commitFence) {
             db.runInTransaction {

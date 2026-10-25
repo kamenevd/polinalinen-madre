@@ -21,8 +21,9 @@ class PlannedBakeOwner(
     private val awaitReady:suspend ()->Unit,
     private val sessionForPlan:(String)->Long?,
     private val startBake:suspend (PlannedBake,Int)->Long?,
+    private val rosterEnabled: () -> Boolean = { com.polinalinen.madre.config.FeatureFlags.FAMILY_ROSTER_V2 },
 ):AutoCloseable {
-    private val preferences=BookPreferences(context.applicationContext)
+    private val preferences=BookPreferences(context.applicationContext, rosterEnabled=rosterEnabled)
     private val app=context.applicationContext as com.polinalinen.madre.MadreApplication
     private val scheduler=PlannedBakeScheduler(context.applicationContext)
     private val _busy=MutableStateFlow(false)

@@ -30,6 +30,14 @@ object AliceCopy {
 
 @Composable
 fun AliceScreen(viewModel: BakingViewModel, coordinator: VoiceCoordinator, onBack: () -> Unit) {
+    if (com.polinalinen.madre.config.FeatureFlags.FAMILY_ROSTER_V2) {
+        val app = androidx.compose.ui.platform.LocalContext.current.applicationContext as com.polinalinen.madre.MadreApplication
+        val roster by app.rosterCoordinator.state.collectAsState()
+        val scope = rememberCoroutineScope()
+        RosterAlicePage(roster, onBack, { scope.launch { app.rosterCoordinator.consentFromExplicitTap() } },
+            app::disconnectVoice, app.rosterCoordinator::retry)
+        return
+    }
     val state by coordinator.state.collectAsState()
     val sessions by viewModel.sessions.collectAsState()
     val scope = rememberCoroutineScope()

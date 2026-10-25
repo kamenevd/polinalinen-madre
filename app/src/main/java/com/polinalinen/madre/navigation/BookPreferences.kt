@@ -30,7 +30,7 @@ object BookStartup {
         if (saved in 0..3 && now - lastVisit in 0 until RECENT_MILLIS) saved else 0
 }
 
-class BookPreferences(context: Context, namespace: String = "madre_prefs") : AutoCloseable {
+class BookPreferences(context: Context, namespace: String = "madre_prefs", private val rosterEnabled: () -> Boolean = { com.polinalinen.madre.config.FeatureFlags.FAMILY_ROSTER_V2 }) : AutoCloseable {
     private val prefs = context.getSharedPreferences(namespace, Context.MODE_PRIVATE)
     private val gson = Gson()
     var plansReadError by mutableStateOf<String?>(null)
@@ -67,11 +67,23 @@ class BookPreferences(context: Context, namespace: String = "madre_prefs") : Aut
     /** Transactions read committed prefs, not an Activity listener's possibly queued presentation state. */
     fun currentPlan(id:String):PlannedBake? = synchronized(PLANS_LOCK){readPlans().firstOrNull{it.id==id}}
     fun snapshotPlans():List<PlannedBake> = synchronized(PLANS_LOCK){readPlans()}
+    /** Technical plan incarnation survives start/removal; no recipe/account data. */
+    fun voicePlanIdentity(id: String): Pair<String, Long> = synchronized(PLANS_LOCK) {
+        (prefs.getString("roster_plan_key_$id", null) ?: BakeNumberStore.plannedBakeKey(id)) to
+            prefs.getLong("roster_plan_revision_$id", 0).also { check(it >= 0) }
+    }
     fun putPlan(plan: PlannedBake, replacingId: String? = null): Boolean = synchronized(PLANS_LOCK) {
         require(plan.portions in 1..5 && plan.startAtMillis > 0 && plan.recipeId.isNotBlank())
         val previous=runCatching { readPlans() }.getOrElse { return@synchronized false }
         val next = (previous.filterNot { it.id == plan.id || it.id == replacingId } + plan).sortedBy { it.startAtMillis }
         val edit=prefs.edit().putString("planned_bakes", gson.toJson(next))
+        if (rosterEnabled()) {
+            val old = previous.firstOrNull { it.id == (replacingId ?: plan.id) }
+            val identity = voicePlanIdentity(old?.id ?: plan.id)
+            val key = if (old == null) java.util.UUID.randomUUID().toString() else identity.first
+            val revision = if (old == null) 0L else if (old == plan) identity.second else Math.addExact(identity.second, 1L)
+            edit.putString("roster_plan_key_${plan.id}", key).putLong("roster_plan_revision_${plan.id}", revision)
+        }
         // Number backfill changes presentation only; existing local reminder capabilities stay valid.
         if(previous.any{it.id==plan.id && it.copy(number=plan.number)!=plan})edit.remove("planned_action_nonce_${plan.id}")
         if(replacingId!=null && replacingId!=plan.id)edit.remove("planned_action_nonce_$replacingId")

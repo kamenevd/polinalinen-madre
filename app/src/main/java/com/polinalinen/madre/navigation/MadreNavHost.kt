@@ -679,6 +679,7 @@ fun MadreNavHost(
                     }})
             } }
             if (aliceSheet) AliceSheet(bakingViewModel, app.voiceCoordinator,
+                currentSessionId = currentEntry?.arguments?.getString("sessionId")?.toLongOrNull(),
                 onDismiss = { aliceSheet = false }, onOpenSettings = {
                     aliceSheet = false; navController.navigate(MadreDestinations.ALICE)
                 })

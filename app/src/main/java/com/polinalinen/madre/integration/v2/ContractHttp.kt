@@ -25,7 +25,7 @@ internal class ContractHttp(private val client: OkHttpClient = client()) {
     }
 
     suspend fun request(method: String, url: String, credential: String? = null,
-                        body: JsonObject? = null, installation: Boolean = false, noContent: Boolean = false): JsonObject = safe {
+                        body: JsonObject? = null, installation: Boolean = false, noContent: Boolean = false, strict: Boolean = false): JsonObject = safe {
         val encoded = body?.toString()
         require(encoded == null || encoded.toByteArray(Charsets.UTF_8).size <= 65_536)
         val builder = Request.Builder().url(url).header("Accept", "application/json")
@@ -61,7 +61,7 @@ internal class ContractHttp(private val client: OkHttpClient = client()) {
                     throw ContractFailure(kind)
                 }
                 require(response.body?.contentType()?.subtype == "json")
-                JsonParser.parseString(text).asJsonObject
+                if (strict) strictObject(text) else JsonParser.parseString(text).asJsonObject
             }
         }
     }

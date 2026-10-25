@@ -29,6 +29,27 @@ class FamilyLinkViewModelTest {
     private fun model(f: FamilyWireFixture, handle: SavedStateHandle = SavedStateHandle(), autoRestore: Boolean = false) =
         FamilyLinkViewModel(app, handle, f.repository, f.accounts, autoRestore)
 
+    @Test fun createReadbackAutomaticallyLoadsInviteAndRetryNeverCreatesAnotherFamily() = runBlocking {
+        FamilyWireFixture().use { f ->
+            f.familyId = null; f.errorPath = "/api/madre/family/invite"
+            val vm = model(f); vm.create("Наша семья")?.join()
+            assertEquals(FamilyOverlay.CreatedInvite, vm.overlay.value)
+            assertNotNull(vm.state.value.failure); assertNull(vm.state.value.invite)
+            assertEquals(1, f.calls.count { it.second.endsWith("/family/create") })
+            f.errorPath = null; vm.refresh()?.join()
+            assertEquals("Наша семья", vm.state.value.family!!.name)
+            assertEquals(f.url, vm.state.value.invite!!.invitation.savedInviteUrl())
+            assertEquals(1, f.calls.count { it.second.endsWith("/family/create") })
+        }
+    }
+    @Test fun failedCreateDoesNotOpenOrLoadInvitation() = runBlocking {
+        FamilyWireFixture().use { f ->
+            f.familyId = null; f.errorPath = "/api/madre/family/create"
+            val vm = model(f); vm.create("Наша семья")?.join()
+            assertNull(vm.overlay.value); assertNotNull(vm.state.value.failure)
+            assertTrue(f.calls.none { it.second.endsWith("/family/invite") })
+        }
+    }
     @Test fun explicitSdkProvisioningReturnsToSameInvitationButNeverJoinsAutomatically() = runBlocking {
         FamilyWireFixture().use { f ->
             f.tokens.verified = false

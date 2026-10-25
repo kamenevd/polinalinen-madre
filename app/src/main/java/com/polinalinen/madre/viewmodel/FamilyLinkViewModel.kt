@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.asStateFlow
 
 sealed interface FamilyOverlay {
     data object Invite : FamilyOverlay
+    data object CreatedInvite : FamilyOverlay
     data object Create : FamilyOverlay
     data object Rename : FamilyOverlay
     data class Member(val id: String) : FamilyOverlay
@@ -53,7 +54,11 @@ class FamilyLinkViewModel internal constructor(app: Application, private val sav
         }
     }
     fun show(overlay: FamilyOverlay?) { mutableOverlay.value = overlay }
-    fun refresh() = run { repository.refresh() }
+    fun refresh() = run {
+        if (mutableOverlay.value == FamilyOverlay.CreatedInvite || mutableOverlay.value == FamilyOverlay.Invite)
+            repository.loadInvite()
+        else repository.refresh()
+    }
     fun openInvitation(url: String): Job {
         val validated = FamilyInvitation.parse(url)
         workGeneration++; work?.cancel(); flight.set(false); repository.invitation.clear(); mutableOverlay.value = null
@@ -83,7 +88,13 @@ class FamilyLinkViewModel internal constructor(app: Application, private val sav
         if (invitation.value.phase == InvitationFlow.Phase.MEMBER) repository.refresh()
     }
     fun retryInvitation() { repository.invitation.savedInviteUrl()?.let(::openInvitation) }
-    fun create(name: String) = run { repository.create(name); dismissOnSuccess() }
+    fun create(name: String) = run {
+        repository.create(name)
+        if (state.value.failure == null && state.value.family != null) {
+            mutableOverlay.value = FamilyOverlay.CreatedInvite
+            repository.loadInvite()
+        }
+    }
     fun rename(name: String) = run { repository.renameFamily(name); dismissOnSuccess() }
     fun approval(required: Boolean) = run { repository.approval(required) }
     fun renameMember(id: String, name: String) = run { repository.renameMember(id, name); dismissOnSuccess() }

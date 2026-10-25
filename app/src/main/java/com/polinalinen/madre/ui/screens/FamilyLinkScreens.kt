@@ -6,6 +6,8 @@ import android.content.Context
 import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -18,9 +20,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import com.polinalinen.madre.account.yandex.*
 import com.polinalinen.madre.integration.v2.*
@@ -31,6 +36,7 @@ import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 val LocalFamilyLinkModel = staticCompositionLocalOf<FamilyLinkViewModel?> { null }
 
@@ -47,8 +53,8 @@ data class FamilyActions(
 
 internal fun familyShareIntent(invite: ActiveFamilyInvite, family: String, inviter: String): Intent =
     Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,
-        (if (inviter.isBlank()) "Вас зовут в семью «$family» в Мадре — общая полка выпечки.\n"
-        else "$inviter зовёт вас в семью «$family» в Мадре — общая полка выпечки.\n") +
+        (if (inviter.isBlank()) "Вас зовут на семейную полку «$family» в Мадре.\n"
+        else "$inviter зовёт вас на семейную полку «$family» в Мадре.\n") +
             invite.invitation.savedInviteUrl() + "\nСсылка действует до ${familyDate(invite.expiresAt)}.")
 
 internal fun familyDate(value: String): String = runCatching {
@@ -89,7 +95,7 @@ internal fun familyDate(value: String): String = runCatching {
     val family = state.family
     BackHandler(overlay != null) { actions.show(null) }
     PaperScaffold(header = {
-        PaperHeader(family?.name ?: "Семья", actions.back, "Полка", Modifier.padding(horizontal = 22.dp), actions = {
+        PaperHeader("Семейная полка", actions.back, "", Modifier.padding(horizontal = 22.dp), actions = {
             if (state.owner) PaperIconButton({ actions.show(FamilyOverlay.Rename) }, label = "Название семьи") {
                 Icon(Icons.Outlined.Edit, null)
             }
@@ -108,9 +114,10 @@ internal fun familyDate(value: String): String = runCatching {
                     Spacer(Modifier.height(16.dp)); YandexIdButton(actions.signIn, enabled = sdkAvailable)
                 }
             }
-            else if (family == null) FamilyEmptyContent(state, actions.signIn, { actions.show(FamilyOverlay.Create) }, sdkAvailable = sdkAvailable, sdkBusy = sdkBusy, sdkError = sdkError)
+            else if (family == null) FamilyEmptyContent(state, actions.signIn, { actions.create(suggestedFamilyName()) }, sdkAvailable = sdkAvailable, sdkBusy = sdkBusy, sdkError = sdkError)
             else {
-                SmallLabel("Семья · ${family.members.size} из 8")
+                SmallLabel("${family.members.size} из 8 · ${if (state.owner) "вы владелец" else "вы участник"}")
+                Text(family.name, style = PaperType.h1, color = p.ink, modifier = Modifier.padding(top = 12.dp))
                 PaperNote("Все вошли с Яндекс ID. Видят выпечки друг друга на полке.", Modifier.padding(top = 8.dp, bottom = 24.dp))
                 PaperCard(contentPadding = PaddingValues(horizontal = 16.dp)) {
                     family.members.forEach { member ->
@@ -129,12 +136,11 @@ internal fun familyDate(value: String): String = runCatching {
                     }
                 }
                 Spacer(Modifier.height(24.dp))
+                if (family.members.size == 1) PaperNote("Пока на полке только вы.", Modifier.padding(bottom = 16.dp))
                 PaperButton("Позвать по ссылке", { actions.invite(false) }, variant = PaperButtonVariant.ACCENT, icon = Icons.Outlined.Link)
                 state.invite?.let { PaperNote("Ссылка действует до ${familyDate(it.expiresAt)} · многоразовая", Modifier.padding(top = 12.dp)) }
                 if (state.owner) {
-                    PaperListRow("Подтверждать новых", note = "иначе по ссылке входят сразу", trailing = {
-                        PaperSwitch(family.approvalRequired, actions.approval, Modifier.testTag("family-approval"))
-                    })
+
                     family.pending.forEach { request ->
                         Column(Modifier.padding(top = 16.dp)) {
                             Text("${request.name} просит войти", style = PaperType.title, color = p.ink)
@@ -156,9 +162,9 @@ internal fun familyDate(value: String): String = runCatching {
     }
     // During network work do not offer actions against an unverified/old roster.
     if (!state.busy) when (overlay) {
-        FamilyOverlay.Create -> FamilyNameDialog("Новая семья", "Название семьи", "", actions.create) { actions.show(null) }
+        FamilyOverlay.Create -> Unit // Creation is a single explicit tap, without a name dialog.
         FamilyOverlay.Rename -> if (family != null && state.owner) FamilyNameDialog("Название семьи", "Название", family.name, actions.rename) { actions.show(null) }
-        FamilyOverlay.Invite -> FamilyInviteSheet(state, actions)
+        FamilyOverlay.Invite, FamilyOverlay.CreatedInvite -> FamilyInviteSheet(state, actions, overlay == FamilyOverlay.CreatedInvite)
         is FamilyOverlay.Member -> family?.members?.singleOrNull { it.id == overlay.id }?.let { member ->
             FamilyMemberSheet(member, state, actions)
         }
@@ -181,17 +187,17 @@ internal fun familyDate(value: String): String = runCatching {
     val p = LocalPaper.current
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
         state.removedFamilyName?.let { PaperCard { Text("Вас убрали из семьи «$it». Ваши выпечки — в вашей книге.", style = PaperType.body, color = p.ink) } }
-        FamilyAccentTitle("Позовите", "семью")
+        FamilyAccentTitle("Общая полка", "для своих")
         PaperFamilyBooks(Modifier.fillMaxWidth().height(100.dp))
-        Text("На полке видно, кто что испёк: выпечки, кадры и записи всей семьи. Своя книга работает и без входа.", style = PaperType.body, color = p.ink2)
+        Text("Видно, кто что испёк — выпечки и кадры всей семьи. Позвать — одна ссылка в любой мессенджер или QR-код.", style = PaperType.body, color = p.ink2)
         if (state.migration) PaperCard {
             Text("Перейдите на Яндекс ID — семья сохранится", style = PaperType.title, color = p.ink)
             PaperNote("Войдите с Яндекс ID: свяжем его с вашим существующим аккаунтом. Семья и выпечки останутся.")
-        } else PaperCard { PaperNote("Семья — только для тех, кто вошёл с Яндекс ID. Зовут по ссылке: поделились — человек вошёл и присоединился.") }
+        } else PaperCard { PaperNote("Только для вошедших с Яндекс ID · до 8 человек. Закваска и дневник остаются вашими.") }
         if (state.signedIn) {
             PaperNote("Вы вошли: ${state.accountName.ifBlank { "имя не указано" }} · Яндекс ID")
-            PaperButton("Создать семью", onCreate, variant = PaperButtonVariant.ACCENT)
-            PaperNote("Или откройте ссылку, которую прислала семья.")
+            PaperButton("Создать семейную полку", onCreate, variant = PaperButtonVariant.ACCENT)
+            PaperNote("Вас уже позвали? Откройте ссылку из сообщения — она приведёт прямо сюда.")
         } else {
             YandexIdButton(onSignIn, enabled = sdkAvailable && !sdkBusy, size = YandexIdButtonSize.L)
             if (sdkBusy) PaperNote("Узнаём вас…")
@@ -203,29 +209,53 @@ internal fun familyDate(value: String): String = runCatching {
     }
 }
 
-@Composable private fun FamilyInviteSheet(state: FamilyPanelState, actions: FamilyActions) {
+@Composable private fun FamilyInviteSheet(state: FamilyPanelState, actions: FamilyActions, created: Boolean = false) {
     val p = LocalPaper.current
+    var qr by remember(state.invite?.invitation?.savedInviteUrl()) { mutableStateOf(false) }
+    val snackbar = remember { PaperSnackbarState() }
+    val scope = rememberCoroutineScope()
+    val copy = {
+        actions.copy.invoke()
+        scope.launch {
+            if (snackbar.showSnackbar("Ссылка скопирована · до ${state.invite?.let { familyDate(it.expiresAt) }.orEmpty()}", "ОТПРАВИТЬ")) actions.share()
+        }
+        Unit
+    }
+    BackHandler(qr) { qr = false }
     PaperSheet({ actions.show(null) }) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp).padding(bottom = 22.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            SmallLabel("Приглашение в семью")
-            Text("Ссылка для семьи «${state.family?.name.orEmpty()}»", style = PaperType.h2, color = p.ink)
-            PaperNote("Кто откроет — войдёт с Яндекс ID и присоединится.")
+            SmallLabel(if (created) "Полка создана" else "Позвать по ссылке")
+            Text(state.family?.name ?: "Приглашение в семью", style = PaperType.h2, color = p.ink)
+            PaperNote("Теперь позовите своих. Кто откроет ссылку — войдёт с Яндекс ID и присоединится.")
             val link = state.invite
             if (link != null) {
+                if (qr) {
+                    val bitmap = remember(link.invitation.savedInviteUrl()) { familyInviteQr(link.invitation).asImageBitmap() }
+                    Image(bitmap, "QR-код приглашения в семью", Modifier.align(Alignment.CenterHorizontally).size(256.dp).background(Color.White).padding(16.dp).testTag("family-invite-qr"))
+                    PaperTextAction("К ССЫЛКЕ", { qr = false })
+                }
                 Row(Modifier.fillMaxWidth().clip(androidx.compose.foundation.shape.RoundedCornerShape(14.dp)).background(p.bg2).padding(start = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Outlined.Link, null, tint = p.acc)
                     Text(link.invitation.savedInviteUrl().removePrefix("https://"), Modifier.weight(1f).padding(horizontal = 8.dp), maxLines = 1, overflow = TextOverflow.Ellipsis, style = PaperType.ui, color = p.ink)
-                    PaperIconButton(actions.copy, label = "Скопировать ссылку") { Icon(Icons.Outlined.ContentCopy, null) }
+                    PaperIconButton(copy, label = "Скопировать ссылку") { Icon(Icons.Outlined.ContentCopy, null) }
                 }
-                Text("до ${familyDate(link.expiresAt)} · ${state.family?.members?.size ?: 0} из 8 мест · многоразовая", style = PaperType.caption, color = p.ink2)
-                PaperButton("Поделиться", actions.share, variant = PaperButtonVariant.ACCENT, icon = Icons.Outlined.Share)
-                PaperButton("Скопировать ссылку", actions.copy, variant = PaperButtonVariant.SECONDARY, icon = Icons.Outlined.ContentCopy)
+                Text("до ${familyDate(link.expiresAt)}${link.seatsLeft?.let { " · ещё $it мест" }.orEmpty()} · многоразовая", style = PaperType.caption, color = p.ink2)
+                PaperButton("Поделиться ссылкой", actions.share, variant = PaperButtonVariant.ACCENT, icon = Icons.Outlined.Share)
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Box(Modifier.weight(1f)) { PaperButton("Копировать", copy, variant = PaperButtonVariant.SECONDARY, icon = Icons.Outlined.ContentCopy) }
+                    Box(Modifier.weight(1f)) { PaperButton("QR-код", { qr = true }, variant = PaperButtonVariant.SECONDARY, icon = Icons.Outlined.QrCode) }
+                }
+            } else if (state.failure != null) {
+                PaperNote("${if (created) "Полка уже создана. " else ""}Не удалось загрузить ссылку. Повторим только приглашение, без создания новой семьи.")
+                FamilyFailure(state.failure, { actions.invite(false) })
             } else PaperNote("Активной ссылки нет. Попросите владельца создать новую.")
             if (state.owner) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 PaperTextAction("ОТОЗВАТЬ", actions.revoke, enabled = link != null, destructive = true)
                 PaperTextAction("НОВАЯ ССЫЛКА", { actions.invite(true) })
             }
             PaperNote("Ссылка утекла? «Отозвать» — старая перестанет работать сразу.")
+            PaperTextAction("ПОЗЖЕ", { actions.show(null) }, Modifier.align(Alignment.CenterHorizontally))
+            PaperSnackbar(snackbar)
         }
     }
 }
@@ -240,9 +270,9 @@ internal fun familyDate(value: String): String = runCatching {
                 Column { Text(member.name, style = PaperType.h2, color = p.ink)
                     PaperNote("${if (member.id == state.userId) "Вы · " else ""}${if (member.role == FamilyRole.OWNER) "Владелец" else "Участник"} · с ${familyDate(member.joinedAt)}") }
             }
-            PaperField(name, { name = it }, label = "Как подписан(а) в семье", modifier = Modifier.testTag("family-member-name"))
+            PaperField(name, { name = it }, label = "Как подписан(а) в семье", modifier = Modifier.testTag("family-member-name"), keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences))
             PaperNote("Подпись видна всей семье. Её можно сменить самостоятельно.")
-            PaperButton("Сохранить подпись", { actions.memberName(member.id, name) }, enabled = name.isNotBlank() && name.length <= 120)
+            PaperButton("Сохранить подпись", { actions.memberName(member.id, familyEditedName(name)) }, enabled = name.isNotBlank() && name.length <= 120)
             if (state.owner && member.id != state.userId) {
                 PaperListRow("Сделать владельцем", note = "вы станете участником", onClick = { actions.show(FamilyOverlay.Transfer(member.id)) }, leading = { Icon(Icons.Outlined.ManageAccounts, null, tint = p.acc) })
                 PaperListRow("Убрать из семьи", note = "выпечки уйдут с полки вместе с участником", onClick = { actions.show(FamilyOverlay.Remove(member.id)) }, leading = { Icon(Icons.Outlined.PersonRemove, null, tint = p.rib) })
@@ -288,8 +318,8 @@ internal fun familyDate(value: String): String = runCatching {
 @Composable private fun FamilyNameDialog(title: String, label: String, initial: String, confirm: (String) -> Unit, dismiss: () -> Unit) {
     var name by remember { mutableStateOf(initial) }
     PaperDialog(dismiss, title = { Text(title, color = LocalPaper.current.ink, style = PaperType.h2) },
-        text = { PaperField(name, { name = it }, label = label) },
-        confirmButton = { PaperButton("Сохранить", { confirm(name) }, enabled = name.isNotBlank() && name.length <= 120) },
+        text = { PaperField(name, { name = it }, label = label, keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences)) },
+        confirmButton = { PaperButton("Сохранить", { confirm(familyEditedName(name)) }, enabled = name.isNotBlank() && name.length <= 120) },
         dismissButton = { PaperTextAction("Отмена", dismiss) })
 }
 

@@ -75,6 +75,12 @@ class WaitTests(unittest.TestCase):
 class AdmissionTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory(dir=os.environ.get('TMPDIR'));self.addCleanup(self.tmp.cleanup)
+        # Fixtures must not acquire the production root-owned lock on GitHub's
+        # non-root runner. Keep the real flock implementation with a private path.
+        original_locked = ops.locked
+        fixture_lock = Path(self.tmp.name) / 'admission.lock'
+        lock_patch = patch.object(ops, 'locked', side_effect=lambda path=None, nonblock=False: original_locked(path if path is not None else fixture_lock, nonblock))
+        lock_patch.start(); self.addCleanup(lock_patch.stop)
         self.repo=Path(self.tmp.name)/'repo';self.repo.mkdir()
         subprocess.run(['git','init','-q',str(self.repo)],check=True)
         for key,value in [('user.email','fixture@example.test'),('user.name','Fixture')]:subprocess.run(['git','config',key,value],cwd=self.repo,check=True)

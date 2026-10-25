@@ -19,6 +19,9 @@ INTEGRATOR = Path('/root/.hermes/work/madre-71-integrator-20261025')
 LOCK = Path('/root/.cache/madre/gradle.lock')
 TASKS = [':app:compileDebugKotlin', ':app:compileReleaseKotlin', ':app:testDebugUnitTest', '-Pmadre.shortApkGate=true']
 ROOT = Path(__file__).resolve().parents[1]
+WORK = Path('/root/.hermes/work')
+INSTALL_ROOT = Path('/root/.local/share/madre-ci-tools')
+BACKEND_PREFIXES = ('madre-pb-auth-', 'madre-pb-family-', 'madre-alice-roster-', 'madre-alice-pair-', 'madre-yandex-A-server-')
 
 
 def git(*args, cwd=None):
@@ -34,9 +37,13 @@ def clean_head(repo, expected):
         raise RuntimeError('full SHA required')
     if git('rev-parse', 'HEAD', cwd=repo) != expected or git('status', '--porcelain', cwd=repo):
         raise RuntimeError('dirty or stale HEAD')
-    gd = Path(git('rev-parse', '--absolute-git-dir', cwd=repo))
-    if any((gd / n).exists() for n in ['MERGE_HEAD', 'CHERRY_PICK_HEAD', 'REVERT_HEAD', 'rebase-merge', 'rebase-apply']):
-        raise RuntimeError('integration already in flight')
+    no_git_operation(repo)
+
+
+def no_git_operation(repo):
+    for name in ['MERGE_HEAD', 'CHERRY_PICK_HEAD', 'REVERT_HEAD', 'REBASE_HEAD', 'rebase-merge', 'rebase-apply', 'sequencer', 'BISECT_LOG', 'index.lock']:
+        if Path(git('rev-parse', '--path-format=absolute', '--git-path', name, cwd=repo)).exists():
+            raise RuntimeError('integration already in flight')
 
 
 @contextlib.contextmanager
@@ -49,6 +56,7 @@ def locked(path=LOCK, nonblock=False):
 
 def gradle(repo, args, *, raw=None):
     with locked():
+        clean_head(repo, git('rev-parse', 'HEAD', cwd=repo))
         return _run_gradle(repo, args, raw=raw)
 
 
@@ -156,51 +164,115 @@ def integrate(repo, expected, mode, commits):
         print('Integrated locally. Push separately through mandatory pre-push gate.')
 
 
-def install(repo, expected, inventory):
-    clean_head(repo, expected)
-    data = json.loads(Path(inventory).read_text())
-    targets = [Path(row['path']).resolve() for row in data] + [INTEGRATOR.resolve()]
-    if len(set(targets)) != len(targets):
-        raise RuntimeError('duplicate installation target')
-    # Fail closed on ANY dirty/in-flight workspace; never silently skip it.
-    for p in targets:
-        if p.parent != Path('/root/.hermes/work') or not p.name.startswith('madre-') or not (p / 'app').is_dir():
+def source_snapshot(repo):
+    def capture(*args):
+        return subprocess.check_output(['git', *args], cwd=repo)
+    files = capture('ls-files', '-z', '--cached', '--others', '--exclude-standard').split(b'\0')
+    hashes = {}
+    for item in files:
+        if not item: continue
+        path = repo / os.fsdecode(item)
+        if path.is_symlink(): value = os.fsencode(os.readlink(path))
+        elif path.is_file(): value = path.read_bytes()
+        else: value = b'<missing>'
+        hashes[os.fsdecode(item)] = hashlib.sha256(value).hexdigest()
+    return {'head': git('rev-parse', 'HEAD', cwd=repo),
+            'status': capture('status', '--porcelain=v1', '-z', '--untracked-files=all').hex(),
+            'diff': capture('diff', '--binary', 'HEAD', '--').hex(),
+            'index_diff': capture('diff', '--cached', '--binary', 'HEAD', '--').hex(), 'hashes': hashes}
+
+
+def installation_targets(inventory):
+    candidates = [Path(row['path']) for row in json.loads(Path(inventory).read_text())] + [INTEGRATOR]
+    targets, excluded = [], []
+    for candidate in candidates:
+        p = candidate.resolve()
+        if candidate.name.startswith(BACKEND_PREFIXES) or p.name.startswith(BACKEND_PREFIXES):
+            excluded.append(str(candidate)); continue
+        if p.parent != WORK or not p.name.startswith('madre-') or not (p / 'app').is_dir() or not (p / 'gradlew').is_file():
             raise RuntimeError('out-of-scope installation target')
-        clean_head(p, git('rev-parse', 'HEAD', cwd=p))
-        if subprocess.run(['git', 'config', '--get', 'madre.rawGradlew'], cwd=p, capture_output=True).returncode == 0:
-            raise RuntimeError('already installed; explicit rollback/review required')
-    # Refuse active legacy Gradle too: do not inspect/print process arguments.
+        if p in targets: raise RuntimeError('duplicate installation target')
+        targets.append(p)
+    return targets, excluded
+
+
+def install_preflight(repo):
+    no_git_operation(repo)
+    for key in ['core.hooksPath', 'madre.rawGradlew']:
+        if subprocess.run(['git', 'config', '--get', key], cwd=repo, capture_output=True).returncode == 0:
+            raise RuntimeError('existing hook/wrapper configuration; explicit review required')
+    hooks = Path(git('rev-parse', '--path-format=absolute', '--git-path', 'hooks', cwd=repo))
+    if hooks.exists() and any(not p.name.endswith('.sample') for p in hooks.iterdir()):
+        raise RuntimeError('unknown hooks; explicit review required')
+    gd = Path(git('rev-parse', '--absolute-git-dir', cwd=repo)) / 'madre-ci'
+    if any((gd / name).exists() for name in ['config.before', 'gradlew.original', 'madre-gradle']):
+        raise RuntimeError('existing installation backups; preserve and review first')
+
+
+def build_quiescent(targets):
+    # Read arguments privately only to identify Gradle clients/daemons; never log them.
+    daemons = set()
     for proc in Path('/proc').iterdir():
         if not proc.name.isdigit(): continue
         try:
-            if (proc / 'comm').read_text().strip() in ['java', 'gradle']:
-                raise RuntimeError('Java/Gradle process active; installation requires quiescence')
-        except (FileNotFoundError, PermissionError):
-            continue
-    # A running wrapper owns this same lock; refuse rather than interrupt it.
+            if (proc / 'comm').read_text().strip() not in ['java', 'gradle']: continue
+            args = (proc / 'cmdline').read_bytes().split(b'\0')
+            if any(b'org.gradle.launcher.daemon.bootstrap.GradleDaemon' in a for a in args):
+                daemons.add(proc.name)
+            elif any(any(marker in a for marker in [b'GradleWrapperMain', b'GradleMain', b'GradleWorkerMain']) for a in args):
+                raise RuntimeError('BUSY: active Gradle client/worker')
+        except (FileNotFoundError, ProcessLookupError): continue
+        except PermissionError: raise RuntimeError('cannot verify Gradle process status')
+    idle = set()
+    for repo in targets:
+        result = subprocess.run(['bash', str(repo / 'gradlew'), '--status'], cwd=repo, capture_output=True, text=True, timeout=60)
+        if result.returncode: raise RuntimeError('cannot verify Gradle daemon status')
+        for line in result.stdout.splitlines():
+            fields = line.split()
+            if len(fields) >= 2 and fields[0].isdigit():
+                if fields[1] == 'IDLE': idle.add(fields[0])
+                elif fields[1] != 'STOPPED': raise RuntimeError('BUSY: Gradle daemon not idle')
+    if daemons - idle: raise RuntimeError('cannot verify all live Gradle daemons are IDLE')
+
+
+def install(repo, expected, inventory):
+    clean_head(repo, expected)
+    targets, excluded = installation_targets(inventory)
+    print(json.dumps({'excluded_backend_targets': excluded}))
+    # Lock covers preflight, daemon inspection, snapshots and every config-only write.
     with locked(nonblock=True):
-        dest = Path('/root/.local/share/madre-ci-tools') / expected
-        if dest.exists():
-            raise RuntimeError('immutable installation already exists')
+        for p in targets: install_preflight(p)
+        build_quiescent(targets)
+        snapshots = {str(p): source_snapshot(p) for p in targets}
+        dest = INSTALL_ROOT / expected
+        if dest.exists(): raise RuntimeError('immutable installation already exists')
         dest.mkdir(parents=True)
         for name in ['madre_ci.py', 'pre-push', 'madre-gradle.sh']:
             shutil.copy2(repo / 'scripts' / name, dest / name)
+        receipt = {'head': expected, 'excluded_backend_targets': excluded, 'targets': {}}
         for p in targets:
+            install_preflight(p)
+            if source_snapshot(p) != snapshots[str(p)]: raise RuntimeError('source changed during installation admission')
             gd = Path(git('rev-parse', '--absolute-git-dir', cwd=p)) / 'madre-ci'
             gd.mkdir(exist_ok=True)
-            # Private backup may contain credential config: never print it.
-            config = Path(git('rev-parse', '--git-path', 'config', cwd=p))
-            if not config.is_absolute(): config = p / config
+            config = Path(git('rev-parse', '--path-format=absolute', '--git-path', 'config', cwd=p))
             shutil.copy2(config, gd / 'config.before'); (gd / 'config.before').chmod(0o600)
             shutil.copy2(p / 'gradlew', gd / 'gradlew.original')
-            # Keep tracked sources clean. All admitted Gradle calls use this local
-            # wrapper (including manual assembleDebug), never edit old gradlew bytes.
+            (gd / 'source.before.json').write_text(json.dumps(snapshots[str(p)], indent=2))
             launcher = gd / 'madre-gradle'
             launcher.write_text('#!/bin/sh\nexec python3 ' + str(dest / 'madre_ci.py') + ' gradle "$@"\n')
             launcher.chmod(0o755)
-            subprocess.run(['git', 'config', 'madre.rawGradlew', str(gd / 'gradlew.original')], cwd=p, check=True)
+            raw = str(p / 'gradlew')  # APP_HOME must remain the repository, NOT backup directory.
+            subprocess.run(['git', 'config', 'madre.rawGradlew', raw], cwd=p, check=True)
             subprocess.run(['git', 'config', 'core.hooksPath', str(dest)], cwd=p, check=True)
-        print('Installed reviewed local hooks/wrappers; backups in each .git/madre-ci. No branch pushed.')
+            after = source_snapshot(p)
+            (gd / 'source.after.json').write_text(json.dumps(after, indent=2))
+            if after != snapshots[str(p)]: raise RuntimeError('source preservation check failed')
+            if git('config', '--get', 'madre.rawGradlew', cwd=p) != raw or git('config', '--get', 'core.hooksPath', cwd=p) != str(dest):
+                raise RuntimeError('installation config readback mismatch')
+            receipt['targets'][str(p)] = {'source_preserved': True, 'raw_gradlew': raw, 'hooks_path': str(dest)}
+        (dest / 'install-receipt.json').write_text(json.dumps(receipt, indent=2))
+        print('Installed config-only hooks/wrappers; source snapshots and rollback backups preserved. No branch pushed.')
 
 
 def main():

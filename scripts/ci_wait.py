@@ -14,8 +14,8 @@ CODES = {'success': 0, 'failure': 1, 'cancelled': 2, 'timeout': 3, 'no-run': 4, 
 
 
 class Waiter:
-    def __init__(self, sha, repo, output, seconds=2400):
-        self.sha, self.repo = sha, repo
+    def __init__(self, sha, repo, output, seconds=2400, gh='/usr/bin/gh'):
+        self.sha, self.repo, self.gh = sha, repo, gh
         self.output = Path(output); self.output.mkdir(parents=True, exist_ok=False)
         os.chmod(self.output, 0o700)
         self.deadline = time.monotonic() + seconds
@@ -26,7 +26,9 @@ class Waiter:
         remaining = self.deadline - time.monotonic()
         if remaining <= 0: raise TimeoutError
         self.seq += 1
-        result = subprocess.run(['gh', *args, '--repo', self.repo], capture_output=True, text=True, timeout=remaining)
+        command = [self.gh, *args]
+        if args[0] != 'api': command += ['--repo', self.repo]
+        result = subprocess.run(command, capture_output=True, text=True, timeout=remaining)
         (self.output / ('%02d.log' % self.seq)).write_text(result.stdout + result.stderr)
         return result
 
@@ -52,12 +54,12 @@ class Waiter:
     def wait(self):
         try:
             while self.run_id is None:
-                result = self.command('run', 'list', '--commit', self.sha, '--workflow', 'quality-gates.yml', '--event', 'workflow_dispatch', '--limit', '20', '--json', 'databaseId,headSha,status,conclusion,createdAt')
+                result = self.command('api', 'repos/' + self.repo + '/actions/workflows/quality-gates.yml/runs?head_sha=' + self.sha + '&per_page=100')
                 if result.returncode: return self.finish('transport', reason='discovery failed')
-                runs = json.loads(result.stdout)
-                matching = [r for r in runs if r['headSha'] == self.sha]
+                runs = json.loads(result.stdout)['workflow_runs']
+                matching = [r for r in runs if r['head_sha'] == self.sha]
                 if matching:
-                    self.run_id = max(matching, key=lambda r: r['databaseId'])['databaseId']
+                    self.run_id = max(matching, key=lambda r: r['id'])['id']
                     (self.output / 'discovered.json').write_text(json.dumps(matching, indent=2))
                     break
                 remaining = self.deadline - time.monotonic()

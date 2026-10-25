@@ -10,7 +10,10 @@ The existing dirty/active workspaces are never renamed, deleted, reset, or silen
 scripts/ci-wait.sh <full-40-character-sha> --output /absolute/new/evidence-dir
 ```
 
-One process discovers the manual `quality-gates.yml` run for that exact SHA and invokes
+One process uses SYSTEM `/usr/bin/gh` (including installed 2.23) to discover the
+`quality-gates.yml` run via `gh api .../runs?head_sha=<sha>`, client-filters the exact
+head, and accepts ordinary PR, push and manual events without an event filter. No
+`--repo` is appended to API commands, and no local shim is required. It invokes
 `gh run watch --exit-status`. A single 2400-second monotonic deadline covers discovery,
 watch, final readback and failure logs. It never dispatches/retries a workflow itself.
 The caller dispatches **once** with `critical_only=true` on the tools branch. Workflow
@@ -80,15 +83,27 @@ Run from the reviewed, clean tools checkout:
 scripts/install-madre-ci.sh <reviewed-tools-full-sha> /root/.hermes/work/madre-ci-acceleration-evidence/20261025-155945/android-workspaces.json
 ```
 
-The exact source SHA, all19 inventory workspaces plus the pinned integrator, cleanliness,
-in-flight markers and absence of active Java/Gradle are preflighted before any write.
-A dirty workspace blocks the entire installation; do not clean it automatically.
+The tools source must be the exact clean reviewed SHA. The 19-entry inventory is
+filtered explicitly: `madre-pb-auth-*`, `madre-pb-family-*`, `madre-alice-roster-*`,
+`madre-alice-pair-*`, `madre-yandex-A-server-*` are excluded and reported, even if they
+contain an Android tree. Their PR63–66 and configuration are never mutated. The
+remaining Android copies plus the pinned integrator receive CONFIG-ONLY admission:
+dirty tracked/untracked source is allowed, with exact before/after status, binary diff,
+and file hash snapshots in `.git/madre-ci/source.{before,after}.json`. Build/push still
+requires strictly clean source. Never reset/clean/rename a dirty copy. Active Git
+operations, existing hook configuration, unknown hooks and previous install backups
+are refused. The global nonblocking flock covers the full install. Private process
+inspection rejects active Gradle clients/workers; actual `gradlew --status` rejects
+BUSY/unknown daemons but permits verified IDLE daemons and unrelated Java. No raw
+process arguments are printed and no process is killed.
 The installer copies canonical hooks/tools to a SHA-addressed directory under
 `/root/.local/share/madre-ci-tools/`, preserves config privately and original gradlew in
 each `.git/madre-ci/`, sets local `core.hooksPath`, and adds `.git/madre-ci/madre-gradle`.
 It changes no tracked files. Manual calls can use that launcher from the repository
-root. Existing hook directories are not removed. No backend/104/other profile target
-can be admitted by the fixed immediate-child Android-workspace scope check.
+root. `madre.rawGradlew` points to the actual `<repo>/gradlew`, so APP_HOME stays
+correct; `gradlew.original` is rollback-only, never executed by the installed tool.
+Existing hook directories are not removed. Installation writes a config readback
+receipt. No backend/104/other profile target is admitted.
 
 Backups: `.git/madre-ci/config.before` (0600; never print, may contain secrets) and
 `gradlew.original`. Rollback must first ensure no push/build is in flight, compare

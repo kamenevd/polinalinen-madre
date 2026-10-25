@@ -3,6 +3,7 @@ Reuse the historical deployed-source upgrade harness; only Yandex is external-mo
 """
 from __future__ import annotations
 import concurrent.futures
+import gzip
 import hashlib
 import hmac
 import json
@@ -147,12 +148,14 @@ class FamilyMembershipIntegration(unittest.TestCase):
         self.assertEqual([], self.sql("SELECT * FROM _madre_family_join_permits"))
         original = type(self).hooks
         try:
-            for revision, digest in (
-                ("7af7c3297acb3e41b77491c0c42c0a4c8e396072", "96debd46afdcb6b547bee5ede088df16d9ef33881a1f23c70499b38cf7715338"),
-                ("15adb6359f1c83900aeaa068333187de0facbc38", "d03c7381e9e999faa5c4fc7bece59ec35bbdfc26244136491d550474cdfb70d3"),
+            for revision, fixture, digest in (
+                ("7af7c3297acb3e41b77491c0c42c0a4c8e396072", "baseline_family_7af7c32.js.gz", "96debd46afdcb6b547bee5ede088df16d9ef33881a1f23c70499b38cf7715338"),
+                ("15adb6359f1c83900aeaa068333187de0facbc38", "deployed_family_15adb63.js", "d03c7381e9e999faa5c4fc7bece59ec35bbdfc26244136491d550474cdfb70d3"),
             ):
                 old = self.work / ("fenced-old-" + revision[:7]); old.mkdir()
-                source = subprocess.check_output(["git", "show", revision+":backend/pb_hooks/madre_family.pb.js"], cwd=runtime.ROOT)
+                source = (runtime.ROOT / "backend/tests/fixtures" / fixture).read_bytes()
+                if fixture.endswith(".gz"):
+                    source = gzip.decompress(source)
                 self.assertEqual(digest, hashlib.sha256(source).hexdigest())
                 (old / "madre_family.pb.js").write_bytes(source)
                 shutil.copy2(original / "madre_stats.pb.js", old)

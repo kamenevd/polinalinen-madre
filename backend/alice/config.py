@@ -91,6 +91,7 @@ class Settings:
     yandex_client_secret: str = ""
     yandex_uid_salt: str = ""
     yandex_match: bool = False
+    roster_v2: bool = False  # CODE ONLY until parent Android/executor acceptance
 
     def yandex_configured(self) -> bool:
         return bool(self.yandex_client_id) and len(self.yandex_uid_salt) >= 32
@@ -123,6 +124,7 @@ def settings_from_env() -> Settings:
         yandex_client_secret=os.environ.get("MADRE_YANDEX_CLIENT_SECRET", ""),
         yandex_uid_salt=os.environ.get("MADRE_YANDEX_UID_SALT", ""),
         yandex_match=os.environ.get("YANDEX_MATCH", "0") == "1",
+        roster_v2=os.environ.get("MADRE_ALICE_ROSTER_V2", "0") == "1",
         host=host,
         port=port,
     )

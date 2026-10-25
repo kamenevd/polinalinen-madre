@@ -1,0 +1,22 @@
+{
+  "source_sha": "d4999178a53571304642486c13388460cfa1ec86",
+  "archive_sha256": "eb815706ab0e31b8af22cf43a8827a94cae2c7364e58984423273d9ef5bee7bc",
+  "files": {
+    "app.py": "c8f52b6a13bc52f4e320241c657655895f47e5444ba6bc969946dd153704f36a",
+    "config.py": "dfe4c30edf6e92d01c40055d40a81a9b662bbeea649ae028e96cf0482d1a24a0",
+    "db.py": "326485c1c25c1cbd28ea4aec7be27ea2e0c3a16a4eb825227f5b07ffa9289fc8",
+    "madre_alice/__init__.py": "8808e623555a25a0db1222d5d65c01af263034f537f559b684d55b76c9d03f4e",
+    "madre_alice/dialog.py": "6eded8e2ab96f9fc61e22fdcbf59a857dd4b5c79b77995c46a4cdfc8d12ade7f",
+    "madre_alice/nlu.py": "1e59eced446692d5efbc0d66d8f1c97e2c3c3d72d82870417e120b526f60f9cc",
+    "madre_alice/recipes.py": "bc938c7f538856274d8b9a3c12db9b13db4f7e9eb1cab615f978d13224b993da",
+    "madre_alice/scale.py": "f0f3f8f498a014c4efc5f00629e7b3ba2c6ef4568922bbdcd72e8f356aeff97b",
+    "security.py": "c032fddd97b61871e753fd2244105d7cf251ff8bc651d45a6b0799acfa4844c0",
+    "server.py": "0496e194cd6bbaea841d01675f35597d32a4983c8c5d21c68acdd1d94b7bcc96",
+    "snapshot.py": "b0e1ced69508540e05ebb8a5b6289f943de0d2e1ed97e90dedbc33b8eb419088",
+    "store.py": "342b1c6ce79776d362dc86abb6d2969bbd2e13f52dd4b6a05b64524d3da5953f",
+    "voice.py": "b8a4ef633df62c86cf0ebb9c16d653fa3caeba0573cbeac41a4c73ea771cba4d",
+    "yandex_identity.py": "e6239d50efa3a42821baf3d3f28a0b7753da919bf286895c92aa69a8af95faa9",
+    "yandex_store.py": "3d7e888a36bc903677ceaa56899729d28db99cde3d975ecc7faaace82da34649",
+    "recipes.json": "81ac1802297a31f90fb42613e8a897d770d2da07b5895c4e5e0e62980ece3a9f"
+  }
+}

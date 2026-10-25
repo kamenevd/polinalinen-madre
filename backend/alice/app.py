@@ -100,6 +100,8 @@ from voice import (
 )
 
 LOG = logging.getLogger("madre-alice")
+import roster_store
+import roster_voice
 
 PHONE_PREFIX = VOICE_PREFIX + "/phone"
 OAUTH_PREFIX = VOICE_PREFIX + "/oauth"
@@ -195,6 +197,8 @@ class App:
         self.slots = threading.BoundedSemaphore(settings.max_inflight)
         with transaction(settings.db_path) as conn:
             startup_invalidate(conn)
+            # Reattach requires a new explicit scoped action after process restart.
+            conn.execute("UPDATE roster_v2_connections SET revoked_at=? WHERE revoked_at IS NULL", (self.now(),))
 
     def now(self) -> int:
         return self.clock.now_ms()
@@ -363,7 +367,7 @@ def guard_copy(payload: dict) -> dict:
     if isinstance(response, dict):
         text = str(response.get("text") or "")
     if asserts_renamed_skill(text) or asserts_renamed_skill(json.dumps(payload, ensure_ascii=False)):
-        return alice_reply(f"{SKILL_NAME} не подтверждает переименование. Повтори запрос.")
+        return alice_reply(f"{SKILL_NAME} не подтверждает переименование. Повторите запрос.")
     return payload
 
 
@@ -404,7 +408,7 @@ class Handler(BaseHTTPRequestHandler):
             LOG.warning("handler failed: %s", "error")
             path = urlsplit(self.path).path
             if path == WEBHOOK_PATH:
-                self._send_json(200, alice_reply("Книга на секунду запнулась. Повтори, пожалуйста."))
+                self._send_json(200, alice_reply("Книга на секунду запнулась. Повторите, пожалуйста."))
             else:
                 self._send(500, b'{"ok":false,"error":"denied"}')
 
@@ -449,6 +453,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == PHONE_PREFIX + "/enroll":
             self._phone_enroll(app, raw)
+            return
+        if path.startswith(PHONE_PREFIX + "/v2/"):
+            self._phone_v2(app, path[len(PHONE_PREFIX + '/v2/'):], raw)
             return
         if path in (PHONE_PREFIX + "/yandex-bind", PHONE_PREFIX + "/yandex-unbind"):
             self._phone_yandex(app, raw, unbind=path.endswith("yandex-unbind"))
@@ -568,6 +575,62 @@ class Handler(BaseHTTPRequestHandler):
             self._send(401, b'{"ok":false,"error":"denied"}')
             return True
         return False
+
+    def _phone_v2(self, app: App, route: str, raw: bytes) -> None:
+        if not app.settings.roster_v2:
+            self._send_json(426, {"error": "unsupported_protocol"})
+            return
+        inst = self._installation(app)
+        if inst is None:
+            self._send_json(401, {"error": "unauthorized"})
+            return
+        try:
+            roster_store.require(route in ('attach', 'disconnect', 'poll', 'ack'), 'not_found', 404)
+            roster_store.require(len(raw) <= 65536, 'request_too_large', 413)
+            roster_store.require(media_type(self.headers.get('Content-Type')) == 'application/json')
+            def unique(pairs):
+                out = {}
+                for key, value in pairs:
+                    roster_store.require(key not in out)
+                    out[key] = value
+                return out
+            try:
+                body = json.loads(raw.decode('utf-8'), object_pairs_hook=unique,
+                                  parse_constant=lambda _: roster_store.require(False))
+            except (UnicodeDecodeError, json.JSONDecodeError, ValueError):
+                raise roster_store.ProtocolError()
+            roster_store.require(type(body) is dict)
+            if route in ('attach', 'poll'):
+                roster_store.require(type(body.get('protocol_version')) is int and body['protocol_version'] == 2,
+                                     'unsupported_protocol', 426)
+            with transaction(app.settings.db_path) as conn:
+                if route == 'attach':
+                    roster_store.require(set(body) == {'protocol_version', 'consent_scope', 'consent'})
+                    roster_store.require(body['consent_scope'] == roster_store.SCOPE and body['consent'] is True,
+                                         'consent_required', 403)
+                    connection = roster_store.attach(conn, inst, app.now(), app.boot_id)
+                    result = {'connection_id': connection, 'consent_scope': roster_store.SCOPE, 'attached': True}
+                elif route == 'disconnect':
+                    roster_store.require(set(body) == {'connection_id'} and roster_store.canonical_uuid(body['connection_id']))
+                    changed = roster_store.disconnect(conn, inst['id'], body['connection_id'], app.now())
+                    # Explicit current disconnect also prevents v1 fallback;
+                    # stale idempotent retries cannot revoke a new connection.
+                    if changed:
+                        disconnect(conn, inst['id'], app.now())
+                    result = None
+                elif route == 'poll':
+                    result = roster_store.poll(conn, inst['id'], body, app.now(), app.boot_id, app.settings.freshness_ms)
+                else:
+                    roster_store.ack(conn, inst['id'], body, app.now(), app.boot_id)
+                    result = {'acknowledged': True}
+            if route == 'ack':
+                app.waiters.wake_ack(body['command_id'])
+            if result is None:
+                self._send(204, b'')
+            else:
+                self._send_json(200, result)
+        except roster_store.ProtocolError as exc:
+            self._send_json(exc.status, {'error': exc.error})
 
     def _phone_enroll(self, app: App, raw: bytes) -> None:
         if self._deny_phone_if_not_installation():
@@ -1265,9 +1328,16 @@ class Handler(BaseHTTPRequestHandler):
             return public_handle(body)
         except Exception:
             LOG.warning("public reader failed")
-            return alice_reply("Книга на секунду запнулась. Повтори, пожалуйста.")
+            return alice_reply("Книга на секунду запнулась. Повторите, пожалуйста.")
 
     def _linked(self, app: App, body: dict, grant) -> dict:
+        if app.settings.roster_v2:
+            # Only the exact paired grant promoted by explicit v2 consent gets
+            # roster access. Revoked v2 authority must never fall back to v1.
+            with transaction(app.settings.db_path) as conn:
+                known = conn.execute('SELECT 1 FROM roster_v2_connections WHERE source_grant_id=? LIMIT 1', (grant['id'],)).fetchone()
+            if known:
+                return self._linked_v2(app, body, grant)
         if "account_linking_complete_event" in body:
             return self._complete_event(app, grant)
         utter = utterance_of(body)
@@ -1296,6 +1366,52 @@ class Handler(BaseHTTPRequestHandler):
         if utter.operation:
             return self._turn1(app, grant, session_id, utter.operation)
         return self._read(app, grant, utter.name)
+
+    def _linked_v2(self, app: App, body: dict, grant) -> dict:
+        if 'account_linking_complete_event' in body:
+            return alice_reply('Связка аккаунта подтверждена. Голос закваски не меняет шаги без отдельного подтверждения.')
+        request = body.get('request')
+        if not isinstance(request, dict):
+            return alice_reply('Не разобрала. Ничего не отправляю.')
+        command, original = request.get('command', ''), request.get('original_utterance', '')
+        if (not isinstance(command, str) or not isinstance(original, str) or max(len(command), len(original)) > 1024
+                or contains_spoken_code(command, original)):
+            return alice_reply('Запрос не принимаю. Код вводится только на телефоне.')
+        with transaction(app.settings.db_path) as conn:
+            now = app.now()
+            roster_store.cleanup(conn, now)
+            # Revalidate bearer authority inside the same mutation transaction:
+            # _classify's earlier snapshot alone cannot survive logout/replay.
+            parsed = parse_authorization(self.headers.get('Authorization'))
+            token = parsed[1] if parsed is not None and parsed[0] == 'bearer' else None
+            if token is None:
+                session = body.get('session', {})
+                user = session.get('user', {}) if isinstance(session, dict) else {}
+                token = user.get('access_token') if isinstance(user, dict) else None
+            live = grant_by_access(conn, sha256_text(token), now) if isinstance(token, str) else None
+            if live is None or live['id'] != grant['id']:
+                return alice_reply('Связка больше не действует. Ничего не отправляю.')
+            row = roster_store.current(conn, grant['installation_id'], now, app.boot_id, grant=grant['id'])
+            if row is None:
+                return alice_reply('Согласие на все текущие выпечки не действует. Подключите Алису на телефоне заново. Ничего не отправляю.')
+            speech, issued = roster_voice.turn(conn, row, command, original, session_id_of(body), now, app.settings.freshness_ms)
+        if issued is None:
+            return alice_reply(speech, end=speech.startswith('Выхожу.'))
+        # Poll and ack HTTP handlers run independently; never wait holding SQL.
+        event = app.waiters.ack_event(issued['id'])
+        try:
+            with transaction(app.settings.db_path) as conn:
+                receipt = conn.execute('SELECT ack_json FROM roster_v2_commands WHERE id=?', (issued['id'],)).fetchone()
+            if receipt is not None and receipt['ack_json'] is None:
+                event.wait(min(app.settings.ack_wait_s, app.settings.request_budget_s))
+            with transaction(app.settings.db_path) as conn:
+                receipt = conn.execute('SELECT ack_json FROM roster_v2_commands WHERE id=?', (issued['id'],)).fetchone()
+            if receipt is None or receipt['ack_json'] is None:
+                return alice_reply('Результат неизвестен. Проверьте телефон. Повторно не отправляю.')
+            outcome = json.loads(receipt['ack_json'])['outcome']
+            return alice_reply(roster_voice.receipt_text(outcome))
+        finally:
+            app.waiters.release_ack(issued['id'])
 
     def _complete_event(self, app: App, grant) -> dict:
         fresh = self._fresh(app, grant)
@@ -1358,7 +1474,7 @@ class Handler(BaseHTTPRequestHandler):
                 clock_ok=sane,
             )
             if projected is None:
-                return alice_reply("Точное время неизвестно. Проверь телефон.")
+                return alice_reply("Точное время неизвестно. Проверьте телефон.")
             if snap.get("paused"):
                 return alice_reply(f"На паузе, осталось {speak_duration(projected)}. Пауза время не уменьшает.")
             return alice_reply(f"Осталось около {speak_duration(projected)}.")
@@ -1417,15 +1533,15 @@ class Handler(BaseHTTPRequestHandler):
             )
         target = step_phrase(snap)
         if operation == "PAUSE":
-            ask = f"Поставить на паузу {target}? Скажи да."
+            ask = f"Поставить на паузу {target}? Скажите да."
         elif operation == "RESUME":
-            ask = f"Продолжить {target}? Скажи да."
+            ask = f"Продолжить {target}? Скажите да."
         elif operation == "ADVANCE":
-            ask = f"Перейти дальше, сейчас {target}? Скажи да."
+            ask = f"Перейти дальше, сейчас {target}? Скажите да."
         elif operation == "BACK":
-            ask = f"Вернуться на шаг назад, сейчас {target}? Скажи да."
+            ask = f"Вернуться на шаг назад, сейчас {target}? Скажите да."
         else:
-            ask = f"Отменить выпечку {snap['recipe_name']}? Скажи подтверждаю отмену."
+            ask = f"Отменить выпечку {snap['recipe_name']}? Скажите подтверждаю отмену."
         return alice_reply(ask)
 
     def _confirm(self, app: App, grant, session_id: str, expect_cancel: bool) -> dict:
@@ -1464,7 +1580,7 @@ class Handler(BaseHTTPRequestHandler):
             if expect_cancel and intent["operation"] != "CANCEL":
                 return None, "Эта фраза подтверждает только отмену выпечки. Не отправлено.", None
             if not expect_cancel and intent["operation"] == "CANCEL":
-                return None, "Для отмены скажи подтверждаю отмену. Не отправлено.", None
+                return None, "Для отмены скажите подтверждаю отмену. Не отправлено.", None
             lease = lease_row(conn, grant["installation_id"])
             snap_row = snapshot_row(conn, grant["installation_id"])
             if lease is None or snap_row is None or lease["boot_id"] != app.boot_id:
@@ -1600,6 +1716,19 @@ class BoundedServer(ThreadingHTTPServer):
     allow_reuse_address = True
     request_queue_size = 32
     app: App
+
+    def service_actions(self) -> None:
+        # Runs even with no requests: privacy expiry is not lazy-only. Leave
+        # nine-minute TTL margin below ten minutes for the bounded SQL wait.
+        now = time.monotonic()
+        if now < getattr(self, '_next_roster_cleanup', 0):
+            return
+        self._next_roster_cleanup = now + 1
+        try:
+            with transaction(self.app.settings.db_path) as conn:
+                roster_store.cleanup(conn, self.app.now())
+        except (LockBusy, OSError):
+            LOG.warning('roster cleanup delayed')
 
     def process_request(self, request, client_address) -> None:  # noqa: N802
         if not self.app.slots.acquire(blocking=False):

@@ -7,6 +7,10 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
+      critical_only:
+        description: Run the unchanged critical PR gate and verified artifacts only; incompatible with acceptance flags
+        type: boolean
+        default: false
       capture_baseline:
         description: Re-render immutable60985a8 comparison (expensive, manual only)
         type: boolean
@@ -60,6 +64,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Reject conflicting manual selectors before any build or acceptance work
+        env:
+          WORKFLOW_INPUTS_JSON: ${{ toJSON(inputs) }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          inputs = json.loads(os.environ['WORKFLOW_INPUTS_JSON']) or {}
+          if inputs.get('critical_only', False):
+              conflicts = sorted(name for name, enabled in inputs.items()
+                                 if name != 'critical_only' and enabled)
+              if conflicts:
+                  raise SystemExit('critical_only cannot be mixed with: ' + ', '.join(conflicts))
+          PY
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Validate workflow state and control plane
         run: |
@@ -68,6 +86,7 @@ jobs:
 
   android-quality:
     name: Android quality
+    needs: workflow-contract
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -122,7 +141,7 @@ jobs:
           python3 scripts/verify_qa_release_like.py .ci-delivery/outputs/apk/qa/app-qa.apk --mapping .ci-delivery/outputs/mapping/qa/mapping.txt > .ci-delivery/reports/qa-binary-provenance.json
           ! grep -Fq 'qa-persistence-api.pro' .ci-delivery/outputs/mapping/qa/configuration.txt
       - name: Extended visual verification (manual, nightly and RC)
-        if: (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && !inputs.fixes_7013_acceptance && !inputs.fixes_7014_acceptance && !inputs.fixes_7014_instrumented && !inputs.fixes_7015_huawei && !inputs.bake_numbers_native && !inputs.exact_qa_timing
+        if: (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && !inputs.critical_only && !inputs.fixes_7013_acceptance && !inputs.fixes_7014_acceptance && !inputs.fixes_7014_instrumented && !inputs.fixes_7015_huawei && !inputs.bake_numbers_native && !inputs.exact_qa_timing
         run: ./gradlew testDebugUnitTest verifyRoborazziDebug -Pmadre.extendedVerification=true --no-daemon --stacktrace --no-configuration-cache
       - name: FIXES frozen-head native acceptance (manual only)
         if: github.event_name == 'workflow_dispatch' && (inputs.fixes_7013_acceptance || inputs.fixes_7014_acceptance)
@@ -200,6 +219,7 @@ jobs:
 
   lint-report:
     name: Lint (report only)
+    needs: workflow-contract
     continue-on-error: true
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -230,7 +250,7 @@ jobs:
     needs: android-quality
     # Keep the protected check name; PR/push is SKIPPED, not a passed smoke.
     # RC release gate still requires a real success at this exact SHA.
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    if: (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && !inputs.critical_only
     runs-on: ubuntu-latest
     timeout-minutes: ${{ inputs.exact_qa_timing && 90 || 45 }}
     env:
@@ -373,6 +393,7 @@ jobs:
 
   required-7015-performance:
     name: Required15 release-like performance
+    needs: workflow-contract
     if: github.event_name == 'workflow_dispatch' && inputs.fixes_7015_huawei
     runs-on: ubuntu-latest
     timeout-minutes: 90

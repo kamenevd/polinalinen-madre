@@ -46,6 +46,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.polinalinen.madre.data.db.entities.StorageLocation
@@ -315,6 +316,17 @@ fun FeedingFormScreen(
 
             PaperField(note, { note = it }, label = "Заметка о кормлении", placeholder = "пахнет яблоками…",
                 modifier = Modifier.padding(horizontal = 22.dp, vertical = 4.dp))
+            Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 22.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("пахнет яблоками", "крупные пузыри", "кислит", "жидковата").forEach { hint ->
+                    // Explicit insertion only: keep every byte of the typed/restored prefix.
+                    PaperChip("+ $hint", selected = false, enabled = !isSaving,
+                        onClick = {
+                            note += (if (note.isNotEmpty() && !note.last().isWhitespace()) "\n" else "") + hint
+                        },
+                        modifier = Modifier.semantics { role = androidx.compose.ui.semantics.Role.Button })
+                }
+            }
 
             // Пустого кормления теперь не набрать: у каждой массы свой нижний
             // предел, и ноль в форму просто не попадает.

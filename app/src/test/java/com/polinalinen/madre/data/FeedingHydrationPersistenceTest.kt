@@ -90,6 +90,27 @@ class FeedingHydrationPersistenceTest {
     )
 
     @Test
+    fun `note hint text remains only a note with exact masses photo and hydration after database reopen`() = runTest {
+        val repository = openBook()
+        val config = repository.getOrCreateDefaultConfig()
+        val note = "Своя строка\nпахнет яблоками\nкрупные пузыри\nкислит\nжидковата"
+        val saved = repository.saveFeeding(saveRequest(config.id, config.intervalHours, 1_000L,
+            retainedStarterGrams = 61, flourGrams = 113, waterGrams = 59)
+            .copy(storageLocation = StorageLocation.FRIDGE, note = note, photoPath = "feeding_photos/fixture.jpg"))
+        closeBook()
+        val persisted = openBook().lastFeeding(config.id)!!
+        assertThat(persisted).isEqualTo(saved.feeding)
+        assertThat(persisted.notes).isEqualTo(note)
+        assertThat(persisted.photoPath).isEqualTo("feeding_photos/fixture.jpg")
+        assertThat(FeedingPresets.last(persisted)).isEqualTo(FeedingPresets.Masses(61, 113, 59))
+        assertThat(persisted.storageLocation).isEqualTo(StorageLocation.FRIDGE)
+        assertThat(persisted.finalHydrationPercent).isEqualTo(HydrationMath.finalHydrationPercent(
+            retainedStarterGrams = 61, priorHydrationPercent = HydrationMath.INITIAL_LEVITO_HYDRATION_PERCENT,
+            addedFlourGrams = 113, addedWaterGrams = 59))
+        assertThat(persisted.generatedComment).doesNotContain("пахнет яблоками")
+    }
+
+    @Test
     fun `cold preset exact masses and enum survive real save and database reopen`() = runTest {
         val repository = openBook()
         val config = repository.getOrCreateDefaultConfig()

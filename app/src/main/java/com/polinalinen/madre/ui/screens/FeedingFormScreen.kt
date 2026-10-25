@@ -210,30 +210,17 @@ fun FeedingFormScreen(
             // Не поле, а результат: книга показывает, что получилось из
             // названных масс, и честно называет, от чего считала.
             Column(Modifier.padding(horizontal = 22.dp, vertical = 14.dp)) {
-                PageLabel("Гидратация после кормления", color = colors.ink2)
-                Text(
-                    "$finalHydration%",
-                    color = colors.ink,style = PaperType.body,
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 24.sp,
-                    modifier = Modifier
-                        .padding(top = 4.dp)
-                        .semantics {
-                            contentDescription = "Гидратация после кормления: $finalHydration процентов, посчитана книгой"
-                        },
-                )
-                Text(
-                    if (priorHydrationPercent == null) {
+                FeedingSummary(
+                    masses = FeedingSummaryMasses(starterGrams, flourGrams, waterGrams),
+                    finalHydration = finalHydration,
+                    priorContext = if (priorHydrationPercent == null) {
                         "Считаем от стартовой гидратации " +
                             "${HydrationMath.INITIAL_LEVITO_HYDRATION_PERCENT}% — " +
                             "посчитанных кормлений в дневнике ещё нет"
-                } else {
-                    "Считаем от прошлой гидратации $priorHydration%"
-                },
-                color = colors.ink2,style = PaperType.body, fontSize = 13.sp,
-                lineHeight = 19.sp,
-                modifier = Modifier.padding(top = 4.dp),
-            )
+                    } else {
+                        "Считаем от прошлой гидратации $priorHydration%"
+                    },
+                )
             Text(
                 "Удобный стартовый набор (редактируемый): 50/100/50 — это просто " +
                     "начальные значения без истории, а не формула.",

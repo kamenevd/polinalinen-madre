@@ -148,31 +148,43 @@ def cleanup(c, now):
     c.execute("DELETE FROM roster_v2_commands WHERE expires_at<?", (now - 86400000,))
 
 
-def current(c, installation, now, boot, connection=None, grant=None):
-    row = c.execute("SELECT v.* FROM roster_v2_connections v JOIN grants g ON g.id=v.source_grant_id "
+def current(c, installation, now, boot, connection=None, grant=None, client_id=None):
+    import installation_pair
+    row = c.execute("SELECT v.* FROM roster_v2_connections v "
                     "JOIN installations i ON i.id=v.installation_id LEFT JOIN yandex_epochs e ON e.installation_id=i.id "
                     "WHERE v.installation_id=? AND v.revoked_at IS NULL AND v.expires_at>? AND v.boot_id=? "
-                    "AND v.scope=? AND v.epoch=COALESCE(e.epoch,0) AND g.revoked_at IS NULL AND g.expires_at>? "
-                    "AND g.bake_key=i.selected_bake_key AND g.selection_generation=i.selected_generation",
-                    (installation, now, boot, SCOPE, now)).fetchone()
+                    "AND v.scope=? AND v.epoch=COALESCE(e.epoch,0)",
+                    (installation, now, boot, SCOPE)).fetchone()
     if row is None or (connection is not None and row['id'] != connection) or (grant is not None and row['source_grant_id'] != grant):
+        return None
+    paired = installation_pair.grant(c, row['source_grant_id'], now, client_id)
+    if paired is not None and paired['installation_id'] == installation:
+        return row
+    legacy = c.execute("SELECT 1 FROM grants g JOIN installations i ON i.id=g.installation_id "
+                       "WHERE g.id=? AND i.id=? AND g.revoked_at IS NULL AND g.expires_at>? "
+                       "AND g.bake_key=i.selected_bake_key AND g.selection_generation=i.selected_generation",
+                       (row['source_grant_id'], installation, now)).fetchone()
+    if legacy is None:
         return None
     return row
 
 
-def attach(c, snapshot, now, boot):
+def attach(c, snapshot, now, boot, client_id=None):
+    import installation_pair
     # Compare the original authentication epoch inside the mutation transaction.
     epoch = c.execute("SELECT epoch FROM yandex_epochs WHERE installation_id=?", (snapshot['id'],)).fetchone()
     require((epoch[0] if epoch else 0) == snapshot['authority_epoch'], 'binding_changed', 409)
     cleanup(c, now)
-    row = current(c, snapshot['id'], now, boot)
+    row = current(c, snapshot['id'], now, boot, client_id=client_id)
     if row:
         return row['id']  # idempotency never refreshes consent lifetime
     c.execute("UPDATE roster_v2_connections SET revoked_at=? WHERE installation_id=? AND revoked_at IS NULL", (now, snapshot['id']))
-    source = c.execute("SELECT g.* FROM grants g JOIN installations i ON i.id=g.installation_id "
-                       "WHERE i.id=? AND g.bake_key=i.selected_bake_key AND g.selection_generation=i.selected_generation "
-                       "AND g.revoked_at IS NULL AND g.expires_at>? ORDER BY g.created_at DESC,g.id LIMIT 1",
-                       (snapshot['id'], now)).fetchone()
+    source = installation_pair.source(c, snapshot['id'], now, client_id)
+    if source is None:
+        source = c.execute("SELECT g.* FROM grants g JOIN installations i ON i.id=g.installation_id "
+                           "WHERE i.id=? AND g.bake_key=i.selected_bake_key AND g.selection_generation=i.selected_generation "
+                           "AND g.revoked_at IS NULL AND g.expires_at>? ORDER BY g.created_at DESC,g.id LIMIT 1",
+                           (snapshot['id'], now)).fetchone()
     require(source is not None, 'pair_required', 409)
     connection = str(uuid.uuid4())
     c.execute("INSERT INTO roster_v2_connections(id,installation_id,source_grant_id,epoch,scope,created_at,expires_at,boot_id) VALUES(?,?,?,?,?,?,?,?)",
@@ -195,12 +207,12 @@ def list_bakes(row, now):
     return json.loads(row['bakes_json'])
 
 
-def poll(c, installation, body, now, boot, freshness):
+def poll(c, installation, body, now, boot, freshness, client_id=None):
     require(set(body) == {'protocol_version', 'connection_id', 'roster_revision', 'bakes'})
     require(canonical_uuid(body['connection_id']) and integer(body['roster_revision']))
     bakes = validate_bakes(body['bakes'])
     cleanup(c, now)
-    row = current(c, installation, now, boot, connection=body['connection_id'])
+    row = current(c, installation, now, boot, connection=body['connection_id'], client_id=client_id)
     require(row is not None, 'connection_revoked', 409)
     rev, dg = body['roster_revision'], digest(bakes)
     require(rev >= row['roster_revision'], 'stale_roster', 409)
@@ -227,7 +239,7 @@ def poll(c, installation, body, now, boot, freshness):
     return {'protocol_version': 2, 'connection_id': row['id'], 'roster_revision': rev, 'server_time': now, 'commands': commands}
 
 
-def ack(c, installation, body, now, boot):
+def ack(c, installation, body, now, boot, client_id=None):
     require(set(body) == {'connection_id', 'command_id', 'lease_id', 'outcome', 'resulting_revision'})
     require(all(canonical_uuid(body[k]) for k in ('connection_id', 'command_id', 'lease_id')))
     require(type(body['outcome']) is str and body['outcome'] in ('applied', 'stale', 'expired', 'rejected', 'phone_required'))
@@ -236,12 +248,12 @@ def ack(c, installation, body, now, boot):
     row = c.execute("SELECT * FROM roster_v2_commands WHERE id=? AND installation_id=? AND connection_id=? AND lease_id=?",
                     (body['command_id'], installation, body['connection_id'], body['lease_id'])).fetchone()
     require(row is not None, 'unknown_command', 409)
+    require(current(c, installation, now, boot, connection=body['connection_id'], client_id=client_id) is not None, 'connection_revoked', 409)
     wire = encoded(body)
     if row['ack_json'] is not None:
         require(row['ack_json'] == wire, 'conflict', 409)
         return
     require(row['state'] in ('dispatched', 'expired') and row['dispatched_at'] is not None, 'connection_revoked', 409)
-    require(current(c, installation, now, boot, connection=body['connection_id']) is not None, 'connection_revoked', 409)
     payload = json.loads(row['payload_json'])
     require(body['outcome'] != 'applied' or body['resulting_revision'] == payload['expected_revision'] + 1)
     # A late receipt is evidence only; never re-enables dispatch or mutates a bake.

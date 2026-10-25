@@ -102,6 +102,7 @@ from voice import (
 LOG = logging.getLogger("madre-alice")
 import roster_store
 import roster_voice
+import installation_pair
 
 PHONE_PREFIX = VOICE_PREFIX + "/phone"
 OAUTH_PREFIX = VOICE_PREFIX + "/oauth"
@@ -585,7 +586,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(401, {"error": "unauthorized"})
             return
         try:
-            roster_store.require(route in ('attach', 'disconnect', 'poll', 'ack'), 'not_found', 404)
+            roster_store.require(route in ('pair-consent', 'attach', 'disconnect', 'poll', 'ack'), 'not_found', 404)
             roster_store.require(len(raw) <= 65536, 'request_too_large', 413)
             roster_store.require(media_type(self.headers.get('Content-Type')) == 'application/json')
             def unique(pairs):
@@ -600,15 +601,30 @@ class Handler(BaseHTTPRequestHandler):
             except (UnicodeDecodeError, json.JSONDecodeError, ValueError):
                 raise roster_store.ProtocolError()
             roster_store.require(type(body) is dict)
-            if route in ('attach', 'poll'):
+            if route in ('pair-consent', 'attach', 'poll'):
                 roster_store.require(type(body.get('protocol_version')) is int and body['protocol_version'] == 2,
                                      'unsupported_protocol', 426)
             with transaction(app.settings.db_path) as conn:
-                if route == 'attach':
+                from yandex_store import epoch
+                roster_store.require(epoch(conn, inst['id']) == inst['authority_epoch'], 'binding_changed', 409)
+                if route == 'pair-consent':
+                    roster_store.require(set(body) == {'protocol_version', 'request_id', 'consent_scope', 'consent'})
+                    roster_store.require(roster_store.canonical_uuid(body['request_id']))
+                    roster_store.require(body['consent_scope'] == roster_store.SCOPE and body['consent'] is True,
+                                         'consent_required', 403)
+                    roster_store.require(app.settings.oauth_configured() and app.settings.yandex_match_configured(),
+                                         'pair_unavailable', 503)
+                    roster_store.require(rate_allow(conn, 'installation-pair:' + inst['id'], app.now(),
+                                                   app.settings.pair_window_ms, 20), 'rate_limited', 429)
+                    expires = installation_pair.request(conn, inst, body['request_id'], app.settings.oauth_client_id,
+                                                        app.now(), app.settings.challenge_ttl_ms)
+                    result = {'request_id': body['request_id'], 'consent_scope': roster_store.SCOPE,
+                              'status': 'pending', 'expires_at': expires}
+                elif route == 'attach':
                     roster_store.require(set(body) == {'protocol_version', 'consent_scope', 'consent'})
                     roster_store.require(body['consent_scope'] == roster_store.SCOPE and body['consent'] is True,
                                          'consent_required', 403)
-                    connection = roster_store.attach(conn, inst, app.now(), app.boot_id)
+                    connection = roster_store.attach(conn, inst, app.now(), app.boot_id, app.settings.oauth_client_id)
                     result = {'connection_id': connection, 'consent_scope': roster_store.SCOPE, 'attached': True}
                 elif route == 'disconnect':
                     roster_store.require(set(body) == {'connection_id'} and roster_store.canonical_uuid(body['connection_id']))
@@ -619,9 +635,9 @@ class Handler(BaseHTTPRequestHandler):
                         disconnect(conn, inst['id'], app.now())
                     result = None
                 elif route == 'poll':
-                    result = roster_store.poll(conn, inst['id'], body, app.now(), app.boot_id, app.settings.freshness_ms)
+                    result = roster_store.poll(conn, inst['id'], body, app.now(), app.boot_id, app.settings.freshness_ms, app.settings.oauth_client_id)
                 else:
-                    roster_store.ack(conn, inst['id'], body, app.now(), app.boot_id)
+                    roster_store.ack(conn, inst['id'], body, app.now(), app.boot_id, app.settings.oauth_client_id)
                     result = {'acknowledged': True}
             if route == 'ack':
                 app.waiters.wake_ack(body['command_id'])
@@ -992,6 +1008,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(400, {"error": "denied"})
             return
         _expires, _browser, verifier, checked = pending
+        pair_candidates = checked.get('_installation_pairs', {}) if app.settings.roster_v2 else {}
         checked = validate_oauth_params({k: [v] for k, v in checked.items()}, app.settings)
         if checked is None:
             self._send_json(400, {"error": "denied"})
@@ -1015,6 +1032,16 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(502, {"error": "yandex_unavailable"}, [clear_cookie])
             return
         auth_code = new_auth_code()
+        if uid in pair_candidates:
+            with transaction(app.settings.db_path) as conn:
+                issued = installation_pair.approve_and_issue(conn, uid, pair_candidates, checked, browser, state,
+                    auth_code, app.now(), app.settings.auth_code_ttl_ms)
+            if not issued:
+                self._yandex_fallback(checked, clear_cookie)
+                return
+            location = build_redirect(checked['redirect_uri'], auth_code, checked['state'], checked['client_id'], checked['scope'])
+            self._send(303, b'', extra=[('Location', location), clear_cookie])
+            return
         display_code, browser_token = new_display_code(), new_browser_token()
         with transaction(app.settings.db_path) as conn:
             now = app.now()
@@ -1056,7 +1083,11 @@ class Handler(BaseHTTPRequestHandler):
             with transaction(app.settings.db_path) as conn:
                 allowed = rate_allow(conn, "yandex-oauth:" + self._peer(), app.now(),
                                      app.settings.oauth_window_ms, app.settings.oauth_limit)
-            pending = app.yandex_states.create(checked, app.now()) if allowed else None
+            context: dict[str, Any] = dict(checked)
+            if app.settings.roster_v2:
+                with transaction(app.settings.db_path) as conn:
+                    context['_installation_pairs'] = installation_pair.pending_snapshot(conn, app.now())
+            pending = app.yandex_states.create(context, app.now()) if allowed else None
             if pending is None:
                 self._send_json(429, {"error": "denied"})
                 return
@@ -1211,17 +1242,25 @@ class Handler(BaseHTTPRequestHandler):
             access = new_access_token()
             refresh = new_refresh_token()
             with transaction(app.settings.db_path) as conn:
-                pair = redeem_auth_code(
-                    conn,
-                    code_hash=sha256_text(code),
-                    client_id=client_id,
-                    redirect_uri=redirect_uri,
-                    now_ms=app.now(),
-                    access_token=access,
-                    refresh_token=refresh,
-                    access_ttl_s=app.settings.access_ttl_s,
-                    grant_ttl_ms=app.settings.grant_ttl_ms,
-                )
+                scoped = app.settings.roster_v2 and installation_pair.known_code(conn, sha256_text(code))
+                if scoped:
+                    if set(params) != {'grant_type', 'code', 'redirect_uri', 'client_id', 'client_secret'}:
+                        self._send_json(400, {'error': 'invalid_request'})
+                        return
+                    pair = installation_pair.redeem(conn, sha256_text(code), client_id, redirect_uri,
+                        access, refresh, app.now(), app.settings.access_ttl_s, app.settings.grant_ttl_ms)
+                else:
+                    pair = redeem_auth_code(
+                        conn,
+                        code_hash=sha256_text(code),
+                        client_id=client_id,
+                        redirect_uri=redirect_uri,
+                        now_ms=app.now(),
+                        access_token=access,
+                        refresh_token=refresh,
+                        access_ttl_s=app.settings.access_ttl_s,
+                        grant_ttl_ms=app.settings.grant_ttl_ms,
+                    )
             if pair is None:
                 self._send_json(400, {"error": "invalid_grant"})
                 return
@@ -1235,15 +1274,26 @@ class Handler(BaseHTTPRequestHandler):
             access = new_access_token()
             rotated = new_refresh_token()
             with transaction(app.settings.db_path) as conn:
-                pair = rotate_refresh(
-                    conn,
-                    refresh_hash=sha256_text(refresh),
-                    now_ms=app.now(),
-                    access_token=access,
-                    refresh_token=rotated,
-                    access_ttl_s=app.settings.access_ttl_s,
-                    grant_ttl_ms=app.settings.grant_ttl_ms,
-                )
+                scoped = app.settings.roster_v2 and installation_pair.known_refresh(conn, sha256_text(refresh))
+                if scoped:
+                    allowed = {'refresh_token', 'client_id', 'client_secret'}
+                    if 'grant_type' in params:
+                        allowed.add('grant_type')
+                    if set(params) != allowed or (not refresh_only and 'grant_type' not in params):
+                        self._send_json(400, {'error': 'invalid_request'})
+                        return
+                    pair = installation_pair.refresh(conn, sha256_text(refresh), client_id, access, rotated,
+                                                     app.now(), app.settings.access_ttl_s)
+                else:
+                    pair = rotate_refresh(
+                        conn,
+                        refresh_hash=sha256_text(refresh),
+                        now_ms=app.now(),
+                        access_token=access,
+                        refresh_token=rotated,
+                        access_ttl_s=app.settings.access_ttl_s,
+                        grant_ttl_ms=app.settings.grant_ttl_ms,
+                    )
             if time.monotonic() - started > 5:
                 self._send_json(500, {"error": "invalid_grant"})
                 return
@@ -1310,6 +1360,8 @@ class Handler(BaseHTTPRequestHandler):
             return "deny", None
         with transaction(app.settings.db_path) as conn:
             grant = grant_by_access(conn, sha256_text(token), app.now())
+            if grant is None and app.settings.roster_v2:
+                grant = installation_pair.by_access(conn, sha256_text(token), app.now(), app.settings.oauth_client_id)
         if grant is None:
             return "deny", None
         return "oauth", grant
@@ -1332,7 +1384,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def _linked(self, app: App, body: dict, grant) -> dict:
         if app.settings.roster_v2:
-            # Only the exact paired grant promoted by explicit v2 consent gets
+            if 'scope' in grant.keys() and grant['scope'] == roster_store.SCOPE:
+                return self._linked_v2(app, body, grant)
+            # Only the exact paired grant selected by explicit v2 consent gets
             # roster access. Revoked v2 authority must never fall back to v1.
             with transaction(app.settings.db_path) as conn:
                 known = conn.execute('SELECT 1 FROM roster_v2_connections WHERE source_grant_id=? LIMIT 1', (grant['id'],)).fetchone()
@@ -1368,9 +1422,10 @@ class Handler(BaseHTTPRequestHandler):
         return self._read(app, grant, utter.name)
 
     def _linked_v2(self, app: App, body: dict, grant) -> dict:
-        if 'account_linking_complete_event' in body:
-            return alice_reply('Связка аккаунта подтверждена. Голос закваски не меняет шаги без отдельного подтверждения.')
         request = body.get('request')
+        complete = 'account_linking_complete_event' in body
+        if complete:
+            request = {}
         if not isinstance(request, dict):
             return alice_reply('Не разобрала. Ничего не отправляю.')
         command, original = request.get('command', ''), request.get('original_utterance', '')
@@ -1389,11 +1444,15 @@ class Handler(BaseHTTPRequestHandler):
                 user = session.get('user', {}) if isinstance(session, dict) else {}
                 token = user.get('access_token') if isinstance(user, dict) else None
             live = grant_by_access(conn, sha256_text(token), now) if isinstance(token, str) else None
+            if live is None and isinstance(token, str):
+                live = installation_pair.by_access(conn, sha256_text(token), now, app.settings.oauth_client_id)
             if live is None or live['id'] != grant['id']:
                 return alice_reply('Связка больше не действует. Ничего не отправляю.')
-            row = roster_store.current(conn, grant['installation_id'], now, app.boot_id, grant=grant['id'])
+            row = roster_store.current(conn, grant['installation_id'], now, app.boot_id, grant=grant['id'], client_id=app.settings.oauth_client_id)
             if row is None:
                 return alice_reply('Согласие на все текущие выпечки не действует. Подключите Алису на телефоне заново. Ничего не отправляю.')
+            if complete:
+                return alice_reply('Связка аккаунта подтверждена. Голос закваски не меняет шаги без отдельного подтверждения.')
             speech, issued = roster_voice.turn(conn, row, command, original, session_id_of(body), now, app.settings.freshness_ms)
         if issued is None:
             return alice_reply(speech, end=speech.startswith('Выхожу.'))

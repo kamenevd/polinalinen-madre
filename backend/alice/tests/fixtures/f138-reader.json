@@ -1,0 +1,24 @@
+{
+  "source_sha": "f1380c21665ebd51fff1da856cdd3164ad36ba9c",
+  "archive_sha256": "3293e0c5a534b18c05b9cf0a0df75cf19c84e7cc23ec8eb1b084c0ae92e3da5c",
+  "files": {
+    "app.py": "eb6a026385c6fd47adda21b07d7c801f50b83d701905029f5e9df1218d7785fb",
+    "config.py": "2cded48c25315cd54eacfe73b3cc830602496f3d82ace9db24b59de8dd52d270",
+    "db.py": "f40b86e0e51ede84829d0b6a9c9ac410c1ee9f5c3bf8983a1ee12e46ae9eee9b",
+    "madre_alice/__init__.py": "8808e623555a25a0db1222d5d65c01af263034f537f559b684d55b76c9d03f4e",
+    "madre_alice/dialog.py": "8e5352786e4223323fb28af59e319368eef2c6c196a9ea27553e6c6a1089a436",
+    "madre_alice/nlu.py": "1e59eced446692d5efbc0d66d8f1c97e2c3c3d72d82870417e120b526f60f9cc",
+    "madre_alice/recipes.py": "bc938c7f538856274d8b9a3c12db9b13db4f7e9eb1cab615f978d13224b993da",
+    "madre_alice/scale.py": "f0f3f8f498a014c4efc5f00629e7b3ba2c6ef4568922bbdcd72e8f356aeff97b",
+    "recipes.json": "81ac1802297a31f90fb42613e8a897d770d2da07b5895c4e5e0e62980ece3a9f",
+    "roster_store.py": "b1203f43c436c2145b549625e697298bcd78f8f32b4c569c863d4234ca5aba8d",
+    "roster_voice.py": "8ee64014e5e0e834194545ce827419a621acfe3294331eb419ab59e3a1813e08",
+    "security.py": "c032fddd97b61871e753fd2244105d7cf251ff8bc651d45a6b0799acfa4844c0",
+    "server.py": "0496e194cd6bbaea841d01675f35597d32a4983c8c5d21c68acdd1d94b7bcc96",
+    "snapshot.py": "b0e1ced69508540e05ebb8a5b6289f943de0d2e1ed97e90dedbc33b8eb419088",
+    "store.py": "342b1c6ce79776d362dc86abb6d2969bbd2e13f52dd4b6a05b64524d3da5953f",
+    "voice.py": "97d4d5feb3cf0780613d07fa107a2137a32a2d2d69317fb4da388fcd1773e185",
+    "yandex_identity.py": "e6239d50efa3a42821baf3d3f28a0b7753da919bf286895c92aa69a8af95faa9",
+    "yandex_store.py": "3d7e888a36bc903677ceaa56899729d28db99cde3d975ecc7faaace82da34649"
+  }
+}

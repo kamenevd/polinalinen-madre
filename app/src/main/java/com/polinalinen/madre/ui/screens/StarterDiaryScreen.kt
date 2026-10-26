@@ -81,6 +81,7 @@ fun StarterDiaryScreen(
     photoCount: Int = 0,
     selectedTabIndex: Int? = null,
     onTabSelected: (Int) -> Unit = {},
+    onRepeat: (FeedingEntity) -> Unit = {},
 ) {
     val colors = LocalPaper.current
     var localTab by rememberSaveable { mutableStateOf(0) }
@@ -208,7 +209,7 @@ fun StarterDiaryScreen(
                             .testTag("diary-week-${week.start}").semantics { heading() })
                 }
                 items(week.entries, key = { "${it.sourdoughConfigId}:${it.id}" }) { feeding ->
-                    JournalRow(feeding, currentYear)
+                    JournalRow(feeding, currentYear, onRepeat)
                 }
             }
             }

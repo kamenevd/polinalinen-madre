@@ -86,6 +86,8 @@ import kotlin.math.roundToInt
  * что посчитанных кормлений ещё нет, и тогда книга вслух называет источник:
  * стартовая гидратация 50% из буклета.
  */
+data class FeedingRepeatRequest(val id: String, val masses: FeedingPresets.Masses)
+
 @Composable
 fun FeedingFormScreen(
     onSave: (Int, Int, Int, StorageLocation, String?, String?) -> Unit,
@@ -93,6 +95,8 @@ fun FeedingFormScreen(
     saveState: FeedingSaveState = FeedingSaveState.Idle,
     priorHydrationPercent: Int? = null,
     lastFeeding: FeedingEntity? = null,
+    repeatRequest: FeedingRepeatRequest? = null,
+    onRepeatConsumed: (String) -> Unit = {},
 ) {
     val colors = LocalPaper.current
     val isSaving = saveState is FeedingSaveState.Saving
@@ -122,8 +126,20 @@ fun FeedingFormScreen(
         acceptHistory = false
     }
     fun editMasses() { acceptHistory = false; selectedPreset = -1 }
+    var consumedRepeat by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(repeatRequest, isSaving) {
+        repeatRequest?.let { request ->
+            if (!isSaving) {
+                if (consumedRepeat != request.id && request.masses.valid) {
+                    applyMasses(request.masses, -1)
+                    consumedRepeat = request.id
+                }
+                onRepeatConsumed(request.id)
+            }
+        }
+    }
     LaunchedEffect(lastMasses) {
-        if (acceptHistory && !isSaving) lastMasses?.let { applyMasses(it, 0) }
+        if (acceptHistory && !isSaving && repeatRequest == null) lastMasses?.let { applyMasses(it, 0) }
     }
 
     val priorHydration = priorHydrationPercent ?: HydrationMath.INITIAL_LEVITO_HYDRATION_PERCENT

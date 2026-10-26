@@ -46,6 +46,8 @@ import com.polinalinen.madre.data.db.entities.FeedingEntity
 import com.polinalinen.madre.ui.screens.BakingFinale
 import com.polinalinen.madre.ui.screens.BookStatsScreen
 import com.polinalinen.madre.ui.screens.FeedingFormScreen
+import com.polinalinen.madre.ui.screens.FeedingRepeatRequest
+import com.polinalinen.madre.sourdough.FeedingPresets
 import com.polinalinen.madre.ui.screens.GalleryPhoto
 import com.polinalinen.madre.ui.screens.PhotoGalleryScreen
 import com.polinalinen.madre.ui.screens.RecipeDetailScreen
@@ -543,6 +545,28 @@ fun MadreNavHost(
                     history = feedingHistory,
                     onBack = { navController.popBackStack() },
                     onFeed = enterFeedingForm,
+                    onRepeat = { selected ->
+                        // Validate the selected current-owner row, never fall back to latest.
+                        val masses = feedingHistory.firstOrNull { it.id == selected.id && it == selected }
+                            ?.let(FeedingPresets::last)
+                        val parent = navController.currentBackStackEntry
+                        val actualOwner = sourdoughViewModel.config.value?.let { "${it.userId}:${it.id}" }
+                        if (masses != null && feedingBookOwner != null && actualOwner == feedingBookOwner &&
+                            parent?.destination?.route == MadreDestinations.STARTER_DETAIL) {
+                            enterFeedingForm()
+                            navController.currentBackStackEntry?.takeIf {
+                                it.destination.route == MadreDestinations.FEEDING_FORM
+                            }?.let { target ->
+                                target.savedStateHandle["diary-repeat"] = android.os.Bundle().apply {
+                                    putString("id", java.util.UUID.randomUUID().toString())
+                                    putString("owner", feedingBookOwner)
+                                    putString("diary", parent.id)
+                                    putString("entry", target.id)
+                                    putIntArray("masses", intArrayOf(masses.starter, masses.flour, masses.water))
+                                }
+                            }
+                        }
+                    },
                     onOpenGallery = { navController.navigate(MadreDestinations.PHOTO_GALLERY) },
                     photoCount = galleryPhotos.size,
                     selectedTabIndex = diarySelectedTab,
@@ -573,6 +597,24 @@ fun MadreNavHost(
                     Unit
                 }
                 BackHandler(enabled = saveState !is FeedingSaveState.Saving, onBack = closeForm)
+                val repeatPayload by entry.savedStateHandle.getStateFlow<android.os.Bundle?>("diary-repeat", null).collectAsState()
+                val repeatRequest = repeatPayload?.takeIf {
+                    it.getString("owner") == feedingBookOwner && it.getString("diary") == formDiaryId &&
+                        it.getString("entry") == entry.id
+                }?.let { payload ->
+                    val values = payload.getIntArray("masses")
+                    val id = payload.getString("id")
+                    if (values?.size == 3 && id != null) FeedingRepeatRequest(id,
+                        FeedingPresets.Masses(values[0], values[1], values[2])).takeIf { it.masses.valid } else null
+                }
+                fun consumeRepeat(id: String?) {
+                    if (repeatPayload?.getString("id") == id) entry.savedStateHandle["diary-repeat"] = null
+                }
+                LaunchedEffect(repeatPayload, feedingBookOwner) {
+                    // Unknown cold bootstrap waits; known different owners cannot inherit intents.
+                    if (feedingBookOwner != null && repeatPayload != null && repeatRequest == null)
+                        consumeRepeat(repeatPayload?.getString("id"))
+                }
                 // An active editor also resets immediately if its real owner changes.
                 key(feedingBookOwner) {
                     // Survives saved-entry restore, but never an owner round trip.
@@ -592,6 +634,8 @@ fun MadreNavHost(
                         // null means no computed history: the form names the initial hydration.
                         priorHydrationPercent = latestFinalHydration,
                         lastFeeding = latestHistoryFeeding,
+                        repeatRequest = repeatRequest,
+                        onRepeatConsumed = ::consumeRepeat,
                     )
                     LaunchedEffect(saveState, formSubmissionKey) {
                         when (saveState) {

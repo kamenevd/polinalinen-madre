@@ -413,6 +413,254 @@ class FeedingDraftNavigationUiTest {
         assertNull(nav.previousBackStackEntry)
     }
 
+    private fun repeatHistory(config: SourdoughConfigEntity, path: String? = null): Pair<FeedingEntity, FeedingEntity> = runBlocking {
+        val older = FeedingEntity(sourdoughConfigId = config.id, timestampMillis = 1_750_000_000_000,
+            retainedStarterGrams = 47, flourGrams = 113, waterGrams = 59, storageLocation = StorageLocation.FRIDGE,
+            notes = "Нельзя копировать историческую заметку", photoPath = path, finalHydrationPercent = 71)
+        val latest = older.copy(timestampMillis = older.timestampMillis + 86_400_000,
+            retainedStarterGrams = 61, flourGrams = 173, waterGrams = 83, notes = "Другая последняя запись", photoPath = null,
+            finalHydrationPercent = 65)
+        older.copy(id = app.database.feedingDao().insert(older)) to latest.copy(id = app.database.feedingDao().insert(latest))
+    }
+    private fun repeatRow(row: FeedingEntity, swipe: Boolean = false) {
+        rule.onNodeWithTag("diary-list").performScrollToNode(hasTestTag("diary-entry-${row.id}"))
+        val node = rule.onNodeWithTag("diary-entry-${row.id}")
+        if (swipe) node.performTouchInput { swipeRight() }
+        else {
+            val disclosure = node.onChildAt(0)
+            if (disclosure.fetchSemanticsNode().config[SemanticsProperties.StateDescription] == "Подробности свёрнуты")
+                disclosure.performClick()
+            rule.onNodeWithTag("diary-repeat-${row.id}").onChildAt(0).performScrollTo().assertIsEnabled().performClick()
+        }
+        rule.waitUntil(10_000) { rule.onRoot().fetchSemanticsNode(); nav.currentDestination?.route == MadreDestinations.FEEDING_FORM }
+        rule.waitForIdle()
+        assertEquals(MadreDestinations.STARTER_DETAIL, nav.previousBackStackEntry?.destination?.route)
+        assertNull(nav.currentBackStackEntry?.savedStateHandle?.get<android.os.Bundle>("diary-repeat"))
+    }
+    private fun repeatMasses(s: Int = 47, f: Int = 113, w: Int = 59) {
+        listOf("Оставленная закваска" to s, "Добавленная мука" to f, "Добавленная вода" to w).forEach { (label, value) ->
+            rule.onNodeWithContentDescription("$label: $value г").assertExists()
+            rule.onNodeWithContentDescription("$label, точный вес в граммах").assertDoesNotExist()
+        }
+    }
+    private fun pendingMass(label: String, current: Int, pending: String) {
+        rule.onNodeWithContentDescription("$label: $current г").performScrollTo().performClick()
+        rule.onNodeWithContentDescription("$label, точный вес в граммах").apply {
+            performTextClearance(); performTextInput(pending)
+        }
+    }
+    private fun jpeg(name: String): File = File.createTempFile(name, ".jpg", app.filesDir).also { file ->
+        Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888).also { bitmap ->
+            file.outputStream().use { assertTrue(bitmap.compress(Bitmap.CompressFormat.JPEG, 90, it)) }; bitmap.recycle()
+        }
+    }
+    @Test fun repeatOlderRightSwipeSavesANewRealRoomRowWithoutCopyingMetadataOrTouchingOriginalBytes() {
+        val config = runBlocking { app.sourdoughRepository.getOrCreateDefaultConfig() }
+        val photo = jpeg("d3-history-"); val bytes = photo.readBytes()
+        val (older, latest) = repeatHistory(config, photo.absolutePath)
+        val controller = bindController()
+        show(); val diary = nav.currentBackStackEntry
+        rule.waitUntil(10_000) { rule.onRoot().fetchSemanticsNode(); controller.history.value.size == 2 }
+        repeatRow(older, swipe = true); repeatMasses()
+        assertSame(diary, nav.previousBackStackEntry)
+        assertNote(""); rule.onNodeWithText("вклеить фотокарточку").assertExists()
+        rule.onNodeWithContentDescription("Где стоит, Кухня").assertIsSelected()
+        // Repeat takes masses from the older row, but hydration remains the latest current config.
+        rule.onNodeWithText("Считаем от прошлой гидратации 65%").assertExists()
+        save()
+        rule.waitUntil(10_000) { rule.onRoot().fetchSemanticsNode(); nav.currentDestination?.route == MadreDestinations.STARTER_DETAIL }
+        val rows = runBlocking { app.database.feedingDao().observeHistory(config.id).first() }
+        assertEquals(3, rows.size)
+        assertEquals(older, rows.single { it.id == older.id }); assertEquals(latest, rows.single { it.id == latest.id })
+        val added = rows.single { it.id != older.id && it.id != latest.id }
+        assertEquals(listOf(47, 113, 59), listOf(added.retainedStarterGrams, added.flourGrams, added.waterGrams))
+        assertNull(added.notes); assertNull(added.photoPath); assertEquals(StorageLocation.KITCHEN, added.storageLocation)
+        assertArrayEquals(bytes, photo.readBytes()); assertSame(diary, nav.currentBackStackEntry)
+    }
+    @Test fun explicitRepeatReplacesAllRestoredPendingEditorsOnceButKeepsOwnDraftPhotoNoteAndLocation() {
+        val config = runBlocking { app.sourdoughRepository.getOrCreateDefaultConfig() }
+        val oldPhoto = jpeg("d3-old-"); val oldBytes = oldPhoto.readBytes()
+        val (older, latest) = repeatHistory(config, oldPhoto.absolutePath)
+        val controller = bindController()
+        val restoration = show(); openForm(); val formId = nav.currentBackStackEntry?.id
+        pendingMass("Оставленная закваска", 61, "50")
+        rule.onNodeWithText("записать вес").performScrollTo().performClick()
+        chooseCold()
+        val ownPhoto = jpeg("d3-own-"); picked = Uri.fromFile(ownPhoto)
+        val photoDir = PhotoStore.resolve(app, "feeding_photos")
+        val beforePhotos = photoDir.listFiles().orEmpty().map { it.name }.toSet()
+        rule.onNodeWithText("вклеить фотокарточку").performScrollTo().performClick()
+        rule.onNodeWithText("Галерея").performSemanticsAction(SemanticsActions.OnClick) { assertTrue(it()) }
+        rule.waitUntil(10_000) { rule.onAllNodesWithContentDescription("Фотокарточка, как она ляжет в книгу").fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithText("Без оформления").performScrollTo().performSemanticsAction(SemanticsActions.OnClick) { assertTrue(it()) }
+        rule.waitUntil(10_000) { rule.onAllNodesWithText("заменить фотокарточку").fetchSemanticsNodes().isNotEmpty() }
+        val ownText = "  Мой черновик, не старая заметка  "
+        val acceptedPhoto = photoDir.listFiles().orEmpty().single { it.isFile && it.name !in beforePhotos }
+        val acceptedBytes = acceptedPhoto.readBytes()
+        note().performScrollTo().performTextInput(ownText)
+        pendingMass("Оставленная закваска", 50, "67")
+        pendingMass("Добавленная мука", 250, "137")
+        pendingMass("Добавленная вода", 250, "97")
+        back(); restoration.emulateSavedInstanceStateRestore(); rule.waitForIdle()
+        repeatRow(older); assertEquals(formId, nav.currentBackStackEntry?.id); repeatMasses()
+        assertNote(ownText); rule.onNodeWithText("заменить фотокарточку").assertExists()
+        rule.onNodeWithContentDescription("Где стоит, Холодильник").assertIsSelected()
+        pendingMass("Добавленная мука", 113, "149")
+        back(); restoration.emulateSavedInstanceStateRestore(); openForm()
+        rule.onNodeWithContentDescription("Добавленная мука, точный вес в граммах").assertTextEquals("149")
+        assertNote(ownText)
+        // A new explicit SAME-row action closes even an unchanged-mass editor.
+        back(); repeatRow(older, swipe = true); repeatMasses(); assertNote(ownText)
+        back(); repeatRow(latest); repeatMasses(61, 173, 83)
+        back(); repeatRow(older); repeatMasses()
+        // A genuinely new late Room emission must not reapply either latest or repeat.
+        pendingMass("Добавленная мука", 113, "151")
+        runBlocking { app.database.feedingDao().insert(latest.copy(id = 0, timestampMillis = latest.timestampMillis + 1,
+            retainedStarterGrams = 73, flourGrams = 193, waterGrams = 89)) }
+        rule.waitUntil(10_000) { rule.onRoot().fetchSemanticsNode(); controller.history.value.size == 3 }
+        back(); restoration.emulateSavedInstanceStateRestore(); openForm()
+        rule.onNodeWithContentDescription("Добавленная мука, точный вес в граммах").assertTextEquals("151")
+        assertNote(ownText); rule.onNodeWithContentDescription("Где стоит, Холодильник").assertIsSelected()
+        rule.onNodeWithText("заменить фотокарточку").assertExists()
+        rule.onNodeWithText("записать вес").performScrollTo().performClick(); save()
+        rule.waitUntil(10_000) { rule.onRoot().fetchSemanticsNode(); nav.currentDestination?.route == MadreDestinations.STARTER_DETAIL }
+        val saved = runBlocking { app.sourdoughRepository.lastFeeding(config.id) }!!
+        assertEquals(listOf(47, 151, 59), listOf(saved.retainedStarterGrams, saved.flourGrams, saved.waterGrams))
+        assertEquals(ownText.trim(), saved.notes); assertEquals(StorageLocation.FRIDGE, saved.storageLocation)
+        assertNotEquals(older.photoPath, saved.photoPath)
+        assertEquals(acceptedPhoto, PhotoStore.resolve(app, requireNotNull(saved.photoPath)))
+        assertArrayEquals(acceptedBytes, PhotoStore.resolve(app, requireNotNull(saved.photoPath)).readBytes())
+        assertArrayEquals(oldBytes, oldPhoto.readBytes())
+        val rows = runBlocking { app.database.feedingDao().observeHistory(config.id).first() }
+        assertEquals(older, rows.single { it.id == older.id }); assertEquals(latest, rows.single { it.id == latest.id })
+    }
+    @Test fun repeatedDraftNeverRevivesAcrossHiddenActualUserConfigRoundTripsOrDiaryExit() {
+        val (first, other) = realOwners()
+        val second = first.copy(id = runBlocking { app.sourdoughRepository.saveConfig(first.copy(id = 0)) })
+        val (older, _) = repeatHistory(first)
+        val owners = MutableStateFlow<SourdoughConfigEntity?>(first)
+        val controller = bindController(owners)
+        val restoration = show(); repeatRow(older); repeatMasses()
+        pendingMass("Добавленная мука", 113, "157"); note().performScrollTo().performTextInput("Не воскресить")
+        back()
+        rule.onNodeWithText("Фото 0").performScrollTo().performClick(); rule.waitForIdle()
+        assertEquals(MadreDestinations.PHOTO_GALLERY, nav.currentDestination?.route)
+        listOf(second, first, other, first).forEach { changeOwner(owners, controller, it) }
+        back(); restoration.emulateSavedInstanceStateRestore(); openForm()
+        assertNote("")
+        rule.onNodeWithContentDescription("Добавленная мука, точный вес в граммах").assertDoesNotExist()
+        rule.waitUntil(10_000) { rule.onRoot().fetchSemanticsNode(); controller.history.value.size == 2 }
+        back(); repeatRow(older); repeatMasses()
+        note().performScrollTo().performTextInput("До выхода из Дневника")
+        back(); back(); assertEquals(MadreDestinations.HOME, nav.currentDestination?.route)
+        openDiary(); openForm(); assertNote("")
+        rule.onNodeWithContentDescription("Добавленная мука: 173 г").assertExists()
+        assertEquals(2, runBlocking { app.database.feedingDao().observeHistory(first.id).first() }.size)
+    }
+    @Test fun unconsumedSelectedRepeatSurvivesNativeSavedStateAndNullOwnerBootstrapThenAppliesOnlyOnce() {
+        val config = runBlocking { app.sourdoughRepository.getOrCreateDefaultConfig() }
+        val (older, latest) = repeatHistory(config)
+        val owners = MutableStateFlow<SourdoughConfigEntity?>(config)
+        val controller = bindController(owners)
+        // The test-only host gate delays first form composition, not its action:
+        // the real older-row OnClick below remains the only payload producer.
+        val hostVisible = androidx.compose.runtime.mutableStateOf(true)
+        val restoration = StateRestorationTester(rule)
+        restoration.setContent {
+            nav = rememberNavController()
+            if (hostVisible.value) MadreNavHost(nav, pendingFeeding = requested)
+        }
+        rule.waitUntil(10_000) { rule.onAllNodesWithText("Дневник", ignoreCase = true).fetchSemanticsNodes().isNotEmpty() }
+        openDiary()
+        rule.waitUntil(10_000) { rule.onRoot().fetchSemanticsNode(); controller.history.value.size == 2 }
+        val diaryId = requireNotNull(nav.currentBackStackEntry).id
+        rule.onNodeWithTag("diary-list").performScrollToNode(hasTestTag("diary-entry-${older.id}"))
+        rule.onNodeWithTag("diary-entry-${older.id}").onChildAt(0).performClick()
+        val action = rule.onNodeWithTag("diary-repeat-${older.id}").onChildAt(0)
+            .performScrollTo().assertIsEnabled().fetchSemanticsNode().config[SemanticsActions.OnClick].action!!
+        lateinit var formId: String
+        lateinit var requestId: String
+        rule.runOnIdle {
+            assertTrue(action())
+            val entry = requireNotNull(nav.currentBackStackEntry)
+            assertEquals(MadreDestinations.FEEDING_FORM, entry.destination.route)
+            formId = entry.id
+            val pending = requireNotNull(entry.savedStateHandle.get<android.os.Bundle>("diary-repeat"))
+            requestId = requireNotNull(pending.getString("id"))
+            assertEquals("${config.userId}:${config.id}", pending.getString("owner"))
+            assertEquals(diaryId, pending.getString("diary")); assertEquals(formId, pending.getString("entry"))
+            assertArrayEquals(intArrayOf(47, 113, 59), pending.getIntArray("masses"))
+            hostVisible.value = false // No frame can apply the newly produced intent yet.
+        }
+        rule.waitForIdle()
+        rule.onNodeWithText("Новая запись").assertDoesNotExist()
+        rule.runOnIdle {
+            assertEquals(requestId, nav.currentBackStackEntry!!.savedStateHandle
+                .get<android.os.Bundle>("diary-repeat")!!.getString("id"))
+            assertNotNull(nav.saveState()) // Real Navigation saved-instance producer, never a fabricated Bundle.
+        }
+        val release = CompletableDeferred<Unit>()
+        val restored = bindController(owners, bootstrap = { release.await() }, replaceStoredController = true)
+        restoration.emulateSavedInstanceStateRestore()
+        rule.runOnIdle { hostVisible.value = true }
+        rule.waitForIdle()
+        assertNull(restored.config.value)
+        assertEquals(MadreDestinations.FEEDING_FORM, nav.currentDestination?.route)
+        assertEquals(formId, nav.currentBackStackEntry?.id)
+        assertEquals(diaryId, nav.previousBackStackEntry?.id)
+        rule.onNodeWithText("Новая запись").assertDoesNotExist()
+        rule.runOnIdle {
+            val pending = requireNotNull(nav.currentBackStackEntry!!.savedStateHandle.get<android.os.Bundle>("diary-repeat"))
+            assertEquals(requestId, pending.getString("id"))
+            assertArrayEquals(intArrayOf(47, 113, 59), pending.getIntArray("masses"))
+            println("D3 native restored pending=$requestId entry=$formId diary=$diaryId config=null masses=47/113/59")
+            release.complete(Unit)
+        }
+        rule.waitUntil(10_000) { rule.onRoot().fetchSemanticsNode(); restored.config.value == config &&
+            nav.currentBackStackEntry!!.savedStateHandle.get<android.os.Bundle>("diary-repeat") == null }
+        repeatMasses()
+        assertNote("")
+        // Applied exactly once: committed manual grams and an uncommitted editor
+        // both outlive subsequent native restore and normal Back/saveState/reopen.
+        pendingMass("Оставленная закваска", 47, "53")
+        rule.onNodeWithText("записать вес").performScrollTo().performClick()
+        pendingMass("Добавленная мука", 113, "149")
+        back(); assertEquals(diaryId, nav.currentBackStackEntry?.id)
+        restoration.emulateSavedInstanceStateRestore(); openForm()
+        assertEquals(formId, nav.currentBackStackEntry?.id)
+        rule.onNodeWithContentDescription("Оставленная закваска: 53 г").assertExists()
+        rule.onNodeWithContentDescription("Добавленная мука, точный вес в граммах").assertTextEquals("149")
+        rule.onNodeWithContentDescription("Добавленная вода: 59 г").assertExists()
+        assertNull(nav.currentBackStackEntry!!.savedStateHandle.get<android.os.Bundle>("diary-repeat"))
+        closeAndReopen(false)
+        assertEquals(formId, nav.currentBackStackEntry?.id)
+        rule.onNodeWithContentDescription("Оставленная закваска: 53 г").assertExists()
+        rule.onNodeWithContentDescription("Добавленная мука, точный вес в граммах").assertTextEquals("149")
+        assertNull(nav.currentBackStackEntry!!.savedStateHandle.get<android.os.Bundle>("diary-repeat"))
+        assertEquals(listOf(latest, older), runBlocking { app.database.feedingDao().observeHistory(config.id).first() })
+    }
+
+    @Test fun legacyUnknownAndInvalidRowsCannotRepeatThroughActualDiaryOrChangeRoom() {
+        val config = runBlocking { app.sourdoughRepository.getOrCreateDefaultConfig() }
+        val (older, latest) = repeatHistory(config)
+        val unknown = older.copy(id = 0, retainedStarterGrams = null, timestampMillis = older.timestampMillis - 1)
+        val invalid = unknown.copy(retainedStarterGrams = 47, waterGrams = 999, timestampMillis = unknown.timestampMillis - 1)
+        runBlocking { app.database.feedingDao().insert(unknown); app.database.feedingDao().insert(invalid) }
+        val rows = runBlocking { app.database.feedingDao().observeHistory(config.id).first() }
+        show()
+        rows.filter { it.id != older.id && it.id != latest.id }.forEach { row ->
+            rule.onNodeWithTag("diary-list").performScrollToNode(hasTestTag("diary-entry-${row.id}"))
+            val node = rule.onNodeWithTag("diary-entry-${row.id}")
+            node.performTouchInput { swipeRight() }; rule.waitForIdle()
+            assertEquals(MadreDestinations.STARTER_DETAIL, nav.currentDestination?.route)
+            node.onChildAt(0).performClick()
+            rule.onNodeWithTag("diary-repeat-${row.id}").onChildAt(0).performScrollTo().assertIsNotEnabled().performClick()
+            rule.onNodeWithTag("diary-repeat-reason-${row.id}").performScrollTo().assertIsDisplayed()
+            assertEquals(MadreDestinations.STARTER_DETAIL, nav.currentDestination?.route)
+        }
+        assertEquals(rows, runBlocking { app.database.feedingDao().observeHistory(config.id).first() })
+    }
+
     private fun realOwners(): Pair<SourdoughConfigEntity, SourdoughConfigEntity> = runBlocking {
         val first = app.sourdoughRepository.getOrCreateDefaultConfig()
         val user = app.database.userDao().upsert(UserEntity(name = "Книга B"))

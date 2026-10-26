@@ -1,11 +1,13 @@
 package com.polinalinen.madre.ui.screens
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -13,6 +15,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -21,6 +25,7 @@ import coil.request.ImageRequest
 import com.polinalinen.madre.data.db.entities.FeedingEntity
 import com.polinalinen.madre.data.db.entities.StorageLocation
 import com.polinalinen.madre.model.RuShortDate
+import com.polinalinen.madre.sourdough.FeedingPresets
 import com.polinalinen.madre.ui.components.AgedPhoto
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.bookAction
@@ -51,8 +56,13 @@ internal fun journalWeeks(history: List<FeedingEntity>, now: Long, zone: ZoneId 
 
 /** All persisted facts remain verbatim; a row tap only changes local disclosure state. */
 @Composable
-internal fun JournalRow(feeding: FeedingEntity, currentYear: Int) {
+internal fun JournalRow(feeding: FeedingEntity, currentYear: Int, onRepeat: (FeedingEntity) -> Unit = {}) {
     val colors = LocalPaper.current
+    val masses = FeedingPresets.last(feeding)
+    val repeatReason = if (feeding.retainedStarterGrams == null)
+        "Повтор недоступен: в записи не указана масса оставленной закваски."
+    else if (masses == null) "Повтор недоступен: массы записи выходят за допустимые пределы." else null
+    val repeatAction by rememberUpdatedState { if (masses != null) onRepeat(feeding) }
     // Inputs only reset a live composition; the keyed group also scopes restored bytes.
     var expanded by key(feeding.sourdoughConfigId, feeding.id) {
         rememberSaveable { mutableStateOf(false) }
@@ -70,13 +80,25 @@ internal fun JournalRow(feeding: FeedingEntity, currentYear: Int) {
         append(hydration?.let { "$it процентов" } ?: "не указана")
         append(". Хранение: $storage.")
     }
-    Column(Modifier.fillMaxWidth().testTag("diary-entry-${feeding.id}")) {
+    Column(Modifier.fillMaxWidth().testTag("diary-entry-${feeding.id}")
+        .pointerInput(feeding.sourdoughConfigId, feeding.id, masses) {
+            var dragged = 0f
+            detectHorizontalDragGestures(
+                onDragStart = { dragged = 0f },
+                onDragCancel = { dragged = 0f },
+                onDragEnd = { if (dragged >= 72.dp.toPx()) repeatAction(); dragged = 0f },
+                onHorizontalDrag = { _, amount -> dragged += amount },
+            )
+        }) {
         Column(Modifier.fillMaxWidth()
             .then(bookAction(if (expanded) "Свернуть подробности кормления $spokenDate"
                 else "Показать подробности кормления $spokenDate", repeatable = true) { expanded = !expanded })
             .clearAndSetSemantics {
                 contentDescription = spoken
                 stateDescription = if (expanded) "Подробности раскрыты" else "Подробности свёрнуты"
+                if (masses != null) customActions = listOf(CustomAccessibilityAction("Повторить кормление") {
+                    repeatAction(); true
+                })
             }
             .padding(horizontal = 22.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
@@ -100,6 +122,13 @@ internal fun JournalRow(feeding: FeedingEntity, currentYear: Int) {
         }
         if (expanded) {
             Column(Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                PaperButton("Повторить кормление", { repeatAction() },
+                    Modifier.fillMaxWidth().testTag("diary-repeat-${feeding.id}"),
+                    enabled = masses != null, variant = PaperButtonVariant.SECONDARY, fillLabelWidth = true)
+                repeatReason?.let {
+                    Text(it, Modifier.fillMaxWidth().testTag("diary-repeat-reason-${feeding.id}"),
+                        color = colors.ink2, style = PaperType.body)
+                }
                 (feeding.generatedComment ?: feeding.starterObservation)?.let {
                     Text(it, Modifier.fillMaxWidth(), color = colors.ink2, style = PaperType.body.copy(fontSize = 13.sp, lineHeight = 19.sp))
                 }

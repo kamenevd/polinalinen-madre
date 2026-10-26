@@ -24,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -89,6 +90,7 @@ fun StarterDiaryScreen(
     currentYear: Int = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR),
     nowMillis: Long? = null,
     nowProvider: () -> Long = System::currentTimeMillis,
+    lastFeedingMillis: Long? = null,
 ) {
     val colors = LocalPaper.current
     // «Клякса» — DESIGN-V4.md Cycle 3, фича InkBlot. Событие для seed — самое
@@ -97,9 +99,7 @@ fun StarterDiaryScreen(
 
     // Срок следующего кормления — тот же расчёт, что и на первой полосе:
     // время последней записи плюс интервал из настроек, без «примерно».
-    val scheduleNowMillis by remember(nowMillis, nowProvider) {
-        mutableStateOf(nowMillis ?: nowProvider())
-    }
+    val scheduleNowMillis = rememberDiaryNowMillis(nowMillis, nowProvider)
     val nextFeedingStatus = history.firstOrNull()
         ?.let { FeedingSchedule.nextFeedingStatus(FeedingSchedule.calculate(it.timestampMillis, intervalHours, scheduleNowMillis)) }
 
@@ -109,13 +109,15 @@ fun StarterDiaryScreen(
         // «листе», не на скроллящемся списке. Без датчика — молчит.
         Box(Modifier.fillMaxSize()) {
         LazyColumn(
-            Modifier
+            Modifier.testTag("diary-list")
                 , // страница дышит — механика #5
             contentPadding = PaddingValues(bottom = 24.dp),
         ) {
             item {
                 PaperHeader(StarterName.diaryTitle(starterName), onBack,
                     overline = "Глава VII · день $dayNumber", modifier = Modifier.padding(horizontal = 22.dp))
+
+                DiaryHero(phase, history, lastFeedingMillis, scheduleNowMillis)
 
                 if (nextFeedingStatus != null) {
                     Text(

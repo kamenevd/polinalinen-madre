@@ -543,6 +543,7 @@ fun MadreNavHost(
                     // Дневник и первая полоса считают срок одной функцией от
                     // одного и того же интервала из настроек.
                     intervalHours = sourdoughConfig?.intervalHours ?: 24,
+                    lastFeedingMillis = authoritativeLastFeedingMillis,
                 )
             }
             composable(MadreDestinations.PHOTO_GALLERY) {

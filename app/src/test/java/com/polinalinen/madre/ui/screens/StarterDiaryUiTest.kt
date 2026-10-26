@@ -7,6 +7,9 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -127,6 +130,12 @@ class StarterDiaryUiTest {
         }
     }
 
+    private fun revealHistory() {
+        // The hero pushes rows below the lazy viewport: materialize them before locating a child.
+        rule.onNodeWithTag("diary-list").performScrollToNode(hasContentDescription(
+            "Дата, Закваска, Мука, Вода, Гидратация, Хранение"))
+    }
+
     @Test fun `actions precede the formulary and its sticky header`() {
         show(listOf(computed))
 
@@ -136,6 +145,7 @@ class StarterDiaryUiTest {
             .fetchSemanticsNode().boundsInRoot.top
         assertThat(feedTop).isLessThan(formularyTop)
         assertThat(galleryTop).isLessThan(formularyTop)
+        revealHistory()
         // Шапка таблицы: шесть колонок, ровно те и в том порядке.
         listOf("Дата", "Закв.", "Мука", "Вода", "Гидр.", "Хранение").forEach { title ->
             rule.onNodeWithText(title).performScrollTo().assertIsDisplayed()
@@ -149,6 +159,7 @@ class StarterDiaryUiTest {
     /** Строка читается одним предложением: шесть подписанных значений с единицами. */
     @Test fun `a computed row is announced as one ordered sentence`() {
         show(listOf(computed))
+        revealHistory()
         rule.onNodeWithContentDescription(
             "18 августа 2025, 12:00. Закваска: 50 граммов. Мука: 100 граммов. " +
                 "Вода: 50 граммов. Гидратация: 50 процентов. Хранение: холодильник."
@@ -158,6 +169,7 @@ class StarterDiaryUiTest {
     /** Старая запись не выдумывает ни закваску, ни гидратацию. */
     @Test fun `a legacy row says the hydration is unknown`() {
         show(listOf(legacy))
+        revealHistory()
         rule.onNodeWithContentDescription(
             "10 августа 2025, 09:30. Закваска: не указана. Мука: 60 граммов. " +
                 "Вода: 30 граммов. Гидратация: не указана. Хранение: кухня."
@@ -170,6 +182,7 @@ class StarterDiaryUiTest {
      */
     @Test fun `the long detail is a separate optional disclosure`() {
         show(listOf(computed))
+        revealHistory()
         rule.onAllNodesWithText("пахнет яблоками", substring = true).assertCountEquals(0)
 
         rule.onNodeWithText("ПОДРОБНЕЕ").performScrollTo().performClick()
@@ -185,12 +198,14 @@ class StarterDiaryUiTest {
     /** Записи без заметки, комментария и фото раскрывать нечем. */
     @Test fun `a bare row offers no disclosure`() {
         show(listOf(legacy))
+        revealHistory()
         rule.onAllNodesWithText("ПОДРОБНЕЕ").assertCountEquals(0)
     }
 
     /** Старые ручные поля показываются в списке именно как display-only seed. */
     @Test fun `legacy hydration with no final value is shown from legacy seed`() {
         show(listOf(legacyHydrationFallback))
+        revealHistory()
         rule.onNodeWithText("80%", useUnmergedTree = true).performScrollTo().assertIsDisplayed()
         rule.onNodeWithContentDescription("80 процентов", substring = true)
             .performScrollTo()
@@ -244,6 +259,7 @@ class StarterDiaryUiTest {
             nowMillis = momentOf(2025, Calendar.AUGUST, 20, 9, 0),
         )
         // Both fixtures are on18August; shared rows may compose both at once.
+        revealHistory()
         rule.onAllNodesWithText("18 авг. 2025", useUnmergedTree = true)[0].performScrollTo().assertIsDisplayed()
         rule.onNodeWithContentDescription(
             "18 августа 2025, 08:00. Закваска: 45 граммов. Мука: 150 граммов. " +

@@ -5,6 +5,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,12 +37,16 @@ import com.polinalinen.madre.ui.components.BackLabel
 import com.polinalinen.madre.ui.components.FullscreenPhotoViewer
 import com.polinalinen.madre.utils.PhotoStore
 
-/** One local photo from either a feeding or a completed bake. */
+/** Presentation provenance, assigned by the persisted-row producers, never inferred from text. */
+enum class GalleryPhotoSource { STARTER, BAKING }
+
+/** A local reference; legacy/unclassified callers honestly belong to All only. */
 data class GalleryPhoto(
     val id: String,
     val path: String,
     val timestampMillis: Long,
     val caption: String,
+    val source: GalleryPhotoSource? = null,
 )
 
 /** Offline-first archive; full-size decoding is deferred to the viewer. */
@@ -56,6 +63,12 @@ fun PhotoGalleryScreen(
             .sortedByDescending { it.timestampMillis }
             .toList()
     }
+    var selected by rememberSaveable { mutableStateOf(0) }
+    val sources = listOf(null, GalleryPhotoSource.STARTER, GalleryPhotoSource.BAKING)
+    val visible = ordered.filter { selected == 0 || it.source == sources[selected] }
+    val labels = listOf("Все ${ordered.size}",
+        "Закваска ${ordered.count { it.source == GalleryPhotoSource.STARTER }}",
+        "Выпечка ${ordered.count { it.source == GalleryPhotoSource.BAKING }}")
     var opened by remember { mutableStateOf<GalleryPhoto?>(null) }
 
     PaperSurface(color = colors.bg, modifier = Modifier.fillMaxSize()) {
@@ -66,23 +79,22 @@ fun PhotoGalleryScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             item(span = { GridItemSpan(maxLineSpan) }) {
-                Box(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 4.dp)) {
+                Column(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     BackLabel("Дневник закваски", onClick = onBack)
-                    Text(
-                        "ФОТО ЗАКВАСКИ",
-                        color = colors.ink2,style = PaperType.caption,
-                        fontSize = 10.sp,
-                        letterSpacing = 2.sp,
-                        modifier = Modifier.align(Alignment.CenterEnd),
-                    )
+                    Text("Фото", color = colors.ink, style = PaperType.h1,
+                        modifier = Modifier.fillMaxWidth())
+                    PaperSegmented(labels, selected, { selected = it }, label = "Источник фото")
                 }
             }
-            if (ordered.isEmpty()) {
+            if (visible.isEmpty()) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
-                    EmptyGallery(colors)
+                    if (ordered.isEmpty()) EmptyGallery(colors)
+                    else PaperEmpty("Пока нет фото", "В этом разделе пока нет фотографий.",
+                        Modifier.padding(top = 26.dp, bottom = 80.dp))
                 }
             } else {
-                items(ordered, key = { it.id }) { photo ->
+                items(visible, key = { it.id }) { photo ->
                     GalleryTile(
                         photo = photo,
                         context = context,
@@ -114,6 +126,7 @@ private fun GalleryTile(
         Modifier
             .fillMaxWidth()
             .aspectRatio(1f)
+            .testTag("gallery-photo-${photo.id}")
             .drawBehind { drawRect(colors.card) }
             .then(com.polinalinen.madre.ui.components.bookAction("Открыть фото", onClick = onClick)),
         contentAlignment = Alignment.Center,

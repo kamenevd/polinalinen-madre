@@ -368,6 +368,15 @@ fun MadreNavHost(
             draftBookOwner = feedingBookOwner
         }
     }
+    // Album selection belongs to this real Nav entry and book generation. Observe
+    // owner changes here too, while the gallery is outside composition (A→B→A).
+    var albumBookOwner by rememberSaveable { mutableStateOf(feedingBookOwner) }
+    var albumOwnerGeneration by rememberSaveable { mutableStateOf(0) }
+    LaunchedEffect(feedingBookOwner) {
+        val owner = feedingBookOwner ?: return@LaunchedEffect
+        if (albumBookOwner != null && albumBookOwner != owner) albumOwnerGeneration++
+        albumBookOwner = owner
+    }
     // Cycle 14: имя закваски одно на всю книгу и живёт в Room. Отсюда оно
     // расходится в дневник, на первую полосу, в подписи фотокарточек кормлений
     // и (через SourdoughViewModel.rescheduleReminder) в напоминание.
@@ -382,6 +391,7 @@ fun MadreNavHost(
                     path = path,
                     timestampMillis = feeding.timestampMillis,
                     caption = StarterName.feedingPhotoCaption(starterName),
+                    source = com.polinalinen.madre.ui.screens.GalleryPhotoSource.STARTER,
                 )
             }
         }
@@ -392,6 +402,7 @@ fun MadreNavHost(
                     path = path,
                     timestampMillis = bake.completedAtMillis,
                     caption = bake.recipeName,
+                    source = com.polinalinen.madre.ui.screens.GalleryPhotoSource.BAKING,
                 )
             }
         }
@@ -597,11 +608,13 @@ fun MadreNavHost(
                 )
                 }
             }
-            composable(MadreDestinations.PHOTO_GALLERY) {
-                PhotoGalleryScreen(
-                    photos = galleryPhotos,
-                    onBack = { navController.popBackStack() },
-                )
+            composable(MadreDestinations.PHOTO_GALLERY) { entry ->
+                androidx.compose.runtime.key(entry.id, albumOwnerGeneration) {
+                    PhotoGalleryScreen(
+                        photos = galleryPhotos,
+                        onBack = { navController.popBackStack() },
+                    )
+                }
             }
             composable(MadreDestinations.FEEDING_FORM) { entry ->
                 val formDiaryId = remember(entry) {

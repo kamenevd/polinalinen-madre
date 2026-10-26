@@ -86,8 +86,23 @@ class QaOwnerAcceptance {
         dismissKnownLauncherAnr()
         device.wait(Until.findObject(By.text("ПОЗЖЕ")),5000)?.click()
         device.wait(Until.findObject(By.text(java.util.regex.Pattern.compile("(?iu)читать"))),3000)?.click()
-        val settings=device.wait(Until.findObject(By.desc("Настройки")),15_000)
-        assertNotNull("Real settings entry missing",settings);settings!!.click()
+        // PaperIconButton exports "Настройки" as ACTION_CLICK's label, not a
+        // contentDescription (the monogram text is the actual local name).
+        fun settingsAction(node: android.view.accessibility.AccessibilityNodeInfo?): android.view.accessibility.AccessibilityNodeInfo? {
+            if (node == null) return null
+            if (node.packageName?.toString() == target && node.isVisibleToUser && node.isEnabled &&
+                node.actionList.any { it.id == android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK && it.label?.toString() == "Настройки" }) return node
+            for (index in 0 until node.childCount) settingsAction(node.getChild(index))?.let { return it }
+            return null
+        }
+        var settings: android.view.accessibility.AccessibilityNodeInfo? = null
+        val settingsDeadline = SystemClock.uptimeMillis() + 15_000
+        while (settings == null && SystemClock.uptimeMillis() < settingsDeadline) {
+            settings = settingsAction(instrumentation.uiAutomation.rootInActiveWindow)
+            if (settings == null) SystemClock.sleep(100)
+        }
+        assertNotNull("Real settings entry missing",settings)
+        assertTrue("Real settings action must open settings", settings!!.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK))
         val search=device.wait(Until.findObject(By.clazz("android.widget.EditText")),10_000)
         assertNotNull(search);search!!.click();device.waitForIdle(500);search.text="Тактильный"
         val ime=device.executeShellCommand("dumpsys input_method")

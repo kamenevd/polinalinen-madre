@@ -130,6 +130,51 @@ class FinalQaReadinessTest(unittest.TestCase):
                     smoke.runtime()
                 command.assert_not_called()
 
+    def test_failed_instrumentation_collects_native_frames_without_retry_or_masking(self):
+        # Executable transport fixture only: no emulator/device is contacted.
+        for collection_fails in (False, True):
+            with self.subTest(collection_fails=collection_fails), tempfile.TemporaryDirectory() as directory:
+                out = Path(directory)
+                (out / "target.apk").write_bytes(b"fixture ordinary QA")
+                (out / "driver.apk").write_bytes(b"fixture external driver")
+                controls = dict(head="1" * 40, run_id="fixture-run", driver_package=smoke.DRIVER,
+                                apk_sha256=smoke.sha(out / "target.apk"), driver_sha256=smoke.sha(out / "driver.apk"))
+                (out / "controls.json").write_text(json.dumps(controls))
+                commands = []
+
+                def command(args, log=None, timeout=180):
+                    args = [str(arg) for arg in args]
+                    commands.append(args)
+                    if args == ["git", "rev-parse", "HEAD"]:
+                        return controls["head"]
+                    self.assertEqual(["adb", "-s", "emulator-5554"], args[:3])
+                    operation = args[3:]
+                    if operation == ["get-serialno"]:
+                        return "emulator-5554\n"
+                    if operation == ["shell", "getprop", "ro.kernel.qemu"]:
+                        return "1\n"
+                    if operation == ["shell", "getprop", "ro.build.version.sdk"]:
+                        return "35\n"
+                    if operation == ["shell", "pm", "path", smoke.PACKAGE]:
+                        return "package:/data/app/ordinary/base.apk\n"
+                    if operation[:2] == ["pull", "/data/app/ordinary/base.apk"]:
+                        Path(operation[2]).write_bytes((out / "target.apk").read_bytes())
+                    if operation[:3] == ["shell", "am", "instrument"]:
+                        self.assertIn(smoke.METHOD, operation)
+                        return "INSTRUMENTATION_STATUS: stack=java.lang.AssertionError: Real settings entry missing\nINSTRUMENTATION_STATUS_CODE: -2\nINSTRUMENTATION_CODE: -1\n"
+                    if collection_fails and (operation[0] == "logcat" or operation[:2] == ["pull", "/sdcard/Download/madre-qa-p0"]):
+                        raise RuntimeError("Fixture collection failure")
+                    return ""
+
+                with patch.object(smoke, "OUT", out), patch.object(smoke, "run", side_effect=command), patch.dict(
+                        os.environ, {"GITHUB_ACTIONS": "true", "CI": "true", "ANDROID_SERIAL": "emulator-5554", "GITHUB_RUN_ID": "fixture-run"}):
+                    with self.assertRaisesRegex(ValueError, "did not pass once without skips"):
+                        smoke.runtime()
+                self.assertEqual(1, sum(args[3:6] == ["shell", "am", "instrument"] for args in commands))
+                self.assertTrue(any(args[3:5] == ["pull", "/sdcard/Download/madre-qa-p0"] for args in commands))
+                self.assertTrue(any(args[3:] == ["shell", "dumpsys", "package", smoke.PACKAGE] for args in commands))
+                self.assertFalse((out / "result.json").exists())
+
     def test_cycle29_is_new_pending_and_archive_is_verbatim(self):
         state = json.loads((ROOT / "workflow/CYCLE.yaml").read_text())
         self.assertEqual([], cycle.validate_state(state))

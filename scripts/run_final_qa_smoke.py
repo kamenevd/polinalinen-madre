@@ -163,7 +163,8 @@ def runtime():
     finally:
         # Best-effort evidence must not mask the original failing exit status.
         for args, log in [(("logcat", "-d"), OUT / "logcat.txt"),
-                          (("shell", "dumpsys", "package", PACKAGE), OUT / "installed-package.txt")]:
+                          (("shell", "dumpsys", "package", PACKAGE), OUT / "installed-package.txt"),
+                          (("pull", "/sdcard/Download/madre-qa-p0", OUT / "native-final"), OUT / "native-final-pull.txt")]:
             try:
                 adb(*args, log=log)
             except (OSError, RuntimeError, subprocess.SubprocessError):

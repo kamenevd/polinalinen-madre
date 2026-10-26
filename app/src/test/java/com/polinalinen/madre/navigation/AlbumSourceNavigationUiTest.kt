@@ -159,10 +159,11 @@ class AlbumSourceNavigationUiTest {
         val other = SourdoughConfigEntity(userId = user, name = "Другая")
             .let { it.copy(id = runBlocking { app.sourdoughRepository.saveConfig(it) }) }
         val sameUserOtherConfig = first.copy(id = runBlocking { app.sourdoughRepository.saveConfig(first.copy(id = 0)) })
-        runBlocking {
-            app.database.feedingDao().insert(feeding(first, "bake-missing.jpg"))
-            app.database.feedingDao().insert(feeding(other, "feeding-missing.jpg"))
+        val feedingIds = runBlocking {
+            val a = app.database.feedingDao().insert(feeding(first, "bake-missing.jpg"))
+            val b = app.database.feedingDao().insert(feeding(other, "feeding-missing.jpg"))
             app.database.bakeRecordDao().insert(bake("feeding-missing.jpg"))
+            mapOf(first.id to a, other.id to b)
         }
         val owners = MutableStateFlow<SourdoughConfigEntity?>(first)
         var controller = bind(owners)
@@ -200,10 +201,33 @@ class AlbumSourceNavigationUiTest {
         waitFilter("Выпечка 1")
         assertEquals(entryId, nav.currentBackStackEntry?.id)
         filter("Выпечка 1").assertIsSelected()
-        fun change(owner: SourdoughConfigEntity) {
+        fun awaitOwner(owner: SourdoughConfigEntity, changed: Boolean) {
+            val expected = listOfNotNull(feedingIds[owner.id])
+            rule.waitUntil(10_000) {
+                rule.onRoot().fetchSemanticsNode()
+                val snapshot = controller.diaryHistory.value
+                snapshot.config == owner && snapshot.history?.map { it.id } == expected &&
+                    controller.history.value.map { it.id } == expected
+            }
+            rule.waitForIdle()
+            if (changed && nav.currentDestination?.route == MadreDestinations.PHOTO_GALLERY) {
+                // A/B both have count 2. Require the new owner's actual Room tile,
+                // not a stale count/selection or the VM config preceding Compose.
+                waitFilter("Все ${expected.size + 1}")
+                rule.waitUntil(10_000) {
+                    expected.all { rule.onAllNodesWithTag("gallery-photo-feeding-$it").fetchSemanticsNodes().size == 1 } &&
+                        feedingIds.values.filter { it !in expected }.all {
+                            rule.onAllNodesWithTag("gallery-photo-feeding-$it").fetchSemanticsNodes().isEmpty()
+                        }
+                }
+            }
+        }
+        fun change(owner: SourdoughConfigEntity, awaitHistory: Boolean = true) {
+            val before = controller.config.value
             rule.runOnIdle { owners.value = owner }
             rule.waitUntil(10_000) { rule.onRoot().fetchSemanticsNode(); controller.config.value == owner }
             rule.waitForIdle()
+            if (awaitHistory) awaitOwner(owner, before?.id != owner.id || before?.userId != owner.userId)
         }
         change(first.copy(name = "Переименована")); filter("Выпечка 1").assertIsSelected()
         change(sameUserOtherConfig); filter("Все 1").assertIsSelected()
@@ -211,7 +235,28 @@ class AlbumSourceNavigationUiTest {
         filter("Выпечка 1").performClick()
         change(other); waitFilter("Все 2"); filter("Все 2").assertIsSelected()
         filter("Выпечка 1").performClick()
-        change(first); filter("Все 2").assertIsSelected()
+        // Deterministic version of the reported line-214 race: the owner is new,
+        // but its real Room result has not arrived. Counts can be equal across A/B.
+        val held = java.util.concurrent.ConcurrentLinkedQueue<Runnable>()
+        androidx.arch.core.executor.ArchTaskExecutor.getInstance().setDelegate(object : androidx.arch.core.executor.TaskExecutor() {
+            override fun executeOnDiskIO(runnable: Runnable) { held.add(runnable) }
+            override fun postToMainThread(runnable: Runnable) = executor.postToMainThread(runnable)
+            override fun isMainThread() = executor.isMainThread
+        })
+        try {
+            change(first, awaitHistory = false)
+            waitFilter("Все 1")
+            assertTrue("New owner Room query must be held", held.isNotEmpty())
+            assertEquals(first, controller.diaryHistory.value.config)
+            assertNull(controller.diaryHistory.value.history)
+            filter("Все 1").assertIsSelected()
+            filter("Все 2").assertDoesNotExist()
+        } finally {
+            androidx.arch.core.executor.ArchTaskExecutor.getInstance().setDelegate(null)
+            while (true) executor.executeOnDiskIO(held.poll() ?: break)
+        }
+        awaitOwner(first, changed = true)
+        filter("Все 2").assertIsSelected()
         filter("Выпечка 1").performClick()
         // Keep the actual album entry on stack while hidden: no resurrection in ABA.
         rule.runOnIdle { nav.navigate(MadreDestinations.HOME) }; rule.waitForIdle()

@@ -175,6 +175,47 @@ class FinalQaReadinessTest(unittest.TestCase):
                 self.assertTrue(any(args[3:] == ["shell", "dumpsys", "package", smoke.PACKAGE] for args in commands))
                 self.assertFalse((out / "result.json").exists())
 
+    def test_owner_driver_uses_real_l_settings_routes_without_retired_search(self):
+        driver = (ROOT / "macrobenchmark/src/main/java/com/polinalinen/madre/macrobenchmark/QaOwnerAcceptance.kt").read_text()
+        method = driver.split("@Test fun actualR8SettingsProbeAndLocalFpsAreVisible()", 1)[1]
+        # Independently verified against the real production Android node export in
+        # LSettingsQaDriverAccessibilityTest, not inferred from human-facing text.
+        self.assertNotIn('By.clazz("android.widget.EditText")', method)
+        self.assertNotIn('By.text("Диагностика QA")', method)
+        routes = re.findall(r'clickAction\("([^"]+)"', method)
+        self.assertEqual(["Настройки", "Уведомления и вибрация", "Проверить", "Назад",
+                          "О приложении", "Для разработчиков", "Назад", "Внешний вид",
+                          "Тема: Ночь", "Назад", "Назад"], routes)
+        self.assertEqual(2, method.count('By.desc("Показывать FPS")'))
+        for retained in ('assertEquals(0,info.flags and ApplicationInfo.FLAG_DEBUGGABLE)',
+                         'By.textContains("hasVibrator:")', 'By.text("JankStats · текущее окно · 1 с")',
+                         'By.textContains("кадров · UI p95")', 'By.text("Оглавление")',
+                         '"qa-haptic-diagnostics"', '"qa-fps-settings"', '"qa-night-settings"', '"qa-night-toc"'):
+            self.assertIn(retained, method)
+
+    def test_owner_failure_export_executes_two_shell_commands_not_literal_semicolon(self):
+        driver = (ROOT / "macrobenchmark/src/main/java/com/polinalinen/madre/macrobenchmark/QaOwnerAcceptance.kt").read_text()
+        method = driver.split("@Test fun actualR8SettingsProbeAndLocalFpsAreVisible()", 1)[1]
+        finalizer = method.rsplit("finally {", 1)[1]
+        self.assertNotIn("; cp", finalizer)
+        self.assertIn('executeShellCommand("mkdir -p /sdcard/Download/madre-qa-p0")', finalizer)
+        self.assertIn('executeShellCommand("cp -R ${output.absolutePath}/. /sdcard/Download/madre-qa-p0/")', finalizer)
+        # UiAutomation runs a command, not sh -c. Exercise the actual extracted
+        # mkdir/cp strings with Runtime.exec-style whitespace tokenization locally.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, destination = root / "source", root / "export"
+            source.mkdir()
+            (source / "qa-owner-failure.xml").write_bytes(b"fixture raw XML")
+            (source / "qa-owner-failure.png").write_bytes(b"fixture raw frame bytes, not a PNG")
+            commands = re.findall(r'executeShellCommand\("([^"]+)"\)', finalizer)
+            for command in commands:
+                command = command.replace("/sdcard/Download/madre-qa-p0", str(destination)).replace("${output.absolutePath}", str(source))
+                subprocess.run(command.split(), cwd=root, check=True, capture_output=True)
+            self.assertEqual(sorted(p.name for p in source.iterdir()), sorted(p.name for p in destination.iterdir()))
+            for path in source.iterdir():
+                self.assertEqual(path.read_bytes(), (destination / path.name).read_bytes())
+
     def test_cycle29_is_new_pending_and_archive_is_verbatim(self):
         state = json.loads((ROOT / "workflow/CYCLE.yaml").read_text())
         self.assertEqual([], cycle.validate_state(state))

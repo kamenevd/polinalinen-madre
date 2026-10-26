@@ -88,45 +88,62 @@ class QaOwnerAcceptance {
         device.wait(Until.findObject(By.text(java.util.regex.Pattern.compile("(?iu)читать"))),3000)?.click()
         // PaperIconButton exports "Настройки" as ACTION_CLICK's label, not a
         // contentDescription (the monogram text is the actual local name).
-        fun settingsAction(node: android.view.accessibility.AccessibilityNodeInfo?): android.view.accessibility.AccessibilityNodeInfo? {
+        fun action(node: android.view.accessibility.AccessibilityNodeInfo?, label: String): android.view.accessibility.AccessibilityNodeInfo? {
             if (node == null) return null
             if (node.packageName?.toString() == target && node.isVisibleToUser && node.isEnabled &&
-                node.actionList.any { it.id == android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK && it.label?.toString() == "Настройки" }) return node
-            for (index in 0 until node.childCount) settingsAction(node.getChild(index))?.let { return it }
+                node.actionList.any { it.id == android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK && it.label?.toString() == label }) return node
+            for (index in 0 until node.childCount) action(node.getChild(index), label)?.let { return it }
             return null
         }
-        var settings: android.view.accessibility.AccessibilityNodeInfo? = null
-        val settingsDeadline = SystemClock.uptimeMillis() + 15_000
-        while (settings == null && SystemClock.uptimeMillis() < settingsDeadline) {
-            settings = settingsAction(instrumentation.uiAutomation.rootInActiveWindow)
-            if (settings == null) SystemClock.sleep(100)
+        fun clickAction(label: String, scroll: Boolean = false) {
+            var found: android.view.accessibility.AccessibilityNodeInfo? = null
+            val deadline = SystemClock.uptimeMillis() + 15_000
+            var swipes = 0
+            while (found == null && SystemClock.uptimeMillis() < deadline) {
+                found = action(instrumentation.uiAutomation.rootInActiveWindow, label)
+                if (found == null) {
+                    // Each real subpage shares a scroll container. Search both
+                    // directions: returning to root may retain its prior offset.
+                    if (scroll && swipes < 14) {
+                        val down = swipes >= 7
+                        val upper = device.displayHeight / 3
+                        val lower = device.displayHeight * 3 / 4
+                        device.swipe(device.displayWidth / 2, if (down) upper else lower,
+                            device.displayWidth / 2, if (down) lower else upper, 25)
+                        swipes++
+                        device.waitForIdle(500)
+                    } else SystemClock.sleep(100)
+                }
+            }
+            assertNotNull("Real $label entry missing", found)
+            assertTrue("Real $label action must open its control", found!!.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK))
         }
-        assertNotNull("Real settings entry missing",settings)
-        assertTrue("Real settings action must open settings", settings!!.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK))
-        val search=device.wait(Until.findObject(By.clazz("android.widget.EditText")),10_000)
-        assertNotNull(search);search!!.click();device.waitForIdle(500);search.text="Тактильный"
-        val ime=device.executeShellCommand("dumpsys input_method")
-        if(ime.contains("mInputShown=true") || ime.contains("mIsInputViewShown=true"))device.pressBack()
-        device.waitForIdle(1000)
-        val probe=device.wait(Until.findObject(By.text("Проверить")),10_000)
-        assertNotNull("Actual haptic probe not visible",probe);probe!!.click()
+        clickAction("Настройки")
+        // L1 Settings has real subpages, no search EditText. The probe remains
+        // on Notifications; its raw result and FPS live under About > Developer.
+        clickAction("Уведомления и вибрация", scroll = true)
+        clickAction("Проверить", scroll = true)
+        clickAction("Назад")
+        clickAction("О приложении", scroll = true)
+        clickAction("Для разработчиков", scroll = true)
         assertTrue(device.wait(Until.hasObject(By.textContains("hasVibrator:")),10_000))
         shot("qa-haptic-diagnostics")
-        val diagnostics=device.findObject(By.text("Диагностика QA"));assertNotNull(diagnostics);diagnostics!!.click()
         val fps=device.wait(Until.findObject(By.desc("Показывать FPS")),5000)
         assertNotNull(fps);fps!!.click()
         assertTrue(device.wait(Until.hasObject(By.text("JankStats · текущее окно · 1 с")),10_000))
         repeat(3){device.swipe(device.displayWidth/2,device.displayHeight*3/4,device.displayWidth/2,device.displayHeight/2,20);device.waitForIdle(300)}
         shot("qa-fps-settings")
         File(output,"qa-fps-visible.txt").writeText(device.findObject(By.textContains("кадров · UI p95"))?.text?:"No frame sample label")
-        device.findObject(By.desc("Показывать FPS"))?.click()
         repeat(3){device.swipe(device.displayWidth/2,device.displayHeight/4,device.displayWidth/2,device.displayHeight*3/4,30)}
-        val themeSearch=device.wait(Until.findObject(By.clazz("android.widget.EditText")),5000)
-        assertNotNull(themeSearch);themeSearch!!.text="Тема"
-        val night=device.wait(Until.findObject(By.text(java.util.regex.Pattern.compile("(?iu)ночь"))),5000)
-        assertNotNull("Actual night theme control missing",night);night!!.click()
+        val fpsOff=device.wait(Until.findObject(By.desc("Показывать FPS")),5000)
+        assertNotNull("Actual FPS off control missing",fpsOff);fpsOff!!.click()
+        assertTrue(device.wait(Until.gone(By.text("JankStats · текущее окно · 1 с")),5000))
+        clickAction("Назад")
+        clickAction("Внешний вид", scroll = true)
+        clickAction("Тема: Ночь", scroll = true)
         shot("qa-night-settings")
-        device.pressBack()
+        clickAction("Назад")
+        clickAction("Назад")
         assertTrue(device.wait(Until.hasObject(By.text("Оглавление")),10_000))
         shot("qa-night-toc")
         // Diagnostics off by default/on relaunch; this explicit test never changes global OS settings.
@@ -143,7 +160,10 @@ class QaOwnerAcceptance {
             device.takeScreenshot(File(output,"qa-owner-failure.png"))
             throw failure
         } finally {
-            device.executeShellCommand("mkdir -p /sdcard/Download/madre-qa-p0; cp -R ${output.absolutePath}/. /sdcard/Download/madre-qa-p0/")
+            // UiAutomation executes a command, not a shell script: a literal
+            // semicolon would become part of mkdir's path and never run cp.
+            device.executeShellCommand("mkdir -p /sdcard/Download/madre-qa-p0")
+            device.executeShellCommand("cp -R ${output.absolutePath}/. /sdcard/Download/madre-qa-p0/")
         }
     }
 }

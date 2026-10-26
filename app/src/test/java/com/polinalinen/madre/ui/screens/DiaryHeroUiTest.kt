@@ -88,8 +88,8 @@ class DiaryHeroUiTest {
         assertThat(voice.fontFamily).isEqualTo(PaperType.note.fontFamily)
         assertThat(voice.fontStyle).isEqualTo(FontStyle.Italic)
         rule.onNodeWithText("Семейная запись от руки").performScrollTo().assertIsDisplayed()
-        rule.onNodeWithText("Покормить").performScrollTo().performClick()
-        rule.onNodeWithText("Фото").performScrollTo().performClick()
+        rule.onNodeWithText("+ Покормить").performScrollTo().performClick()
+        rule.onNodeWithText("Фото 0").performScrollTo().performClick()
         assertThat(feeds).isEqualTo(1); assertThat(galleries).isEqualTo(1)
     }
 

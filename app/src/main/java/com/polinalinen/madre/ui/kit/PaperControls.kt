@@ -54,7 +54,7 @@ import com.polinalinen.madre.ui.components.TapGate
 val PaperTouchTarget = 48.dp
 enum class PaperButtonVariant { PRIMARY, ACCENT, SECONDARY, TEXT }
 
-/** A visual pill can grow with fontScale; its accessible target never shrinks. */
+/** Keep the original Compose/JVM entry point and its default label measurement. */
 @Composable fun PaperButton(
     label: String, onClick: () -> Unit, modifier: Modifier = Modifier,
     primary: Boolean? = null,
@@ -62,6 +62,18 @@ enum class PaperButtonVariant { PRIMARY, ACCENT, SECONDARY, TEXT }
     variant: PaperButtonVariant = PaperButtonVariant.PRIMARY,
     icon: ImageVector? = null,
     haptic: Boolean = true,
+) = PaperButton(label, onClick, modifier, primary, enabled, caption, repeatable, variant, icon, haptic,
+    fillLabelWidth = false)
+
+/** A visual pill can grow with fontScale; label width expands only for explicit opt-ins. */
+@Composable fun PaperButton(
+    label: String, onClick: () -> Unit, modifier: Modifier = Modifier,
+    primary: Boolean? = null,
+    enabled: Boolean = true, caption: String? = null, repeatable: Boolean = false,
+    variant: PaperButtonVariant = PaperButtonVariant.PRIMARY,
+    icon: ImageVector? = null,
+    haptic: Boolean = true,
+    fillLabelWidth: Boolean,
 ) {
     val p = LocalPaper.current
     val view=androidx.compose.ui.platform.LocalView.current
@@ -95,7 +107,7 @@ enum class PaperButtonVariant { PRIMARY, ACCENT, SECONDARY, TEXT }
             }.padding(horizontal = 20.dp, vertical = 14.dp), contentAlignment = Alignment.Center) {
             Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(6.dp)) {
             if(icon!=null)Icon(icon,null,Modifier.size(20.dp),tint=foreground.copy(alpha=if(enabled)1f else .4f))
-            Text(label, modifier=Modifier.weight(1f,fill=false),color = foreground.copy(alpha = if (enabled) 1f else .4f),
+            Text(label, modifier=Modifier.weight(1f,fill=fillLabelWidth),color = foreground.copy(alpha = if (enabled) 1f else .4f),
                 style = if (actualVariant == PaperButtonVariant.TEXT) PaperType.ui.copy(fontSize = 13.sp, letterSpacing = 1.2.sp)
                     else PaperType.ui.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
                 textAlign = TextAlign.Center)

@@ -23,6 +23,8 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.polinalinen.madre.MadreApplication
 import com.polinalinen.madre.data.db.entities.SourdoughConfigEntity
+import com.polinalinen.madre.data.db.entities.FeedingEntity
+import com.polinalinen.madre.data.db.entities.BakeRecordEntity
 import com.polinalinen.madre.data.db.entities.StorageLocation
 import com.polinalinen.madre.data.db.entities.UserEntity
 import com.polinalinen.madre.data.repository.SourdoughFeedingSaveRequest
@@ -32,6 +34,7 @@ import com.polinalinen.madre.viewmodel.FeedingSaveState
 import com.polinalinen.madre.viewmodel.SourdoughViewModel
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.*
 import org.junit.Assert.*
@@ -103,7 +106,8 @@ class FeedingDraftNavigationUiTest {
         assertEquals(MadreDestinations.STARTER_DETAIL, nav.currentDestination?.route)
     }
     private fun openForm() {
-        rule.onNodeWithText("Покормить", ignoreCase = true).performScrollTo().performClick()
+        rule.onNodeWithText(if (nav.currentDestination?.route == MadreDestinations.STARTER_DETAIL)
+            "+ Покормить" else "Покормить", ignoreCase = true).performScrollTo().performClick()
         rule.waitForIdle()
         assertEquals(MadreDestinations.FEEDING_FORM, nav.currentDestination?.route)
         rule.waitUntil(10_000) { rule.onAllNodesWithText("Новая запись").fetchSemanticsNodes().isNotEmpty() }
@@ -148,6 +152,76 @@ class FeedingDraftNavigationUiTest {
     }
     @Test fun headerCloseAndRealReopenRetainPendingInputAndNote() = verifyReopen(false)
     @Test fun systemBackAndRealReopenRetainPendingInputAndNote() = verifyReopen(true)
+
+    @Test fun diaryCountTracksTheActualFeedAndBakeAlbumWithoutChangingRowsOrPhotoBytes() {
+        val config = runBlocking { app.sourdoughRepository.getOrCreateDefaultConfig() }
+        val source = File.createTempFile("diary-album-", ".jpg", app.filesDir)
+        val bitmap = Bitmap.createBitmap(16, 16, Bitmap.Config.ARGB_8888)
+        source.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 90, it) }
+        bitmap.recycle()
+        val bytes = source.readBytes()
+        val missing = File(app.filesDir, "diary-album-explicitly-missing.jpg")
+        assertFalse(missing.exists())
+        val feeding = FeedingEntity(sourdoughConfigId = config.id, timestampMillis = 1_000,
+            flourGrams = 100, waterGrams = 50, storageLocation = StorageLocation.KITCHEN,
+            photoPath = source.absolutePath)
+        runBlocking {
+            app.database.feedingDao().insert(feeding)
+            app.database.bakeRecordDao().insert(BakeRecordEntity(recipeId = "synthetic-album",
+                recipeName = "Пробная выпечка", portions = 1, completedAtMillis = 2_000,
+                photoPath = source.absolutePath))
+        }
+        show()
+        fun count(n: Int) {
+            rule.waitUntil(10_000) { rule.onAllNodesWithText("Фото $n").fetchSemanticsNodes().isNotEmpty() }
+            rule.onNodeWithText("Фото $n").performScrollTo().assertIsEnabled().assertIsDisplayed()
+        }
+        fun album(n: Int) {
+            count(n)
+            rule.onNodeWithText("Фото $n").performClick()
+            rule.waitForIdle()
+            assertEquals(MadreDestinations.PHOTO_GALLERY, nav.currentDestination?.route)
+        }
+        count(2) // One feeding AND one bake; the same readable path is two entries.
+        runBlocking {
+            app.database.feedingDao().insert(feeding.copy(timestampMillis = 3_000))
+            app.database.bakeRecordDao().insert(BakeRecordEntity(recipeId = "synthetic-missing",
+                recipeName = "Нет файла", portions = 1, completedAtMillis = 4_000, photoPath = missing.absolutePath))
+            app.database.feedingDao().insert(feeding.copy(photoPath = "  "))
+            app.database.feedingDao().insert(feeding.copy(photoPath = null))
+            app.database.bakeRecordDao().insert(BakeRecordEntity(recipeId = "synthetic-blank",
+                recipeName = "Без фото", portions = 1, photoPath = ""))
+        }
+        count(4) // Live Room emissions, duplicates retained, blanks excluded, missing file counted.
+        val rowsBefore = runBlocking {
+            app.database.feedingDao().observeHistory(config.id).first() to app.database.bakeRecordDao().observeAll().first()
+        }
+        album(4)
+        rule.onAllNodesWithContentDescription("Кормление · Мадре").assertCountEquals(2)
+        rule.onNodeWithContentDescription("Пробная выпечка").assertIsDisplayed()
+        rule.onNodeWithText("файл\nне найден").assertIsDisplayed()
+        back()
+        count(4)
+        openForm() // The other action still opens the real feeding route, not the gallery.
+        back()
+        count(4)
+        val rowsAfter = runBlocking {
+            app.database.feedingDao().observeHistory(config.id).first() to app.database.bakeRecordDao().observeAll().first()
+        }
+        assertEquals(rowsBefore, rowsAfter)
+        assertArrayEquals(bytes, source.readBytes())
+        assertFalse(missing.exists())
+    }
+
+    @Test fun zeroCountOpensTheActualEmptyGallery() {
+        show()
+        rule.onNodeWithText("Фото 0").performScrollTo().assertIsEnabled().performClick()
+        rule.waitForIdle()
+        assertEquals(MadreDestinations.PHOTO_GALLERY, nav.currentDestination?.route)
+        rule.onNodeWithText("Фотографии появятся здесь после кормления\nили готовой выпечки.").assertIsDisplayed()
+        back()
+        rule.onNodeWithText("Фото 0").performScrollTo().assertIsEnabled()
+    }
 
     @Test fun realGalleryPresetLateHistoryAndClosedRotationKeepTheWholeDraftUntilSuccessfulSave() {
         val saves = mutableListOf<SourdoughFeedingSaveRequest>()
@@ -200,6 +274,7 @@ class FeedingDraftNavigationUiTest {
         assertArrayEquals(bytes, PhotoStore.resolve(app, requireNotNull(saved.photoPath)).readBytes())
         assertEquals(1, launches)
         assertEquals(saved.photoPath, runBlocking { app.sourdoughRepository.lastFeeding(config.id) }?.photoPath)
+        rule.waitUntil(10_000) { rule.onAllNodesWithText("Фото 1").fetchSemanticsNodes().isNotEmpty() }
         openForm(); assertNotEquals(formEntry?.id, nav.currentBackStackEntry?.id)
         assertNote(""); rule.onNodeWithText("вклеить фотокарточку").assertExists()
         editor().assertDoesNotExist()

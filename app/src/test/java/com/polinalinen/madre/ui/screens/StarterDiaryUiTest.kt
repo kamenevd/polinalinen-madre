@@ -139,8 +139,8 @@ class StarterDiaryUiTest {
     @Test fun `actions precede the formulary and its sticky header`() {
         show(listOf(computed))
 
-        val feedTop = rule.onNodeWithText("Покормить").fetchSemanticsNode().boundsInRoot.top
-        val galleryTop = rule.onNodeWithText("Фото").fetchSemanticsNode().boundsInRoot.top
+        val feedTop = rule.onNodeWithText("+ Покормить").fetchSemanticsNode().boundsInRoot.top
+        val galleryTop = rule.onNodeWithText("Фото 0").fetchSemanticsNode().boundsInRoot.top
         val formularyTop = rule.onNodeWithText("ФОРМУЛЯР КОРМЛЕНИЙ").performScrollTo()
             .fetchSemanticsNode().boundsInRoot.top
         assertThat(feedTop).isLessThan(formularyTop)

@@ -4,6 +4,7 @@ import com.polinalinen.madre.ui.kit.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,6 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -32,6 +34,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -91,6 +95,7 @@ fun StarterDiaryScreen(
     nowMillis: Long? = null,
     nowProvider: () -> Long = System::currentTimeMillis,
     lastFeedingMillis: Long? = null,
+    photoCount: Int = 0,
 ) {
     val colors = LocalPaper.current
     // «Клякса» — DESIGN-V4.md Cycle 3, фича InkBlot. Событие для seed — самое
@@ -188,18 +193,7 @@ fun StarterDiaryScreen(
             }
 
             item {
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 14.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                PaperButton(label = "Покормить", onClick = onFeed, modifier = Modifier.weight(1f))
-                PaperButton(
-                    label = "Фото",
-                    onClick = onOpenGallery,
-                    variant = PaperButtonVariant.SECONDARY,
-                    modifier = Modifier.weight(1f),
-                )
-            }
+            DiaryActions(photoCount, onFeed, onOpenGallery)
             PageLabel("Советы из руководства", Modifier.padding(horizontal = 22.dp, vertical = 8.dp), color = colors.ink)
             Text(
                 "В буклете Levito Madre указано соотношение базового кормления 2:1:2 (закваска:вода:мука) и стартовая гидратация 50%. " +
@@ -221,6 +215,33 @@ fun StarterDiaryScreen(
                 FormularyRow(feeding = feeding, currentYear = currentYear)
             }
         }
+        }
+    }
+}
+
+/** Same kit/variants, with full-width actions when their real labels need room. */
+@Composable
+private fun DiaryActions(photoCount: Int, onFeed: () -> Unit, onOpenGallery: () -> Unit) {
+    val feedLabel = "+ Покормить"
+    val photoLabel = "Фото $photoCount"
+    val measurer = rememberTextMeasurer()
+    val style = PaperType.ui.copy(fontWeight = FontWeight.Bold)
+    val labelWidth = with(LocalDensity.current) {
+        maxOf(measurer.measure(AnnotatedString(feedLabel), style, softWrap = false).size.width,
+            measurer.measure(AnnotatedString(photoLabel), style, softWrap = false).size.width).toDp()
+    }
+    BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 14.dp)) {
+        // PaperButton keeps 20dp padding on each side; never shrink its type.
+        if ((maxWidth - 10.dp) / 2 < labelWidth + 40.dp) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                PaperButton(feedLabel, onFeed, Modifier.fillMaxWidth(), fillLabelWidth = true)
+                PaperButton(photoLabel, onOpenGallery, Modifier.fillMaxWidth(), variant = PaperButtonVariant.SECONDARY, fillLabelWidth = true)
+            }
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                PaperButton(feedLabel, onFeed, Modifier.weight(1f), fillLabelWidth = true)
+                PaperButton(photoLabel, onOpenGallery, Modifier.weight(1f), variant = PaperButtonVariant.SECONDARY, fillLabelWidth = true)
+            }
         }
     }
 }

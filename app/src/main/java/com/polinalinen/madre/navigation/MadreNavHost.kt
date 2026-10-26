@@ -538,6 +538,7 @@ fun MadreNavHost(
                     onBack = { navController.popBackStack() },
                     onFeed = enterFeedingForm,
                     onOpenGallery = { navController.navigate(MadreDestinations.PHOTO_GALLERY) },
+                    photoCount = galleryPhotos.size,
                     cancelledBakeCount = cancelledBakeCount,
                     starterName = starterName,
                     // Дневник и первая полоса считают срок одной функцией от

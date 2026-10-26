@@ -256,12 +256,19 @@ class PaperSnackbarState {
 }
 
 @Composable fun PaperSnackbar(hostState: PaperSnackbarState, modifier: Modifier = Modifier) {
+    PaperSnackbar(hostState, modifier, fillMessageWidth = false)
+}
+
+/** Opt in when the message must use the available width rather than its intrinsic width. */
+@Composable fun PaperSnackbar(hostState: PaperSnackbarState, modifier: Modifier, fillMessageWidth: Boolean) {
     val p = LocalPaper.current
     SnackbarHost(hostState.host, modifier.testTag("paper-snackbar")) { data ->
         Snackbar(shape = RoundedCornerShape(16.dp), containerColor = p.ink,contentColor = p.bg,
             action={data.visuals.actionLabel?.let{label->
                 PaperButton(label.uppercase(java.util.Locale.forLanguageTag("ru")),data::performAction,
                     Modifier.widthIn(max=130.dp),variant=PaperButtonVariant.TEXT)
-            }}) {Text(data.visuals.message,style=PaperType.body,color=p.bg)}
+            }}) {Text(data.visuals.message,
+                modifier = if (fillMessageWidth) Modifier.fillMaxWidth() else Modifier,
+                style=PaperType.body,color=p.bg)}
     }
 }

@@ -13,6 +13,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -90,47 +96,63 @@ fun PhotoGalleryScreen(
         "Закваска ${ordered.count { it.source == GalleryPhotoSource.STARTER }}",
         "Выпечка ${ordered.count { it.source == GalleryPhotoSource.BAKING }}")
     var opened by remember { mutableStateOf<GalleryPhoto?>(null) }
+    val snackbar = remember { PaperSnackbarState() }
+    val noticeScope = rememberCoroutineScope()
+    var noticeJob by remember { mutableStateOf<Job?>(null) }
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { noticeJob?.cancel() }
 
     PaperSurface(color = colors.bg, modifier = Modifier.fillMaxSize()) {
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 132.dp),
-            contentPadding = PaddingValues(start = 22.dp, end = 22.dp, bottom = 32.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                Column(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    BackLabel("Дневник закваски", onClick = onBack)
-                    Text("Фото", color = colors.ink, style = PaperType.h1,
-                        modifier = Modifier.fillMaxWidth())
-                    PaperSegmented(labels, selected, { selected = it }, label = "Источник фото")
-                }
-            }
-            if (visible.isEmpty()) {
+        Box(Modifier.fillMaxSize()) {
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(minSize = 132.dp),
+                contentPadding = PaddingValues(start = 22.dp, end = 22.dp, bottom = 32.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
-                    if (ordered.isEmpty()) EmptyGallery(colors)
-                    else PaperEmpty("Пока нет фото", "В этом разделе пока нет фотографий.",
-                        Modifier.padding(top = 26.dp, bottom = 80.dp))
-                }
-            } else {
-                months.forEach { (month, entries) ->
-                    stickyHeader(key = "gallery-month:$month") {
-                        SmallLabel(month.format(monthFormat), Modifier
-                            .testTag("gallery-month-$month")
-                            .fillMaxWidth()
-                            .background(colors.bg)
-                            .padding(vertical = 10.dp))
+                    Column(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        BackLabel("Дневник закваски", onClick = onBack)
+                        Text("Фото", color = colors.ink, style = PaperType.h1,
+                            modifier = Modifier.fillMaxWidth())
+                        PaperSegmented(labels, selected, { selected = it }, label = "Источник фото")
                     }
-                    items(entries, key = { it.second }) { (photo, _) ->
-                        GalleryTile(
-                            photo = photo,
-                            context = context,
-                            onClick = { if (PhotoStore.isReadable(context, photo.path)) opened = photo },
-                        )
+                }
+                if (visible.isEmpty()) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        if (ordered.isEmpty()) EmptyGallery(colors)
+                        else PaperEmpty("Пока нет фото", "В этом разделе пока нет фотографий.",
+                            Modifier.padding(top = 26.dp, bottom = 80.dp))
+                    }
+                } else {
+                    months.forEach { (month, entries) ->
+                        stickyHeader(key = "gallery-month:$month") {
+                            SmallLabel(month.format(monthFormat), Modifier
+                                .testTag("gallery-month-$month")
+                                .fillMaxWidth()
+                                .background(colors.bg)
+                                .padding(vertical = 10.dp))
+                        }
+                        items(entries, key = { it.second }) { (photo, _) ->
+                            GalleryTile(
+                                photo = photo,
+                                context = context,
+                                onClick = {
+                                    if (PhotoStore.isReadable(context, photo.path)) {
+                                        noticeJob?.cancel()
+                                        opened = photo
+                                    } else if (noticeJob?.isActive != true) {
+                                        // Coalesce repeated missing taps instead of queuing messages.
+                                        noticeJob = noticeScope.launch { snackbar.showSnackbar("Файл не найден") }
+                                    }
+                                },
+                            )
+                        }
                     }
                 }
             }
+            PaperSnackbar(snackbar, Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                .navigationBarsPadding().padding(horizontal = 12.dp, vertical = 12.dp), fillMessageWidth = true)
         }
     }
 

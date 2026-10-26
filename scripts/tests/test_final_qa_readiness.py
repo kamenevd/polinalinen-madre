@@ -1,5 +1,6 @@
 """Executable source/selector/transport fixtures; NOT an emulator acceptance receipt."""
 import copy
+import hashlib
 import itertools
 import json
 import os
@@ -137,8 +138,12 @@ class FinalQaReadinessTest(unittest.TestCase):
         self.assertEqual("planning", state["cycle"]["stage"])
         self.assertEqual({"pending"}, {gate["status"] for gate in state["gates"].values()})
         self.assertTrue(all(value is None for value in state["artifacts"].values()))
-        old = subprocess.check_output(["git", "show", "477cf0b1d5ff4d9354b0231e7f57d2598e4cf287:workflow/CYCLE.yaml"], cwd=ROOT)
-        self.assertEqual(old, (ROOT / "workflow/evidence/cycle28/CYCLE.archived.json").read_bytes())
+        # Independently verified verbatim bytes from
+        # 477cf0b1d5ff4d9354b0231e7f57d2598e4cf287:workflow/CYCLE.yaml.
+        # Pin integrity without requiring historic objects in depth-1 CI checkouts.
+        archived = (ROOT / "workflow/evidence/cycle28/CYCLE.archived.json").read_bytes()
+        self.assertEqual("67596f292a72ae89685da8d20e8687a39a31fd3c3aa4097706eba475adbcf31d",
+                         hashlib.sha256(archived).hexdigest())
         self.assertIn("NOT_RUN", json.dumps(state))
 
     def test_release_patch_applies_only_in_fixture_and_never_changes_qa_or_signing(self):

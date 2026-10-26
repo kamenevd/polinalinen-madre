@@ -200,16 +200,20 @@ fun StarterDiaryScreen(
             }
             if (selectedTab == 1) {
             item {
-            PageLabel("Советы из руководства", Modifier.padding(horizontal = 22.dp, vertical = 8.dp), color = colors.ink)
-            Text(
-                "В буклете Levito Madre указано соотношение базового кормления 2:1:2 (закваска:вода:мука) и стартовая гидратация 50%. " +
-                    "Мадре и закваску кормят белой пшеничной мукой высшего сорта с содержанием белка >10 г на 100 г. " +
-                    "Хранение в холодильнике при 4–6°C обычно даёт интервал кормления 3–5 дней. " +
+            PageLabel("Советы из руководства", Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 8.dp), color = colors.ink)
+            PaperCard(Modifier.padding(horizontal = 22.dp, vertical = 6.dp).testTag("diary-advice-card")) {
+                listOf(
+                    "В буклете Levito Madre указано соотношение базового кормления 2:1:2 (закваска:вода:мука) и стартовая гидратация 50%. " +
+                        "Мадре и закваску кормят белой пшеничной мукой высшего сорта с содержанием белка >10 г на 100 г.",
+                    "Хранение в холодильнике при 4–6°C обычно даёт интервал кормления 3–5 дней.",
                     "Пик чаще всего бывает около 3–5 часов, но фактически зависит от температуры, муки, печи и вашего ритма. " +
-                    "Стартовые значения формы 50/100/50 — это редактируемые удобные массы, а не формула.",
-                color = colors.ink2,style = PaperType.body, fontSize = 13.sp, lineHeight = 19.sp,
-                modifier = Modifier.padding(horizontal = 22.dp, vertical = 6.dp),
-            )
+                        "Стартовые значения формы 50/100/50 — это редактируемые удобные массы, а не формула.",
+                ).forEachIndexed { index, paragraph ->
+                    Text(paragraph, color = colors.ink2, style = PaperType.body, fontSize = 13.sp, lineHeight = 19.sp,
+                        modifier = Modifier.fillMaxWidth().padding(top = if (index == 0) 0.dp else 12.dp)
+                            .testTag("diary-advice-paragraph-$index"))
+                }
+            }
             }
             } else {
             // Pending deletion hides presentation only: its Room row is still history.

@@ -9,6 +9,8 @@ class ApkAccountGateTest(unittest.TestCase):
         dump = "Class descriptor  : 'Lcom/polinalinen/madre/BuildConfig;'\nStatic fields -\n"
         for name, value in [("APPLICATION_ID", '"com.polinalinen.madre.qa"'),
                             ("YANDEX_ID", str(enabled).lower()),
+                            ("ALICE", "true"), ("BUILD_TYPE", '"qa"'),
+                            ("FAMILY_LINK_UI", "true"), ("FAMILY_ROSTER_V2", "true"),
                             ("YANDEX_CLIENT_ID", '"' + client + '"'),
                             ("VERSION_CODE", "50"), ("VERSION_NAME", '"7.0.14"')]:
             dump += f"  name          : '{name}'\n  value         : {value}\n"
@@ -26,6 +28,23 @@ class ApkAccountGateTest(unittest.TestCase):
     def test_false_apk_cannot_pass_even_if_its_client_matches(self):
         fields, client = self.fixture(False)
         with self.assertRaisesRegex(ValueError, "not enabled"):
+            validate_fields(fields, client)
+
+    def test_every_delivery_feature_must_be_true_not_missing_false_or_integer(self):
+        for name in ("YANDEX_ID", "FAMILY_LINK_UI", "FAMILY_ROSTER_V2", "ALICE"):
+            for value in (None, False, 1):
+                with self.subTest(name=name, value=value):
+                    fields, client = self.fixture()
+                    fields[name] = value
+                    with self.assertRaises(ValueError):
+                        validate_fields(fields, client)
+
+    def test_legacy_debug_is_not_mistaken_for_the_delivery_variant(self):
+        fields, client = self.fixture()
+        fields.update(BUILD_TYPE="debug", FAMILY_LINK_UI=False, FAMILY_ROSTER_V2=False)
+        validate_fields(fields, client)
+        fields["BUILD_TYPE"] = "release"
+        with self.assertRaises(ValueError):
             validate_fields(fields, client)
 
     def test_ordinary_package_cannot_pass_the_qa_contract(self):

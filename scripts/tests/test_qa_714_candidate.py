@@ -21,7 +21,7 @@ METHOD = "com.polinalinen.madre.ui.razvorot.BakeNumberRenderTest.bakingPreviousS
 
 
 class Qa714CandidateTests(unittest.TestCase):
-    def test_qa_alice_and_default_off_family_have_independent_callers(self):
+    def test_final_qa_alice_and_family_have_independent_callers_and_release_stays_off(self):
         gradle = (ROOT / "app/build.gradle.kts").read_text()
         flag = 'buildConfigField("boolean", "FAMILY_ROSTER_V2", '
         self.assertEqual(1, gradle.count(flag + '"false")'))
@@ -37,7 +37,11 @@ class Qa714CandidateTests(unittest.TestCase):
         self.assertIn('const val FAMILY_ROSTER_V2 = com.polinalinen.madre.BuildConfig.FAMILY_ROSTER_V2', flags)
         family_flag = 'buildConfigField("boolean", "FAMILY_LINK_UI", '
         self.assertEqual(1, gradle.count(family_flag + '"false")'))
-        self.assertEqual(1, gradle.count(family_flag))  # No QA/preview override.
+        self.assertEqual(2, gradle.count(family_flag))  # Only final QA override.
+        self.assertIn(family_flag + '"true")', qa)
+        for variant in ('debug', 'release'):
+            match = re.search(r'\b' + variant + r'\s*\{(.*?)\n        \}', gradle, re.S)
+            self.assertNotIn('FAMILY_LINK_UI', match.group(1))
         self.assertIn(family_flag + '"false")', gradle.split('defaultConfig {', 1)[1].split('signingConfigs {', 1)[0])
         self.assertIn('const val V2_ACCOUNT = FAMILY_LINK_UI || FAMILY_ROSTER_V2', flags)
         source = ROOT / 'app/src/main/java/com/polinalinen/madre'
@@ -72,7 +76,7 @@ class Qa714CandidateTests(unittest.TestCase):
         jobs = sections(text.split('\njobs:\n', 1)[1], r'^  ([a-z0-9-]+):\n')
         frame = jobs['bake-back-frame']
         self.assertEqual('workflow-contract', scalar(frame, 'needs', 4))
-        self.assertNotIn('bake-back-frame', scalar(jobs['android-quality'], 'needs', 4))
+        self.assertIsNone(optional_scalar(jobs['android-quality'], 'needs', 4))
         self.assertNotIn('continue-on-error', frame)
         expression = scalar(frame, 'if', 4).replace('&&', ' and ')
         for event in ('push', 'pull_request', 'workflow_dispatch', 'schedule'):

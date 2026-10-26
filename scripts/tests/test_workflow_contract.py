@@ -45,13 +45,18 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn('exit "$result"', script)
         self.assertIn("adb shell cmd overlay enable com.android.internal.display.cutout.emulation.tall", script)
 
-    def test_pr_keeps_protected_smoke_name_but_skips_native_work(self):
+    def test_extended_native_work_stays_optional_and_protected_smoke_is_separate(self):
         text = self.read(".github/workflows/quality-gates.yml")
-        smoke = text.split("  instrumented-smoke:\n", 1)[1]
-        self.assertIn("name: Instrumented smoke", smoke)
+        smoke = text.split("  instrumented-acceptance:\n", 1)[1]
+        self.assertIn("name: Optional extended instrumented acceptance", smoke)
+        self.assertEqual(1, text.count("    name: Instrumented smoke\n"))
+        protected = text.split("  instrumented-smoke:\n", 1)[1].split("  instrumented-acceptance:\n", 1)[0]
+        self.assertIn("needs: [workflow-contract, android-quality]", protected)
+        self.assertIn("needs.workflow-contract.outputs.final_qa == 'true'", protected)
+        self.assertNotIn("qaRegression=true", protected)
         self.assertIn("if: (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && !inputs.critical_only && !inputs.family_link_render", smoke)
-        quality = text.split("  android-acceptance:\n", 1)[1].split("  lint-report:\n", 1)[0]
-        self.assertIn("needs: workflow-contract", quality)
+        quality = text.split("  android-acceptance:\n", 1)[1].split("  qa-regression:\n", 1)[0]
+        self.assertIn("needs: [workflow-contract, android-quality]", quality)
         critical = next(line for line in quality.splitlines() if "run: ./gradlew compileDebugKotlin" in line)
         self.assertIn("testDebugUnitTest assembleDebug", critical)
         self.assertNotIn("lintDebug", critical)
@@ -61,7 +66,7 @@ class WorkflowContractTests(unittest.TestCase):
 
     def test_lint_is_a_separate_nonblocking_report(self):
         text = self.read(".github/workflows/quality-gates.yml")
-        lint = text.split("  lint-report:\n", 1)[1].split("  instrumented-smoke:\n", 1)[0]
+        lint = text.split("  lint-report:\n", 1)[1].split("  instrumented-acceptance:\n", 1)[0]
         self.assertIn("continue-on-error: true", lint)
         self.assertIn("lintDebug", lint)
         self.assertIn("lint-reports", lint)
@@ -69,7 +74,7 @@ class WorkflowContractTests(unittest.TestCase):
     def test_coordinator_executes_as_one_command_under_the_pinned_actions_posix_shell(self):
         import subprocess
         text=self.read(".github/workflows/quality-gates.yml")
-        smoke=text.split("  instrumented-smoke:\n",1)[1].split("  required-7015-performance:\n",1)[0]
+        smoke=text.split("  instrumented-acceptance:\n",1)[1].split("  required-7015-performance:\n",1)[0]
         line=next(line.strip().removeprefix('script: ') for line in smoke.splitlines() if line.strip().startswith('script: '))
         self.assertEqual('bash scripts/run_native_acceptance.sh "${{ inputs.bake_numbers_native && \'true\' || \'false\' }}" "${{ inputs.exact_qa_timing && \'true\' || \'false\' }}"',line)
         line=line.replace('bash scripts/run_native_acceptance.sh','printf %s')
@@ -87,7 +92,7 @@ class WorkflowContractTests(unittest.TestCase):
 
     def test_qa_signing_is_verified_before_upload_without_a_fallback(self):
         text = self.read(".github/workflows/quality-gates.yml")
-        quality = text.split("  android-acceptance:\n", 1)[1].split("  lint-report:\n", 1)[0]
+        quality = text.split("  android-acceptance:\n", 1)[1].split("  qa-regression:\n", 1)[0]
         restore = quality.index("run: python3 scripts/restore_qa_signing.py\n")
         build = quality.index("run: ./gradlew compileDebugKotlin")
         verify = quality.index("id: verify_qa_signature")
@@ -124,6 +129,47 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("delivery_phase delivery-check",runtime)
         self.assertIn("'test_only_persistence_ABI':False",runtime)
         self.assertIn("actualUnmodifiedDeliveryReadsLegacyAndAddsPlan",self.read("macrobenchmark/src/main/java/com/polinalinen/madre/macrobenchmark/QaOwnerAcceptance.kt"))
+
+    def test_single_ordinary_r8_and_same_run_optional_consumers(self):
+        from scripts.tests.test_workflow_selector import sections, scalar, step_blocks
+        text = self.read(".github/workflows/quality-gates.yml")
+        jobs = sections(text.split("\njobs:\n", 1)[1], r"^  ([a-z0-9-]+):\n")
+        ordinary, regression = [], []
+        for name, job in jobs.items():
+            for line in job.splitlines():
+                if re.search(r"(?<![\w])(?::app:)?assembleQa(?![\w])", line):
+                    (regression if "-Pmadre.qaRegression=true" in line else ordinary).append(name)
+        self.assertEqual(["android-quality"], ordinary)
+        self.assertEqual(["qa-regression"], regression)
+        self.assertNotIn("qaRegression", jobs["android-quality"])
+        self.assertNotIn("assembleQa", jobs["android-acceptance"])
+        self.assertIsNone(scalar(jobs["android-quality"], "needs", 4))
+        self.assertEqual("[workflow-contract, android-quality]", scalar(jobs["android-acceptance"], "needs", 4))
+        self.assertEqual("[android-acceptance, qa-regression]", scalar(jobs["instrumented-acceptance"], "needs", 4))
+        download = step_blocks(jobs["android-acceptance"])["Download same-run ordinary QA, never rebuild delivery"]
+        self.assertIn("actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0", download)
+        self.assertEqual("madre-short-qa", scalar(download, "name", 10))
+        self.assertEqual("app/build", scalar(download, "path", 10))
+        for forbidden in ("run-id:", "github-token:", "continue-on-error:"):
+            self.assertNotIn(forbidden, download)
+        short = step_blocks(jobs["android-quality"])["Upload verified short QA and provenance"]
+        for path in ("outputs/apk/qa/app-qa.apk", "outputs/mapping/qa/", "intermediates/merged_manifests/qa/", "reports/qa-binary-provenance.json", "reports/qa-account-gate.json"):
+            self.assertIn("app/build/" + path, short)
+        self.assertIn("compiled_profile", self.read("scripts/verify_qa_release_like.py"))
+        for artifact in ("madre-qa-regression-target", "madre-qa-regression-test"):
+            self.assertIn("name: " + artifact, jobs["qa-regression"])
+            self.assertNotIn("name: " + artifact, jobs["android-acceptance"])
+            consumer = next(block for block in step_blocks(jobs["instrumented-acceptance"]).values() if "name: " + artifact in block)
+            self.assertNotIn("run-id:", consumer)
+            self.assertIn("inputs.bake_numbers_native || inputs.exact_qa_timing", consumer)
+        self.assertNotIn("continue-on-error: true", jobs["qa-regression"])
+
+    def test_gradle_cache_parallel_daemon_policy(self):
+        properties = self.read("gradle.properties")
+        for setting in ("org.gradle.caching=true", "org.gradle.parallel=true", "org.gradle.daemon=true", "org.gradle.workers.max=2", "org.gradle.jvmargs=-Xmx1536m -Dfile.encoding=UTF-8"):
+            self.assertIn(setting, properties.splitlines())
+        for workflow in ("quality-gates.yml", "release.yml"):
+            self.assertNotIn("--no-daemon", self.read(".github/workflows/" + workflow))
 
     def test_minified_control_build_finishes_before_boot_and_transport_is_not_a_pass(self):
         text=self.read(".github/workflows/quality-gates.yml")

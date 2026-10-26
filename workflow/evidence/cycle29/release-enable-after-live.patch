@@ -1,0 +1,14 @@
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -131,7 +131,10 @@
+             resValue("string", "app_name", "Мадре QA")
+         }
+         release {
+-            buildConfigField("boolean", "YANDEX_ID", "false")
++            // Apply only after live owner acceptance and a separately authorized release window.
++            buildConfigField("boolean", "YANDEX_ID", "true")
++            buildConfigField("boolean", "FAMILY_LINK_UI", "true")
++            buildConfigField("boolean", "FAMILY_ROSTER_V2", "true")
+             isMinifyEnabled = true
+             isShrinkResources = true
+             signingConfigs.findByName("release")?.let { signingConfig = it }

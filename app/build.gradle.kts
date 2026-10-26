@@ -80,8 +80,8 @@ android {
         minSdk = 26
         targetSdk = 35
         // versionCode is monotonic over the latest published release; release_cycle.py enforces it.
-        versionCode = 76
-        versionName = "7.1.23"
+        versionCode = 77
+        versionName = "7.1.24"
 
         testInstrumentationRunner = if (qaRegression) "com.polinalinen.madre.MinifiedPlanInstrumentation" else "androidx.test.runner.AndroidJUnitRunner"
         if (qaRegression) testProguardFile("qa-test-rules.pro")
@@ -92,6 +92,8 @@ android {
         buildConfigField("String", "MADRE_API_URL", "\"https://madre-api.kdnfx.space\"")
         buildConfigField("String", "YANDEX_CLIENT_ID", "\"$yandexClientId\"")
         buildConfigField("boolean", "QA_DIAGNOSTICS", "false")
+        // Kept in BuildConfig so binary verification covers the actual compiled flag.
+        buildConfigField("boolean", "ALICE", "true")
         // Production and debug transport stay legacy; only the selected QA candidate opts in.
         buildConfigField("boolean", "FAMILY_ROSTER_V2", "false")
         // Family invitations/list are independent of the QA Alice roster/control lane.
@@ -154,6 +156,8 @@ android {
         // Candidate only: PB activation/security and owner Station acceptance are still pending.
         // This single flag is consumed by both family and Alice roster-v2 UI/transport callers.
         buildConfigField("boolean", "FAMILY_ROSTER_V2", "true")
+        // Owner-approved final QA batch only; ordinary release remains disabled.
+        buildConfigField("boolean", "FAMILY_LINK_UI", "true")
         resValue("string", "app_name", "Мадре QA")
         matchingFallbacks.add("release")
     }

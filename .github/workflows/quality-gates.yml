@@ -3,8 +3,10 @@ name: Quality gates
 on:
   pull_request:
     branches: [main]
+    paths-ignore: ['**/*.md', 'docs/**', 'design/**']
   push:
     branches: [main]
+    paths-ignore: ['**/*.md', 'docs/**', 'design/**']
   workflow_dispatch:
     inputs:
       family_link_render:
@@ -65,17 +67,25 @@ env:
 jobs:
   workflow-contract:
     name: Workflow integrity
+    outputs:
+      final_qa: ${{ steps.final_qa.outputs.final_qa }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Reject conflicting manual selectors before any build or acceptance work
         env:
           WORKFLOW_INPUTS_JSON: ${{ toJSON(inputs) }}
+          WORKFLOW_EVENT_NAME: ${{ github.event_name }}
+          WORKFLOW_REF_NAME: ${{ github.ref_name }}
         run: |
           python3 - <<'PY'
           import json
           import os
           inputs = json.loads(os.environ['WORKFLOW_INPUTS_JSON']) or {}
+          if (os.environ.get('WORKFLOW_EVENT_NAME') == 'workflow_dispatch'
+                  and os.environ.get('WORKFLOW_REF_NAME', '').startswith('wip/')
+                  and not inputs.get('critical_only', False)):
+              raise SystemExit('wip branches require manual critical_only')
           if inputs.get('critical_only', False):
               conflicts = sorted(name for name, enabled in inputs.items()
                                  if name != 'critical_only' and enabled)
@@ -88,10 +98,15 @@ jobs:
                   raise SystemExit('family_link_render cannot be mixed with: ' + ', '.join(conflicts))
           PY
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Validate workflow state and control plane
         run: |
           python3 -m unittest discover -s scripts/tests -v
           python3 scripts/cycle.py validate
+      - name: Select final QA from this exact trusted PR head
+        id: final_qa
+        run: python3 scripts/select_final_qa.py
 
   # Feature pushes already synchronize PR61: use that single automatic run, not a second push/dispatch.
   bake-back-frame:
@@ -123,9 +138,12 @@ jobs:
           packages: platform-tools
       - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
         if: steps.select.outputs.capture == 'true'
+        with:
+          cache-read-only: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) || (github.event.repository != null && github.ref_name != github.event.repository.default_branch && !startsWith(github.head_ref || github.ref_name, 'feat/')) }}
+          cache-cleanup: on-success
       - name: Capture only the requested bake-back method
         if: steps.select.outputs.capture == 'true'
-        run: ./gradlew :app:testDebugUnitTest --tests 'com.polinalinen.madre.ui.razvorot.BakeNumberRenderTest.bakingPreviousStepFooter' --rerun-tasks --no-daemon --stacktrace --no-configuration-cache
+        run: ./gradlew :app:testDebugUnitTest --tests 'com.polinalinen.madre.ui.razvorot.BakeNumberRenderTest.bakingPreviousStepFooter' --rerun-tasks --stacktrace --no-configuration-cache
       - name: Upload bake-back PNG
         if: always() && steps.select.outputs.capture == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -145,7 +163,8 @@ jobs:
 
   android-quality:
     name: Android quality
-    needs: workflow-contract
+    # Independent short path; repeat the cheap selector guard before setup.
+    if: github.event_name != 'pull_request' || !startsWith(github.head_ref, 'wip/')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -156,6 +175,31 @@ jobs:
       MADRE_YANDEX_CLIENT_ID: ${{ secrets.MADRE_YANDEX_CLIENT_ID }}
       MADRE_BUILD_TOOLS_VERSION: "36.0.0"
     steps:
+      - name: Reject conflicting manual selectors before any build or acceptance work
+        env:
+          WORKFLOW_INPUTS_JSON: ${{ toJSON(inputs) }}
+          WORKFLOW_EVENT_NAME: ${{ github.event_name }}
+          WORKFLOW_REF_NAME: ${{ github.ref_name }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          inputs = json.loads(os.environ['WORKFLOW_INPUTS_JSON']) or {}
+          if (os.environ.get('WORKFLOW_EVENT_NAME') == 'workflow_dispatch'
+                  and os.environ.get('WORKFLOW_REF_NAME', '').startswith('wip/')
+                  and not inputs.get('critical_only', False)):
+              raise SystemExit('wip branches require manual critical_only')
+          if inputs.get('critical_only', False):
+              conflicts = sorted(name for name, enabled in inputs.items()
+                                 if name != 'critical_only' and enabled)
+              if conflicts:
+                  raise SystemExit('critical_only cannot be mixed with: ' + ', '.join(conflicts))
+          if inputs.get('family_link_render', False):
+              conflicts = sorted(name for name, enabled in inputs.items()
+                                 if name != 'family_link_render' and enabled)
+              if conflicts:
+                  raise SystemExit('family_link_render cannot be mixed with: ' + ', '.join(conflicts))
+          PY
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -166,7 +210,10 @@ jobs:
       - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
         with:
           packages: platform-tools
-      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+        with:
+          cache-read-only: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) || (github.event.repository != null && github.ref_name != github.event.repository.default_branch && !startsWith(github.head_ref || github.ref_name, 'feat/')) }}
+          cache-cleanup: on-success
       - name: Install pinned QA verification tools
         run: sdkmanager "build-tools;${MADRE_BUILD_TOOLS_VERSION}"
       # Current parent authority: stable QA identity approved from7.0.8 onward.
@@ -177,7 +224,7 @@ jobs:
           QA_SIGNING_CERT_SHA256: ${{ secrets.MADRE_QA_SIGNING_CERT_SHA256 }}
         run: python3 scripts/restore_qa_signing.py
       - name: Short APK gate - compile, executed units and ordinary QA
-        run: ./gradlew :app:compileDebugKotlin :app:compileDebugUnitTestKotlin :app:testDebugUnitTest :app:assembleDebug :app:assembleQa -Pmadre.shortApkGate=true --no-daemon --stacktrace --no-configuration-cache
+        run: ./gradlew :app:compileDebugKotlin :app:compileDebugUnitTestKotlin :app:testDebugUnitTest :app:assembleDebug :app:assembleQa -Pmadre.shortApkGate=true --stacktrace --no-configuration-cache
       - name: Verify stable QA APK identity before any APK upload
         id: verify_qa_signature
         run: python3 scripts/verify_apk_signature.py app/build/outputs/apk/debug/app-debug.apk
@@ -201,6 +248,7 @@ jobs:
             app/build/outputs/mapping/qa/
             app/build/reports/qa-binary-provenance.json
             app/build/reports/qa-account-gate.json
+            app/build/intermediates/merged_manifests/qa/
           if-no-files-found: error
           retention-days: 14
       - name: Upload short APK gate unit reports
@@ -220,7 +268,7 @@ jobs:
   android-acceptance:
     name: Optional detailed Android acceptance
     if: (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && !inputs.critical_only
-    needs: workflow-contract
+    needs: [workflow-contract, android-quality]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -239,7 +287,10 @@ jobs:
       - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
         with:
           packages: platform-tools
-      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+        with:
+          cache-read-only: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) || (github.event.repository != null && github.ref_name != github.event.repository.default_branch && !startsWith(github.head_ref || github.ref_name, 'feat/')) }}
+          cache-cleanup: on-success
       - name: Install pinned QA verification tools
         run: sdkmanager "build-tools;${MADRE_BUILD_TOOLS_VERSION}"
       # Current parent authority: stable QA identity approved from7.0.8 onward.
@@ -250,15 +301,20 @@ jobs:
           QA_SIGNING_CERT_SHA256: ${{ secrets.MADRE_QA_SIGNING_CERT_SHA256 }}
         run: python3 scripts/restore_qa_signing.py
       - name: Compile, domain tests, style boundary, 20 key native frames and QA APK
-        run: ./gradlew compileDebugKotlin compileReleaseKotlin testDebugUnitTest assembleDebug assembleQa --no-daemon --stacktrace --no-configuration-cache
+        run: ./gradlew compileDebugKotlin compileReleaseKotlin testDebugUnitTest assembleDebug --stacktrace --no-configuration-cache
+      - name: Download same-run ordinary QA, never rebuild delivery
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: madre-short-qa
+          path: app/build
       - name: Freeze ordinary delivery QA before building the test-only persistence ABI
         run: |
           mkdir -p .ci-delivery/outputs/apk/qa .ci-delivery/outputs/mapping .ci-delivery/intermediates/merged_manifests
           cp app/build/outputs/apk/qa/app-qa.apk .ci-delivery/outputs/apk/qa/
           cp -R app/build/outputs/mapping/qa .ci-delivery/outputs/mapping/
           cp -R app/build/intermediates/merged_manifests/qa .ci-delivery/intermediates/merged_manifests/
-      - name: Build minified QA instrumentation separately without displacing debug domain and render tests
-        run: ./gradlew :app:assembleQa :app:assembleQaAndroidTest -Pmadre.qaRegression=true --no-daemon --stacktrace --no-configuration-cache
+          mkdir -p .ci-delivery/reports
+          cp app/build/reports/qa-*-gate.json app/build/reports/qa-binary-provenance.json .ci-delivery/reports/
       - name: Verify stable QA APK identity before any APK upload
         id: verify_qa_signature
         run: python3 scripts/verify_apk_signature.py app/build/outputs/apk/debug/app-debug.apk
@@ -269,20 +325,19 @@ jobs:
         id: verify_real_qa
         run: |
           python3 scripts/verify_apk_signature.py app/build/outputs/apk/qa/app-qa.apk
-          python3 scripts/verify_qa_release_like.py app/build/outputs/apk/qa/app-qa.apk --mapping app/build/outputs/mapping/qa/mapping.txt > app/build/reports/qa-regression-binary-provenance.json
           python3 scripts/verify_apk_signature.py .ci-delivery/outputs/apk/qa/app-qa.apk
           mkdir -p .ci-delivery/reports
           python3 scripts/verify_qa_release_like.py .ci-delivery/outputs/apk/qa/app-qa.apk --mapping .ci-delivery/outputs/mapping/qa/mapping.txt > .ci-delivery/reports/qa-binary-provenance.json
           ! grep -Fq 'qa-persistence-api.pro' .ci-delivery/outputs/mapping/qa/configuration.txt
       - name: Extended visual verification (manual, nightly and RC)
         if: (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && !inputs.critical_only && !inputs.family_link_render && !inputs.fixes_7013_acceptance && !inputs.fixes_7014_acceptance && !inputs.fixes_7014_instrumented && !inputs.fixes_7015_huawei && !inputs.bake_numbers_native && !inputs.exact_qa_timing
-        run: ./gradlew testDebugUnitTest verifyRoborazziDebug -Pmadre.extendedVerification=true --no-daemon --stacktrace --no-configuration-cache
+        run: ./gradlew testDebugUnitTest verifyRoborazziDebug -Pmadre.extendedVerification=true --stacktrace --no-configuration-cache
       - name: Optional family K Compose renders (manual only)
         if: github.event_name == 'workflow_dispatch' && inputs.family_link_render
         run: |
           mkdir -p app/build/reports/critical-before-family-render
           cp -R app/build/test-results/testDebugUnitTest app/build/reports/critical-before-family-render/
-          ./gradlew :app:testDebugUnitTest --tests 'com.polinalinen.madre.familyui.FamilyLinkRenderTest' -Pmadre.familyLinkRender=true --no-daemon --stacktrace --no-configuration-cache
+          ./gradlew :app:testDebugUnitTest --tests 'com.polinalinen.madre.familyui.FamilyLinkRenderTest' -Pmadre.familyLinkRender=true --stacktrace --no-configuration-cache
       - name: Upload optional family K PNG (not e2e or Huawei)
         if: always() && github.event_name == 'workflow_dispatch' && inputs.family_link_render
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -296,7 +351,7 @@ jobs:
         run: |
           mkdir -p app/build/reports/critical-before-fixes-acceptance
           cp -R app/build/test-results/testDebugUnitTest app/build/reports/critical-before-fixes-acceptance/
-          ./gradlew testDebugUnitTest --tests 'com.polinalinen.madre.ui.razvorot.Fixes7013ExtendedRenderTest' -Pmadre.extendedVerification=true --no-daemon --stacktrace --no-configuration-cache
+          ./gradlew testDebugUnitTest --tests 'com.polinalinen.madre.ui.razvorot.Fixes7013ExtendedRenderTest' -Pmadre.extendedVerification=true --stacktrace --no-configuration-cache
       - name: Native412 comparison from immutable60985a8 app sources
         if: github.event_name == 'workflow_dispatch' && inputs.capture_baseline
         run: python3 scripts/capture_style_baseline.py
@@ -310,26 +365,6 @@ jobs:
           # Dedicated allowlist above contains only APK/mapping/manifest/provenance,
           # never the keystore; upload-artifact excludes dot directories otherwise.
           include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 14
-      - name: Upload explicitly test-only R8 persistence target, never deliver it
-        if: success() && steps.verify_real_qa.outcome == 'success'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: madre-qa-regression-target
-          path: |
-            app/build/outputs/apk/qa/app-qa.apk
-            app/build/outputs/mapping/qa/
-            app/build/reports/qa-regression-binary-provenance.json
-            app/build/intermediates/merged_manifests/qa/
-          if-no-files-found: error
-          retention-days: 14
-      - name: Upload same-certificate minified QA instrumentation
-        if: success() && steps.verify_real_qa.outcome == 'success'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: madre-qa-regression-test
-          path: app/build/outputs/apk/androidTest/qa/*.apk
           if-no-files-found: error
           retention-days: 14
       - name: Upload verified debug APK first
@@ -365,8 +400,79 @@ jobs:
         if: always()
         run: python3 scripts/restore_qa_signing.py --cleanup
 
+  qa-regression:
+    name: Optional test-only R8 QA regression
+    if: (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && !inputs.critical_only && !inputs.family_link_render
+    needs: workflow-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      QA_KEYSTORE_PASSWORD: ${{ secrets.MADRE_QA_KEYSTORE_PASSWORD }}
+      QA_KEY_ALIAS: ${{ secrets.MADRE_QA_KEY_ALIAS }}
+      QA_KEY_PASSWORD: ${{ secrets.MADRE_QA_KEY_PASSWORD }}
+      MADRE_SIGNING_CERT_SHA256: "9ACA5F5F57F301EC8359AD670ECEB6387156132007C07FF36A31266326468258"
+      MADRE_YANDEX_CLIENT_ID: ${{ secrets.MADRE_YANDEX_CLIENT_ID }}
+      MADRE_BUILD_TOOLS_VERSION: "36.0.0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+      - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+        with:
+          packages: platform-tools
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+        with:
+          cache-read-only: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) || (github.event.repository != null && github.ref_name != github.event.repository.default_branch && !startsWith(github.head_ref || github.ref_name, 'feat/')) }}
+          cache-cleanup: on-success
+      - name: Install pinned QA verification tools
+        run: sdkmanager "build-tools;${MADRE_BUILD_TOOLS_VERSION}"
+      # Current parent authority: stable QA identity approved from7.0.8 onward.
+      # Production signing remains separate; no ephemeral delivery fallback.
+      - name: Restore private stable QA signing
+        env:
+          QA_KEYSTORE_BASE64: ${{ secrets.MADRE_QA_KEYSTORE_BASE64 }}
+          QA_SIGNING_CERT_SHA256: ${{ secrets.MADRE_QA_SIGNING_CERT_SHA256 }}
+        run: python3 scripts/restore_qa_signing.py
+      - name: Build minified QA instrumentation separately without displacing debug domain and render tests
+        run: ./gradlew :app:assembleQa :app:assembleQaAndroidTest -Pmadre.qaRegression=true --stacktrace --no-configuration-cache
+      - name: Verify test-only QA target and matching instrumentation certificate
+        id: verify_real_qa
+        run: |
+          mkdir -p app/build/reports
+          python3 scripts/verify_apk_signature.py app/build/outputs/apk/qa/app-qa.apk
+          python3 scripts/verify_apk_signature.py app/build/outputs/apk/androidTest/qa/app-qa-androidTest.apk
+          python3 scripts/verify_apk_account_gate.py app/build/outputs/apk/qa/app-qa.apk > app/build/reports/qa-regression-account-gate.json
+          python3 scripts/verify_qa_release_like.py app/build/outputs/apk/qa/app-qa.apk --mapping app/build/outputs/mapping/qa/mapping.txt > app/build/reports/qa-regression-binary-provenance.json
+          grep -Fq 'qa-persistence-api.pro' app/build/outputs/mapping/qa/configuration.txt
+      - name: Upload explicitly test-only R8 persistence target, never deliver it
+        if: success() && steps.verify_real_qa.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: madre-qa-regression-target
+          path: |
+            app/build/outputs/apk/qa/app-qa.apk
+            app/build/outputs/mapping/qa/
+            app/build/reports/qa-regression-binary-provenance.json
+            app/build/intermediates/merged_manifests/qa/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload same-certificate minified QA instrumentation
+        if: success() && steps.verify_real_qa.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: madre-qa-regression-test
+          path: app/build/outputs/apk/androidTest/qa/*.apk
+          if-no-files-found: error
+          retention-days: 14
+      - name: Remove private QA keystore
+        if: always()
+        run: python3 scripts/restore_qa_signing.py --cleanup
+
   lint-report:
     name: Lint (report only)
+    if: github.event_name != 'pull_request' || !startsWith(github.head_ref, 'wip/')
     needs: workflow-contract
     continue-on-error: true
     runs-on: ubuntu-latest
@@ -380,10 +486,13 @@ jobs:
       - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
         with:
           packages: platform-tools
-      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+        with:
+          cache-read-only: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) || (github.event.repository != null && github.ref_name != github.event.repository.default_branch && !startsWith(github.head_ref || github.ref_name, 'feat/')) }}
+          cache-cleanup: on-success
       - name: Lint warnings do not block PR or APK
         continue-on-error: true
-        run: ./gradlew lintDebug --no-daemon --stacktrace
+        run: ./gradlew lintDebug --stacktrace
       - name: Upload lint report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -393,11 +502,73 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  # Protected check: real ordinary-QA smoke, independent of optional render/regression jobs.
   instrumented-smoke:
     name: Instrumented smoke
-    needs: android-acceptance
-    # Keep the protected check name; PR/push is SKIPPED, not a passed smoke.
-    # RC release gate still requires a real success at this exact SHA.
+    needs: [workflow-contract, android-quality]
+    if: (needs.workflow-contract.outputs.final_qa == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && !inputs.critical_only && !inputs.family_link_render
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      MADRE_YANDEX_CLIENT_ID: ${{ secrets.MADRE_YANDEX_CLIENT_ID }}
+      MADRE_BUILD_TOOLS_VERSION: "36.0.0"
+      MADRE_EXACT_QA_DIR: ${{ github.workspace }}/.ci-final-qa
+      ANDROID_SERIAL: emulator-5554
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+      - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+        with:
+          packages: platform-tools
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+        with:
+          cache-read-only: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) || (github.event.repository != null && github.ref_name != github.event.repository.default_branch && !startsWith(github.head_ref || github.ref_name, 'feat/')) }}
+          cache-cleanup: on-success
+      - name: Download only the same-run verified ordinary QA
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: madre-short-qa
+          path: .ci-final-qa
+      - name: Build only the external self-instrumenting driver before AVD
+        run: ./gradlew :macrobenchmark:assembleBenchmark --stacktrace --no-configuration-cache
+      - name: Verify actual same-head QA bytes before emulator boot
+        run: |
+          sdkmanager "build-tools;${MADRE_BUILD_TOOLS_VERSION}"
+          python3 scripts/run_final_qa_smoke.py --prepare
+      - name: Enable KVM for the CI emulator only
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Smoke the exact ordinary signed QA, not debug or qaRegression
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_2
+          emulator-port: 5554
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: python3 scripts/run_final_qa_smoke.py
+      - name: Upload raw exact QA smoke evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: final-qa-smoke
+          path: performance-evidence/final-qa-smoke/
+          if-no-files-found: error
+          retention-days: 14
+
+  instrumented-acceptance:
+    name: Optional extended instrumented acceptance
+    needs: [android-acceptance, qa-regression]
+    # Extended native groups remain manual/nightly, independent of protected ordinary-QA smoke.
+    # A skipped extended job is never presented as a successful emulator acceptance.
     if: (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && !inputs.critical_only && !inputs.family_link_render
     runs-on: ubuntu-latest
     timeout-minutes: ${{ inputs.exact_qa_timing && 90 || 45 }}
@@ -423,7 +594,10 @@ jobs:
       - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
         with:
           packages: platform-tools
-      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+        with:
+          cache-read-only: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) || (github.event.repository != null && github.ref_name != github.event.repository.default_branch && !startsWith(github.head_ref || github.ref_name, 'feat/')) }}
+          cache-cleanup: on-success
       - name: Enable KVM
         # The optional device job must use the same QA identity, never an ephemeral debug key.
         run: |
@@ -461,7 +635,7 @@ jobs:
         run: |
           python3 -c 'import os,re; assert re.fullmatch(r"[0-9a-fA-F]{32}", os.environ.get("MADRE_YANDEX_CLIENT_ID", "")), "Approved Yandex client id is required for instrumentation"'
           sdkmanager "build-tools;${MADRE_BUILD_TOOLS_VERSION}"
-          ./gradlew :yandex-authsdk-330:mergeDebugAndroidTestManifest :app:assembleDebugAndroidTest --no-daemon --stacktrace --no-configuration-cache
+          ./gradlew :yandex-authsdk-330:mergeDebugAndroidTestManifest :app:assembleDebugAndroidTest --stacktrace --no-configuration-cache
       - name: Build immutable negative R8 control before AVD boot, not alongside emulator memory
         if: inputs.bake_numbers_native || inputs.exact_qa_timing
         run: python3 scripts/run_minified_plan_regression.py --prepare
@@ -479,7 +653,7 @@ jobs:
         continue-on-error: true # missing/failed preparation is a real coordinator lane failure
         run: |
           mkdir -p performance-evidence/exact-qa-timing
-          ./gradlew :macrobenchmark:assembleBenchmark --no-daemon --stacktrace --no-configuration-cache 2>&1 | tee performance-evidence/exact-qa-timing/driver-build.log
+          ./gradlew :macrobenchmark:assembleBenchmark --stacktrace --no-configuration-cache 2>&1 | tee performance-evidence/exact-qa-timing/driver-build.log
           python3 scripts/run_exact_qa_timing.py --prepare 2>&1 | tee performance-evidence/exact-qa-timing/prepare.log
       - name: Run emulator smoke tests
         uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
@@ -565,6 +739,9 @@ jobs:
         with:
           packages: platform-tools
       - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+        with:
+          cache-read-only: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) || (github.event.repository != null && github.ref_name != github.event.repository.default_branch && !startsWith(github.head_ref || github.ref_name, 'feat/')) }}
+          cache-cleanup: on-success
       - name: Restore same QA key for isolated measurement APKs only
         env:
           QA_KEYSTORE_BASE64: ${{ secrets.MADRE_QA_KEYSTORE_BASE64 }}
@@ -577,8 +754,8 @@ jobs:
 
       - name: Build both actual R8 timing targets and driver before booting AVD
         run: |
-          (cd "$RUNNER_TEMP/madre-perf-before" && ./gradlew :app:assembleBenchmark :macrobenchmark:assembleBenchmark --no-daemon --stacktrace --no-configuration-cache)
-          ./gradlew :app:assembleBenchmark :macrobenchmark:assembleBenchmark --no-daemon --stacktrace --no-configuration-cache
+          (cd "$RUNNER_TEMP/madre-perf-before" && ./gradlew :app:assembleBenchmark :macrobenchmark:assembleBenchmark --stacktrace --no-configuration-cache)
+          ./gradlew :app:assembleBenchmark :macrobenchmark:assembleBenchmark --stacktrace --no-configuration-cache
       - name: Enable KVM for controlled CI AVD
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules

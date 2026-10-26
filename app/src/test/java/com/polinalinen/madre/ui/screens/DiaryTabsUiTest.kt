@@ -74,7 +74,7 @@ class DiaryTabsUiTest {
         rule.onNodeWithTag("diary-list").performScrollToNode(hasText("СОВЕТЫ ИЗ РУКОВОДСТВА"))
         rule.onNodeWithText("СОВЕТЫ ИЗ РУКОВОДСТВА").assertIsDisplayed()
         rule.onNodeWithText("В буклете Levito Madre указано", substring = true).performScrollTo().assertIsDisplayed()
-        rule.onNodeWithContentDescription("Дата, Закваска, Мука, Вода, Гидратация, Хранение").assertDoesNotExist()
+        rule.onNodeWithTag("diary-entry-24").assertDoesNotExist()
         restoration.emulateSavedInstanceStateRestore()
         assertTabs(false)
         tab("Советы").performClick(); assertTabs(false)
@@ -86,16 +86,62 @@ class DiaryTabsUiTest {
         }
         assertThat(feeds).isEqualTo(1); assertThat(galleries).isEqualTo(1)
         reveal("Журнал"); tab("Журнал").performClick(); assertTabs(true)
-        rule.onNodeWithTag("diary-list").performScrollToNode(hasContentDescription(
-            "Дата, Закваска, Мука, Вода, Гидратация, Хранение"))
-        rule.onNodeWithContentDescription("Дата, Закваска, Мука, Вода, Гидратация, Хранение").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Дата, Закваска, Мука, Вода, Гидратация, Хранение").assertDoesNotExist()
         history.lastOrNull()?.let {
-            // No ten-row ceiling: materialize the actual last row and its unchanged disclosure.
-            rule.onNodeWithTag("diary-list").performScrollToNode(hasText("ПОДРОБНЕЕ"))
-            rule.onNodeWithText("ПОДРОБНЕЕ").performScrollTo().performClick()
+            rule.onNodeWithTag("diary-list").performScrollToNode(hasTestTag("diary-entry-${it.id}"))
+            rule.onNodeWithTag("diary-entry-${it.id}").onChildAt(0).performClick()
             rule.onNodeWithText("Заметка: Последняя из 24").performScrollTo().assertIsDisplayed()
         }
     }
+    private fun disclosureAcrossAdvice(ownerRoundTrip: Boolean?, restoreWhileHidden: Boolean = false) {
+        val original = FeedingEntity(id = 17, sourdoughConfigId = 1, timestampMillis = 1_750_000_000_000,
+            flourGrams = 100, waterGrams = 50, storageLocation = StorageLocation.KITCHEN,
+            generatedComment = "Подробности настоящей строки")
+        val current = androidx.compose.runtime.mutableStateOf(original)
+        val restoration = StateRestorationTester(rule)
+        restoration.setContent {
+            RazvorotTheme {
+                StarterDiaryScreen(1, GrowthPhase.EMPTY, profileForInterval(24), emptyList(), listOf(current.value),
+                    {}, {}, nowMillis = original.timestampMillis)
+            }
+        }
+        fun entry() = rule.onNodeWithTag("diary-entry-17").onChildAt(0)
+        fun revealEntry() = rule.onNodeWithTag("diary-list").performScrollToNode(hasTestTag("diary-entry-17"))
+        revealEntry(); entry().performClick()
+        rule.onNodeWithText(original.generatedComment!!).performScrollTo().assertIsDisplayed()
+        restoration.emulateSavedInstanceStateRestore()
+        revealEntry()
+        entry().assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Подробности раскрыты"))
+        reveal("Советы"); tab("Советы").performClick()
+        rule.onNodeWithTag("diary-entry-17").assertDoesNotExist()
+        if (ownerRoundTrip != null) {
+            // These are the actual persisted FeedingEntity owner/id fields, not UI book labels or auth identities.
+            rule.runOnIdle { current.value = original.copy(sourdoughConfigId = 2) }
+            rule.waitForIdle()
+            assertThat(current.value.sourdoughConfigId).isEqualTo(2)
+            rule.onNodeWithTag("diary-entry-17").assertDoesNotExist()
+            if (ownerRoundTrip) {
+                rule.runOnIdle { current.value = original }
+                rule.waitForIdle()
+                assertThat(current.value.sourdoughConfigId).isEqualTo(1)
+            }
+        }
+        if (restoreWhileHidden) {
+            restoration.emulateSavedInstanceStateRestore()
+            reveal("Советы"); tab("Советы").assertIsSelected()
+        }
+        reveal("Журнал"); tab("Журнал").performClick(); revealEntry()
+        val expected = if (ownerRoundTrip == null) "Подробности раскрыты" else "Подробности свёрнуты"
+        entry().assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, expected))
+        if (ownerRoundTrip == null) rule.onNodeWithText(original.generatedComment!!).performScrollTo().assertIsDisplayed()
+        else rule.onNodeWithText(original.generatedComment!!).assertDoesNotExist()
+        assertThat(current.value.id).isEqualTo(17)
+    }
+    @Test fun hiddenJournalDoesNotRestoreDisclosureForAnotherConfigWithReusedId() = disclosureAcrossAdvice(false)
+    @Test fun hiddenJournalOwnerRoundTripDoesNotReviveTheOldDisclosure() = disclosureAcrossAdvice(true)
+    @Test fun hiddenJournalOwnerRoundTripStaysCollapsedAfterSavedStateRestore() = disclosureAcrossAdvice(true, true)
+    @Test fun sameOwnerJournalRetainsDisclosureAcrossVisibleRestoreAndAdvice() = disclosureAcrossAdvice(null)
+
     @Test fun emptyDiaryUsesNativeSegmentsAndRestoresAdvice() = verify(1f, emptyList())
     @Test fun largeTextKeepsBothTabsAndAllExistingRowsAccessible() = verify(2f, (1L..24L).map { id ->
         FeedingEntity(id = id, sourdoughConfigId = 1, timestampMillis = id * 86_400_000,

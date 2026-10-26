@@ -204,6 +204,12 @@ class FeedingDraftNavigationUiTest {
         val rowsBefore = runBlocking {
             app.database.feedingDao().observeHistory(config.id).first() to app.database.bakeRecordDao().observeAll().first()
         }
+        val stored = rowsBefore.first.first { it.photoPath == source.absolutePath }
+        rule.onNodeWithTag("diary-list").performScrollToNode(hasTestTag("diary-entry-${stored.id}"))
+        rule.onNodeWithTag("diary-entry-${stored.id}").onChildAt(0).performClick()
+        rule.onNodeWithContentDescription("Фотокарточка кормления").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithTag("diary-entry-${stored.id}").onChildAt(0).performScrollTo().performClick()
+        rule.onNodeWithContentDescription("Фотокарточка кормления").assertDoesNotExist()
         album(4)
         rule.onAllNodesWithContentDescription("Кормление · Мадре").assertCountEquals(2)
         rule.onNodeWithContentDescription("Пробная выпечка").assertIsDisplayed()

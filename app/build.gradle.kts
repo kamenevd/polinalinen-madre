@@ -80,8 +80,8 @@ android {
         minSdk = 26
         targetSdk = 35
         // versionCode is monotonic over the latest published release; release_cycle.py enforces it.
-        versionCode = 68
-        versionName = "7.1.15"
+        versionCode = 69
+        versionName = "7.1.16"
 
         testInstrumentationRunner = if (qaRegression) "com.polinalinen.madre.MinifiedPlanInstrumentation" else "androidx.test.runner.AndroidJUnitRunner"
         if (qaRegression) testProguardFile("qa-test-rules.pro")

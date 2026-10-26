@@ -8,6 +8,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performClick
@@ -28,11 +29,7 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-/**
- * Cycle 26: «Формуляр кормлений» — таблица. Шесть колонок целиком помещаются
- * в портрет, длинный человеческий текст живёт отдельным раскрытием, а старая
- * запись без гидратации говорит «не указана», а не подставляет число.
- */
+/** Journal rows preserve the ordered facts and exact legacy disclosures. */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "ru-w360dp-h640dp-xhdpi", application = MadreApplication::class)
@@ -131,30 +128,20 @@ class StarterDiaryUiTest {
     }
 
     private fun revealHistory() {
-        // The hero pushes rows below the lazy viewport: materialize them before locating a child.
-        rule.onNodeWithTag("diary-list").performScrollToNode(hasContentDescription(
-            "Дата, Закваска, Мука, Вода, Гидратация, Хранение"))
+        rule.onNodeWithTag("diary-list").performScrollToNode(hasTestTag("diary-entry-7") or
+            hasTestTag("diary-entry-3") or hasTestTag("diary-entry-4") or hasTestTag("diary-entry-8"))
     }
 
-    @Test fun `actions precede the formulary and its sticky header`() {
-        show(listOf(computed))
-
+    @Test fun `actions precede week groups and the journal has no table`() {
+        show(listOf(computed), nowMillis = computed.timestampMillis)
         val feedTop = rule.onNodeWithText("+ Покормить").fetchSemanticsNode().boundsInRoot.top
         val galleryTop = rule.onNodeWithText("Фото 0").fetchSemanticsNode().boundsInRoot.top
-        rule.onNodeWithTag("diary-list").performScrollToNode(androidx.compose.ui.test.hasText("ФОРМУЛЯР КОРМЛЕНИЙ"))
-        val formularyTop = rule.onNodeWithText("ФОРМУЛЯР КОРМЛЕНИЙ").performScrollTo()
-            .fetchSemanticsNode().boundsInRoot.top
-        assertThat(feedTop).isLessThan(formularyTop)
-        assertThat(galleryTop).isLessThan(formularyTop)
-        revealHistory()
-        // Шапка таблицы: шесть колонок, ровно те и в том порядке.
-        listOf("Дата", "Закв.", "Мука", "Вода", "Гидр.", "Хранение").forEach { title ->
-            rule.onNodeWithText(title).performScrollTo().assertIsDisplayed()
-        }
-        rule.onNodeWithContentDescription(
-            "Дата, Закваска, Мука, Вода, Гидратация, Хранение"
-        ).assertIsDisplayed()
-        rule.onAllNodesWithText("Прошлые главы").assertCountEquals(0)
+        rule.onNodeWithTag("diary-list").performScrollToNode(androidx.compose.ui.test.hasText("Эта неделя"))
+        val weekTop = rule.onNodeWithText("Эта неделя").performScrollTo().fetchSemanticsNode().boundsInRoot.top
+        assertThat(feedTop).isLessThan(weekTop)
+        assertThat(galleryTop).isLessThan(weekTop)
+        rule.onNodeWithContentDescription("Дата, Закваска, Мука, Вода, Гидратация, Хранение").assertDoesNotExist()
+        listOf("Дата", "Закв.", "Мука", "Вода", "Гидр.", "Хранение").forEach { rule.onNodeWithText(it).assertDoesNotExist() }
     }
 
     /** Строка читается одним предложением: шесть подписанных значений с единицами. */
@@ -186,24 +173,25 @@ class StarterDiaryUiTest {
     @Test fun `the long detail is a separate optional disclosure`() {
         show(listOf(computed))
         revealHistory()
-        rule.onAllNodesWithText("пахнет яблоками", substring = true).assertCountEquals(0)
+        rule.onNodeWithText("пахнет яблоками", useUnmergedTree = true).assertExists()
+        rule.onNodeWithText(computed.generatedComment!!).assertDoesNotExist()
 
-        rule.onNodeWithTag("diary-list").performScrollToNode(androidx.compose.ui.test.hasText("ПОДРОБНЕЕ"))
-        rule.onNodeWithText("ПОДРОБНЕЕ").performScrollTo().performClick()
+        rule.onNodeWithContentDescription("18 августа 2025, 12:00", substring = true).performScrollTo().performClick()
 
         rule.onNodeWithText("Заметка: пахнет яблоками").performScrollTo().assertIsDisplayed()
         rule.onNodeWithText(
             "Записано 18 августа, 12:00. Расписание: каждые 24 ч."
         ).performScrollTo().assertIsDisplayed()
         // Раскрытая запись без заметок и комментария раскрывать нечего.
-        rule.onNodeWithText("СВЕРНУТЬ").assertExists()
+        rule.onNodeWithText("Свернуть", useUnmergedTree = true).assertExists()
     }
 
-    /** Записи без заметки, комментария и фото раскрывать нечем. */
-    @Test fun `a bare row offers no disclosure`() {
+    /** The same row tap also toggles a bare legacy row without inventing detail. */
+    @Test fun `a bare row still has a real disclosure action`() {
         show(listOf(legacy))
         revealHistory()
-        rule.onAllNodesWithText("ПОДРОБНЕЕ").assertCountEquals(0)
+        rule.onNodeWithContentDescription("10 августа 2025, 09:30", substring = true).performScrollTo().performClick()
+        rule.onNodeWithText("Свернуть", useUnmergedTree = true).assertExists()
     }
 
     /** Старые ручные поля показываются в списке именно как display-only seed. */

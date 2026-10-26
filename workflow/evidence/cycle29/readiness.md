@@ -17,7 +17,9 @@ No new screens or backend payload. Larger SCREENS work is deferred to 7.2.
 - PR70: inert source/docs/fixture tests only. No cleanup, cron or installation.
 - Deliverable `qa`: YANDEX_ID, FAMILY_LINK_UI, FAMILY_ROSTER_V2 and ALICE are ON.
   Actual DEX verifier enforces all four. Legacy debug keeps family transport OFF;
-  ordinary release keeps Yandex/family flags OFF and its original signing policy.
+  its ALICE remains ON. Ordinary release keeps all four flags OFF and its original
+  signing policy. The owner's 2026-10-26 21:15 MSK instruction supersedes the old
+  release-ALICE exception; no release activation is authorized.
 
 ## One automatic final-candidate CI run
 
@@ -61,7 +63,7 @@ Skipped smoke is not PASS and release context still demands an actual successful
 `release-enable-after-live.patch` is intentionally unapplied. Tests run real
 `git apply --check` and apply it only to a temporary fixture, verifying unchanged
 QA code, application identities and signing. It switches only release YANDEX_ID,
-FAMILY_LINK_UI and FAMILY_ROSTER_V2 to true; ALICE already remains true.
+FAMILY_LINK_UI, FAMILY_ROSTER_V2 and ALICE to true; all four remain OFF by default.
 
 After separately authorized live Yandex/family/Alice/Station checks, final review,
 and a new explicit owner release window, the controller may review a fresh patch

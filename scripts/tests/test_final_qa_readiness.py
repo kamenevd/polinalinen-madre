@@ -158,11 +158,37 @@ class FinalQaReadinessTest(unittest.TestCase):
             new_release, new_rest = new_suffix.split("\n        }", 1)
             self.assertEqual(prefix, new_prefix)
             self.assertEqual(old_rest, new_rest)
-            for flag in ("YANDEX_ID", "FAMILY_LINK_UI", "FAMILY_ROSTER_V2"):
+            for flag in ("YANDEX_ID", "FAMILY_LINK_UI", "FAMILY_ROSTER_V2", "ALICE"):
                 self.assertIn('buildConfigField("boolean", "' + flag + '", "true")', new_release)
+                self.assertNotIn('buildConfigField("boolean", "' + flag + '", "true")', old_release)
             self.assertIn('buildConfigField("boolean", "YANDEX_ID", "false")', old_release)
             self.assertEqual(1, changed.count('signingConfigs.findByName("release")'))
         self.assertEqual(source, (ROOT / "app/build.gradle.kts").read_bytes())
+
+    def test_owner_2115_all_four_qa_flags_on_release_defaults_off_debug_voice_kept(self):
+        source = (ROOT / "app/build.gradle.kts").read_text()
+        defaults = source.split("    defaultConfig {\n", 1)[1].split("\n    signingConfigs {", 1)[0]
+        release = source.split("        release {\n", 1)[1].split("\n        }", 1)[0]
+        debug = source.split("        debug {\n", 1)[1].split("\n        }", 1)[0]
+        qa = source.split('    buildTypes.create("qa") {\n', 1)[1].split("\n    }", 1)[0]
+
+        def fields(block):
+            return dict(re.findall(r'buildConfigField\("boolean", "([A-Z_0-9]+)", (.+)\)', block))
+
+        default_flags, release_flags = fields(defaults), fields(release)
+        qa_flags, debug_flags = fields(qa), fields(debug)
+        self.assertIn('initWith(buildTypes.getByName("release"))', qa)
+        approval = re.search(r"val qaYandexActivationApproved = (\w+)", source)
+        assert approval is not None
+        self.assertEqual("true", approval.group(1))
+        for flag in ("YANDEX_ID", "FAMILY_LINK_UI", "FAMILY_ROSTER_V2", "ALICE"):
+            with self.subTest(flag=flag):
+                self.assertEqual('"false"', release_flags.get(flag, default_flags.get(flag)))
+                self.assertEqual('qaYandexActivationApproved.toString()' if flag == "YANDEX_ID" else '"true"', qa_flags[flag])
+        self.assertEqual('"false"', default_flags["ALICE"])
+        self.assertEqual('"true"', debug_flags["ALICE"])
+        for flag in ("FAMILY_LINK_UI", "FAMILY_ROSTER_V2"):
+            self.assertEqual('"false"', debug_flags.get(flag, default_flags.get(flag)))
 
 
 if __name__ == "__main__":

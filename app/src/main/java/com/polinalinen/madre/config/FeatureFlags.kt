@@ -1,6 +1,6 @@
 package com.polinalinen.madre.config
 
-/** Android voice is included in both variants. Backend/OAuth require separate deployment consent. */
+/** Voice is enabled in debug/QA, not release. Backend/OAuth need separate deployment consent. */
 object FeatureFlags {
     const val RECIPE_EDIT = false
     const val ALICE = com.polinalinen.madre.BuildConfig.ALICE

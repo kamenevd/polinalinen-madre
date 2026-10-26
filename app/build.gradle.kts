@@ -92,8 +92,8 @@ android {
         buildConfigField("String", "MADRE_API_URL", "\"https://madre-api.kdnfx.space\"")
         buildConfigField("String", "YANDEX_CLIENT_ID", "\"$yandexClientId\"")
         buildConfigField("boolean", "QA_DIAGNOSTICS", "false")
-        // Kept in BuildConfig so binary verification covers the actual compiled flag.
-        buildConfigField("boolean", "ALICE", "true")
+        // Release stays off; only legacy debug and the owner-approved QA opt in.
+        buildConfigField("boolean", "ALICE", "false")
         // Production and debug transport stay legacy; only the selected QA candidate opts in.
         buildConfigField("boolean", "FAMILY_ROSTER_V2", "false")
         // Family invitations/list are independent of the QA Alice roster/control lane.
@@ -123,6 +123,7 @@ android {
 
     buildTypes {
         debug {
+            buildConfigField("boolean", "ALICE", "true")
             buildConfigField("boolean", "QA_DIAGNOSTICS", "true")
             buildConfigField("boolean", "YANDEX_ID", qaYandexActivationApproved.toString())
             applicationIdSuffix = ".qa"
@@ -152,6 +153,7 @@ android {
         signingConfig=signingConfigs.findByName("qa")
         if (providers.gradleProperty("madre.qaRegression").getOrElse("false").toBoolean()) proguardFile("qa-persistence-api.pro")
         buildConfigField("boolean", "YANDEX_ID", qaYandexActivationApproved.toString())
+        buildConfigField("boolean", "ALICE", "true")
         buildConfigField("boolean", "QA_DIAGNOSTICS", "true")
         // Candidate only: PB activation/security and owner Station acceptance are still pending.
         // This single flag is consumed by both family and Alice roster-v2 UI/transport callers.

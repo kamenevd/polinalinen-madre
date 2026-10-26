@@ -326,7 +326,8 @@ fun MadreNavHost(
 
     // Реальное sourdough-состояние (Cycle 3): конфиг и история кормлений из Room,
     // через SourdoughViewModel — реактивно, без ручного refetch после кормления.
-    val sourdoughConfig by sourdoughViewModel.config.collectAsState()
+    val diaryHistory by sourdoughViewModel.diaryHistory.collectAsState()
+    val sourdoughConfig = diaryHistory.config
     val diaryDeletion by sourdoughViewModel.diaryDeletion.state.collectAsState()
     val deletionAuthority = diaryDeletion.authority
     val observedFeedingHistory by sourdoughViewModel.history.collectAsState()
@@ -551,7 +552,8 @@ fun MadreNavHost(
                     // Generated biology is not an observation. Only saved user
                     // observations appear in the factual feeding list below.
                     entries = emptyList(),
-                    history = feedingHistory,
+                    history = diaryHistory.history.orEmpty(),
+                    historyLoaded = diaryHistory.history != null,
                     deletion = diaryDeletion,
                     onDelete = { selected ->
                         if (feedingHistory.any { it == selected }) sourdoughViewModel.diaryDeletion.queue(selected, deletionAuthority)

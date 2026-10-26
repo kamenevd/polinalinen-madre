@@ -89,6 +89,7 @@ fun StarterDiaryScreen(
     deletion: com.polinalinen.madre.sourdough.DiaryDeletionState = com.polinalinen.madre.sourdough.DiaryDeletionState(),
     onUndoDelete: (Long) -> Unit = {},
     onDeletionNoticeHeightChanged: (Dp) -> Unit = {},
+    historyLoaded: Boolean = true,
 ) {
     val colors = LocalPaper.current
     val density = LocalDensity.current
@@ -211,6 +212,20 @@ fun StarterDiaryScreen(
             )
             }
             } else {
+            // Pending deletion hides presentation only: its Room row is still history.
+            if (historyLoaded && history.isEmpty()) {
+                item(key = "diary-empty") {
+                    // Keep the shared PaperEmpty and palette intact; its 17sp note needs
+                    // readable ink on this page, not the kit's decorative muted ink.
+                    androidx.compose.runtime.CompositionLocalProvider(LocalPaper provides colors.copy(mut = colors.ink2)) {
+                        PaperEmpty("", "Дневник начнётся с первого кормления. $starterName ждёт.",
+                            Modifier.padding(horizontal = 22.dp).testTag("diary-empty")) {
+                            PaperButton("Покормить", onFeed, Modifier.fillMaxWidth().testTag("diary-empty-feed"),
+                                fillLabelWidth = true)
+                        }
+                    }
+                }
+            }
             journalWeeks(history.filterNot { row -> deletion.pending?.let {
                 row.id == it.row.id && row.sourdoughConfigId == it.book.configId
             } == true }, scheduleNowMillis).forEach { week ->

@@ -22,10 +22,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -37,6 +37,12 @@ sealed interface FeedingSaveState {
     data class Success(val feedingId: Long) : FeedingSaveState
     data class Error(val message: String) : FeedingSaveState
 }
+
+/** Null history is unknown/loading, not a loaded empty Journal. */
+data class DiaryHistoryState(
+    val config: SourdoughConfigEntity? = null,
+    val history: List<FeedingEntity>? = null,
+)
 
 /**
  * Cycle 3: реальное состояние закваски вместо захардкоженных profile/phase/history,
@@ -70,9 +76,16 @@ class SourdoughViewModel @JvmOverloads constructor(
 
     val diaryDeletion = com.polinalinen.madre.sourdough.DiaryDeletion(viewModelScope, repository::deleteDiaryFeeding, diaryElapsed, diaryWait)
 
-    private fun publishConfig(value: SourdoughConfigEntity) {
-        diaryDeletion.selectBook(com.polinalinen.madre.sourdough.DiaryBook(value.userId, value.id))
+    private fun publishConfig(value: SourdoughConfigEntity?) {
+        val book = value?.let { com.polinalinen.madre.sourdough.DiaryBook(it.userId, it.id) }
+        val changedOwner = book != historyOwner.value?.book
+        // Invalidate before publishing the new config, including an A -> B -> A.
+        // Diary consumes this single snapshot, never a separate loaded flag.
+        _diaryHistory.value = if (changedOwner) DiaryHistoryState(value)
+            else _diaryHistory.value.copy(config = value)
+        diaryDeletion.selectBook(book)
         _config.value = value
+        if (changedOwner) historyOwner.value = book?.let { HistoryOwner(it, ++historyGeneration) }
     }
 
     override fun onCleared() {
@@ -83,11 +96,23 @@ class SourdoughViewModel @JvmOverloads constructor(
     private val _config = MutableStateFlow<SourdoughConfigEntity?>(null)
     val config: StateFlow<SourdoughConfigEntity?> = _config.asStateFlow()
 
-    val history: StateFlow<List<FeedingEntity>> = _config
-        .map { it?.id }
-        .distinctUntilChanged()
-        .flatMapLatest { configId ->
-            if (configId == null) flowOf(emptyList()) else repository.observeHistory(configId)
+    private data class HistoryOwner(val book: com.polinalinen.madre.sourdough.DiaryBook, val generation: Long)
+    private var historyGeneration = 0L
+    private val historyOwner = MutableStateFlow<HistoryOwner?>(null)
+    private val _diaryHistory = MutableStateFlow(DiaryHistoryState())
+    val diaryHistory: StateFlow<DiaryHistoryState> = _diaryHistory.asStateFlow()
+
+    // Keep the public history and its existing retained-row/form behavior. The
+    // same single Room stream also publishes atomic Diary config/rows/readiness.
+    val history: StateFlow<List<FeedingEntity>> = historyOwner
+        .flatMapLatest { owner ->
+            if (owner == null) flowOf(emptyList()) else repository.observeHistory(owner.book.configId)
+                .mapNotNull { rows ->
+                    if (historyOwner.value !== owner) null else {
+                        _diaryHistory.value = DiaryHistoryState(_config.value, rows)
+                        rows
+                    }
+                }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -120,8 +145,7 @@ class SourdoughViewModel @JvmOverloads constructor(
                     publishConfig(latest)
                     rescheduleReminder(latest)
                 } else {
-                    diaryDeletion.selectBook(null)
-                    _config.value = null
+                    publishConfig(null)
                 }
             }
         }

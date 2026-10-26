@@ -27,11 +27,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -82,8 +85,14 @@ fun StarterDiaryScreen(
     selectedTabIndex: Int? = null,
     onTabSelected: (Int) -> Unit = {},
     onRepeat: (FeedingEntity) -> Unit = {},
+    onDelete: ((FeedingEntity) -> Unit)? = null,
+    deletion: com.polinalinen.madre.sourdough.DiaryDeletionState = com.polinalinen.madre.sourdough.DiaryDeletionState(),
+    onUndoDelete: (Long) -> Unit = {},
+    onDeletionNoticeHeightChanged: (Dp) -> Unit = {},
 ) {
     val colors = LocalPaper.current
+    val density = LocalDensity.current
+    var deletionNoticeHeight by remember { mutableStateOf(0.dp) }
     var localTab by rememberSaveable { mutableStateOf(0) }
     val selectedTab = selectedTabIndex ?: localTab
     // «Клякса» — DESIGN-V4.md Cycle 3, фича InkBlot. Событие для seed — самое
@@ -107,7 +116,7 @@ fun StarterDiaryScreen(
         LazyColumn(
             Modifier.testTag("diary-list")
                 , // страница дышит — механика #5
-            contentPadding = PaddingValues(bottom = 24.dp),
+            contentPadding = PaddingValues(bottom = 24.dp + if (deletion.pending != null || deletion.error != null) deletionNoticeHeight else 0.dp),
         ) {
             item {
                 PaperHeader(StarterName.diaryTitle(starterName), onBack,
@@ -202,18 +211,35 @@ fun StarterDiaryScreen(
             )
             }
             } else {
-            journalWeeks(history, scheduleNowMillis).forEach { week ->
+            journalWeeks(history.filterNot { row -> deletion.pending?.let {
+                row.id == it.row.id && row.sourdoughConfigId == it.book.configId
+            } == true }, scheduleNowMillis).forEach { week ->
                 item(key = "week-${week.start}") {
                     Text(week.label, color = colors.ink2, style = PaperType.ui,
                         modifier = Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 24.dp, bottom = 8.dp)
                             .testTag("diary-week-${week.start}").semantics { heading() })
                 }
                 items(week.entries, key = { "${it.sourdoughConfigId}:${it.id}" }) { feeding ->
-                    JournalRow(feeding, currentYear, onRepeat)
+                    JournalRow(feeding, currentYear, onRepeat, onDelete, deletion.pending == null)
                 }
             }
             }
         }
+        }
+        if (deletion.pending != null || deletion.error != null) {
+            PaperSurface(color = colors.bg, modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged {
+                deletionNoticeHeight = with(density) { it.height.toDp() }
+                onDeletionNoticeHeightChanged(deletionNoticeHeight)
+            }) {
+                Column(Modifier.fillMaxWidth().padding(22.dp).testTag("diary-delete-status"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val pending = deletion.pending
+                    Text(deletion.error ?: if (pending?.committing == true) "Удаляем запись…" else "Запись скрыта. Можно вернуть в течение 5 секунд.",
+                        color = colors.ink, style = PaperType.body,
+                        modifier = Modifier.semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite })
+                    if (pending != null && !pending.committing) PaperButton("Вернуть", { onUndoDelete(pending.token) },
+                        Modifier.fillMaxWidth().testTag("diary-delete-undo"), fillLabelWidth = true)
+                }
+            }
         }
         }
     }

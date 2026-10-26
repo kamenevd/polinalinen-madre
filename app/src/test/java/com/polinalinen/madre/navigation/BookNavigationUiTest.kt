@@ -14,6 +14,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.polinalinen.madre.MadreApplication
@@ -45,12 +46,23 @@ class BookNavigationUiTest {
     @Before fun setup() { runCatching{androidx.work.WorkManager.initialize(app,androidx.work.Configuration.Builder().build())} }
     @After fun clearControllers() { rule.activity.viewModelStore.clear() }
 
-    private fun bindRealController():BakingViewModel {
+    private fun bindRealController(replaceStoredController:Boolean=false):BakingViewModel {
         lateinit var controller:BakingViewModel
         rule.activityRule.scenario.onActivity { activity ->
             assertSame(app,activity.application)
             // Bind the actual fixture owner, never a cached Application from another test.
-            controller=ViewModelProvider(activity,ViewModelProvider.AndroidViewModelFactory(app))[BakingViewModel::class.java]
+            val factory=ViewModelProvider.AndroidViewModelFactory(app)
+            if(replaceStoredController) {
+                // Kill only the real baking VM: Navigation must retain its live store until onSave.
+                val store=activity.viewModelStore
+                val key=store.keys().single{it.endsWith(BakingViewModel::class.java.canonicalName!!)}
+                val previous=requireNotNull(store[key])
+                val retained=store.keys().filter{it!=key}.associateWith{store[it]}
+                store.put(key,factory.create(BakingViewModel::class.java))
+                assertFalse(previous.viewModelScope.coroutineContext[kotlinx.coroutines.Job]!!.isActive)
+                retained.forEach{(retainedKey,viewModel)->assertSame(viewModel,store[retainedKey])}
+            }
+            controller=ViewModelProvider(activity,factory)[BakingViewModel::class.java]
         }
         assertSame(app,controller.getApplication<MadreApplication>())
         return controller
@@ -284,8 +296,7 @@ class BookNavigationUiTest {
         assertEquals(fixture.id.toString(),nav.currentBackStackEntry?.arguments?.getString("sessionId"))
         assertNull(requested.value)
         val firstController=controller
-        rule.runOnIdle{rule.activity.viewModelStore.clear()}
-        controller=bindRealController()
+        controller=bindRealController(replaceStoredController=true)
         assertNotSame(firstController,controller)
         restoration.emulateSavedInstanceStateRestore()
         awaitActualBake()
@@ -441,7 +452,7 @@ class BookNavigationUiTest {
         val requested=MutableStateFlow<Long?>(fixture.id)
         lateinit var nav:NavHostController
         val restoration=StateRestorationTester(rule)
-        bindRealController()
+        val firstController=bindRealController()
         restoration.setContent{nav=rememberNavController();MadreNavHost(nav,pendingSessionId=requested)}
         rule.waitUntil(10_000){rule.onAllNodesWithText("Крупно").fetchSemanticsNodes().isNotEmpty()}
         val bakeRoute=MadreDestinations.BAKE
@@ -474,8 +485,7 @@ class BookNavigationUiTest {
         assertEquals(1,nav.currentBackStackEntry?.savedStateHandle?.get<Int>("home_section"))
         assertEquals(recordId,ledger.recordIdFor(fixture.id))
         rule.onNodeWithText("ИСПЕЧЕНО · ВПИШИТЕ В КНИГУ").assertExists()
-        rule.runOnIdle{rule.activity.viewModelStore.clear()}
-        bindRealController()
+        assertNotSame(firstController,bindRealController(replaceStoredController=true))
         restoration.emulateSavedInstanceStateRestore()
         rule.waitUntil(10_000){rule.onAllNodesWithText("Вписать в книгу").fetchSemanticsNodes().isNotEmpty()}
         rule.onNodeWithText("ИСПЕЧЕНО · ВПИШИТЕ В КНИГУ").assertExists()

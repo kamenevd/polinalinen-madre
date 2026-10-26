@@ -56,13 +56,15 @@ internal fun journalWeeks(history: List<FeedingEntity>, now: Long, zone: ZoneId 
 
 /** All persisted facts remain verbatim; a row tap only changes local disclosure state. */
 @Composable
-internal fun JournalRow(feeding: FeedingEntity, currentYear: Int, onRepeat: (FeedingEntity) -> Unit = {}) {
+internal fun JournalRow(feeding: FeedingEntity, currentYear: Int, onRepeat: (FeedingEntity) -> Unit = {},
+    onDelete: ((FeedingEntity) -> Unit)? = null, deleteEnabled: Boolean = true) {
     val colors = LocalPaper.current
     val masses = FeedingPresets.last(feeding)
     val repeatReason = if (feeding.retainedStarterGrams == null)
         "Повтор недоступен: в записи не указана масса оставленной закваски."
     else if (masses == null) "Повтор недоступен: массы записи выходят за допустимые пределы." else null
     val repeatAction by rememberUpdatedState { if (masses != null) onRepeat(feeding) }
+    val deleteAction by rememberUpdatedState { if (deleteEnabled) onDelete?.invoke(feeding) }
     // Inputs only reset a live composition; the keyed group also scopes restored bytes.
     var expanded by key(feeding.sourdoughConfigId, feeding.id) {
         rememberSaveable { mutableStateOf(false) }
@@ -86,7 +88,11 @@ internal fun JournalRow(feeding: FeedingEntity, currentYear: Int, onRepeat: (Fee
             detectHorizontalDragGestures(
                 onDragStart = { dragged = 0f },
                 onDragCancel = { dragged = 0f },
-                onDragEnd = { if (dragged >= 72.dp.toPx()) repeatAction(); dragged = 0f },
+                onDragEnd = {
+                    if (dragged >= 72.dp.toPx()) repeatAction()
+                    else if (dragged <= -72.dp.toPx()) deleteAction()
+                    dragged = 0f
+                },
                 onHorizontalDrag = { _, amount -> dragged += amount },
             )
         }) {
@@ -96,9 +102,11 @@ internal fun JournalRow(feeding: FeedingEntity, currentYear: Int, onRepeat: (Fee
             .clearAndSetSemantics {
                 contentDescription = spoken
                 stateDescription = if (expanded) "Подробности раскрыты" else "Подробности свёрнуты"
-                if (masses != null) customActions = listOf(CustomAccessibilityAction("Повторить кормление") {
-                    repeatAction(); true
-                })
+                val actions = buildList {
+                    if (masses != null) add(CustomAccessibilityAction("Повторить кормление") { repeatAction(); true })
+                    if (onDelete != null && deleteEnabled) add(CustomAccessibilityAction("Удалить кормление") { deleteAction(); true })
+                }
+                if (actions.isNotEmpty()) customActions = actions
             }
             .padding(horizontal = 22.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
@@ -125,6 +133,9 @@ internal fun JournalRow(feeding: FeedingEntity, currentYear: Int, onRepeat: (Fee
                 PaperButton("Повторить кормление", { repeatAction() },
                     Modifier.fillMaxWidth().testTag("diary-repeat-${feeding.id}"),
                     enabled = masses != null, variant = PaperButtonVariant.SECONDARY, fillLabelWidth = true)
+                if (onDelete != null) PaperButton("Удалить кормление", { deleteAction() },
+                    Modifier.fillMaxWidth().testTag("diary-delete-${feeding.id}"),
+                    enabled = deleteEnabled, variant = PaperButtonVariant.SECONDARY, fillLabelWidth = true)
                 repeatReason?.let {
                     Text(it, Modifier.fillMaxWidth().testTag("diary-repeat-reason-${feeding.id}"),
                         color = colors.ink2, style = PaperType.body)
@@ -138,7 +149,8 @@ internal fun JournalRow(feeding: FeedingEntity, currentYear: Int, onRepeat: (Fee
                 feeding.photoPath?.let { path ->
                     if (PhotoStore.isReadable(LocalContext.current, path)) {
                         AgedPhoto(photoPath = path, takenAtMillis = feeding.timestampMillis, height = 140.dp,
-                            caption = "Фотокарточка кормления")
+                            // Keep the fixed Undo reachable while any Journal deletion is pending.
+                            openable = deleteEnabled, caption = "Фотокарточка кормления")
                     } else {
                         Text("Фото: файл не найден", Modifier.fillMaxWidth(), color = colors.ink2, style = PaperType.caption)
                     }

@@ -114,6 +114,10 @@ class FeedingDraftNavigationUiTest {
         assertEquals(MadreDestinations.STARTER_DETAIL, nav.currentDestination?.route)
     }
     private fun openForm() {
+        if (nav.currentDestination?.route == MadreDestinations.STARTER_DETAIL) {
+            // Expanded D2 actions can put this lazy item outside composition.
+            rule.onNodeWithTag("diary-list").performScrollToNode(hasText("+ Покормить", ignoreCase = true))
+        }
         rule.onNodeWithText(if (nav.currentDestination?.route == MadreDestinations.STARTER_DETAIL)
             "+ Покормить" else "Покормить", ignoreCase = true).performScrollTo().performClick()
         rule.waitForIdle()

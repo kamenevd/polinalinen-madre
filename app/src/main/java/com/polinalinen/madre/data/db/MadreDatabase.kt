@@ -56,7 +56,13 @@ interface SourdoughConfigDao {
     // затереть параллельные изменения name/intervalHours/remindersEnabled
     // устаревшей копией конфига.
     @Query("UPDATE sourdough_configs SET lastFeedingMillis = :millis WHERE id = :configId")
-    suspend fun updateLastFeeding(configId: Long, millis: Long)
+    suspend fun updateLastFeeding(configId: Long, millis: Long?)
+
+    @Query("SELECT * FROM sourdough_configs WHERE id = :configId LIMIT 1")
+    fun getNow(configId: Long): SourdoughConfigEntity?
+
+    @Query("UPDATE sourdough_configs SET lastFeedingMillis = :millis WHERE id = :configId")
+    fun updateLastFeedingNow(configId: Long, millis: Long?)
 
     // Cycle 11: «Кормить» и «Напоминания» в колофоне наконец пишут в Room, а не
     // в UI-стейт экрана. Точечные UPDATE — по той же причине, что и выше.
@@ -76,6 +82,15 @@ interface SourdoughConfigDao {
 
 @Dao
 interface FeedingDao {
+    @Query("SELECT * FROM feedings WHERE id = :id LIMIT 1")
+    fun getNow(id: Long): FeedingEntity?
+
+    @Query("SELECT * FROM feedings WHERE sourdoughConfigId = :configId ORDER BY id DESC LIMIT 1")
+    fun getLastNow(configId: Long): FeedingEntity?
+
+    @Delete
+    fun deleteNow(feeding: FeedingEntity)
+
     @Query("SELECT photoPath FROM feedings WHERE photoPath IS NOT NULL")
     suspend fun allPhotoPaths(): List<String>
 

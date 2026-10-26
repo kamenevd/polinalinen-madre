@@ -61,10 +61,24 @@ class SourdoughViewModel @JvmOverloads constructor(
         notifier.cancelFeedingReminder()
         syncRepository.shareFeedingStat(feedingId, flour, water, fedAt)
     },
+    private val diaryElapsed: () -> Long = android.os.SystemClock::elapsedRealtime,
+    private val diaryWait: suspend (Long) -> Unit = { kotlinx.coroutines.delay(it) },
 ) : AndroidViewModel(app) {
 
     private val weatherTimeoutMillis = 4_000L
     private val saveInProgress = AtomicBoolean(false)
+
+    val diaryDeletion = com.polinalinen.madre.sourdough.DiaryDeletion(viewModelScope, repository::deleteDiaryFeeding, diaryElapsed, diaryWait)
+
+    private fun publishConfig(value: SourdoughConfigEntity) {
+        diaryDeletion.selectBook(com.polinalinen.madre.sourdough.DiaryBook(value.userId, value.id))
+        _config.value = value
+    }
+
+    override fun onCleared() {
+        diaryDeletion.leave()
+        super.onCleared()
+    }
 
     private val _config = MutableStateFlow<SourdoughConfigEntity?>(null)
     val config: StateFlow<SourdoughConfigEntity?> = _config.asStateFlow()
@@ -91,7 +105,7 @@ class SourdoughViewModel @JvmOverloads constructor(
     init {
         viewModelScope.launch {
             val bootstrapped = loadConfig()
-            _config.value = bootstrapped
+            publishConfig(bootstrapped)
             // Конфиг есть — записываем имя, если его успели набрать раньше.
             renameQueue.flush()?.let { repository.setName(bootstrapped.id, it) }
             // Держим конфиг актуальным реактивно: после кормления lastFeedingMillis
@@ -103,8 +117,11 @@ class SourdoughViewModel @JvmOverloads constructor(
             // конфиге, план пересчитывается от актуальных значений.
             observeConfig(bootstrapped.userId).collect { latest ->
                 if (latest != null) {
-                    _config.value = latest
+                    publishConfig(latest)
                     rescheduleReminder(latest)
+                } else {
+                    diaryDeletion.selectBook(null)
+                    _config.value = null
                 }
             }
         }

@@ -114,6 +114,7 @@ fun MadreNavHost(
     }
     val navSnackbar = remember { PaperSnackbarState() }
     val bakeActionBarHeight=remember{mutableStateOf(0.dp)}
+    val diaryDeleteNoticeHeight = remember { mutableStateOf(0.dp) }
     val restoreReady by bakingViewModel.restoreReady.collectAsState()
     val bakeMutationError by bakingViewModel.mutationError.collectAsState()
     LaunchedEffect(bakeMutationError) { bakeMutationError?.let { navSnackbar.showSnackbar(it) } }
@@ -326,6 +327,8 @@ fun MadreNavHost(
     // Реальное sourdough-состояние (Cycle 3): конфиг и история кормлений из Room,
     // через SourdoughViewModel — реактивно, без ручного refetch после кормления.
     val sourdoughConfig by sourdoughViewModel.config.collectAsState()
+    val diaryDeletion by sourdoughViewModel.diaryDeletion.state.collectAsState()
+    val deletionAuthority = diaryDeletion.authority
     val observedFeedingHistory by sourdoughViewModel.history.collectAsState()
     // The config flow can advance before Room replaces the previous history.
     val feedingHistory = observedFeedingHistory.filter { it.sourdoughConfigId == sourdoughConfig?.id }
@@ -341,6 +344,12 @@ fun MadreNavHost(
         MadreDestinations.FEEDING_FORM, MadreDestinations.PHOTO_GALLERY -> navController.previousBackStackEntry
             ?.takeIf { it.destination.route == MadreDestinations.STARTER_DETAIL }
         else -> null
+    }
+    LaunchedEffect(feedingScopeEntry, diaryOwner?.id) {
+        // Never leave a destructive timer behind an inaccessible Undo action.
+        // Opening the form/album also cancels; the still-authoritative row remains.
+        if (feedingScopeEntry != null && feedingScopeEntry.destination.route != MadreDestinations.STARTER_DETAIL)
+            sourdoughViewModel.diaryDeletion.leave()
     }
     var draftDiaryId by rememberSaveable { mutableStateOf<String?>(null) }
     var draftBookOwner by rememberSaveable { mutableStateOf(feedingBookOwner) }
@@ -543,6 +552,12 @@ fun MadreNavHost(
                     // observations appear in the factual feeding list below.
                     entries = emptyList(),
                     history = feedingHistory,
+                    deletion = diaryDeletion,
+                    onDelete = { selected ->
+                        if (feedingHistory.any { it == selected }) sourdoughViewModel.diaryDeletion.queue(selected, deletionAuthority)
+                    },
+                    onUndoDelete = { sourdoughViewModel.diaryDeletion.undo(it) },
+                    onDeletionNoticeHeightChanged = { diaryDeleteNoticeHeight.value = it },
                     onBack = { navController.popBackStack() },
                     onFeed = enterFeedingForm,
                     onRepeat = { selected ->
@@ -751,7 +766,9 @@ fun MadreNavHost(
                     navController.navigate(MadreDestinations.SETTINGS_SHELF) { launchSingleTop = true }
                 }
             PaperSnackbar(navSnackbar,Modifier.align(Alignment.BottomCenter).padding(horizontal=12.dp)
-                .padding(bottom=if(bakeActionBarHeight.value>0.dp)bakeActionBarHeight.value+12.dp else 80.dp))
+                .padding(bottom=maxOf(if(bakeActionBarHeight.value>0.dp)bakeActionBarHeight.value+12.dp else 80.dp,
+                    if (currentEntry?.destination?.route == MadreDestinations.STARTER_DETAIL &&
+                        (diaryDeletion.pending != null || diaryDeletion.error != null)) diaryDeleteNoticeHeight.value + 12.dp else 0.dp)))
         }
             startRecipeId?.let { id->recipesForStats.firstOrNull{it.id==id}?.let { recipe->
                 val editing=bookPreferences.plans.firstOrNull{it.id==editingPlanId}

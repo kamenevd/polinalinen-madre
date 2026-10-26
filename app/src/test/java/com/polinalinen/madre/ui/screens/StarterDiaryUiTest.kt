@@ -141,6 +141,7 @@ class StarterDiaryUiTest {
 
         val feedTop = rule.onNodeWithText("+ Покормить").fetchSemanticsNode().boundsInRoot.top
         val galleryTop = rule.onNodeWithText("Фото 0").fetchSemanticsNode().boundsInRoot.top
+        rule.onNodeWithTag("diary-list").performScrollToNode(androidx.compose.ui.test.hasText("ФОРМУЛЯР КОРМЛЕНИЙ"))
         val formularyTop = rule.onNodeWithText("ФОРМУЛЯР КОРМЛЕНИЙ").performScrollTo()
             .fetchSemanticsNode().boundsInRoot.top
         assertThat(feedTop).isLessThan(formularyTop)
@@ -160,6 +161,7 @@ class StarterDiaryUiTest {
     @Test fun `a computed row is announced as one ordered sentence`() {
         show(listOf(computed))
         revealHistory()
+        rule.onNodeWithTag("diary-list").performScrollToNode(hasContentDescription("18 августа 2025, 12:00", substring = true))
         rule.onNodeWithContentDescription(
             "18 августа 2025, 12:00. Закваска: 50 граммов. Мука: 100 граммов. " +
                 "Вода: 50 граммов. Гидратация: 50 процентов. Хранение: холодильник."
@@ -170,6 +172,7 @@ class StarterDiaryUiTest {
     @Test fun `a legacy row says the hydration is unknown`() {
         show(listOf(legacy))
         revealHistory()
+        rule.onNodeWithTag("diary-list").performScrollToNode(hasContentDescription("10 августа 2025, 09:30", substring = true))
         rule.onNodeWithContentDescription(
             "10 августа 2025, 09:30. Закваска: не указана. Мука: 60 граммов. " +
                 "Вода: 30 граммов. Гидратация: не указана. Хранение: кухня."
@@ -185,6 +188,7 @@ class StarterDiaryUiTest {
         revealHistory()
         rule.onAllNodesWithText("пахнет яблоками", substring = true).assertCountEquals(0)
 
+        rule.onNodeWithTag("diary-list").performScrollToNode(androidx.compose.ui.test.hasText("ПОДРОБНЕЕ"))
         rule.onNodeWithText("ПОДРОБНЕЕ").performScrollTo().performClick()
 
         rule.onNodeWithText("Заметка: пахнет яблоками").performScrollTo().assertIsDisplayed()
@@ -206,6 +210,7 @@ class StarterDiaryUiTest {
     @Test fun `legacy hydration with no final value is shown from legacy seed`() {
         show(listOf(legacyHydrationFallback))
         revealHistory()
+        rule.onNodeWithTag("diary-list").performScrollToNode(hasContentDescription("80 процентов", substring = true))
         rule.onNodeWithText("80%", useUnmergedTree = true).performScrollTo().assertIsDisplayed()
         rule.onNodeWithContentDescription("80 процентов", substring = true)
             .performScrollTo()

@@ -336,17 +336,21 @@ fun MadreNavHost(
     val feedingScopeEntry = currentEntry
     val diaryOwner = when (feedingScopeEntry?.destination?.route) {
         MadreDestinations.STARTER_DETAIL -> feedingScopeEntry
-        MadreDestinations.FEEDING_FORM -> navController.previousBackStackEntry
+        MadreDestinations.FEEDING_FORM, MadreDestinations.PHOTO_GALLERY -> navController.previousBackStackEntry
             ?.takeIf { it.destination.route == MadreDestinations.STARTER_DETAIL }
         else -> null
     }
     var draftDiaryId by rememberSaveable { mutableStateOf<String?>(null) }
     var draftBookOwner by rememberSaveable { mutableStateOf(feedingBookOwner) }
+    var diarySelectedTab by rememberSaveable { mutableStateOf(0) }
     LaunchedEffect(feedingBookOwner, diaryOwner?.id, feedingScopeEntry) {
         // Capture one composition snapshot: the first restored entry can arrive
         // before this effect runs. Unknown bootstrap/entry is not a Diary exit.
         if (feedingScopeEntry == null || feedingBookOwner == null) return@LaunchedEffect
         if (draftDiaryId != diaryOwner?.id || draftBookOwner != feedingBookOwner) {
+            // One saveable slot survives unknown bootstrap and same-visit children,
+            // but never revives A's selection after an offscreen A→B→A round trip.
+            diarySelectedTab = 0
             navController.clearBackStack(MadreDestinations.FEEDING_FORM)
             draftDiaryId = diaryOwner?.id
             draftBookOwner = feedingBookOwner
@@ -527,6 +531,8 @@ fun MadreNavHost(
             }
             composable(MadreDestinations.STARTER_DETAIL) {
                 val cancelledBakeCount by bakingViewModel.cancelledCount.collectAsState()
+                // Unknown bootstrap config must not consume the restored tab state.
+                if (feedingBookOwner == null || draftBookOwner != feedingBookOwner) PaperProgress() else {
                 StarterDiaryScreen(
                     dayNumber = dayNumber,
                     phase = phase,
@@ -539,6 +545,8 @@ fun MadreNavHost(
                     onFeed = enterFeedingForm,
                     onOpenGallery = { navController.navigate(MadreDestinations.PHOTO_GALLERY) },
                     photoCount = galleryPhotos.size,
+                    selectedTabIndex = diarySelectedTab,
+                    onTabSelected = { diarySelectedTab = it },
                     cancelledBakeCount = cancelledBakeCount,
                     starterName = starterName,
                     // Дневник и первая полоса считают срок одной функцией от
@@ -546,6 +554,7 @@ fun MadreNavHost(
                     intervalHours = sourdoughConfig?.intervalHours ?: 24,
                     lastFeedingMillis = authoritativeLastFeedingMillis,
                 )
+                }
             }
             composable(MadreDestinations.PHOTO_GALLERY) {
                 PhotoGalleryScreen(

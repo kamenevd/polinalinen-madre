@@ -96,8 +96,12 @@ fun StarterDiaryScreen(
     nowProvider: () -> Long = System::currentTimeMillis,
     lastFeedingMillis: Long? = null,
     photoCount: Int = 0,
+    selectedTabIndex: Int? = null,
+    onTabSelected: (Int) -> Unit = {},
 ) {
     val colors = LocalPaper.current
+    var localTab by rememberSaveable { mutableStateOf(0) }
+    val selectedTab = selectedTabIndex ?: localTab
     // «Клякса» — DESIGN-V4.md Cycle 3, фича InkBlot. Событие для seed — самое
     // свежее кормление (id), т.к. отдельного id у DiaryEntry/фазы нет.
     val inkEventId = history.firstOrNull()?.id ?: 0L
@@ -194,6 +198,11 @@ fun StarterDiaryScreen(
 
             item {
             DiaryActions(photoCount, onFeed, onOpenGallery)
+            PaperSegmented(listOf("Журнал", "Советы"), selectedTab, { localTab = it; onTabSelected(it) },
+                Modifier.padding(horizontal = 22.dp), label = "Раздел дневника")
+            }
+            if (selectedTab == 1) {
+            item {
             PageLabel("Советы из руководства", Modifier.padding(horizontal = 22.dp, vertical = 8.dp), color = colors.ink)
             Text(
                 "В буклете Levito Madre указано соотношение базового кормления 2:1:2 (закваска:вода:мука) и стартовая гидратация 50%. " +
@@ -204,6 +213,9 @@ fun StarterDiaryScreen(
                 color = colors.ink2,style = PaperType.body, fontSize = 13.sp, lineHeight = 19.sp,
                 modifier = Modifier.padding(horizontal = 22.dp, vertical = 6.dp),
             )
+            }
+            } else {
+            item {
             PageLabel("Формуляр кормлений", Modifier.padding(start = 22.dp, top = 10.dp), color = colors.ink)
             }
 
@@ -213,6 +225,7 @@ fun StarterDiaryScreen(
 
             items(history, key = { feeding -> feeding.id }) { feeding ->
                 FormularyRow(feeding = feeding, currentYear = currentYear)
+            }
             }
         }
         }

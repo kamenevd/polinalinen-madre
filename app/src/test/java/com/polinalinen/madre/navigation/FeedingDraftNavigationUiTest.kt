@@ -72,12 +72,20 @@ class FeedingDraftNavigationUiTest {
     @After fun cleanup() { rule.activity.viewModelStore.clear() }
     private fun bindController(owners: MutableStateFlow<SourdoughConfigEntity?>? = null,
         save: suspend (SourdoughFeedingSaveRequest) -> SourdoughFeedingSaveResult = app.sourdoughRepository::saveFeeding,
+        bootstrap: suspend () -> Unit = {},
+        replaceStoredController: Boolean = false,
     ): SourdoughViewModel {
         val initial = owners?.value ?: runBlocking { app.sourdoughRepository.getOrCreateDefaultConfig() }
-        val controller = SourdoughViewModel(app, loadConfig = { requireNotNull(initial) },
+        val controller = SourdoughViewModel(app, loadConfig = { bootstrap(); requireNotNull(initial) },
             observeConfig = { owners ?: app.sourdoughRepository.observeConfig(it) },
             describeWeather = { null }, saveFeeding = save, afterInsert = { _, _, _, _ -> })
         rule.activityRule.scenario.onActivity { activity ->
+            if (replaceStoredController) {
+                // Replace only this VM. Clearing the entire Activity store before
+                // onSaveInstanceState destroys Navigation's own closed-entry state.
+                val key = activity.viewModelStore.keys().single { it.endsWith(SourdoughViewModel::class.java.canonicalName!!) }
+                activity.viewModelStore.put(key, controller)
+            }
             ViewModelProvider(activity, object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T = controller as T
@@ -221,6 +229,78 @@ class FeedingDraftNavigationUiTest {
         rule.onNodeWithText("Фотографии появятся здесь после кормления\nили готовой выпечки.").assertIsDisplayed()
         back()
         rule.onNodeWithText("Фото 0").performScrollTo().assertIsEnabled()
+    }
+
+    private fun diaryTab(label: String) = rule.onNodeWithContentDescription("Раздел дневника, $label")
+    private fun selectDiaryTab(label: String) {
+        rule.onNodeWithTag("diary-list").performScrollToNode(hasContentDescription("Раздел дневника, $label"))
+        diaryTab(label).performScrollTo().assertIsDisplayed().performClick().assertIsSelected()
+    }
+    private fun assertDiaryTab(label: String) {
+        rule.onNodeWithTag("diary-list").performScrollToNode(hasContentDescription("Раздел дневника, $label"))
+        diaryTab(label).performScrollTo().assertIsDisplayed().assertIsSelected()
+    }
+
+    @Test fun selectedAdviceAndExactDraftSurviveRealFormGalleryBackAndDelayedBootstrapRestore() {
+        val owners = MutableStateFlow<SourdoughConfigEntity?>(runBlocking { app.sourdoughRepository.getOrCreateDefaultConfig() })
+        bindController(owners)
+        val restoration = show()
+        selectDiaryTab("Советы")
+        val diary = nav.currentBackStackEntry
+        openForm()
+        note().performScrollTo().performTextInput("  Черновик рядом с советами  ")
+        rule.onNodeWithContentDescription("Добавленная мука: 100 г").performScrollTo().performClick()
+        rule.onNodeWithContentDescription("Добавленная мука, точный вес в граммах").apply {
+            performTextClearance(); performTextInput("137")
+        }
+        back(); assertSame(diary, nav.currentBackStackEntry); assertDiaryTab("Советы")
+        rule.onNodeWithText("Фото 0").performScrollTo().performClick()
+        rule.waitForIdle(); assertEquals(MadreDestinations.PHOTO_GALLERY, nav.currentDestination?.route)
+        back(); assertSame(diary, nav.currentBackStackEntry); assertDiaryTab("Советы")
+        openForm(); assertNote("  Черновик рядом с советами  ")
+        rule.onNodeWithContentDescription("Добавленная мука, точный вес в граммах").assertTextEquals("137")
+        back(false); assertDiaryTab("Советы")
+
+        // Recreate the real VM with a deliberately unknown bootstrap owner, not
+        // just a same-name screen or a rotation with already available config.
+        val release = CompletableDeferred<Unit>()
+        val restored = bindController(owners, bootstrap = { release.await() }, replaceStoredController = true)
+        restoration.emulateSavedInstanceStateRestore(); rule.waitForIdle()
+        assertNull(restored.config.value)
+        diaryTab("Советы").assertDoesNotExist()
+        rule.runOnIdle { release.complete(Unit) }
+        rule.waitUntil(10_000) { rule.onRoot().fetchSemanticsNode(); restored.config.value != null }
+        assertDiaryTab("Советы")
+        openForm(); assertNote("  Черновик рядом с советами  ")
+        rule.onNodeWithContentDescription("Добавленная мука, точный вес в граммах").assertTextEquals("137")
+        assertTrue(runBlocking { app.database.feedingDao().observeHistory(requireNotNull(owners.value).id).first() }.isEmpty())
+    }
+
+    @Test fun actualBookAndConfigChangesResetTabEvenAcrossOffscreenOwnerRoundTrip() {
+        val (first, other) = realOwners()
+        val second = first.copy(id = runBlocking { app.sourdoughRepository.saveConfig(first.copy(id = 0)) })
+        assertNotEquals(first.id, second.id); assertNotEquals(first.userId, other.userId)
+        val owners = MutableStateFlow<SourdoughConfigEntity?>(first)
+        val controller = bindController(owners)
+        val restoration = show()
+        selectDiaryTab("Советы")
+        // Editing a name is NOT an identity change.
+        changeOwner(owners, controller, first.copy(name = "Переименована")); assertDiaryTab("Советы")
+        changeOwner(owners, controller, second); assertDiaryTab("Журнал")
+        selectDiaryTab("Советы")
+        changeOwner(owners, controller, first); assertDiaryTab("Журнал")
+        selectDiaryTab("Советы")
+        openForm(); note().performScrollTo().performTextInput("Не отдавать другой книге")
+        changeOwner(owners, controller, other); assertNote("")
+        changeOwner(owners, controller, first); assertNote("")
+        back(); assertDiaryTab("Журнал")
+        selectDiaryTab("Советы")
+        rule.onNodeWithText("Фото 0").performScrollTo().performClick(); rule.waitForIdle()
+        assertEquals(MadreDestinations.PHOTO_GALLERY, nav.currentDestination?.route)
+        changeOwner(owners, controller, other)
+        changeOwner(owners, controller, first)
+        back(); assertDiaryTab("Журнал")
+        restoration.emulateSavedInstanceStateRestore(); assertDiaryTab("Журнал")
     }
 
     @Test fun realGalleryPresetLateHistoryAndClosedRotationKeepTheWholeDraftUntilSuccessfulSave() {

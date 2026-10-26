@@ -169,8 +169,26 @@ class AlbumSourceNavigationUiTest {
         val restoration = show(); album(2)
         val entryId = requireNotNull(nav.currentBackStackEntry).id
         filter("Выпечка 1").performClick().assertIsSelected()
-        restoration.emulateSavedInstanceStateRestore()
-        assertEquals(entryId, nav.currentBackStackEntry?.id)
+        // A restored host re-collects the real Room bake flow from emptyList().
+        // Hold that query: Compose idle/entry restoration is not data readiness.
+        val executor = androidx.arch.core.executor.DefaultTaskExecutor()
+        val pending = java.util.concurrent.ConcurrentLinkedQueue<Runnable>()
+        androidx.arch.core.executor.ArchTaskExecutor.getInstance().setDelegate(object : androidx.arch.core.executor.TaskExecutor() {
+            override fun executeOnDiskIO(runnable: Runnable) { pending.add(runnable) }
+            override fun postToMainThread(runnable: Runnable) = executor.postToMainThread(runnable)
+            override fun isMainThread() = executor.isMainThread
+        })
+        try {
+            restoration.emulateSavedInstanceStateRestore()
+            assertEquals(entryId, nav.currentBackStackEntry?.id)
+            assertTrue("Restored Room queries are actually held", pending.isNotEmpty())
+            filter("Выпечка 0").assertIsSelected()
+            filter("Выпечка 1").assertDoesNotExist()
+        } finally {
+            androidx.arch.core.executor.ArchTaskExecutor.getInstance().setDelegate(null)
+            while (true) executor.executeOnDiskIO(pending.poll() ?: break)
+        }
+        waitFilter("Выпечка 1")
         filter("Выпечка 1").assertIsSelected()
 
         val release = CompletableDeferred<Unit>()
@@ -179,6 +197,7 @@ class AlbumSourceNavigationUiTest {
         assertNull(controller.config.value)
         rule.runOnIdle { release.complete(Unit) }
         waitFilter("Закваска 1")
+        waitFilter("Выпечка 1")
         assertEquals(entryId, nav.currentBackStackEntry?.id)
         filter("Выпечка 1").assertIsSelected()
         fun change(owner: SourdoughConfigEntity) {

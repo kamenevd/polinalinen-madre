@@ -36,6 +36,11 @@ import coil.request.ImageRequest
 import com.polinalinen.madre.ui.components.BackLabel
 import com.polinalinen.madre.ui.components.FullscreenPhotoViewer
 import com.polinalinen.madre.utils.PhotoStore
+import java.time.Instant
+import java.time.YearMonth
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /** Presentation provenance, assigned by the persisted-row producers, never inferred from text. */
 enum class GalleryPhotoSource { STARTER, BAKING }
@@ -65,7 +70,22 @@ fun PhotoGalleryScreen(
     }
     var selected by rememberSaveable { mutableStateOf(0) }
     val sources = listOf(null, GalleryPhotoSource.STARTER, GalleryPhotoSource.BAKING)
-    val visible = ordered.filter { selected == 0 || it.source == sources[selected] }
+    // Namespace headers separately; repeated producer ids/paths remain separate references.
+    val keyed = remember(ordered) {
+        val occurrences = mutableMapOf<String, Int>()
+        ordered.map { photo ->
+            val occurrence = occurrences.getOrDefault(photo.id, 0)
+            occurrences[photo.id] = occurrence + 1
+            photo to "gallery-record:${photo.id}:$occurrence"
+        }
+    }
+    val zone = ZoneId.systemDefault()
+    val monthFormat = remember { DateTimeFormatter.ofPattern("LLLL uuuu", Locale.forLanguageTag("ru")) }
+    val visible = keyed.filter { selected == 0 || it.first.source == sources[selected] }
+    val months = remember(visible, zone) {
+        visible.groupBy { YearMonth.from(Instant.ofEpochMilli(it.first.timestampMillis).atZone(zone)) }
+            .toSortedMap(reverseOrder())
+    }
     val labels = listOf("Все ${ordered.size}",
         "Закваска ${ordered.count { it.source == GalleryPhotoSource.STARTER }}",
         "Выпечка ${ordered.count { it.source == GalleryPhotoSource.BAKING }}")
@@ -94,12 +114,21 @@ fun PhotoGalleryScreen(
                         Modifier.padding(top = 26.dp, bottom = 80.dp))
                 }
             } else {
-                items(visible, key = { it.id }) { photo ->
-                    GalleryTile(
-                        photo = photo,
-                        context = context,
-                        onClick = { if (PhotoStore.isReadable(context, photo.path)) opened = photo },
-                    )
+                months.forEach { (month, entries) ->
+                    stickyHeader(key = "gallery-month:$month") {
+                        SmallLabel(month.format(monthFormat), Modifier
+                            .testTag("gallery-month-$month")
+                            .fillMaxWidth()
+                            .background(colors.bg)
+                            .padding(vertical = 10.dp))
+                    }
+                    items(entries, key = { it.second }) { (photo, _) ->
+                        GalleryTile(
+                            photo = photo,
+                            context = context,
+                            onClick = { if (PhotoStore.isReadable(context, photo.path)) opened = photo },
+                        )
+                    }
                 }
             }
         }

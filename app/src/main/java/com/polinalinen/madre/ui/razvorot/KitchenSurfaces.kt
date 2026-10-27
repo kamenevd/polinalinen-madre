@@ -43,6 +43,7 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
     plans:List<com.polinalinen.madre.navigation.PlannedBake> = emptyList(),onOpenPlan:(com.polinalinen.madre.navigation.PlannedBake)->Unit={},
     onPreviousStep:(()->Unit)?=null) {
     var full by rememberSaveable { mutableStateOf(false) }
+    val addedIngredients=rememberSaveable { mutableStateOf(listOf<String>()) }
     var stationTimer by rememberSaveable(session.id) { mutableStateOf(false) }
 
     if(full) { FullTimer(session,remaining,sessions=sessions,onSwitchSession=onSwitchSession,plans=plans,onOpenPlan=onOpenPlan){full=false};return }
@@ -89,7 +90,7 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
         // Only the reading region can scroll at accessibility sizes; timer and actions stay fixed.
         Column(Modifier.weight(1f).then(if(density.fontScale>1.3f)Modifier.verticalScroll(rememberScrollState()) else Modifier).testTag("bake-reading")) {
             PaperCard(contentPadding=PaddingValues(horizontal=16.dp,vertical=14.dp)) {
-                StepIngredientParagraph(session,Modifier.testTag("bake-instructions"))
+                StepIngredientParagraph(session,addedIngredients,Modifier.testTag("bake-instructions"))
             }
             if (session.trustedPortions == null) com.polinalinen.madre.ui.screens.UnknownPortionsConfirmation(session.id, onConfirmPortions)
         }

@@ -79,6 +79,13 @@ class BakingCompactLayoutTest {
         rule.onNodeWithText("✓ сахар 50 г",useUnmergedTree=true).performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult){it(layouts)}
         assertEquals(androidx.compose.ui.text.style.TextDecoration.LineThrough,layouts.single().layoutInput.style.textDecoration)
         assertEquals(DawnPaper.sage,layouts.single().layoutInput.style.color)
+        for(rotate in listOf(false,true)) {
+            rule.onNodeWithContentDescription("Открыть большой таймер").performClick()
+            sugar.assertDoesNotExist()
+            if(rotate)restoration.emulateSavedInstanceStateRestore() // Paragraph is absent.
+            rule.onNode(SemanticsMatcher("Close timer") { it.config.getOrNull(androidx.compose.ui.semantics.SemanticsActions.OnClick)?.label=="Свернуть таймер" }).performClick()
+            sugar.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription,"Добавлено"))
+        }
         restoration.emulateSavedInstanceStateRestore()
         sugar.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription,"Добавлено"))
         for(other in listOf(original.copy(id=8),original.copy(bakeKey="another-bake"),original.copy(currentStepIndex=2),original.copy(scaleFactor=3.0),original.copy(recipeRevision="new"),original.copy(recipe=original.recipe.copy(description="updated")))) {
@@ -93,6 +100,20 @@ class BakingCompactLayoutTest {
             sugar.assertDoesNotExist()
             rule.onNodeWithTag("bake-instructions").assertTextEquals("Порции не сохранены — подтвердите количество для этой выпечки.")
         }
+    }
+    @Test fun popupExplainsExactFractionAndDoesNotMultiplyToTaste() {
+        val session=mutableStateOf(bake(recipes.single{it.id=="cinnamon_buns"},0).copy(scaleFactor=3.0))
+        rule.setContent { RazvorotTheme(force=Atmosphere.DAWN) { BakingPaper(session.value,702,{},{},{},{}) } }
+        val starter=StepIngredients.parts(session.value.recipe,0,3).indexOfFirst{it.ref!=null}
+        rule.onNodeWithTag("bake-ingredient-$starter",useUnmergedTree=true).performClick()
+        rule.onNodeWithText("113 г",useUnmergedTree=true).assertIsDisplayed()
+        rule.onNodeWithText("37,5 г × 3 → 113 г").assertIsDisplayed()
+        rule.onNodeWithTag("bake-ingredient-add").performClick()
+        rule.runOnIdle { session.value=session.value.copy(currentStepIndex=4) }
+        val vanilla=StepIngredients.parts(session.value.recipe,4,3).indexOfFirst{it.amount=="по вкусу"}
+        rule.onNodeWithTag("bake-ingredient-$vanilla",useUnmergedTree=true).performClick()
+        rule.onNodeWithText("По вкусу · без пересчёта").assertIsDisplayed()
+        rule.onNodeWithText("по вкусу × 3").assertDoesNotExist()
     }
     @Test fun anchoredPopupAddedGreenStrikeAndScopedRestore412()=popupAndAddedState()
     @Test @Config(qualifiers="ru-w360dp-h780dp-mdpi") fun anchoredPopupAddedGreenStrikeAndScopedRestore360()=popupAndAddedState()

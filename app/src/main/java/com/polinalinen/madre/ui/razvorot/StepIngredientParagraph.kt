@@ -23,14 +23,14 @@ import com.polinalinen.madre.model.*
 import com.polinalinen.madre.ui.kit.*
 
 /** Real inline anchors: popup is positioned from the tapped word, never a sheet or screen modal. */
-@Composable internal fun StepIngredientParagraph(session:BakingSession,modifier:Modifier=Modifier) {
+@Composable internal fun StepIngredientParagraph(session:BakingSession,addedState:MutableState<List<String>>,modifier:Modifier=Modifier) {
     val portions=session.trustedPortions
     if(portions==null || !session.restoredStepValid) {
         PaperStepParagraph("Порции не сохранены — подтвердите количество для этой выпечки.",modifier);return
     }
     val scope="${session.bakeKey}:${session.id}:${session.recipe.id}:${session.recipeRevision}:${session.recipe.hashCode()}:${session.currentStepIndex}:$portions"
-    // Keep a saveable map across session/step switches; rotation restores only the exact bake identity.
-    var added by rememberSaveable { mutableStateOf(listOf<String>()) }
+    // BakingPaper owns the saveable marks even while FullTimer replaces this subtree.
+    var added by addedState
     var selected by rememberSaveable(scope) { mutableStateOf<Int?>(null) }
     val parts=remember(session.recipe,session.currentStepIndex,portions){StepIngredients.parts(session.recipe,session.currentStepIndex,portions)}
     val p=LocalPaper.current;val density=LocalDensity.current;val measurer=rememberTextMeasurer()
@@ -80,7 +80,7 @@ import com.polinalinen.madre.ui.kit.*
                                                 Text(part.text,Modifier.weight(1f),style=PaperType.title,color=p.bg)
                                                 Text(part.amount,style=PaperType.ui.copy(fontWeight=FontWeight.Bold),color=p.bg)
                                             }
-                                            Text("${part.base} × $portions",style=PaperType.caption,color=p.bg)
+                                            Text(if(part.base=="по вкусу")"По вкусу · без пересчёта" else "${part.base} × $portions → ${part.amount}",style=PaperType.caption,color=p.bg)
                                             Box(Modifier.fillMaxWidth().heightIn(min=40.dp).background(p.acc2,RoundedCornerShape(22.dp))
                                                 .clickable(onClickLabel="Добавил ${part.text}"){if(!done)added=added+key;selected=null}.testTag("bake-ingredient-add"),contentAlignment=Alignment.Center) {
                                                 Text("✓ Добавил",style=PaperType.ui,color=p.ink)

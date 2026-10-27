@@ -45,12 +45,23 @@ class StepIngredientsTest {
             }
         }
     }
+    @Test fun focacciaConsumesTheWholeLiteralQuantityPhrase() {
+        val focaccia=StepIngredients.text(StepIngredients.parts(recipe("focaccia"),0,2))
+        assertEquals("К закваске 30 г добавить воды 240 мл и муки 240 г. Перемешать, накрыть плёнкой.",focaccia)
+        assertFalse(focaccia.contains("ст.л."))
+        assertTrue(StepIngredients.text(StepIngredients.parts(recipe("focaccia"),0,5)).startsWith("К закваске 75 г"))
+    }
     @Test fun fractionalEggsSpecialUnitsAndProseStayIntact() {
         val buns=recipe("cinnamon_buns")
-        assertEquals("113 г",StepIngredients.parts(buns,0,3).first{it.ref!=null}.amount)
+        val starter=StepIngredients.parts(buns,0,3).first{it.ref!=null}
+        assertEquals("113 г",starter.amount);assertEquals("37,5 г",starter.base)
+        assertEquals("350 мл",StepIngredients.parts(recipe("ciabatta"),0,3).single{it.ref?.name=="воды"}.base)
+        assertEquals("100 г",StepIngredients.parts(recipe("ciabatta"),2,3).single{it.ref?.name=="воды"}.base)
+        assertEquals("220 г",StepIngredients.parts(recipe("home_bread"),2,3).first{it.ref!=null}.base)
+        val bread=recipe("home_bread");val sponge=bread.ingredients.getValue("sponge").mapIndexed{i,row->if(i==0)row.copy(amount=row.amount+0.5) else row}
+        val all=StepIngredients.parts(bread.copy(ingredients=bread.ingredients+("sponge" to sponge)),2,3).first{it.ref!=null}
+        assertEquals("220,5 г",all.base);assertEquals("662 г",all.amount)
         assertEquals("6 шт",StepIngredients.parts(buns,4,3).first{it.ref!=null}.amount)
-        val focaccia=StepIngredients.text(StepIngredients.parts(recipe("focaccia"),0,2))
-        assertTrue(focaccia.startsWith("К 1 ст.л. закваски 30 г"))
         assertTrue(StepIngredients.parts(buns,4,2).any{it.amount=="по вкусу"})
         assertTrue(StepIngredients.text(StepIngredients.parts(buns,6,2)).startsWith("Раскатать в пласт ~40×60 см."))
     }

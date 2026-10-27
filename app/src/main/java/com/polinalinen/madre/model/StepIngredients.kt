@@ -15,7 +15,7 @@ internal object StepIngredients {
         "pirozhki" to mapOf(0 to "тёплое молоко=тёплого молока;закваску=активированной закваски;мёд=мёда (или сахара);муку=муки",2 to "тёплому молоку=тёплого молока;сахар=сахара;соль=соли;опару=опара (из предыдущего этапа);яйцо=яйцо;растительное масло=растительного масла;муку=муки"),
         "belyashi" to mapOf(0 to "Закваску=активированной закваски;водой=воды;молоком=молока;соль=соли;сахар=сахара;растительное масло=растительного масла;муку=пшеничной муки;сливочное масло=сливочного масла",5 to "начинку=main:начинки (мясо, лук)"),
         "ciabatta" to mapOf(0 to "закваску=активной закваски;муку=пшеничной муки;холодной воды=воды",2 to "соль=соли;оставшуюся холодную воду=воды",3 to "оливковое масло=оливкового масла"),
-        "focaccia" to mapOf(0 to "закваски=закваски;воды=воды;муки=муки в/с",2 to "воду=холодной воды;опару=опара (из предыдущего этапа);всю муку=муки в/с;всю муку=цельнозерновой муки",4 to "мёд=мёда",5 to "соль=соли",6 to "оливковое масло=оливкового масла",9 to "маслом=main:оливковое масло, травы, помидор"),
+        "focaccia" to mapOf(0 to "1 ст.л. закваски=закваски;воды=воды;муки=муки в/с",2 to "воду=холодной воды;опару=опара (из предыдущего этапа);всю муку=муки в/с;всю муку=цельнозерновой муки",4 to "мёд=мёда",5 to "соль=соли",6 to "оливковое масло=оливкового масла",9 to "маслом=main:оливковое масло, травы, помидор"),
         "pizza" to mapOf(0 to "ингредиенты=стартера (закваски);ингредиенты=воды;ингредиенты=муки",2 to "опару=опары (из предыдущего этапа);муку=муки;воды=воды",4 to "масло=оливкового масла"),
         "waffles" to mapOf(0 to "муку=пшеничной муки;соду=соды;соль=соли;сахар=сахара;закваску=активной закваски;яйца=яйца;молоко=молока;тёплое масло=сливочного масла"),
         "pancakes" to mapOf(2 to "закваске=активной закваски;молоко=молока;сахар=сахара;муку=пшеничной муки",4 to "соль=соли;соду=соды;яйца=яйца"),
@@ -38,7 +38,7 @@ internal object StepIngredients {
             val prefix=tokens.singleOrNull{it.range.last+1==match.range.first}
             if(prefix!=null && IngredientRef(prefix.groupValues[2],prefix.groupValues[3])!=ref)return@mapNotNull null
             var measured=ingredient
-            var label=word.text
+            var label=if(word.text=="1 ст.л. закваски")"закваске" else word.text
             if(prefix!=null) {
                 val quantity=RecipeScaler.stepQuantities(prefix.value).singleOrNull()?:return@mapNotNull null
                 measured=ingredient.copy(amount=quantity.amount,unit=quantity.unit)
@@ -56,7 +56,13 @@ internal object StepIngredients {
                 }
                 return RecipeScaler.scaledDisplayText(measured,factor).removeSuffix(" ${measured.name}")
             }
-            Hit(prefix?.range?.first?:match.range.first,match.range.last+1,Part(label,ref,amount(portions.toDouble()),amount(1.0)))
+            fun exact(value:Double)=java.math.BigDecimal.valueOf(value).stripTrailingZeros().toPlainString().replace('.',',')
+            val base=when {
+                !measured.scalable || measured.unit=="по вкусу" -> "по вкусу"
+                measured.refType=="all_of_section" -> recipe.ingredients[measured.refSection]?.let { "${exact(it.sumOf{row->row.gramsValue()})} г" }?:"вся опара"
+                else -> "${exact(measured.amount)} ${measured.unit}"
+            }
+            Hit(prefix?.range?.first?:match.range.first,match.range.last+1,Part(label,ref,amount(portions.toDouble()),base))
         }.sortedBy{it.start}
         val result=mutableListOf<Part>();var cursor=0
         hits.groupBy{it.start to it.end}.forEach { (range,group) ->

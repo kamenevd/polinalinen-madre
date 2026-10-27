@@ -29,7 +29,7 @@ class BakingCompactLayoutTest {
     @get:Rule val rule=createComposeRule()
     private val recipes by lazy { runBlocking { RecipeRepository(ApplicationProvider.getApplicationContext()).getRecipes() } }
     private fun bake(recipe:Recipe=recipes.first(),step:Int=4)=BakingSession(7,recipe,step,0L,0L,scaleFactor=2.0,bakeNumber=2)
-    private fun expected(session:BakingSession)=RecipeScaler.scaledStepText(session.currentStep.description,2.0,RecipeScaler.scalableBindings(session.recipe))
+    private fun expected(session:BakingSession)=StepIngredients.text(StepIngredients.parts(session.recipe,session.currentStepIndex,session.trustedPortions!!))
     private fun assertTextFits() {
         val layouts=mutableListOf<TextLayoutResult>()
         rule.onNodeWithTag("bake-instructions").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult){it(layouts)}
@@ -44,7 +44,7 @@ class BakingCompactLayoutTest {
         var switched=0L;var opened:String?=null
         rule.setContent { RazvorotTheme(force=Atmosphere.DAWN) { BakingPaper(session.value,702,{},{},{},{},onOpenAlice={},onPreviousStep={},
             sessions=listOf(other,session.value),onSwitchSession={switched=it},plans=listOf(plan),onOpenPlan={opened=it.id}) } }
-        val cases=recipes.map { recipe -> bake(recipe,recipe.timeline.indices.maxBy { expected(bake(recipe,it)).length }) }+bake()+bake(step=2)
+        val cases=recipes.flatMap { recipe -> (StepIngredients.linkedSteps(recipe)+recipe.timeline.indices.maxBy { expected(bake(recipe,it)).length }).map{bake(recipe,it)} }+bake()+bake(step=2)
         cases.forEach { current ->
             rule.runOnIdle { session.value=current }
             rule.onNodeWithTag("bake-instructions").assertTextEquals(expected(current)).assertIsDisplayed()
@@ -62,6 +62,40 @@ class BakingCompactLayoutTest {
     }
     @Test fun longestRealInstructionsAndScaledTemplateFit412()=fixedLayout()
     @Test @Config(qualifiers="ru-w360dp-h780dp-mdpi") fun longestRealInstructionsAndScaledTemplateFit360()=fixedLayout()
+
+    private fun popupAndAddedState() {
+        val original=bake();val session=mutableStateOf(original)
+        val restoration=androidx.compose.ui.test.junit4.StateRestorationTester(rule)
+        restoration.setContent { RazvorotTheme(force=Atmosphere.DAWN) { BakingPaper(session.value,702,{},{},{},{},onOpenAlice={},onPreviousStep={}) } }
+        val sugar=rule.onNodeWithTag("bake-ingredient-1",useUnmergedTree=true)
+        sugar.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription,"Не добавлено")).performClick()
+        rule.onNodeWithTag("bake-ingredient-popup").assertIsDisplayed()
+        rule.onNodeWithText("50 г",useUnmergedTree=true).assertIsDisplayed()
+        rule.onNode(isDialog()).assertDoesNotExist()
+        rule.onNodeWithTag("bake-ingredient-add").performClick()
+        rule.onNodeWithTag("bake-ingredient-popup").assertDoesNotExist()
+        sugar.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription,"Добавлено"))
+        val layouts=mutableListOf<TextLayoutResult>()
+        rule.onNodeWithText("✓ сахар 50 г",useUnmergedTree=true).performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult){it(layouts)}
+        assertEquals(androidx.compose.ui.text.style.TextDecoration.LineThrough,layouts.single().layoutInput.style.textDecoration)
+        assertEquals(DawnPaper.sage,layouts.single().layoutInput.style.color)
+        restoration.emulateSavedInstanceStateRestore()
+        sugar.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription,"Добавлено"))
+        for(other in listOf(original.copy(id=8),original.copy(bakeKey="another-bake"),original.copy(currentStepIndex=2),original.copy(scaleFactor=3.0),original.copy(recipeRevision="new"),original.copy(recipe=original.recipe.copy(description="updated")))) {
+            rule.runOnIdle{session.value=other}
+            rule.onAllNodes(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription,"Добавлено"),useUnmergedTree=true).assertCountEquals(0)
+            rule.onNodeWithTag("bake-ingredient-popup").assertDoesNotExist()
+        }
+        rule.runOnIdle{session.value=original}
+        sugar.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription,"Добавлено"))
+        for(invalid in listOf(original.copy(scaleFactor=null),original.copy(restoredStepValid=false))) {
+            rule.runOnIdle{session.value=invalid}
+            sugar.assertDoesNotExist()
+            rule.onNodeWithTag("bake-instructions").assertTextEquals("Порции не сохранены — подтвердите количество для этой выпечки.")
+        }
+    }
+    @Test fun anchoredPopupAddedGreenStrikeAndScopedRestore412()=popupAndAddedState()
+    @Test @Config(qualifiers="ru-w360dp-h780dp-mdpi") fun anchoredPopupAddedGreenStrikeAndScopedRestore360()=popupAndAddedState()
 
     @Test @Config(qualifiers="ru-w360dp-h780dp-mdpi") fun controlsKeepCallbacksAndInvalidRestoreGuard() {
         val session=mutableStateOf(bake());val adjustments=mutableListOf<Int>()

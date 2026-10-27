@@ -454,9 +454,9 @@ class BookNavigationUiTest {
         val restoration=StateRestorationTester(rule)
         val firstController=bindRealController()
         restoration.setContent{nav=rememberNavController();MadreNavHost(nav,pendingSessionId=requested)}
-        rule.waitUntil(10_000){rule.onAllNodesWithText("Крупно").fetchSemanticsNodes().isNotEmpty()}
+        rule.waitUntil(10_000){rule.onAllNodesWithContentDescription("Открыть большой таймер").fetchSemanticsNodes().isNotEmpty()}
         val bakeRoute=MadreDestinations.BAKE
-        rule.onNodeWithText("Крупно").performScrollTo().performClick()
+        rule.onNodeWithContentDescription("Открыть большой таймер").assertIsDisplayed().performClick()
         rule.waitForIdle()
         rule.onNode(SemanticsMatcher("close actual FullTimer"){
             it.config.getOrNull(SemanticsActions.OnClick)?.label=="Свернуть таймер"

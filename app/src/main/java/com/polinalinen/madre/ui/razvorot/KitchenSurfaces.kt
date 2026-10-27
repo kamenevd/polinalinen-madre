@@ -63,7 +63,7 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
         BookBakeSessionChips(sessions,session.id,onSwitchSession,plans,onOpenPlan)
         PaperStepRail(session.recipe.timeline.size,session.currentStepIndex,Modifier.fillMaxWidth().padding(top=4.dp))
         Row(Modifier.fillMaxWidth().padding(top=8.dp),verticalAlignment=Alignment.CenterVertically) {
-            BookText(session.currentStep.title,20,Modifier.weight(1f),weight=FontWeight.Medium)
+            BookText(session.currentStep.title,20,Modifier.weight(1f),weight=FontWeight.Medium,italic=session.currentStep.type==StepType.WAIT)
             Text("${session.currentStepIndex+1} / ${session.recipe.timeline.size}",Modifier.padding(start=8.dp),style=PaperType.overline,color=p.mut)
         }
         val progress=timerProgress(session.currentStep.durationMinutes*60L,remaining)
@@ -86,11 +86,10 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
                 }
             }
         }
-        val bindings=remember(session.recipe){RecipeScaler.scalableBindings(session.recipe)}
         // Only the reading region can scroll at accessibility sizes; timer and actions stay fixed.
         Column(Modifier.weight(1f).then(if(density.fontScale>1.3f)Modifier.verticalScroll(rememberScrollState()) else Modifier).testTag("bake-reading")) {
             PaperCard(contentPadding=PaddingValues(horizontal=16.dp,vertical=14.dp)) {
-                PaperStepParagraph(session.trustedPortions?.takeIf { session.restoredStepValid }?.let { RecipeScaler.scaledStepText(session.currentStep.description,it.toDouble(),bindings) } ?: "Порции не сохранены — подтвердите количество для этой выпечки.",Modifier.testTag("bake-instructions"))
+                StepIngredientParagraph(session,Modifier.testTag("bake-instructions"))
             }
             if (session.trustedPortions == null) com.polinalinen.madre.ui.screens.UnknownPortionsConfirmation(session.id, onConfirmPortions)
         }
@@ -114,7 +113,8 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
             if (onOpenAlice != null && com.polinalinen.madre.config.FeatureFlags.ALICE)
                 PaperTextButton(onOpenAlice,Modifier.weight(1f),label="Открыть Алису") {
                     Icon(Icons.Outlined.Mic,null,Modifier.size(20.dp))
-                    Spacer(Modifier.width(6.dp));Text("Алиса · «${com.polinalinen.madre.model.BakeNumbers.ordinal(session.bakeNumber)}»",style=PaperType.ui,maxLines=1)
+                    Spacer(Modifier.width(6.dp));Text("Алиса",style=PaperType.ui,maxLines=1)
+                    Text(" · «${com.polinalinen.madre.model.BakeNumbers.ordinal(session.bakeNumber)}»",style=PaperType.ui,maxLines=1)
                 }
             if(com.polinalinen.madre.config.FeatureFlags.YANDEX_ID)
                 PaperIconButton({stationTimer=true},label="Таймер на Станции") { Icon(Icons.Outlined.Timer,null) }

@@ -46,11 +46,25 @@ class BakeNumberRenderTest {
             rule.onNodeWithTag("bake-instructions").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult){it(layouts)}
             assertFalse(layouts.single().hasVisualOverflow)
             val module=if(File("app/src/main/AndroidManifest.xml").isFile)File("app") else File(".")
-            val output=File(module,"build/outputs/roborazzi/bake-back/bake-back-dawn-${width}x${height}.png")
-            output.parentFile!!.mkdirs()
-            captureScreenRoboImage(filePath=output.absolutePath,roborazziOptions=RoborazziOptions(taskType=RoborazziTaskType.Record))
-            val image=requireNotNull(BitmapFactory.decodeFile(output.absolutePath))
-            assertEquals(width,image.width);assertEquals(height,image.height);image.recycle()
+            fun capture(state:String) {
+                val output=File(module,"build/outputs/roborazzi/bake-back/bake-back-dawn-${width}x${height}${if(state=="normal")"" else "-$state"}.png")
+                output.parentFile!!.mkdirs()
+                captureScreenRoboImage(filePath=output.absolutePath,roborazziOptions=RoborazziOptions(taskType=RoborazziTaskType.Record))
+                val image=requireNotNull(BitmapFactory.decodeFile(output.absolutePath))
+                assertEquals(width,image.width);assertEquals(height,image.height);image.recycle()
+            }
+            capture("normal")
+            rule.onNodeWithTag("bake-ingredient-1",useUnmergedTree=true).performClick()
+            rule.onNodeWithTag("bake-ingredient-popup").assertIsDisplayed()
+            rule.onNodeWithText("✓ Добавил").assertIsDisplayed()
+            rule.onNode(isDialog()).assertDoesNotExist()
+            capture("popup")
+            rule.onNodeWithTag("bake-ingredient-add").performClick()
+            rule.onNodeWithTag("bake-ingredient-popup").assertDoesNotExist()
+            rule.onNodeWithTag("bake-ingredient-1",useUnmergedTree=true)
+                .assert(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription,"Добавлено"))
+            rule.onNodeWithText("✓ сахар 50 г",useUnmergedTree=true).assertIsDisplayed()
+            capture("added")
         }
     }
 

@@ -36,7 +36,7 @@ class StepIngredientsTest {
             assertEquals(expected[recipe.id],StepIngredients.linkedSteps(recipe))
             for(index in StepIngredients.linkedSteps(recipe))for(scale in 1..5) {
                 val parts=StepIngredients.parts(recipe,index,scale)
-                assertTrue("${recipe.id}/$index",parts.any{it.ref!=null})
+                assertEquals("${recipe.id}/$index",StepIngredients.linkCount(recipe,index),parts.count{it.ref!=null})
                 assertFalse(StepIngredients.text(parts).contains("{{"))
                 parts.filter{it.ref!=null}.forEach { part ->
                     assertEquals(1,recipe.ingredients[part.ref!!.section]!!.count{it.name==part.ref.name})

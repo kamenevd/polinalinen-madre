@@ -23,6 +23,7 @@ internal object StepIngredients {
         "garlic_buns" to mapOf(0 to "закваску=Левито Мадре на пике активности;водой=воды;муку=муки пшеничной в/с;подсолнечное масло=подсолнечного масла;соль=соли;сахар=сахара;мягкое сливочное масло=сливочного масла")
     ).mapValues{(_,steps)->steps.mapValues{words(it.value)}}
     fun linkedSteps(recipe:Recipe)=links[recipe.id].orEmpty().keys
+    fun linkCount(recipe:Recipe,index:Int)=links[recipe.id]?.get(index).orEmpty().size
     private val token=Regex("\\{\\{([^|{}]+)\\|([^:{}]+):([^{}]+)\\}\\}\\s*")
     fun parts(recipe:Recipe,index:Int,portions:Int):List<Part> {
         val step=recipe.timeline[index];val source=step.description
@@ -61,6 +62,7 @@ internal object StepIngredients {
         hits.groupBy{it.start to it.end}.forEach { (range,group) ->
             if(range.first<cursor)return@forEach
             if(range.first>cursor)result+=Part(RecipeScaler.scaledStepText(source.substring(cursor,range.first),portions.toDouble(),bindings))
+            if(group.size>1)result+=Part(source.substring(range.first,range.second)+": ")
             group.forEachIndexed{i,hit->if(i>0)result+=Part(" + ");result+=hit.part}
             cursor=range.second
         }

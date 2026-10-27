@@ -43,8 +43,7 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
     onPreviousStep:(()->Unit)?=null) {
     var full by rememberSaveable { mutableStateOf(false) }
     var stationTimer by rememberSaveable(session.id) { mutableStateOf(false) }
-    // A confirmation cannot survive a different bake or a committed timer/step mutation.
-    var confirmPrevious by remember(session.id,session.revision,session.currentStepIndex) { mutableStateOf(false) }
+
     if(full) { FullTimer(session,remaining,sessions=sessions,onSwitchSession=onSwitchSession,plans=plans,onOpenPlan=onOpenPlan){full=false};return }
     val actionBarHeight=LocalBakeActionBarHeight.current
     val density=LocalDensity.current
@@ -99,7 +98,7 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
             PaperButton(if(session.isPaused)"Продолжить" else "Пауза",onPause,Modifier.weight(1f),variant=PaperButtonVariant.SECONDARY)
             PaperButton(if(session.isLastStep)"Испечено" else "Дальше →",onNext,Modifier.weight(1f),true, enabled = !session.isLastStep || session.trustedPortions != null)
         }
-        PaperButton("Вернуться на прошлый шаг",{confirmPrevious=true},
+        PaperButton("Назад",{if(session.canStepBack)onPreviousStep?.invoke()},
             Modifier.fillMaxWidth().padding(top=8.dp).testTag("bake-previous-step"),
             enabled=session.canStepBack && onPreviousStep!=null,variant=PaperButtonVariant.SECONDARY)
         Row(Modifier.fillMaxWidth().testTag("bake-voice-actions"),verticalAlignment=Alignment.CenterVertically) {
@@ -114,9 +113,7 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
         }
       }
     }
-    if(confirmPrevious && session.canStepBack && onPreviousStep!=null) PaperConfirmDialog(
-        "Вернуться на прошлый шаг?","Таймер прошлого шага начнётся заново.","Вернуться","Остаться",
-        onConfirm={confirmPrevious=false;onPreviousStep()},onDismiss={confirmPrevious=false})
+
     if(stationTimer)com.polinalinen.madre.account.yandex.StationTimerSheet(remaining,bakeNumber=session.bakeNumber){stationTimer=false}
 }
 @Composable fun FullTimer(session:BakingSession,remaining:Long,sessions:List<BakingSession> = emptyList(),onSwitchSession:(Long)->Unit={},

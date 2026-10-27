@@ -26,7 +26,9 @@ class BakeNumberRenderTest {
     @Test fun bakingPreviousStepFooter() {
         rule.activityRule.scenario.onActivity{it.atmosphere=Atmosphere.DAWN;it.scene="bake-number"}
         rule.waitForIdle()
-        rule.onNodeWithText("Вернуться на прошлый шаг").assertIsDisplayed().assertIsEnabled()
+        rule.onNodeWithTag("bake-previous-step").onChildAt(0)
+            .assertTextEquals("Назад").assertIsDisplayed().assertIsEnabled()
+        rule.onNode(isDialog()).assertDoesNotExist()
         rule.onNodeWithText("Алиса",substring=true).assertIsDisplayed()
         val main=rule.onNodeWithTag("bake-main-actions").fetchSemanticsNode().boundsInRoot
         val back=rule.onNodeWithTag("bake-previous-step").fetchSemanticsNode().boundsInRoot

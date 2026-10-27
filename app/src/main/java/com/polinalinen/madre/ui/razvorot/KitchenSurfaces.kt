@@ -27,6 +27,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 import com.polinalinen.madre.model.BakingSession
 import com.polinalinen.madre.model.RecipeScaler
@@ -50,50 +51,58 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
     val bottomInset=WindowInsets.systemBarsIgnoringVisibility.union(WindowInsets.displayCutout).getBottom(density)
     DisposableEffect(actionBarHeight){onDispose{actionBarHeight?.value=0.dp}}
     val p=LocalPaper.current
-    Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBarsIgnoringVisibility.union(WindowInsets.displayCutout))) {
+    Column(Modifier.fillMaxSize().testTag("bake-paper").windowInsetsPadding(WindowInsets.systemBarsIgnoringVisibility.union(WindowInsets.displayCutout))) {
         Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
             PaperIconButton(onBack,label="Назад") { Icon(Icons.AutoMirrored.Outlined.ArrowBack,"Назад") }
-            Box(Modifier.weight(1f)){BookBakeSessionChips(sessions,session.id,onSwitchSession,plans,onOpenPlan)}
+            PaperBakeNumber(session.bakeNumber,size=BakeNumberSize.Md,accent=true)
+            Text(session.recipe.name,Modifier.weight(1f).padding(start=8.dp),style=PaperType.title,color=p.ink,maxLines=1,overflow=TextOverflow.Ellipsis)
+            Text(session.trustedPortions?.let{"×$it"}?:"?",style=PaperType.ui,color=p.acc)
             PaperIconButton(onDetails,label="Действия выпечки") { Icon(Icons.Outlined.MoreHoriz,"Действия выпечки") }
         }
-      Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal=22.dp)) {
-        Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-            PaperBakeNumber(session.bakeNumber,size=BakeNumberSize.Lg,accent=true)
-            Column { SmallLabel("ВЫПЕЧКА ${com.polinalinen.madre.model.BakeNumbers.label(session.bakeNumber)}")
-                SmallLabel(session.trustedPortions?.let { "${session.recipe.name} · ×$it СЕМЬИ" } ?: "${session.recipe.name} · ПОРЦИИ НЕ СОХРАНЕНЫ") }
-        }
-        PaperStepRail(session.recipe.timeline.size,session.currentStepIndex,Modifier.fillMaxWidth().padding(top=14.dp))
-        Row(Modifier.fillMaxWidth().padding(top=26.dp),verticalAlignment=Alignment.Bottom) {
-            BookText("%02d".format(session.currentStepIndex+1),100,weight=FontWeight.ExtraLight)
-            BookText("/${session.recipe.timeline.size}",28,Modifier.padding(bottom=12.dp),color=p.mut)
-            Spacer(Modifier.weight(1f));Column(Modifier.weight(1f),horizontalAlignment=Alignment.End) {SmallLabel(if(session.currentStep.type==StepType.WAIT)"ЖДЁМ" else "РУКАМИ");BookText(session.currentStep.title,20,italic=session.currentStep.type==StepType.WAIT,weight=FontWeight.Medium)}
+      Column(Modifier.weight(1f).padding(horizontal=18.dp).testTag("bake-content")) {
+        BookBakeSessionChips(sessions,session.id,onSwitchSession,plans,onOpenPlan)
+        PaperStepRail(session.recipe.timeline.size,session.currentStepIndex,Modifier.fillMaxWidth().padding(top=4.dp))
+        Row(Modifier.fillMaxWidth().padding(top=8.dp),verticalAlignment=Alignment.CenterVertically) {
+            BookText(session.currentStep.title,20,Modifier.weight(1f),weight=FontWeight.Medium)
+            Text("${session.currentStepIndex+1} / ${session.recipe.timeline.size}",Modifier.padding(start=8.dp),style=PaperType.overline,color=p.mut)
         }
         val progress=timerProgress(session.currentStep.durationMinutes*60L,remaining)
-        TimerNumber(timerDigits(remaining),progress,92.sp,(-5).sp,p.ink,Modifier.fillMaxWidth().clickable(onClickLabel="Открыть большой таймер"){full=true}.padding(top=12.dp))
-        PaperProgress(progress, Modifier.fillMaxWidth().padding(vertical=12.dp))
-        SmallLabel(if(remaining==0L) "ВРЕМЯ ВЫШЛО" else "ОСТАЛОСЬ ИЗ ${session.currentStep.durationMinutes} МИН")
-        val bindings=remember(session.recipe){RecipeScaler.scalableBindings(session.recipe)}
-        FlowRow(Modifier.padding(vertical=12.dp),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
-            listOf(-5,5,15).forEach { minutes -> PaperChip(if(minutes>0)"+$minutes мин" else "−5 мин",false,{onAdjustMinutes(minutes)},enabled=session.restoredStepValid) }
-            PaperChip("Крупно",false,{full=true},icon=Icons.Outlined.Fullscreen)
+        Box(Modifier.fillMaxWidth().padding(top=8.dp).clickable(onClickLabel="Открыть большой таймер"){full=true},contentAlignment=Alignment.Center) {
+            TimerNumber(timerDigits(remaining),progress,if(density.fontScale>1.3f)44.sp else 84.sp,(-4).sp,p.ink)
         }
-        PaperNote(com.polinalinen.madre.ui.screens.BakingTimerCopy.moodLine(session.currentStep.type==StepType.WAIT,session.isPaused,remaining))
-        PaperCard(Modifier.padding(top=16.dp)) {
-            PaperStepParagraph(session.trustedPortions?.takeIf { session.restoredStepValid }?.let { RecipeScaler.scaledStepText(session.currentStep.description,it.toDouble(),bindings) } ?: "Порции не сохранены — подтвердите количество для этой выпечки.")
-        }
-        if (session.trustedPortions == null) com.polinalinen.madre.ui.screens.UnknownPortionsConfirmation(session.id, onConfirmPortions)
-        session.recipe.timeline.getOrNull(session.currentStepIndex+1)?.let {
-            PaperCard(Modifier.padding(top=16.dp),containerColor=p.acc2) {
-                SmallLabel("ДАЛЬШЕ · ЧЕРЕЗ ${BookCatalog.duration((remaining/60+if(remaining%60>0)1 else 0).coerceIn(0L,Int.MAX_VALUE.toLong()).toInt())}",color=p.acc)
-                BookText("${it.title} · ${it.durationMinutes} мин",19)
-                if(it.requiresButterPrep && session.currentStep.type==StepType.WAIT && remaining in 1..1800)
-                    PaperNote("Скоро понадобится мягкое масло — достаньте его согреться")
+        PaperProgress(progress, Modifier.fillMaxWidth().padding(top=8.dp))
+        Row(Modifier.fillMaxWidth().testTag("bake-timer-controls"),verticalAlignment=Alignment.CenterVertically) {
+            Text(if(remaining==0L) "ВРЕМЯ ВЫШЛО" else "ИЗ ${session.currentStep.durationMinutes} МИН",
+                Modifier.weight(1f),style=PaperType.caption,color=p.mut)
+            listOf(-5,5,15,0).forEach { minutes ->
+                val label=if(minutes==0)"Открыть большой таймер" else if(minutes>0)"+$minutes мин" else "−5 мин"
+                Box(Modifier.size(48.dp).clickable(enabled=minutes==0 || session.restoredStepValid,onClickLabel=label) {
+                    if(minutes==0)full=true else onAdjustMinutes(minutes)
+                }.semantics{contentDescription=label},contentAlignment=Alignment.Center) {
+                    Box(Modifier.heightIn(min=30.dp).background(p.bg2,RoundedCornerShape(15.dp)).padding(horizontal=10.dp),contentAlignment=Alignment.Center) {
+                        if(minutes==0)Icon(Icons.Outlined.Fullscreen,null,Modifier.size(16.dp),tint=p.ink2)
+                        else Text(if(minutes>0)"+$minutes" else "−5",style=PaperType.caption,color=if(session.restoredStepValid)p.ink2 else p.mut)
+                    }
+                }
             }
         }
-        Spacer(Modifier.height(16.dp))
+        val bindings=remember(session.recipe){RecipeScaler.scalableBindings(session.recipe)}
+        // Only the reading region can scroll at accessibility sizes; timer and actions stay fixed.
+        Column(Modifier.weight(1f).then(if(density.fontScale>1.3f)Modifier.verticalScroll(rememberScrollState()) else Modifier).testTag("bake-reading")) {
+            PaperCard(contentPadding=PaddingValues(horizontal=16.dp,vertical=14.dp)) {
+                PaperStepParagraph(session.trustedPortions?.takeIf { session.restoredStepValid }?.let { RecipeScaler.scaledStepText(session.currentStep.description,it.toDouble(),bindings) } ?: "Порции не сохранены — подтвердите количество для этой выпечки.",Modifier.testTag("bake-instructions"))
+            }
+            if (session.trustedPortions == null) com.polinalinen.madre.ui.screens.UnknownPortionsConfirmation(session.id, onConfirmPortions)
+        }
+        session.recipe.timeline.getOrNull(session.currentStepIndex+1)?.let {
+            if(it.requiresButterPrep && session.currentStep.type==StepType.WAIT && remaining in 1..1800)
+                PaperNote("Скоро понадобится мягкое масло — достаньте его согреться")
+            Text("ДАЛЬШЕ · ${it.title} · ${BookCatalog.duration(it.durationMinutes)}",Modifier.padding(top=6.dp),
+                style=PaperType.caption,color=p.acc,maxLines=1,overflow=TextOverflow.Ellipsis)
+        }
       }
       Column(Modifier.fillMaxWidth().onSizeChanged{actionBarHeight?.value=with(density){(it.height+bottomInset).toDp()}}
-          .padding(horizontal=22.dp,vertical=10.dp).testTag("bake-action-bar")) {
+          .padding(horizontal=18.dp,vertical=8.dp).testTag("bake-action-bar")) {
         Row(Modifier.fillMaxWidth().testTag("bake-main-actions"),horizontalArrangement=Arrangement.spacedBy(10.dp)) {
             PaperButton(if(session.isPaused)"Продолжить" else "Пауза",onPause,Modifier.weight(1f),variant=PaperButtonVariant.SECONDARY)
             PaperButton(if(session.isLastStep)"Испечено" else "Дальше →",onNext,Modifier.weight(1f),true, enabled = !session.isLastStep || session.trustedPortions != null)
@@ -105,8 +114,7 @@ fun timerDigits(seconds:Long):String { val s=seconds.coerceAtLeast(0);return if(
             if (onOpenAlice != null && com.polinalinen.madre.config.FeatureFlags.ALICE)
                 PaperTextButton(onOpenAlice,Modifier.weight(1f),label="Открыть Алису") {
                     Icon(Icons.Outlined.Mic,null,Modifier.size(20.dp))
-                    Spacer(Modifier.width(6.dp));Text("Алиса",style=PaperType.ui)
-                    Text(" · «${com.polinalinen.madre.model.BakeNumbers.ordinal(session.bakeNumber)}»",style=PaperType.ui)
+                    Spacer(Modifier.width(6.dp));Text("Алиса · «${com.polinalinen.madre.model.BakeNumbers.ordinal(session.bakeNumber)}»",style=PaperType.ui,maxLines=1)
                 }
             if(com.polinalinen.madre.config.FeatureFlags.YANDEX_ID)
                 PaperIconButton({stationTimer=true},label="Таймер на Станции") { Icon(Icons.Outlined.Timer,null) }

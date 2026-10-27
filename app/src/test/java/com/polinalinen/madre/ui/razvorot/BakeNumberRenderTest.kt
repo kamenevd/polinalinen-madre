@@ -22,24 +22,36 @@ import java.io.File
 @Config(sdk=[35],qualifiers="ru-w412dp-h915dp-mdpi",application=MadreApplication::class)
 class BakeNumberRenderTest {
     @get:Rule val rule=createAndroidComposeRule<RazvorotSceneActivity>()
-    /** Single opt-in CI frame, using the same production screen as the numbered fixture. */
+    /** Both approved viewports, in the existing exact-head automatic PR capture. */
     @Test fun bakingPreviousStepFooter() {
-        rule.activityRule.scenario.onActivity{it.atmosphere=Atmosphere.DAWN;it.scene="bake-number"}
-        rule.waitForIdle()
-        rule.onNodeWithTag("bake-previous-step").onChildAt(0)
-            .assertTextEquals("Назад").assertIsDisplayed().assertIsEnabled()
-        rule.onNode(isDialog()).assertDoesNotExist()
-        rule.onNodeWithText("Алиса",substring=true).assertIsDisplayed()
-        val main=rule.onNodeWithTag("bake-main-actions").fetchSemanticsNode().boundsInRoot
-        val back=rule.onNodeWithTag("bake-previous-step").fetchSemanticsNode().boundsInRoot
-        val voice=rule.onNodeWithTag("bake-voice-actions").fetchSemanticsNode().boundsInRoot
-        assertTrue(back.top>=main.bottom);assertTrue(voice.top>=back.bottom)
-        val module=if(File("app/src/main/AndroidManifest.xml").isFile)File("app") else File(".")
-        val output=File(module,"build/outputs/roborazzi/bake-back/bake-back-dawn.png")
-        output.parentFile!!.mkdirs()
-        captureScreenRoboImage(filePath=output.absolutePath,roborazziOptions=RoborazziOptions(taskType=RoborazziTaskType.Record))
-        val image=requireNotNull(BitmapFactory.decodeFile(output.absolutePath))
-        assertEquals(412,image.width);assertEquals(915,image.height);image.recycle()
+        for((width,height) in listOf(360 to 780,412 to 915)) {
+            org.robolectric.RuntimeEnvironment.setQualifiers("ru-w${width}dp-h${height}dp-mdpi")
+            rule.activityRule.scenario.recreate()
+            rule.activityRule.scenario.onActivity{it.atmosphere=Atmosphere.DAWN;it.scene="bake-compact"}
+            rule.waitForIdle()
+            rule.onNodeWithTag("bake-previous-step").onChildAt(0)
+                .assertTextEquals("Назад").assertIsDisplayed().assertIsEnabled()
+            rule.onNode(isDialog()).assertDoesNotExist()
+            rule.onNodeWithText("Алиса",substring=true).assertIsDisplayed()
+            rule.onNodeWithText("Замес с добавками").assertIsDisplayed()
+            rule.onAllNodes(SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsProperties.VerticalScrollAxisRange)).assertCountEquals(0)
+            val main=rule.onNodeWithTag("bake-main-actions").fetchSemanticsNode().boundsInRoot
+            val back=rule.onNodeWithTag("bake-previous-step").fetchSemanticsNode().boundsInRoot
+            val voice=rule.onNodeWithTag("bake-voice-actions").fetchSemanticsNode().boundsInRoot
+            val reading=rule.onNodeWithTag("bake-reading").fetchSemanticsNode().boundsInRoot
+            val instructions=rule.onNodeWithTag("bake-instructions").fetchSemanticsNode().boundsInRoot
+            assertTrue(instructions.bottom<=reading.bottom);assertTrue(reading.bottom<=main.top)
+            assertTrue(back.top>=main.bottom);assertTrue(voice.top>=back.bottom)
+            val layouts=mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+            rule.onNodeWithTag("bake-instructions").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult){it(layouts)}
+            assertFalse(layouts.single().hasVisualOverflow)
+            val module=if(File("app/src/main/AndroidManifest.xml").isFile)File("app") else File(".")
+            val output=File(module,"build/outputs/roborazzi/bake-back/bake-back-dawn-${width}x${height}.png")
+            output.parentFile!!.mkdirs()
+            captureScreenRoboImage(filePath=output.absolutePath,roborazziOptions=RoborazziOptions(taskType=RoborazziTaskType.Record))
+            val image=requireNotNull(BitmapFactory.decodeFile(output.absolutePath))
+            assertEquals(width,image.width);assertEquals(height,image.height);image.recycle()
+        }
     }
 
     @Test fun numberedSurfacesUseProductionRenderers() {

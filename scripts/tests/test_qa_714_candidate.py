@@ -101,7 +101,7 @@ class Qa714CandidateTests(unittest.TestCase):
                 continue
             self.assertIn("steps.select.outputs.capture == 'true'", scalar(step, 'if', 8))
         for name, artifact, path in (
-            ('Upload bake-back PNG', 'bake-back-frame-png', 'app/build/outputs/roborazzi/bake-back/bake-back-dawn.png'),
+            ('Upload bake-back PNG', 'bake-back-frame-png', 'app/build/outputs/roborazzi/bake-back/*.png'),
             ('Upload raw bake-back JUnit', 'bake-back-frame-junit', 'app/build/test-results/testDebugUnitTest/')):
             step = steps[name]
             self.assertTrue(scalar(step, 'if', 8).startswith('always() &&'))

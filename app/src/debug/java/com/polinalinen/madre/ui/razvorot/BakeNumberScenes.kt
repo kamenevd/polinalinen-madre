@@ -12,7 +12,7 @@ import com.polinalinen.madre.ui.screens.*
 import com.polinalinen.madre.voice.*
 
 /** Explicit synthetic data, exact production renderers; no storage, backend or account actions. */
-internal val BakeNumberScenes=setOf("oven-numbers","sheet-start-number","bake-number","bake-fulltimer-number",
+internal val BakeNumberScenes=setOf("oven-numbers","sheet-start-number","bake-number","bake-compact","bake-fulltimer-number",
     "bake-finale-number","chapter-active-number","alice-linked-number","station-number","oven-nine-snack")
 
 @Composable internal fun BakeNumberScene(scene:String,recipes:List<Recipe>,preferences:ReadingPreferences) {
@@ -47,6 +47,8 @@ internal val BakeNumberScenes=setOf("oven-numbers","sheet-start-number","bake-nu
             BookStartSheet(recipes.first{it.id=="focaccia"},2,{},{},onPlan={_,_->},bakeNumber=4,onChapter={})
         }
         "bake-number" -> BakingPaper(current,1100,{},{},{},{},onOpenAlice={},sessions=sessions,plans=listOf(plan),onPreviousStep={})
+        "bake-compact" -> BakingPaper(first.copy(currentStepIndex=4,bakeNumber=2),702,{},{},{},{},onOpenAlice={},
+            sessions=listOf(first.copy(id=810,bakeNumber=1),first.copy(currentStepIndex=4,bakeNumber=2)),plans=listOf(plan),onPreviousStep={})
         "bake-fulltimer-number" -> FullTimer(current,1100,sessions=sessions,plans=listOf(plan)){}
         "bake-finale-number" -> BakeFinalePage(BakeFinalePageState(ciabatta.name,recipes.indexOf(ciabatta)+1,2,
             RecipeScale.totalMinutes(ciabatta,2),ciabatta.timeline.size,LocalBookClock.current.millis(),recipes.map{it.id==ciabatta.id},24,bakeNumber=2),{},{},photo={PaperNote("Фото пока нет")})

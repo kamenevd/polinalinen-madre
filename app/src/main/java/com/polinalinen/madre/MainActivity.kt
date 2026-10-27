@@ -1,5 +1,7 @@
 package com.polinalinen.madre
 
+import com.polinalinen.madre.ui.kit.*
+import androidx.compose.ui.graphics.toArgb
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
@@ -12,8 +14,19 @@ import android.content.Context
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 import com.polinalinen.madre.navigation.MadreNavHost
-import com.polinalinen.madre.ui.theme.MadreTheme
 import kotlinx.coroutines.flow.MutableStateFlow
+import androidx.activity.viewModels
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.safeDrawingPadding
+import kotlinx.coroutines.launch
+import com.polinalinen.madre.account.yandex.*
+import com.polinalinen.madre.config.FeatureFlags
+import com.yandex.authsdk.YandexAuthOptions
+import com.yandex.authsdk.YandexAuthSdk
 
 /**
  * Каркас: enableEdgeToEdge + разрешение на уведомления + NavHost.
@@ -23,7 +36,17 @@ import kotlinx.coroutines.flow.MutableStateFlow
  * singleTop, поэтому тап по уведомлению при живой книге приходит не в
  * onCreate, а в onNewIntent; обрабатываются оба входа.
  */
-class MainActivity : ComponentActivity() {
+class MainActivity : ComponentActivity(), ImmersiveHost {
+    override val immersiveController = ImmersiveController()
+    private val accountEnabled get() = FeatureFlags.YANDEX_ID && BuildConfig.YANDEX_CLIENT_ID.isNotEmpty()
+    private val accountModel: YandexAccountViewModel by viewModels {
+        ViewModelProvider.AndroidViewModelFactory(application)
+    }
+    private val familyModel: com.polinalinen.madre.viewmodel.FamilyLinkViewModel by viewModels()
+    private val familyInviteQueue = com.polinalinen.madre.integration.v2.FamilyInviteRouting.Queue { FeatureFlags.FAMILY_LINK_UI }
+    private val pendingInvitation = familyInviteQueue.pending
+    private var yandexBridge: YandexSdkResultBridge? = null
+    private var qaFrameMonitor:com.polinalinen.madre.performance.QaFrameMonitor?=null
 
     /**
      * Выпечка, которую попросили открыть. MutableStateFlow, а не разовый
@@ -37,6 +60,7 @@ class MainActivity : ComponentActivity() {
      * шторки. Ждёт NavHost тем же способом, что и [pendingSessionId].
      */
     private val pendingFeeding = MutableStateFlow(false)
+    private val pendingPlanned = MutableStateFlow<com.polinalinen.madre.notifications.PlannedBakeRequest?>(null)
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -50,19 +74,76 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        readIntent(intent)
+        if(accountEnabled) {
+            val options=YandexAuthOptions(this,false)
+            check(options.clientId == BuildConfig.YANDEX_CLIENT_ID) { "Account login configuration mismatch" }
+            yandexBridge=YandexSdkResultBridge(activityResultRegistry,YandexAuthSdk.create(options).contract,
+                BuildConfig.YANDEX_CLIENT_ID,accountModel.controller,accountModel.callbackScope,
+                savedInstanceState?.getStringArrayList(KEY_YANDEX_REQUESTS).orEmpty())
+        }
+        enableEdgeToEdge(
+            statusBarStyle = androidx.activity.SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT) { false },
+            navigationBarStyle = androidx.activity.SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT) { false },
+        )
+        val initial = ReadingPreferences(this).atmosphere.let {
+            if (it == Atmosphere.AUTO) atmosphereAt(java.time.LocalTime.now().hour) else it
+        }
+        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(paperAt(initial).bg.toArgb()))
+        immersiveController.setPaperLight(initial != Atmosphere.NIGHT)
+        immersiveController.attach(window)
+        if(savedInstanceState==null)readIntent(intent) else {
+            pendingSessionId.value=savedInstanceState.getLong("madre.pending_session",-1).takeIf{it>=0}
+            pendingFeeding.value=savedInstanceState.getBoolean("madre.pending_feeding",false)
+            familyInviteQueue.restore(savedInstanceState.getString(KEY_FAMILY_INVITE))
+            val id=savedInstanceState.getString("madre.pending_plan")
+            val action=runCatching { com.polinalinen.madre.notifications.PlannedBakeAction.valueOf(savedInstanceState.getString("madre.pending_plan_action").orEmpty()) }.getOrNull()
+            if(id!=null && action!=null)pendingPlanned.value=com.polinalinen.madre.notifications.PlannedBakeRequest(id,action)
+        }
         askForNotificationsOnce()
 
+        qaFrameMonitor=if(BuildConfig.QA_DIAGNOSTICS)com.polinalinen.madre.performance.QaFrameMonitor(window) else null
         setContent {
-            MadreTheme {
-                MadreNavHost(
-                    pendingSessionId = pendingSessionId,
-                    pendingFeeding = pendingFeeding,
-                )
+            val account=if(accountEnabled)remember(accountModel) {
+                YandexAccountUi(accountModel){browser->lifecycleScope.launch{yandexBridge?.launch(browser)}}
+            } else null
+            androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) {
+            CompositionLocalProvider(LocalYandexAccountUi provides account,
+                com.polinalinen.madre.ui.screens.LocalFamilyLinkModel provides if (FeatureFlags.FAMILY_LINK_UI) familyModel else null,
+                com.polinalinen.madre.performance.LocalQaFrameMonitor provides qaFrameMonitor) {
+            MadreNavHost(
+                pendingSessionId = pendingSessionId,
+                pendingFeeding = pendingFeeding,
+                pendingPlanned = pendingPlanned,
+                pendingInvitation = pendingInvitation,
+            )
+            }
+            qaFrameMonitor?.takeIf{it.enabled}?.let{QaFpsOverlay(it,androidx.compose.ui.Modifier.align(androidx.compose.ui.Alignment.TopEnd).safeDrawingPadding())}
             }
         }
     }
+
+    private var rosterJob: kotlinx.coroutines.Job? = null
+    override fun onStart() {
+        super.onStart()
+        if (FeatureFlags.FAMILY_ROSTER_V2) rosterJob = lifecycleScope.launch {
+            (application as MadreApplication).rosterCoordinator.runForeground()
+        }
+    }
+    override fun onStop() {
+        if (FeatureFlags.FAMILY_ROSTER_V2) (application as MadreApplication).rosterCoordinator.stopForeground()
+        rosterJob?.cancel(); rosterJob = null
+        super.onStop()
+    }
+    override fun onResume() {
+        super.onResume(); immersiveController.reapply(window);qaFrameMonitor?.resume()
+        if(accountEnabled)accountModel.retryPendingUnbind()
+    }
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) immersiveController.reapply(window)
+    }
+    override fun onPause(){qaFrameMonitor?.pause();super.onPause()}
+    override fun onDestroy() { qaFrameMonitor?.close();yandexBridge?.close(); immersiveController.detach(window); super.onDestroy() }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -70,10 +151,22 @@ class MainActivity : ComponentActivity() {
         readIntent(intent)
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        yandexBridge?.let{outState.putStringArrayList(KEY_YANDEX_REQUESTS,it.requestKeysForSavedState())}
+        if (FeatureFlags.FAMILY_LINK_UI) outState.putString(KEY_FAMILY_INVITE, pendingInvitation.value)
+        outState.putLong("madre.pending_session",pendingSessionId.value?:-1)
+        outState.putBoolean("madre.pending_feeding",pendingFeeding.value)
+        outState.putString("madre.pending_plan",pendingPlanned.value?.id)
+        outState.putString("madre.pending_plan_action",pendingPlanned.value?.action?.name)
+        super.onSaveInstanceState(outState)
+    }
+
     private fun readIntent(intent: Intent?) {
+        familyInviteQueue.accept(intent)
         val id = intent?.getLongExtra(EXTRA_SESSION_ID, -1L) ?: -1L
         if (id >= 0L) pendingSessionId.value = id
         if (intent?.getBooleanExtra(EXTRA_OPEN_FEEDING, false) == true) pendingFeeding.value = true
+        com.polinalinen.madre.notifications.PlannedBakeActions.read(this,intent)?.let{pendingPlanned.value=it}
     }
 
     /**
@@ -99,8 +192,11 @@ class MainActivity : ComponentActivity() {
 
         /** Открыть форму кормления — приходит с кнопкой «Покормить» из шторки. */
         const val EXTRA_OPEN_FEEDING = "madre.open_feeding"
+        const val EXTRA_PLANNED_ID = "madre.planned_id"
 
         private const val KEY_NOTIFICATIONS_ASKED = "notifications_permission_asked"
         private const val KEY_NOTIFICATIONS_GRANTED = "notifications_permission_granted"
+        private const val KEY_FAMILY_INVITE = "madre.family.pending_invite"
+        private const val KEY_YANDEX_REQUESTS = "madre.yandex.request_keys"
     }
 }

@@ -17,4 +17,6 @@ data class FamilySettingEntity(
 
 object FamilySettingKeys {
     const val FAMILY_NAME = "family_name"
+    const val KEEP_SCREEN_ON = "keep_screen_on"
+    const val LOCK_SCREEN_PROGRESS = "lock_screen_progress"
 }

@@ -1,15 +1,17 @@
 package com.polinalinen.madre.ui.photo
 
+import com.polinalinen.madre.ui.kit.*
 import android.content.Context
 import android.graphics.Bitmap
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.polinalinen.madre.MadreApplication
-import com.polinalinen.madre.ui.theme.MadreTheme
+import com.polinalinen.madre.ui.kit.RazvorotTheme as MadreTheme
 import com.polinalinen.madre.utils.PhotoStore
 import java.io.File
 import java.io.FileOutputStream
@@ -60,7 +62,7 @@ class PhotoDesignerTapCycleUiTest {
 
         rule.onNodeWithText("без оттиска").performClick()
         rule.onNodeWithText("колос").assertIsDisplayed()
-        rule.onNodeWithText("Угол").assertIsDisplayed()
+        rule.onNodeWithText("Угол").performScrollTo().assertIsDisplayed()
 
         rule.onNodeWithText("колос").performClick()
         rule.onNodeWithText("каравай").assertIsDisplayed()

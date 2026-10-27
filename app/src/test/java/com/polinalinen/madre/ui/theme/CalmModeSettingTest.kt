@@ -1,5 +1,7 @@
 package com.polinalinen.madre.ui.theme
 
+import com.polinalinen.madre.ui.kit.CalmModeSetting
+import com.polinalinen.madre.ui.kit.FlagStore
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
@@ -21,18 +23,18 @@ class CalmModeSettingTest {
     }
 
     @Test
-    fun `a fresh book opens in calm mode`() {
-        assertThat(CalmModeSetting(FakeStore()).isCalm()).isTrue()
-        assertThat(CalmModeSetting.DEFAULT).isTrue()
+    fun `a fresh book does not reduce motion`() {
+        assertThat(CalmModeSetting(FakeStore()).isCalm()).isFalse()
+        assertThat(CalmModeSetting.DEFAULT).isFalse()
     }
 
     @Test
     fun `toggling switches between calm and full decoration`() {
         val setting = CalmModeSetting(FakeStore())
-        assertThat(setting.toggle()).isFalse()
-        assertThat(setting.isCalm()).isFalse()
         assertThat(setting.toggle()).isTrue()
         assertThat(setting.isCalm()).isTrue()
+        assertThat(setting.toggle()).isFalse()
+        assertThat(setting.isCalm()).isFalse()
     }
 
     @Test

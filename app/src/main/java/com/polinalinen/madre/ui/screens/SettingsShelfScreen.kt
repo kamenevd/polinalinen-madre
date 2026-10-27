@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.screens
 
+import com.polinalinen.madre.ui.kit.*
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
@@ -15,8 +16,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -41,13 +40,10 @@ import com.polinalinen.madre.account.InviteCode
 import com.polinalinen.madre.data.db.entities.BakeRecordEntity
 import com.polinalinen.madre.shelf.ShelfMember
 import com.polinalinen.madre.ui.components.BackLabel
-import com.polinalinen.madre.ui.components.BookButton
-import com.polinalinen.madre.ui.components.BookButtonVariant
 import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.Stamp
 import com.polinalinen.madre.ui.components.TextAction
 import com.polinalinen.madre.ui.components.bookAction
-import com.polinalinen.madre.ui.theme.AppColors
 import com.polinalinen.madre.viewmodel.FamilyBookViewModel
 import com.polinalinen.madre.viewmodel.ShelfViewModel
 
@@ -63,7 +59,17 @@ fun SettingsShelfScreen(
     familyBookViewModel: FamilyBookViewModel = viewModel(),
     shelfViewModel: ShelfViewModel = viewModel(),
 ) {
-    val colors = AppColors.current
+    if (com.polinalinen.madre.config.FeatureFlags.FAMILY_LINK_UI) {
+        FamilyLinkRoute(onBack)
+        return
+    }
+    if (com.polinalinen.madre.config.FeatureFlags.FAMILY_ROSTER_V2) {
+        PaperScaffold(header = { PaperHeader("Семейная полка", onBack) }) {
+            item { FamilyFailure(com.polinalinen.madre.integration.v2.ContractFailure.Kind.DISABLED, {}, showRetry = false) }
+        }
+        return
+    }
+    val colors = LocalPaper.current
     val context = LocalContext.current
     val familyBookState by familyBookViewModel.state.collectAsState()
     val passwordResetNotice by familyBookViewModel.passwordReset.collectAsState()
@@ -89,28 +95,21 @@ fun SettingsShelfScreen(
     val loading = familyBookState is FamilyBookState.Loading
     val inFamily = account?.hasFamily == true
 
-    Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
+    PaperSurface(color = colors.bg, modifier = Modifier.fillMaxSize()) {
         Column(
             Modifier
-                .statusBarsPadding()
+
                 .verticalScroll(rememberScrollState())
                 .padding(bottom = 32.dp),
         ) {
-            BackLabel("Настройки", onClick = onBack, modifier = Modifier.padding(horizontal = 22.dp))
-            Text(
-                "Полка",
-                color = colors.espresso,
-                fontFamily = FontFamily.Serif,
-                fontWeight = FontWeight.Bold,
-                fontSize = 26.sp,
-                modifier = Modifier.padding(horizontal = 22.dp),
-            )
+            PaperHeader("Полка", onBack = onBack, overline = "Настройки", modifier = Modifier.padding(horizontal = 22.dp))
+
             if (inFamily) {
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Stamp("ваша полка", colors.cocoa)
+                    Stamp("ваша полка", colors.ink2)
                 }
             }
             when {
@@ -129,8 +128,7 @@ fun SettingsShelfScreen(
                     if (failed != null) {
                         Text(
                             failed.failure.message,
-                            color = colors.terracotta,
-                            fontFamily = FontFamily.Serif,
+                            color = colors.error,style = PaperType.body,
                             fontSize = 13.sp,
                             modifier = Modifier.padding(horizontal = 22.dp, vertical = 8.dp),
                         )
@@ -138,8 +136,7 @@ fun SettingsShelfScreen(
                     if (loading) {
                         Text(
                             "проверяем полку",
-                            color = colors.cocoa,
-                            fontFamily = FontFamily.Serif,
+                            color = colors.ink2,style = PaperType.body,
                             fontStyle = FontStyle.Italic,
                             fontSize = 12.sp,
                             modifier = Modifier.padding(horizontal = 22.dp, vertical = 4.dp),
@@ -148,9 +145,8 @@ fun SettingsShelfScreen(
                     val familyName = account.familyName.orEmpty().ifBlank { "полка" }
                     Text(
                         familyName,
-                        color = colors.espresso,
-                        fontFamily = FontFamily.Serif,
-                        fontWeight = FontWeight.Bold,
+                        color = colors.ink,style = PaperType.body,
+                        fontWeight = FontWeight.Medium,
                         fontSize = 20.sp,
                         modifier = Modifier.padding(horizontal = 22.dp, vertical = 8.dp),
                     )
@@ -169,43 +165,7 @@ fun SettingsShelfScreen(
                         members = members,
                         familyOwnerId = account.familyOwnerId,
                     )
-                    val code = account.inviteCode
-                    if (code != null) {
-                        val printedCode = InviteCode.format(code)
-                        Text(
-                            printedCode,
-                            color = colors.crust,
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 17.sp,
-                            modifier = Modifier.padding(horizontal = 22.dp, vertical = 10.dp),
-                        )
-                        Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp)) {
-                            TextAction("Скопировать", onClick = {
-                                val clipboard = context.getSystemService(ClipboardManager::class.java)
-                                clipboard?.setPrimaryClip(ClipData.newPlainText("Код полки", printedCode))
-                                familyBookViewModel.clearInviteCode()
-                            }, modifier = Modifier.weight(1f))
-                            TextAction("Отправить", onClick = {
-                                val share = Intent(Intent.ACTION_SEND)
-                                    .setType("text/plain")
-                                    .putExtra(
-                                        Intent.EXTRA_TEXT,
-                                        "Вступите на полку «${account.familyName ?: "Мадре"}»: $printedCode",
-                                    )
-                                context.startActivity(Intent.createChooser(share, "Отправить приглашение"))
-                                familyBookViewModel.clearInviteCode()
-                            }, modifier = Modifier.weight(1f))
-                        }
-                    }
-                    if (account.isFamilyOwner) {
-                        Spacer(Modifier.height(8.dp))
-                        BookButton(
-                            label = "Обновить код приглашения",
-                            variant = BookButtonVariant.SECONDARY,
-                            onClick = familyBookViewModel::rotateInviteCode,
-                            modifier = Modifier.padding(horizontal = 22.dp),
-                        )
-                    }
+                    // Legacy server credentials remain readable, but invitation-code UI is retired.
                     HairRule(Modifier.padding(horizontal = 22.dp, vertical = 12.dp))
                     TextAction(
                         "Уйти с полки · можно вернуться",
@@ -219,18 +179,16 @@ fun SettingsShelfScreen(
     }
 
     if (renaming && account?.isFamilyOwner == true) {
-        AlertDialog(
+        PaperDialog(
             onDismissRequest = { renaming = false },
-            shape = RoundedCornerShape(4.dp),
-            containerColor = colors.cream,
             title = {
-                Text("Название полки", color = colors.espresso, fontFamily = FontFamily.Serif, fontSize = 20.sp)
+                Text("Название полки", color = colors.ink,style = PaperType.body, fontSize = 20.sp)
             },
             text = {
                 FamilyBookField("Название полки", draftName) { draftName = it }
             },
             confirmButton = {
-                BookButton(
+                PaperButton(
                     label = "Сохранить",
                     enabled = draftName.isNotBlank(),
                     onClick = {
@@ -246,11 +204,10 @@ fun SettingsShelfScreen(
 
 @Composable
 internal fun ShelfPeopleList(members: List<ShelfMember>, familyOwnerId: String?) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     Text(
         "Книги на полке",
-        color = colors.cocoa,
-        fontFamily = FontFamily.Serif,
+        color = colors.ink2,style = PaperType.body,
         fontStyle = FontStyle.Italic,
         fontSize = 12.sp,
         modifier = Modifier.padding(horizontal = 22.dp),
@@ -260,15 +217,13 @@ internal fun ShelfPeopleList(members: List<ShelfMember>, familyOwnerId: String?)
         Column(Modifier.padding(horizontal = 22.dp, vertical = 8.dp)) {
             Text(
                 member.displayName,
-                color = colors.espresso,
-                fontFamily = FontFamily.Serif,
+                color = colors.ink,style = PaperType.body,
                 fontSize = 16.sp,
             )
             if (founded) {
                 Text(
                     "кто завёл полку",
-                    color = colors.cocoa,
-                    fontFamily = FontFamily.Serif,
+                    color = colors.ink2,style = PaperType.body,
                     fontStyle = FontStyle.Italic,
                     fontSize = 12.sp,
                 )

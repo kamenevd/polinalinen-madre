@@ -1,9 +1,9 @@
 package com.polinalinen.madre.family
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import com.polinalinen.madre.ui.theme.AppColors
 
 /**
  * DESIGN-V4.md Cycle 2, фича «Голоса семьи» (FamilyHand): у каждого автора
@@ -41,10 +41,10 @@ data class FamilyHandStyle(
 
 @Composable
 fun FamilyHand.style(): FamilyHandStyle {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     return when (this) {
-        FamilyHand.ESPRESSO -> FamilyHandStyle(colors.espresso, -1f, FontWeight.Normal)
-        FamilyHand.COCOA -> FamilyHandStyle(colors.cocoa, -2f, FontWeight.Medium)
-        FamilyHand.CARAMEL -> FamilyHandStyle(colors.caramel, -3f, FontWeight.Normal)
+        FamilyHand.ESPRESSO -> FamilyHandStyle(colors.ink, -1f, FontWeight.Normal)
+        FamilyHand.COCOA -> FamilyHandStyle(colors.ink2, -2f, FontWeight.Medium)
+        FamilyHand.CARAMEL -> FamilyHandStyle(colors.acc, -3f, FontWeight.Normal)
     }
 }

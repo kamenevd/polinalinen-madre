@@ -51,7 +51,9 @@ class ShelfViewModel(app: Application) : AndroidViewModel(app) {
 
             _myUserId.value = account?.userId
             _familyName.value = account?.familyName
-            if (account == null || !account.hasFamily) {
+            if (account == null || !account.hasFamily ||
+                (com.polinalinen.madre.config.FeatureFlags.FAMILY_ROSTER_V2 && !com.polinalinen.madre.config.FeatureFlags.FAMILY_LINK_UI)) {
+                _familyName.value = null
                 val mine = FamilyShelf.localMember(localName)
                 _members.value = listOf(mine)
                 _ledger.value = FamilyShelf.ledgerFromLocal(localRecords, mine.displayName)
@@ -69,6 +71,32 @@ class ShelfViewModel(app: Application) : AndroidViewModel(app) {
                 remoteBakes = emptyList()
                 lastConfirmedMembers = listOf(mine)
                 _unreachable.value = false
+                return@launch
+            }
+            if (com.polinalinen.madre.config.FeatureFlags.FAMILY_LINK_UI) {
+                // No stale/offline family data. Personal Room records remain available independently.
+                remoteBakes = emptyList(); lastConfirmedMembers = emptyList()
+                _members.value = listOf(FamilyShelf.localMember(localName))
+                _ledger.value = FamilyShelf.ledgerFromLocal(localRecords, localName)
+                val verified = runCatching {
+                    madreApp.familyAccountRepository.familyTransaction(madreApp.familyLinkApi) { session ->
+                        val roster = madreApp.familyLinkApi.family(session)
+                        require(roster.id == session.familyId && roster.members.any { it.id == session.userId })
+                        roster to madreApp.madreApi.listBakeStats(session.credential).items
+                    }
+                }
+                if (myGeneration != currentRefreshGeneration) return@launch
+                verified.onSuccess { (reply, session) ->
+                    val (roster, stats) = reply
+                    if (roster.id != session.familyId || madreApp.familyAccountRepository.currentAccount()?.familyId != roster.id) return@onSuccess
+                    _members.value = FamilyShelf.orderMembers(roster.members.map {
+                        ShelfMember(it.id, it.name.ifBlank { "без имени" }, it.id == session.userId)
+                    })
+                    remoteBakes = stats.filter { stat -> roster.members.any { it.id == stat.userId } }
+                    _ledger.value = FamilyShelf.ledgerFromStats(remoteBakes)
+                    _familyName.value = roster.name
+                }
+                _unreachable.value = verified.isFailure
                 return@launch
             }
             // users: on failure keep last confirmed (do not collapse to empty/local)
@@ -108,8 +136,14 @@ class ShelfViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun recordsFor(ownerId: String): List<BakeRecordEntity> =
-        FamilyShelf.recordsForUser(remoteBakes, ownerId)
+    fun recordsFor(ownerId: String): List<BakeRecordEntity> {
+        if (com.polinalinen.madre.config.FeatureFlags.FAMILY_ROSTER_V2 && !com.polinalinen.madre.config.FeatureFlags.FAMILY_LINK_UI) return emptyList()
+        if (com.polinalinen.madre.config.FeatureFlags.FAMILY_LINK_UI) {
+            val state = madreApp.familyLinkRepository.state.value
+            if (state.busy || state.failure != null || state.family?.members?.none { it.id == ownerId } != false) return emptyList()
+        }
+        return FamilyShelf.recordsForUser(remoteBakes, ownerId)
+    }
 
     fun labelFor(ownerId: String, fallback: String): String {
         if (FamilyShelf.isOwnBook(ownerId, _myUserId.value)) {

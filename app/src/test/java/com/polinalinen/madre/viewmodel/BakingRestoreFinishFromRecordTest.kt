@@ -65,13 +65,16 @@ class BakingRestoreFinishFromRecordTest {
         assertThat(vm.session(7L)).isNull()
         vm.stageBakePhoto(7L, "bake_photos/restored.jpg")
         var exits = 0
-        vm.finish(7L, ShelfShareDecision.PUT_WITH_PHOTO) { exits += 1 }
+        // Number retirement is serialized with real Room restoration; await the actual durable job.
+        vm.finish(7L, ShelfShareDecision.PUT_WITH_PHOTO) { exits += 1 }?.join()
         advanceUntilIdle()
 
         assertThat(sync.calls).hasSize(1)
         assertThat(sync.calls.single().recordId).isEqualTo(55L)
         assertThat(sync.calls.single().photoPath).isEqualTo("bake_photos/restored.jpg")
         assertThat(exits).isEqualTo(1)
+        assertThat(ledger.recordIdFor(7L)).isNull()
+        assertThat(vm.completions.value.containsKey(7L)).isFalse()
     }
 
     @Test

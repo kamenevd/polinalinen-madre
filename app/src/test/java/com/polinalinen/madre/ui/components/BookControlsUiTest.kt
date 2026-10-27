@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.components
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -19,7 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
-import com.polinalinen.madre.ui.theme.MadreTheme
+import com.polinalinen.madre.ui.kit.RazvorotTheme as MadreTheme
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -44,7 +45,7 @@ class BookControlsUiTest {
 
     @Test
     fun `a book button is never smaller than a finger`() {
-        rule.setContent { MadreTheme { BookButton(label = "Начать выпечку", onClick = {}) } }
+        rule.setContent { MadreTheme { PaperButton(label = "Начать выпечку", onClick = {}) } }
         rule.onNodeWithText("Начать выпечку").assertHeightIsAtLeast(48.dp)
     }
 
@@ -64,7 +65,7 @@ class BookControlsUiTest {
      * константа, сверенная сама с собой, ничего не проверяет.
      */
     @Test
-    fun `a quiet text action is set at reading size`() {
+    fun `paper text action uses approved compact interface type`() {
         rule.setContent { MadreTheme { TextAction(label = "заглянуть ещё раз", onClick = {}) } }
         val layouts = mutableListOf<TextLayoutResult>()
         rule.onNodeWithText("заглянуть ещё раз")
@@ -72,7 +73,8 @@ class BookControlsUiTest {
             .config[SemanticsActions.GetTextLayoutResult]
             .action
             ?.invoke(layouts)
-        assertThat(layouts.first().layoutInput.style.fontSize).isEqualTo(15.sp)
+        // STYLE-SYSTEM §2: this is now Manrope UI text13sp, not the retired serif15sp action.
+        assertThat(layouts.first().layoutInput.style.fontSize).isEqualTo(13.sp)
     }
 
     @Test
@@ -80,7 +82,7 @@ class BookControlsUiTest {
         rule.setContent {
             MadreTheme {
                 Column {
-                    BookButton(label = "Готово", onClick = {})
+                    PaperButton(label = "Готово", onClick = {})
                     TextAction(label = "повторить", onClick = {})
                 }
             }
@@ -99,7 +101,7 @@ class BookControlsUiTest {
     @Test
     fun `a hurried double tap counts as one`() {
         var taps = 0
-        rule.setContent { MadreTheme { BookButton(label = "Дальше →", onClick = { taps++ }) } }
+        rule.setContent { MadreTheme { PaperButton(label = "Дальше →", onClick = { taps++ }) } }
         rule.onNodeWithText("Дальше →").performClick()
         rule.onNodeWithText("Дальше →").performClick()
         assertThat(taps).isEqualTo(1)

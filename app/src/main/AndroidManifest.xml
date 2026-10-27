@@ -34,6 +34,8 @@
         android:theme="@style/Theme.Madre"
         tools:targetApi="35">
 
+        <meta-data android:name="android.notch_support" android:value="true" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -43,6 +45,12 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="kdnfx.space" android:pathPrefix="/madre/f/" />
             </intent-filter>
         </activity>
 

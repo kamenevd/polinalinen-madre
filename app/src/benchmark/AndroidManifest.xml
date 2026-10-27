@@ -1,0 +1,7 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+    <!-- Isolated CI package .benchmark only. Production/debug manifest stays non-exported. -->
+    <application>
+        <profileable android:shell="true" />
+        <activity android:name="com.polinalinen.madre.ui.razvorot.RazvorotSceneActivity" android:exported="true" />
+    </application>
+</manifest>

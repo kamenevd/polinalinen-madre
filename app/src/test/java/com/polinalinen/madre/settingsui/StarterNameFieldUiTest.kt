@@ -1,5 +1,6 @@
 package com.polinalinen.madre.settingsui
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -10,7 +11,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
 import com.polinalinen.madre.sourdough.StarterName
 import com.polinalinen.madre.ui.screens.StarterNameField
-import com.polinalinen.madre.ui.theme.MadreTheme
+import com.polinalinen.madre.ui.kit.RazvorotTheme as MadreTheme
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith

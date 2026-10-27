@@ -1,0 +1,7 @@
+{
+  "tracking": "https://github.com/kamenevd/polinalinen-madre/pull/61",
+  "reason": "PR61 UI kit migration removed all 330 legacy positions. Only the exact ui/kit owner path+package is lawful. No NAV/platform baseline exemptions remain; no new violations accepted.",
+  "source_head": "fc14c3dea1d74cdc874d4b730548af9c5b37f84d",
+  "count": 0,
+  "violations": []
+}

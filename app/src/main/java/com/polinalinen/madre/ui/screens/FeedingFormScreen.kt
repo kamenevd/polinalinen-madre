@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.screens
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.defaultMinSize
@@ -15,21 +16,20 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.CornerRadius
@@ -47,25 +47,24 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.polinalinen.madre.data.db.entities.StorageLocation
+import com.polinalinen.madre.data.db.entities.FeedingEntity
 import com.polinalinen.madre.sourdough.FeedingInput
 import com.polinalinen.madre.sourdough.FeedingMassCopy
+import com.polinalinen.madre.sourdough.FeedingPresets
 import com.polinalinen.madre.sourdough.HydrationMath
 import com.polinalinen.madre.viewmodel.FeedingSaveState
 import com.polinalinen.madre.ui.components.AgedPhoto
 import com.polinalinen.madre.ui.components.BackLabel
-import com.polinalinen.madre.ui.components.BookButton
 import com.polinalinen.madre.ui.components.MinTouchTarget
 import com.polinalinen.madre.ui.components.PageLabel
-import com.polinalinen.madre.ui.components.TapCycle
-import com.polinalinen.madre.ui.components.TapCycleRow
 import com.polinalinen.madre.ui.components.TextAction
 import com.polinalinen.madre.ui.components.bookAction
 import com.polinalinen.madre.ui.components.drawPhotoHolders
 import com.polinalinen.madre.ui.photo.rememberPhotoAttachment
-import com.polinalinen.madre.ui.theme.AppColors
 import com.polinalinen.madre.utils.PhotoStore
 import kotlin.math.roundToInt
 
@@ -87,14 +86,19 @@ import kotlin.math.roundToInt
  * что посчитанных кормлений ещё нет, и тогда книга вслух называет источник:
  * стартовая гидратация 50% из буклета.
  */
+data class FeedingRepeatRequest(val id: String, val masses: FeedingPresets.Masses)
+
 @Composable
 fun FeedingFormScreen(
     onSave: (Int, Int, Int, StorageLocation, String?, String?) -> Unit,
     onBack: () -> Unit,
     saveState: FeedingSaveState = FeedingSaveState.Idle,
     priorHydrationPercent: Int? = null,
+    lastFeeding: FeedingEntity? = null,
+    repeatRequest: FeedingRepeatRequest? = null,
+    onRepeatConsumed: (String) -> Unit = {},
 ) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     val isSaving = saveState is FeedingSaveState.Saving
 
     // rememberSaveable, а не remember: поворот телефона или уход в камеру за
@@ -105,6 +109,38 @@ fun FeedingFormScreen(
     var location by rememberSaveable { mutableStateOf(StorageLocation.KITCHEN) }
     var note by rememberSaveable { mutableStateOf("") }
     var photoPath by rememberSaveable { mutableStateOf<String?>(null) }
+    val lastMasses = FeedingPresets.last(lastFeeding)
+    // A restored draft is authoritative, even when history arrives afterwards.
+    var acceptHistory by rememberSaveable(stateSaver = Saver<Boolean, Boolean>(
+        save = { false }, restore = { false },
+    )) { mutableStateOf(true) }
+    var selectedPreset by rememberSaveable { mutableStateOf(-1) }
+    var presetGeneration by rememberSaveable { mutableStateOf(0) }
+    fun applyMasses(masses: FeedingPresets.Masses, preset: Int) {
+        starterGrams = masses.starter
+        flourGrams = masses.flour
+        waterGrams = masses.water
+        selectedPreset = preset
+        // Explicit application replaces pending exact input, even for unchanged masses.
+        presetGeneration++
+        acceptHistory = false
+    }
+    fun editMasses() { acceptHistory = false; selectedPreset = -1 }
+    var consumedRepeat by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(repeatRequest, isSaving) {
+        repeatRequest?.let { request ->
+            if (!isSaving) {
+                if (consumedRepeat != request.id && request.masses.valid) {
+                    applyMasses(request.masses, -1)
+                    consumedRepeat = request.id
+                }
+                onRepeatConsumed(request.id)
+            }
+        }
+    }
+    LaunchedEffect(lastMasses) {
+        if (acceptHistory && !isSaving && repeatRequest == null) lastMasses?.let { applyMasses(it, 0) }
+    }
 
     val priorHydration = priorHydrationPercent ?: HydrationMath.INITIAL_LEVITO_HYDRATION_PERCENT
     val finalHydration = HydrationMath.finalHydrationPercent(
@@ -127,106 +163,112 @@ fun FeedingFormScreen(
         key = 0L,
     ) { path -> photoPath = path }
 
-    Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
+    PaperScaffold(contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) {
+        item {
         Column(
             Modifier
-                .statusBarsPadding()
-                .verticalScroll(rememberScrollState())
+
                 .padding(bottom = 32.dp)
         ) {
             BackHandler(enabled = isSaving) {}
-            BackLabel("Дневник", onClick = { if (!isSaving) onBack() }, modifier = Modifier.padding(horizontal = 22.dp))
+            PaperHeader("Новая запись", onBack = { if (!isSaving) onBack() }, overline = "Закваска · дневник", modifier = Modifier.padding(horizontal = 22.dp))
 
+            val ratios = listOf(1, 2, 5).map { FeedingPresets.ratio(starterGrams, it) }
+            val labels = listOf("Как в прошлый раз", "1 : 1 : 1", "1 : 2 : 2", "1 : 5 : 5 · в холод")
+            Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 22.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                labels.forEachIndexed { index, label ->
+                    val masses = if (index == 0) lastMasses else ratios[index - 1]
+                    PaperChip(label, selectedPreset == index &&
+                        masses == FeedingPresets.Masses(starterGrams, flourGrams, waterGrams),
+                        enabled = masses != null && !isSaving,
+                        onClick = { masses?.let { applyMasses(it, index) }
+                            if (index == 3) location = StorageLocation.FRIDGE },
+                        modifier = Modifier.semantics { contentDescription = label })
+                }
+            }
             Text(
-                "Новая запись",
-                color = colors.espresso,
-                fontFamily = FontFamily.Serif,
-                fontWeight = FontWeight.Bold,
-                fontSize = 26.sp,
-                modifier = Modifier.padding(horizontal = 22.dp),
+                listOfNotNull(
+                    if (lastMasses == null) "Прошлые массы недоступны: нет записи с тремя допустимыми массами." else null,
+                    "Мука и вода округляются до 5 г. Недоступные соотношения выходят за пределы: мука 10–500 г, вода 5–300 г. Измените массу закваски.",
+                ).joinToString(" "),
+                style = PaperType.caption, color = colors.ink2,
+                modifier = Modifier.padding(horizontal = 22.dp, vertical = 4.dp),
             )
 
             GramCard(
                 label = FeedingMassCopy.STARTER,
+                icon = PaperFeedingMassIconKind.JAR,
                 accessibleLabel = "Оставленная закваска",
                 range = FeedingInput.STARTER,
                 grams = starterGrams,
-                onChange = { starterGrams = it },
+                presetGeneration = presetGeneration,
+                onEdit = ::editMasses,
+                onChange = { editMasses(); starterGrams = it },
             )
             GramCard(
                 label = FeedingMassCopy.FLOUR,
+                icon = PaperFeedingMassIconKind.WHEAT,
                 accessibleLabel = "Добавленная мука",
                 range = FeedingInput.FLOUR,
                 grams = flourGrams,
-                onChange = { flourGrams = it },
+                presetGeneration = presetGeneration,
+                onEdit = ::editMasses,
+                onChange = { editMasses(); flourGrams = it },
             )
             GramCard(
                 label = FeedingMassCopy.WATER,
+                icon = PaperFeedingMassIconKind.DROP,
                 accessibleLabel = "Добавленная вода",
                 range = FeedingInput.WATER,
                 grams = waterGrams,
-                onChange = { waterGrams = it },
+                presetGeneration = presetGeneration,
+                onEdit = ::editMasses,
+                onChange = { editMasses(); waterGrams = it },
             )
 
             // Не поле, а результат: книга показывает, что получилось из
             // названных масс, и честно называет, от чего считала.
             Column(Modifier.padding(horizontal = 22.dp, vertical = 14.dp)) {
-                PageLabel("Гидратация после кормления", color = colors.cocoa)
-                Text(
-                    "$finalHydration%",
-                    color = colors.espresso,
-                    fontFamily = FontFamily.Serif,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 24.sp,
-                    modifier = Modifier
-                        .padding(top = 4.dp)
-                        .semantics {
-                            contentDescription = "Гидратация после кормления: $finalHydration процентов, посчитана книгой"
-                        },
-                )
-                Text(
-                    if (priorHydrationPercent == null) {
+                FeedingSummary(
+                    masses = FeedingSummaryMasses(starterGrams, flourGrams, waterGrams),
+                    finalHydration = finalHydration,
+                    priorContext = if (priorHydrationPercent == null) {
                         "Считаем от стартовой гидратации " +
                             "${HydrationMath.INITIAL_LEVITO_HYDRATION_PERCENT}% — " +
                             "посчитанных кормлений в дневнике ещё нет"
-                } else {
-                    "Считаем от прошлой гидратации $priorHydration%"
-                },
-                color = colors.cocoa, fontFamily = FontFamily.Serif, fontSize = 13.sp,
-                lineHeight = 19.sp,
-                modifier = Modifier.padding(top = 4.dp),
-            )
+                    } else {
+                        "Считаем от прошлой гидратации $priorHydration%"
+                    },
+                )
             Text(
                 "Удобный стартовый набор (редактируемый): 50/100/50 — это просто " +
-                    "начальные значения, а не формула.",
-                color = colors.cocoa,
-                fontFamily = FontFamily.Serif,
+                    "начальные значения без истории, а не формула.",
+                color = colors.ink2,style = PaperType.body,
                 fontSize = 13.sp,
                 lineHeight = 19.sp,
                 modifier = Modifier.padding(top = 6.dp),
             )
             Text(
                 "«Комментарий закваски» книга запишет сама — фактами этого кормления.",
-                color = colors.cocoa, fontFamily = FontFamily.Serif,
+                color = colors.ink2,style = PaperType.body,
                     fontStyle = FontStyle.Italic, fontSize = 13.sp, lineHeight = 19.sp,
                     modifier = Modifier.padding(top = 6.dp),
                 )
             }
 
-            TapCycleRow(
-                label = "Где стоит закваска",
-                value = when (location) {
-                    StorageLocation.KITCHEN -> "Кухня"
-                    StorageLocation.FRIDGE -> "Холод"
-                },
-                modifier = Modifier.padding(vertical = 2.dp),
-                onClick = {
-                    location = TapCycle.next(
-                        options = listOf(StorageLocation.KITCHEN, StorageLocation.FRIDGE),
-                        current = location,
-                    )
-                },
-            )
+            Column(Modifier.padding(horizontal = 22.dp, vertical = 2.dp)) {
+                PageLabel("Где стоит", color = colors.ink2)
+                val locations = listOf(StorageLocation.KITCHEN, StorageLocation.FRIDGE)
+                PaperSegmented(
+                    labels = listOf("Кухня", "Холодильник"),
+                    selectedIndex = locations.indexOf(location),
+                    onSelect = { location = locations[it]
+                        if (selectedPreset == 3 && location != StorageLocation.FRIDGE) selectedPreset = -1 },
+                    label = "Где стоит",
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
 
             // Слот фотокарточки:
             //  - пустой — нажимаемый (bookAction: роль, подпись, мишень 48dp)
@@ -238,26 +280,25 @@ fun FeedingFormScreen(
                         .padding(horizontal = 22.dp, vertical = 18.dp)
                         .fillMaxWidth()
                         .rotate(1f)
-                        .drawBehind { drawRect(colors.cream) }
+                        .drawBehind { drawRect(colors.card) }
                         .padding(10.dp)
                         .then(bookAction("Вклеить фотокарточку кормления") { openPhotoSource() })
                         .drawBehind {
                             drawRoundRect(
-                                color = colors.flour,
+                                color = colors.line,
                                 style = Stroke(
                                     width = 1.dp.toPx(),
                                     pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 5f)),
                                 ),
                             )
-                            drawPhotoHolders(colors.cocoa.copy(alpha = 0.55f), 14.dp.toPx())
+                            drawPhotoHolders(colors.ink2.copy(alpha = 0.55f), 14.dp.toPx())
                         }
                         .padding(vertical = 18.dp),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         "вклеить фотокарточку",
-                        color = colors.cocoa,
-                        fontFamily = FontFamily.Serif,
+                        color = colors.ink2,style = PaperType.body,
                         fontStyle = FontStyle.Italic,
                         fontSize = 12.sp,
                     )
@@ -280,38 +321,17 @@ fun FeedingFormScreen(
                 }
             }
 
-            Column(Modifier.padding(horizontal = 22.dp, vertical = 4.dp)) {
-                PageLabel("Заметка о кормлении", color = colors.cocoa)
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(top = 6.dp)
-                        .drawBehind {
-                            drawLine(
-                                color = colors.flour,
-                                start = Offset(0f, size.height),
-                                end = Offset(size.width, size.height),
-                                strokeWidth = 0.5.dp.toPx(),
-                            )
-                        }
-                        .padding(bottom = 6.dp)
-                ) {
-                    if (note.isEmpty()) {
-                        Text(
-                            "пахнет яблоками…",
-                            color = colors.flour,
-                            fontFamily = FontFamily.Cursive,
-                            fontSize = 16.sp,
-                        )
-                    }
-                    BasicTextField(
-                        value = note,
-                        onValueChange = { note = it },
-                        singleLine = true,
-                        textStyle = TextStyle(color = colors.espresso, fontFamily = FontFamily.Cursive, fontSize = 16.sp),
-                        cursorBrush = SolidColor(colors.crust),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+            PaperField(note, { note = it }, label = "Заметка о кормлении", placeholder = "пахнет яблоками…",
+                modifier = Modifier.padding(horizontal = 22.dp, vertical = 4.dp))
+            Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 22.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("пахнет яблоками", "крупные пузыри", "кислит", "жидковата").forEach { hint ->
+                    // Explicit insertion only: keep every byte of the typed/restored prefix.
+                    PaperChip("+ $hint", selected = false, enabled = !isSaving,
+                        onClick = {
+                            note += (if (note.isNotEmpty() && !note.last().isWhitespace()) "\n" else "") + hint
+                        },
+                        modifier = Modifier.semantics { role = androidx.compose.ui.semantics.Role.Button })
                 }
             }
 
@@ -320,8 +340,7 @@ fun FeedingFormScreen(
             saveAnnouncement?.let { announcement ->
                 Text(
                     announcement,
-                    color = colors.cocoa,
-                    fontFamily = FontFamily.Serif,
+                    color = colors.ink2,style = PaperType.body,
                     fontSize = 13.sp,
                     lineHeight = 19.sp,
                     modifier = Modifier
@@ -333,8 +352,9 @@ fun FeedingFormScreen(
                 )
             }
             Box(Modifier.padding(horizontal = 22.dp, vertical = 22.dp)) {
-                BookButton(
+                PaperButton(
                     label = "Вписать в дневник",
+                    variant = PaperButtonVariant.ACCENT,
                     enabled = saveState !is FeedingSaveState.Saving,
                     onClick = {
                         val trimmedNote = note.trim()
@@ -346,6 +366,7 @@ fun FeedingFormScreen(
                 )
             }
         }
+        }
     }
 }
 
@@ -356,33 +377,29 @@ fun FeedingFormScreen(
  * Ползунок здесь быстрый путь, а не единственный: 47 г он не наберёт, поэтому
  * число всегда остаётся нажимаемым.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun GramCard(
     label: String,
+    icon: PaperFeedingMassIconKind,
     accessibleLabel: String,
     range: FeedingInput.Range,
     grams: Int,
+    presetGeneration: Int,
+    onEdit: () -> Unit,
     onChange: (Int) -> Unit,
 ) {
-    val colors = AppColors.current
-    var typing by rememberSaveable { mutableStateOf(false) }
+    val colors = LocalPaper.current
+    var typing by rememberSaveable(presetGeneration) { mutableStateOf(false) }
 
-    Column(
-        Modifier
-            .padding(horizontal = 22.dp, vertical = 8.dp)
-            .fillMaxWidth()
-            .drawBehind {
-                drawRoundRect(colors.cream, cornerRadius = CornerRadius(4.dp.toPx()))
-                drawRoundRect(
-                    colors.flour,
-                    cornerRadius = CornerRadius(4.dp.toPx()),
-                    style = Stroke(width = 1.dp.toPx()),
-                )
-            }
-            .padding(horizontal = 14.dp, vertical = 10.dp)
-    ) {
-        PageLabel(label, color = colors.cocoa)
+    PaperCard(Modifier.padding(horizontal = 22.dp, vertical = 8.dp)) {
+        Row(
+            Modifier.testTag("feeding-mass-header-${icon.name}"),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            PaperFeedingMassIcon(icon)
+            SmallLabel(label, color = colors.ink2)
+        }
         if (typing) {
             GramNumberField(
                 accessibleLabel = accessibleLabel,
@@ -398,16 +415,14 @@ private fun GramCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     Modifier
-                        .then(bookAction("Указать точный вес: $accessibleLabel") { typing = true })
+                        .then(bookAction("Указать точный вес: $accessibleLabel") { onEdit(); typing = true })
                         .padding(vertical = 4.dp),
                     contentAlignment = Alignment.CenterStart,
                 ) {
                     Text(
                         "$grams г",
-                        color = colors.espresso,
-                        fontFamily = FontFamily.Serif,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 26.sp,
+                        color = colors.ink,
+                        style = PaperType.number.copy(fontSize = 38.sp, fontWeight = FontWeight.ExtraLight),
                         // Иначе TalkBack прочитает «50 г» и промолчит о том, чего
                         // именно 50: на странице таких чисел три.
                         modifier = Modifier.semantics { contentDescription = "$accessibleLabel: $grams г" },
@@ -431,52 +446,21 @@ private fun GramCard(
             }
         }
 
-        Slider(
+        PaperSlider(
             value = grams.coerceIn(range.min, range.max).toFloat(),
             onValueChange = { onChange(range.clamp(it.roundToInt())) },
-            valueRange = range.min.toFloat()..range.max.toFloat(),
-            steps = range.sliderSteps,
-            colors = SliderDefaults.colors(
-                thumbColor = colors.espresso,
-                activeTrackColor = colors.cocoa,
-                inactiveTrackColor = colors.flour,
-                activeTickColor = colors.flour,
-                inactiveTickColor = colors.flour,
-            ),
-            // Ползунок книги: засечка на линейке, а не пластиковая таблетка.
-            thumb = {
-                Box(
-                    Modifier
-                        .size(width = 10.dp, height = 26.dp)
-                        .drawBehind {
-                            drawRoundRect(colors.espresso, cornerRadius = CornerRadius(2.dp.toPx()))
-                        }
-                )
-            },
-            track = {
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(2.dp)
-                        .drawBehind { drawRect(colors.flour) }
-                )
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 2.dp)
-                .semantics {
-                    contentDescription = "$accessibleLabel, граммы"
-                    stateDescription = "$grams г"
-                },
-        )
+            valueRange = range.min.toFloat()..range.max.toFloat(), steps = range.sliderSteps,
+            modifier = Modifier.fillMaxWidth().padding(top = 2.dp).semantics {
+                contentDescription = "$accessibleLabel, граммы"
+                stateDescription = "$grams г"
+            })
 
         // Видимая шкала: край, значение по умолчанию, край.
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             listOf(range.min, range.default, range.max).forEach { mark ->
                 Text(
                     "$mark г",
-                    color = colors.cocoa,
-                    fontFamily = FontFamily.SansSerif,
+                    color = colors.ink2,style = PaperType.caption,
                     fontSize = 11.sp,
                 )
             }
@@ -498,42 +482,21 @@ private fun GramNumberField(
     onCancel: () -> Unit,
     onConfirm: (Int) -> Unit,
 ) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     var text by rememberSaveable { mutableStateOf(grams.toString()) }
     val parsed = range.parse(text)
 
     Column {
         Row(verticalAlignment = Alignment.Bottom) {
-            BasicTextField(
-                value = text,
+            PaperField(value = text,
                 onValueChange = { new -> if (new.length <= 4 && new.all(Char::isDigit)) text = new },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                textStyle = TextStyle(
-                    color = colors.espresso,
-                    fontFamily = FontFamily.Serif,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 24.sp,
-                ),
-                cursorBrush = SolidColor(colors.crust),
-                modifier = Modifier
-                    .weight(1f)
-                    .drawBehind {
-                        drawLine(
-                            color = colors.espresso,
-                            start = Offset(0f, size.height),
-                            end = Offset(size.width, size.height),
-                            strokeWidth = 1.5.dp.toPx(),
-                        )
-                    }
-                    .semantics { contentDescription = "$accessibleLabel, точный вес в граммах" },
-            )
-            Text("г", color = colors.cocoa, fontFamily = FontFamily.Serif, fontSize = 15.sp)
+                numeric = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.weight(1f).semantics { contentDescription = "$accessibleLabel, точный вес в граммах" })
+            Text("г", color = colors.ink2,style = PaperType.body, fontSize = 15.sp)
         }
         Text(
             "от ${range.min} до ${range.max} г",
-            color = if (parsed == null) colors.terracotta else colors.cocoa,
-            fontFamily = FontFamily.Serif,
+            color = if (parsed == null) colors.rib else colors.ink2,style = PaperType.body,
             fontSize = 12.sp,
             modifier = Modifier.padding(top = 4.dp),
         )
@@ -547,28 +510,5 @@ private fun GramNumberField(
 /** Кнопка на пять граммов: рамка книги, мишень 48dp, подпись для TalkBack. */
 @Composable
 private fun StepButton(symbol: String, label: String, enabled: Boolean, onClick: () -> Unit) {
-    val colors = AppColors.current
-    val ink = if (enabled) colors.espresso else colors.flour
-    Box(
-        Modifier
-            .defaultMinSize(minWidth = MinTouchTarget, minHeight = MinTouchTarget)
-            .then(bookAction(label = label, enabled = enabled, onClick = onClick))
-            .drawBehind {
-                drawRoundRect(
-                    ink,
-                    cornerRadius = CornerRadius(3.dp.toPx()),
-                    style = Stroke(width = 1.5.dp.toPx()),
-                )
-            },
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            symbol,
-            color = ink,
-            fontFamily = FontFamily.SansSerif,
-            fontSize = 13.sp,
-            letterSpacing = 1.sp,
-        )
-    }
+    PaperStepButton(symbol, label, enabled, onClick, accelerateOnHold = true)
 }
-

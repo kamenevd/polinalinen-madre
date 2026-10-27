@@ -9,6 +9,7 @@ import com.polinalinen.madre.data.db.entities.StorageLocation
 import com.polinalinen.madre.data.repository.SourdoughFeedingSaveRequest
 import com.polinalinen.madre.data.repository.SourdoughRepository
 import com.polinalinen.madre.sourdough.HydrationMath
+import com.polinalinen.madre.sourdough.FeedingPresets
 import com.polinalinen.madre.notifications.FeedingSchedule
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -87,6 +88,57 @@ class FeedingHydrationPersistenceTest {
         photoPath = null,
         weather = weather,
     )
+
+    @Test
+    fun `note hint text remains only a note with exact masses photo and hydration after database reopen`() = runTest {
+        val repository = openBook()
+        val config = repository.getOrCreateDefaultConfig()
+        val note = "Своя строка\nпахнет яблоками\nкрупные пузыри\nкислит\nжидковата"
+        val saved = repository.saveFeeding(saveRequest(config.id, config.intervalHours, 1_000L,
+            retainedStarterGrams = 61, flourGrams = 113, waterGrams = 59)
+            .copy(storageLocation = StorageLocation.FRIDGE, note = note, photoPath = "feeding_photos/fixture.jpg"))
+        closeBook()
+        val persisted = openBook().lastFeeding(config.id)!!
+        assertThat(persisted).isEqualTo(saved.feeding)
+        assertThat(persisted.notes).isEqualTo(note)
+        assertThat(persisted.photoPath).isEqualTo("feeding_photos/fixture.jpg")
+        assertThat(FeedingPresets.last(persisted)).isEqualTo(FeedingPresets.Masses(61, 113, 59))
+        assertThat(persisted.storageLocation).isEqualTo(StorageLocation.FRIDGE)
+        assertThat(persisted.finalHydrationPercent).isEqualTo(HydrationMath.finalHydrationPercent(
+            retainedStarterGrams = 61, priorHydrationPercent = HydrationMath.INITIAL_LEVITO_HYDRATION_PERCENT,
+            addedFlourGrams = 113, addedWaterGrams = 59))
+        assertThat(persisted.generatedComment).doesNotContain("пахнет яблоками")
+    }
+
+    @Test
+    fun `cold preset exact masses and enum survive real save and database reopen`() = runTest {
+        val repository = openBook()
+        val config = repository.getOrCreateDefaultConfig()
+        val masses = FeedingPresets.ratio(47, 5)!!
+        repository.saveFeeding(saveRequest(config.id, config.intervalHours, 1_000L,
+            retainedStarterGrams = masses.starter, flourGrams = masses.flour, waterGrams = masses.water)
+            .copy(storageLocation = StorageLocation.FRIDGE))
+        closeBook()
+        val persisted = openBook().lastFeeding(config.id)
+        assertThat(FeedingPresets.last(persisted)).isEqualTo(FeedingPresets.Masses(47, 235, 235))
+        assertThat(persisted?.storageLocation).isEqualTo(StorageLocation.FRIDGE)
+    }
+
+    @Test
+    fun `fridge storage survives a real save and database reopen`() = runTest {
+        val repository = openBook()
+        val config = repository.getOrCreateDefaultConfig()
+        val saved = repository.saveFeeding(
+            saveRequest(config.id, config.intervalHours, 1_000L)
+                .copy(storageLocation = StorageLocation.FRIDGE)
+        )
+        assertThat(saved.feeding.storageLocation).isEqualTo(StorageLocation.FRIDGE)
+        closeBook()
+
+        val persisted = openBook().lastFeeding(config.id)
+        assertThat(persisted?.id).isEqualTo(saved.feedingId)
+        assertThat(persisted?.storageLocation).isEqualTo(StorageLocation.FRIDGE)
+    }
 
     @Test
     fun `a saved feeding supplies the next feeding's prior hydration`() = runTest {

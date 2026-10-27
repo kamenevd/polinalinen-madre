@@ -14,7 +14,7 @@ import androidx.work.WorkManager
 import com.google.common.truth.Truth.assertThat
 import com.polinalinen.madre.MadreApplication
 import com.polinalinen.madre.shelf.ShelfShareDecision
-import com.polinalinen.madre.ui.theme.MadreTheme
+import com.polinalinen.madre.ui.kit.RazvorotTheme as MadreTheme
 import com.polinalinen.madre.viewmodel.BakingViewModel
 import com.polinalinen.madre.viewmodel.fakes.FakeBakeHistory
 import com.polinalinen.madre.viewmodel.fakes.FakeBakeSessionLedger
@@ -59,6 +59,12 @@ class BakingCompleteBusyWhileFinishingUiTest {
             scaleFactor = 1.0,
         )
         vm.advanceStep(sessionId)
+        // Transition publishes the durable completed step before the intentionally held history insert.
+        rule.waitUntil(10_000) {
+            // Before setContent there is no Compose frame loop to drain Main after real Room IO.
+            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+            vm.session(sessionId)?.isCompleted == true
+        }
         rule.waitForIdle()
 
         var exits = 0
@@ -68,7 +74,7 @@ class BakingCompleteBusyWhileFinishingUiTest {
         rule.setContent {
             CompositionLocalProvider(LocalSaveableStateRegistry provides null) {
                 MadreTheme {
-                    BakingCompleteScreen(
+                    BakingFinale(
                         sessionId = sessionId,
                         onHome = { exits += 1 },
                         viewModel = vm,
@@ -89,7 +95,13 @@ class BakingCompleteBusyWhileFinishingUiTest {
         assertThat(exits).isEqualTo(0)
 
         hold.complete(Unit)
-        rule.waitUntil(timeoutMillis = 5_000) { exits == 1 }
+        rule.waitUntil(timeoutMillis = 5_000) {
+            // Room deletion resumes the ViewModel on the paused Robolectric Main looper.
+            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+            exits == 1
+        }
         assertThat(exits).isEqualTo(1)
+        assertThat(history.recordCalls).hasSize(1)
+        assertThat(vm.session(sessionId)).isNull()
     }
 }

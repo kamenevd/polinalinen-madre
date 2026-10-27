@@ -12,6 +12,8 @@ import com.polinalinen.madre.data.remote.RenameFamilyRequest
 import com.polinalinen.madre.data.remote.UserRecord
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -158,12 +160,92 @@ class FamilyAccountRepository(
         synchronized(authGate) {
             revision.incrementAndGet()
             token.set(null)
-            tokens.clear()
             _state.value = FamilyBookState.SignedOut
+            tokens.clear()
             FamilyBookState.SignedOut
         }
 
+    /**
+     * Foreground-only v2 authentication, serialized with legacy account operations.
+     * A saved PB session always links that exact live record; never silently creates
+     * an unrelated account after refresh/link failure. No Room or server leave call.
+     */
+    suspend fun authenticateYandex(
+        bearer: com.polinalinen.madre.account.yandex.YandexLoginToken,
+        auth: com.polinalinen.madre.integration.v2.FamilyAuthenticationApi,
+        isCurrent: () -> Boolean,
+    ) = mutex.withLock {
+        val seen = revision.get()
+        if (!isCurrent()) throw kotlinx.coroutines.CancellationException()
+        val saved = tokens.read()
+        val existing = saved?.let { auth.refreshSession(it) }
+        currentCoroutineContext().ensureActive()
+        if (!isCurrent() || revision.get() != seen) throw kotlinx.coroutines.CancellationException()
+        val result = auth.authenticate(bearer, existing)
+        currentCoroutineContext().ensureActive()
+        synchronized(authGate) {
+            if (!isCurrent() || revision.get() != seen) throw kotlinx.coroutines.CancellationException()
+            require(existing == null || result.userId == existing.userId)
+            val old = _state.value.account?.takeIf { it.userId == result.userId }
+            // The protected store is shared with shelf/sync; never persist Yandex OAuth.
+            tokens.writeYandex(result.credential)
+            token.set(result.credential)
+            publishFreshUnderGate(seen, FamilyBookState.SignedIn(FamilyAccount(
+                result.userId, old?.email.orEmpty(), result.name, result.familyId,
+                old?.familyName?.takeIf { old.familyId == result.familyId },
+                familyOwnerId = old?.familyOwnerId?.takeIf { old.familyId == result.familyId },
+            )))
+        }
+        Unit
+    }
+
     fun currentAccount(): FamilyAccount? = _state.value.account
+    fun sessionGeneration(): Long = revision.get()
+    fun hasSavedSession(): Boolean = tokens.read() != null
+    fun hasYandexSession(): Boolean = tokens.isYandexVerified()
+
+    /** One lane with legacy/auth. Revalidate before AND after every v2 action; logout fences late replies. */
+    suspend fun <T> familyTransaction(
+        auth: com.polinalinen.madre.integration.v2.FamilyAuthenticationApi,
+        action: suspend (com.polinalinen.madre.integration.v2.FamilySession) -> T,
+    ): Pair<T, com.polinalinen.madre.integration.v2.FamilySession> = mutex.withLock {
+        val seen = revision.get()
+        val saved = tokens.read() ?: throw com.polinalinen.madre.integration.v2.ContractFailure(
+            com.polinalinen.madre.integration.v2.ContractFailure.Kind.UNAUTHORIZED)
+        fun fence() {
+            if (revision.get() != seen) throw kotlinx.coroutines.CancellationException()
+        }
+        val before = auth.refreshSession(saved)
+        currentCoroutineContext().ensureActive(); fence()
+        synchronized(authGate) {
+            fence()
+            if (tokens.isYandexVerified()) tokens.writeYandex(before.credential) else tokens.write(before.credential)
+            token.set(before.credential)
+        }
+        val result = action(before)
+        currentCoroutineContext().ensureActive(); fence()
+        val after = auth.refreshSession(before.credential)
+        currentCoroutineContext().ensureActive(); fence()
+        require(before.userId == after.userId)
+        synchronized(authGate) {
+            fence()
+            val old = _state.value.account?.takeIf { it.userId == after.userId }
+            if (tokens.isYandexVerified()) tokens.writeYandex(after.credential) else tokens.write(after.credential)
+            token.set(after.credential)
+            _state.value = FamilyBookState.SignedIn(FamilyAccount(after.userId, old?.email.orEmpty(), after.name,
+                after.familyId, old?.familyName?.takeIf { old.familyId == after.familyId },
+                familyOwnerId = old?.familyOwnerId?.takeIf { old.familyId == after.familyId }))
+        }
+        result to after
+    }
+
+    /** Only already-authorized roster readback may update the settings/shelf header. */
+    fun adoptFamilyReadback(roster: com.polinalinen.madre.integration.v2.FamilyRoster) = synchronized(authGate) {
+        val account = _state.value.account ?: return@synchronized
+        if (account.familyId != roster.id || roster.members.none { it.id == account.userId }) return@synchronized
+        _state.value = FamilyBookState.SignedIn(account.copy(familyName = roster.name, familyOwnerId = roster.owner,
+            displayName = roster.members.single { it.id == account.userId }.name))
+    }
 
     /**
      * Забыть открытый код: сервер отдаёт его один раз, и после показа он не
@@ -181,7 +263,7 @@ class FamilyAccountRepository(
         val seen = publishLocked(FamilyBookState.Loading(_state.value.account))
         val response = runCatching { api.authRefresh(stored) }
             .getOrElse { return failLocked(seen, NetworkFailure.classify(it, NetworkFailure.SIGNED_OUT)) }
-        return adoptLocked(seen, response)
+        return adoptLocked(seen, response, preserveYandex = tokens.isYandexVerified())
     }
 
     private suspend fun refreshLocked(): FamilyBookState {
@@ -225,7 +307,7 @@ class FamilyAccountRepository(
         return api.listFamilyUsers(authorization).items
     }
 
-    private suspend fun adoptLocked(seen: Long, response: AuthResponse): FamilyBookState {
+    private suspend fun adoptLocked(seen: Long, response: AuthResponse, preserveYandex: Boolean = false): FamilyBookState {
         val familyId = response.record.family.orEmpty().takeIf { it.isNotBlank() }
         // Название и владелец семьи — отдельный запрос, и его провал не повод
         // не пускать читателя внутрь: книга просто побудет пока безымянной.
@@ -243,7 +325,7 @@ class FamilyAccountRepository(
                 return@synchronized _state.value
             }
             token.set(response.token)
-            tokens.write(response.token)
+            if (preserveYandex) tokens.writeYandex(response.token) else tokens.write(response.token)
             publishFreshUnderGate(seen, FamilyBookState.SignedIn(restored))
         }
     }

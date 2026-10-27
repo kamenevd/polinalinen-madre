@@ -1,4 +1,8 @@
-# Мадре — backend (PocketBase 0.39.7)
+# Мадре — backend (PocketBase 0.39.11)
+
+7.1 K2/K10 code-only auth candidate: [контракт, pinned API sources,
+source drift и изолированные тесты](docs/yandex-auth-7.1.md).
+Это не выполненный деплой и не закрытие почтовой регистрации.
 
 Cycle 11 перевёл сервер из домашней сети в production: единственный адрес —
 `https://madre-api.kdnfx.space`. Приложение ходит только по HTTPS, исключения
@@ -73,22 +77,14 @@ MADRE_INVITE_PEPPER=<32+ случайных байт, base64>
 
 ## Развёртывание
 
-1. Сначала миграции:
+Развёртывание — отдельная parent-owned операция после полного свежего
+backup и проверенного rollback, сверки provenance/Git-live delta и наличия
+санкционированного PocketBase lifecycle. Не применять каталог вслепую через
+rsync и не заменять отсутствующий lifecycle прямым SSH/systemctl/helper.
 
-   ```sh
-   rsync -a backend/pb_migrations/ <сервер>:<каталог PocketBase>/pb_migrations/
-   systemctl restart pocketbase
-   ```
-
-2. Потом хуки:
-
-   ```sh
-   rsync -a backend/pb_hooks/ <сервер>:<каталог PocketBase>/pb_hooks/
-   systemctl restart pocketbase
-   ```
-
-PocketBase применяет новые миграции на старте и подхватывает хуки без
-отдельной команды. TLS завершается на реверс-прокси перед PocketBase;
+Кодовый срез 7.1 не перезапускает production и не запускает его миграции.
+Локальные synthetic DB/process тесты описаны в `docs/yandex-auth-7.1.md`.
+TLS завершается на реверс-прокси перед PocketBase;
 `https://madre-api.kdnfx.space` — единственный вход снаружи.
 
 Сброс пароля — штатный маршрут PocketBase

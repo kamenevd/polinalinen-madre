@@ -1,7 +1,12 @@
-<resources>
-    <!-- Bootstrap-тема для splash/до Compose. Реальная палитра — в ui/theme/Theme.kt (Compose). -->
+<resources xmlns:tools="http://schemas.android.com/tools">
     <style name="Theme.Madre" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#F4F1EC</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="27">true</item>
+        <item name="android:enforceNavigationBarContrast" tools:targetApi="29">false</item>
+        <item name="android:enforceStatusBarContrast" tools:targetApi="29">false</item>
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="28">shortEdges</item>
     </style>
 </resources>

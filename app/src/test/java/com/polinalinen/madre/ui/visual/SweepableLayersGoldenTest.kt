@@ -1,8 +1,8 @@
 package com.polinalinen.madre.ui.visual
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -14,7 +14,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.polinalinen.madre.ui.components.crumbs
 import com.polinalinen.madre.ui.components.dustLayer
-import com.polinalinen.madre.ui.theme.MadreTheme
+import com.polinalinen.madre.ui.kit.RazvorotTheme as MadreTheme
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -57,7 +57,7 @@ class SweepableLayersGoldenTest {
         rule.mainClock.autoAdvance = false
         rule.setContent {
             MadreTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
+                PaperSurface(modifier = Modifier.fillMaxSize()) {
                     Box(Modifier.fillMaxSize().testTag(PAGE).then(content()))
                 }
             }

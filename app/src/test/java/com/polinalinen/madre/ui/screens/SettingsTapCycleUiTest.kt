@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.screens
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -13,11 +14,16 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsSelected
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
 import com.polinalinen.madre.MadreApplication
-import com.polinalinen.madre.ui.theme.MadreTheme
+import com.polinalinen.madre.ui.kit.RazvorotTheme as MadreTheme
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -33,7 +39,7 @@ class SettingsTapCycleUiTest {
     val rule = createComposeRule()
 
     @Test
-    fun `feeding rhythm rotates without dialog`() {
+    fun `feeding rhythm directly selects the requested interval without a dialog`() {
         rule.setContent {
             var interval by remember { mutableIntStateOf(24) }
             MadreTheme {
@@ -48,13 +54,14 @@ class SettingsTapCycleUiTest {
             }
         }
 
-        rule.onNodeWithText("Ваш ритм: раз в сутки").performClick()
-        rule.onNodeWithText("Ваш ритм: раз в два дня").assertExists()
+        rule.onNodeWithText("Закваска").performClick()
+        rule.onNodeWithText("неделя").performScrollTo().performClick().assertIsSelected()
+        rule.onNodeWithText("2 дня").performScrollTo().performClick().assertIsSelected()
         rule.onAllNodesWithText("Оставить как есть").assertCountEquals(0)
     }
 
     @Test
-    fun `look cycles by one tap`() {
+    fun `calm mode toggles through its real switch`() {
         rule.setContent {
             var calm by remember { mutableStateOf(true) }
             MadreTheme {
@@ -63,24 +70,23 @@ class SettingsTapCycleUiTest {
                     onMyNameChange = {},
                     onBack = {},
                     starterName = "Соня",
+                    readingPreferences = remember { ReadingPreferences(androidx.test.core.app.ApplicationProvider.getApplicationContext(),"tap-reduced").apply{setReduced(true)} },
                     calmMode = calm,
                     onCalmModeChange = { calm = it },
                 )
             }
         }
 
-        val clickables = rule.onAllNodes(hasClickAction(), useUnmergedTree = true)
-        val targetIndex = clickables.fetchSemanticsNodes().indexOfFirst {
-            it.config.getOrNull(SemanticsActions.OnClick)?.label == "Оформление: спокойное"
-        }
-        assertThat(targetIndex).isAtLeast(0)
-        clickables[targetIndex].performSemanticsAction(SemanticsActions.OnClick)
+        rule.onNodeWithText("Внешний вид").performScrollTo().performClick()
+        val control = rule.onNodeWithContentDescription("Меньше движения")
+        control.assertIsOn().performScrollTo().performClick()
         rule.waitForIdle()
-        rule.onNodeWithText("живое").assertExists()
+        control.assertIsOff()
+        rule.onNodeWithText("Спокойный режим").assertDoesNotExist()
     }
 
     @Test
-    fun `reminders row either cycles or stays intentionally fixed when denied by phone`() {
+    fun `reminders switch is actionable only when the phone allows notifications`() {
         rule.setContent {
             var reminders by remember { mutableStateOf(true) }
             MadreTheme {
@@ -95,15 +101,17 @@ class SettingsTapCycleUiTest {
             }
         }
 
-        val deniedNodes = rule.onAllNodesWithText("не разрешены телефоном").fetchSemanticsNodes()
+        rule.onNodeWithText("Уведомления и вибрация").performClick()
+        val deniedNodes = rule.onAllNodesWithText("Уведомления выключены в телефоне").fetchSemanticsNodes()
         if (deniedNodes.isNotEmpty()) {
             val labels = rule.onAllNodes(hasClickAction(), useUnmergedTree = true)
                 .fetchSemanticsNodes()
                 .mapNotNull { it.config.getOrNull(SemanticsActions.OnClick)?.label }
-            assertThat(labels.any { it.startsWith("Напоминания:") }).isFalse()
+            assertThat(labels.any { it == "Напоминать о закваске" || it.startsWith("Напоминать о закваске:") }).isFalse()
+            rule.onNodeWithContentDescription("Напоминать о закваске").assertDoesNotExist()
         } else {
-            rule.onNodeWithText("вкл").performClick()
-            rule.onNodeWithText("выкл").assertExists()
+            val control = rule.onNodeWithContentDescription("Напоминать о закваске")
+            control.assertIsOn().performScrollTo().performClick().assertIsOff()
         }
     }
 }

@@ -14,6 +14,7 @@ import androidx.room.TypeConverters
 import androidx.room.Update
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.polinalinen.madre.data.db.entities.VoiceCommandReceiptEntity
 import com.polinalinen.madre.data.db.entities.ActiveBakeEntity
 import com.polinalinen.madre.data.db.entities.BakeRecordEntity
 import com.polinalinen.madre.data.db.entities.FamilySettingEntity
@@ -55,7 +56,13 @@ interface SourdoughConfigDao {
     // затереть параллельные изменения name/intervalHours/remindersEnabled
     // устаревшей копией конфига.
     @Query("UPDATE sourdough_configs SET lastFeedingMillis = :millis WHERE id = :configId")
-    suspend fun updateLastFeeding(configId: Long, millis: Long)
+    suspend fun updateLastFeeding(configId: Long, millis: Long?)
+
+    @Query("SELECT * FROM sourdough_configs WHERE id = :configId LIMIT 1")
+    fun getNow(configId: Long): SourdoughConfigEntity?
+
+    @Query("UPDATE sourdough_configs SET lastFeedingMillis = :millis WHERE id = :configId")
+    fun updateLastFeedingNow(configId: Long, millis: Long?)
 
     // Cycle 11: «Кормить» и «Напоминания» в колофоне наконец пишут в Room, а не
     // в UI-стейт экрана. Точечные UPDATE — по той же причине, что и выше.
@@ -75,6 +82,15 @@ interface SourdoughConfigDao {
 
 @Dao
 interface FeedingDao {
+    @Query("SELECT * FROM feedings WHERE id = :id LIMIT 1")
+    fun getNow(id: Long): FeedingEntity?
+
+    @Query("SELECT * FROM feedings WHERE sourdoughConfigId = :configId ORDER BY id DESC LIMIT 1")
+    fun getLastNow(configId: Long): FeedingEntity?
+
+    @Delete
+    fun deleteNow(feeding: FeedingEntity)
+
     @Query("SELECT photoPath FROM feedings WHERE photoPath IS NOT NULL")
     suspend fun allPhotoPaths(): List<String>
 
@@ -139,12 +155,36 @@ interface BakeRecordDao {
 interface ActiveBakeDao {
     @Query("SELECT * FROM active_bakes")
     suspend fun getAll(): List<ActiveBakeEntity>
+    @Query("SELECT * FROM active_bakes")
+    fun getAllNow(): List<ActiveBakeEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(bake: ActiveBakeEntity)
 
     @Query("DELETE FROM active_bakes WHERE sessionId = :sessionId")
     suspend fun delete(sessionId: Long)
+
+    // Synchronous forms are used only on IO inside the short guarded Room transaction.
+    @Query("SELECT * FROM active_bakes WHERE sessionId = :sessionId LIMIT 1")
+    fun getNow(sessionId: Long): ActiveBakeEntity?
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun upsertNow(bake: ActiveBakeEntity)
+    @Query("DELETE FROM active_bakes WHERE sessionId = :sessionId")
+    fun deleteNow(sessionId: Long)
+}
+
+@Dao
+interface VoiceReceiptDao {
+    @Query("SELECT * FROM voice_command_receipts WHERE commandId = :id LIMIT 1")
+    fun getNow(id: String): VoiceCommandReceiptEntity?
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    fun insertNow(receipt: VoiceCommandReceiptEntity)
+    @Query("SELECT * FROM voice_command_receipts WHERE operation = 'CANCEL' AND outcome = 'APPLIED' AND effectApplied = 0")
+    fun pendingEffectsNow(): List<VoiceCommandReceiptEntity>
+    @Query("UPDATE voice_command_receipts SET effectApplied = 1 WHERE commandId = :id")
+    fun markEffectNow(id: String)
+    @Query("DELETE FROM voice_command_receipts WHERE expiresAt < :cutoff AND (operation != 'CANCEL' OR effectApplied = 1)")
+    fun pruneNow(cutoff: Long)
 }
 
 @Dao
@@ -305,6 +345,30 @@ private val MIGRATION_9_10 = object : Migration(9, 10) {
  * дропаются: разрушительной миграции здесь быть не должно, версия остаётся 6.
  * Читать и писать их теперь нечем — DAO удалены вместе с фичами.
  */
+val MIGRATION_10_11 = object : Migration(10, 11) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE active_bakes ADD COLUMN scaleFactor REAL")
+        db.execSQL("ALTER TABLE active_bakes ADD COLUMN bakeKey TEXT")
+        db.execSQL("ALTER TABLE active_bakes ADD COLUMN revision INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE active_bakes ADD COLUMN recipeRevision TEXT")
+        db.execSQL("CREATE TABLE IF NOT EXISTS voice_command_receipts (commandId TEXT NOT NULL PRIMARY KEY, fingerprint TEXT NOT NULL, bakeKey TEXT NOT NULL, expectedRevision INTEGER NOT NULL, outcome TEXT NOT NULL, newRevision INTEGER NOT NULL, expiresAt INTEGER NOT NULL, operation TEXT NOT NULL, recipeId TEXT NOT NULL, effectApplied INTEGER NOT NULL DEFAULT 0)")
+    }
+}
+
+val MIGRATION_11_12 = object : Migration(11, 12) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE active_bakes ADD COLUMN bake_number INTEGER NOT NULL DEFAULT 0")
+        // Stable tie-breaker; never drop an overflow legacy row or expose its internal id.
+        db.query("SELECT sessionId FROM active_bakes ORDER BY startedAtWallClock, sessionId").use { rows ->
+            var number = 1
+            while (rows.moveToNext()) {
+                if (number <= 9) db.execSQL("UPDATE active_bakes SET bake_number = ? WHERE sessionId = ?", arrayOf<Any>(number, rows.getLong(0)))
+                number++
+            }
+        }
+    }
+}
+
 @Database(
     entities = [
         UserEntity::class,
@@ -312,11 +376,12 @@ private val MIGRATION_9_10 = object : Migration(9, 10) {
         FeedingEntity::class,
         BakeRecordEntity::class,
         ActiveBakeEntity::class,
+        VoiceCommandReceiptEntity::class,
         MarginNoteEntity::class,
         SealedNoteEntity::class,
         FamilySettingEntity::class,
     ],
-    version = 10,
+    version = 12,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -326,6 +391,7 @@ abstract class MadreDatabase : RoomDatabase() {
     abstract fun feedingDao(): FeedingDao
     abstract fun bakeRecordDao(): BakeRecordDao
     abstract fun activeBakeDao(): ActiveBakeDao
+    abstract fun voiceReceiptDao(): VoiceReceiptDao
     abstract fun familySettingDao(): FamilySettingDao
 
     companion object {
@@ -336,15 +402,17 @@ abstract class MadreDatabase : RoomDatabase() {
          */
         val MIGRATIONS: Array<Migration> = arrayOf(
             MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
-            MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
+            MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
         )
 
         // Room создаётся один раз через Application (см. MadreApplication.kt),
         // а не через lazy-singleton в ViewModel — закрывает баг v3 #1
         // (db.close() в onCleared() → crash при повторном входе).
-        fun build(context: Context): MadreDatabase =
-            Room.databaseBuilder(context.applicationContext, MadreDatabase::class.java, "madre.db")
+        fun build(context: Context): MadreDatabase {
+            LegacyDatabaseBackup.beforeNumberMigration(context)
+            return Room.databaseBuilder(context.applicationContext, MadreDatabase::class.java, "madre.db")
                 .addMigrations(*MIGRATIONS)
                 .build()
+        }
     }
 }

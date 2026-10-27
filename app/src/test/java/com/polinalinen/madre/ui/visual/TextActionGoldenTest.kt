@@ -1,10 +1,10 @@
 package com.polinalinen.madre.ui.visual
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
@@ -14,8 +14,7 @@ import androidx.compose.ui.unit.sp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.polinalinen.madre.ui.components.TextAction
-import com.polinalinen.madre.ui.theme.AppColors
-import com.polinalinen.madre.ui.theme.MadreTheme
+import com.polinalinen.madre.ui.kit.RazvorotTheme as MadreTheme
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
@@ -38,15 +37,14 @@ class TextActionGoldenTest {
     fun `тихое действие отличается от подписи рядом`() {
         captureRoboImage {
             MadreTheme {
-                Surface(color = AppColors.current.paper, modifier = Modifier.fillMaxSize()) {
+                PaperSurface(color = LocalPaper.current.bg, modifier = Modifier.fillMaxSize()) {
                     Column(
                         Modifier.padding(horizontal = 14.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         Text(
                             "общая книга сейчас не отвечает",
-                            color = AppColors.current.cocoa,
-                            fontFamily = FontFamily.Serif,
+                            color = LocalPaper.current.ink2,style = PaperType.body,
                             fontStyle = FontStyle.Italic,
                             fontSize = 15.sp,
                             modifier = Modifier.padding(horizontal = 8.dp),

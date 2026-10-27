@@ -1,8 +1,9 @@
 package com.polinalinen.madre.ui.screens
 
-import androidx.compose.foundation.ExperimentalFoundationApi
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,26 +15,30 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.polinalinen.madre.data.db.entities.FeedingEntity
@@ -45,17 +50,12 @@ import com.polinalinen.madre.notifications.FeedingSchedule
 import com.polinalinen.madre.sourdough.GrowthPhase
 import com.polinalinen.madre.sourdough.SourdoughProfile
 import com.polinalinen.madre.sourdough.StarterName
-import com.polinalinen.madre.ui.components.AgedPhoto
 import com.polinalinen.madre.ui.components.BackLabel
-import com.polinalinen.madre.ui.components.BookButton
-import com.polinalinen.madre.ui.components.HairRule
 import com.polinalinen.madre.ui.components.InkBlot
 import com.polinalinen.madre.ui.components.InkBlotSpot
 import com.polinalinen.madre.ui.components.PageLabel
-import com.polinalinen.madre.ui.components.bookAction
 import com.polinalinen.madre.ui.components.breathingPage
 import com.polinalinen.madre.ui.components.lightPage
-import com.polinalinen.madre.ui.theme.AppColors
 
 data class DiaryEntry(
     val timeLabel: String,
@@ -63,18 +63,7 @@ data class DiaryEntry(
     val isHighlight: Boolean,
 )
 
-/**
- * Закваска — «Дневник культуры» (DESIGN-V4.md, экран 4).
- * Механики: #1 дневник от первого лица, #4 формуляр, #5 дышащая страница.
- *
- * Cycle 26: «Формуляр кормлений» — настоящая таблица с прилипающей шапкой, а
- * не раскрывающиеся карточки с прозой. Шесть узких колонок помещаются в
- * портрет целиком, история едет через LazyColumn целиком (без потолка в
- * десять строк), а длинная человеческая заметка и фотокарточка живут
- * отдельным необязательным раскрытием под строкой — они дополняют таблицу,
- * а не подменяют её.
- */
-@OptIn(ExperimentalFoundationApi::class)
+/** Дневник культуры: неизменённая первая полоса и журнал по календарным неделям. */
 @Composable
 fun StarterDiaryScreen(
     dayNumber: Int,
@@ -91,55 +80,55 @@ fun StarterDiaryScreen(
     currentYear: Int = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR),
     nowMillis: Long? = null,
     nowProvider: () -> Long = System::currentTimeMillis,
+    lastFeedingMillis: Long? = null,
+    photoCount: Int = 0,
+    selectedTabIndex: Int? = null,
+    onTabSelected: (Int) -> Unit = {},
+    onRepeat: (FeedingEntity) -> Unit = {},
+    onDelete: ((FeedingEntity) -> Unit)? = null,
+    deletion: com.polinalinen.madre.sourdough.DiaryDeletionState = com.polinalinen.madre.sourdough.DiaryDeletionState(),
+    onUndoDelete: (Long) -> Unit = {},
+    onDeletionNoticeHeightChanged: (Dp) -> Unit = {},
+    historyLoaded: Boolean = true,
 ) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
+    val density = LocalDensity.current
+    var deletionNoticeHeight by remember { mutableStateOf(0.dp) }
+    var localTab by rememberSaveable { mutableStateOf(0) }
+    val selectedTab = selectedTabIndex ?: localTab
     // «Клякса» — DESIGN-V4.md Cycle 3, фича InkBlot. Событие для seed — самое
     // свежее кормление (id), т.к. отдельного id у DiaryEntry/фазы нет.
     val inkEventId = history.firstOrNull()?.id ?: 0L
 
     // Срок следующего кормления — тот же расчёт, что и на первой полосе:
     // время последней записи плюс интервал из настроек, без «примерно».
-    val scheduleNowMillis by remember(nowMillis, nowProvider) {
-        mutableStateOf(nowMillis ?: nowProvider())
-    }
+    val scheduleNowMillis = rememberDiaryNowMillis(nowMillis, nowProvider)
     val nextFeedingStatus = history.firstOrNull()
         ?.let { FeedingSchedule.nextFeedingStatus(FeedingSchedule.calculate(it.timestampMillis, intervalHours, scheduleNowMillis)) }
 
-    Surface(color = colors.paper, modifier = Modifier.fillMaxSize()) {
+    PaperSurface(color = colors.bg, modifier = Modifier.fillMaxSize()) {
         // «Страница на просвет» (Cycle 4, LightPage): наклон телефона ловит
         // свет — блик по бумаге и водяной знак живой культуры. Висит на
         // «листе», не на скроллящемся списке. Без датчика — молчит.
-        Box(Modifier.fillMaxSize().lightPage(watermark = "MADRE · ЖИВАЯ КУЛЬТУРА · ДЕНЬ $dayNumber")) {
+        Box(Modifier.fillMaxSize()) {
+        // Dispose the lazy saveable cache on every factual book transition, even on Advice.
+        // A compound row key alone would resurrect A's disclosure after A → B → A.
+        key(history.firstOrNull()?.sourdoughConfigId) {
         LazyColumn(
-            Modifier
-                .statusBarsPadding()
-                .breathingPage(phase), // страница дышит — механика #5
-            contentPadding = PaddingValues(bottom = 24.dp),
+            Modifier.testTag("diary-list")
+                , // страница дышит — механика #5
+            contentPadding = PaddingValues(bottom = 24.dp + if (deletion.pending != null || deletion.error != null) deletionNoticeHeight else 0.dp),
         ) {
             item {
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    BackLabel("Первая полоса", onClick = onBack)
-                    PageLabel("Глава VII · день $dayNumber")
-                }
+                PaperHeader(StarterName.diaryTitle(starterName), onBack,
+                    overline = "Глава VII · день $dayNumber", modifier = Modifier.padding(horizontal = 22.dp))
 
-                Text(
-                    // Cycle 14: имя закваски — то, которым её назвали в колофоне.
-                    StarterName.diaryTitle(starterName),
-                    color = colors.espresso,
-                    fontFamily = FontFamily.Serif,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 28.sp,
-                    modifier = Modifier.padding(horizontal = 22.dp),
-                )
+                DiaryHero(phase, history, lastFeedingMillis, scheduleNowMillis)
 
                 if (nextFeedingStatus != null) {
                     Text(
                         nextFeedingStatus,
-                        color = colors.espresso,
-                        fontFamily = FontFamily.Serif,
+                        color = colors.ink,style = PaperType.body,
                         fontSize = 15.sp,
                         modifier = Modifier.padding(horizontal = 22.dp, vertical = 6.dp),
                     )
@@ -156,7 +145,7 @@ fun StarterDiaryScreen(
                 Column(
                     Modifier
                         .drawBehind {
-                            drawRect(colors.flour, size = androidx.compose.ui.geometry.Size(2.dp.toPx(), size.height))
+                            drawRect(colors.line, size = androidx.compose.ui.geometry.Size(2.dp.toPx(), size.height))
                         }
                         .padding(start = 14.dp)
                 ) {
@@ -168,17 +157,15 @@ fun StarterDiaryScreen(
                     Row(Modifier.padding(vertical = 5.dp), verticalAlignment = Alignment.Top) {
                         Text(
                             "${entry.timeLabel} —",
-                            color = if (entry.isHighlight) colors.sage else colors.cocoa,
-                            fontFamily = FontFamily.SansSerif,
+                            color = if (entry.isHighlight) colors.sage else colors.ink2,style = PaperType.caption,
                             fontSize = 11.sp,
                             letterSpacing = 1.sp,
                             modifier = Modifier.width(56.dp),
                         )
                         Text(
                             entry.text,
-                            color = hand.ink,
-                            fontFamily = FontFamily.Cursive,
-                            fontWeight = if (entry.isHighlight) FontWeight.Bold else hand.fontWeight,
+                            color = hand.ink,style = PaperType.note,
+                            fontWeight = if (entry.isHighlight) FontWeight.Medium else hand.fontWeight,
                             fontSize = 16.sp,
                             lineHeight = 24.sp,
                             modifier = Modifier.rotate(hand.rotationDeg),
@@ -190,7 +177,7 @@ fun StarterDiaryScreen(
                 if (cancelledBakeCount > 0) {
                     InkBlotSpot(
                         seed = InkBlot.seedFor(inkEventId, cancelledBakeCount),
-                        color = colors.espresso,
+                        color = colors.ink,
                         modifier = Modifier.align(Alignment.TopEnd).size(40.dp),
                     )
                 }
@@ -199,7 +186,7 @@ fun StarterDiaryScreen(
                     InkBlotSpot(
                         seed = InkBlot.seedFor(inkEventId, HUNGRY_BLOT_OFFSET),
                         blurred = true,
-                        color = colors.cocoa,
+                        color = colors.ink2,
                         modifier = Modifier.align(Alignment.BottomStart).size(56.dp),
                     )
                 }
@@ -207,188 +194,100 @@ fun StarterDiaryScreen(
             }
 
             item {
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 14.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                BookButton(label = "Покормить", onClick = onFeed, modifier = Modifier.weight(1f))
-                BookButton(
-                    label = "Фото",
-                    onClick = onOpenGallery,
-                    variant = com.polinalinen.madre.ui.components.BookButtonVariant.SECONDARY,
-                    modifier = Modifier.weight(1f),
-                )
+            DiaryActions(photoCount, onFeed, onOpenGallery)
+            PaperSegmented(listOf("Журнал", "Советы"), selectedTab, { localTab = it; onTabSelected(it) },
+                Modifier.padding(horizontal = 22.dp), label = "Раздел дневника")
             }
-            PageLabel("Советы из руководства", Modifier.padding(horizontal = 22.dp, vertical = 8.dp), color = colors.espresso)
-            Text(
-                "В буклете Levito Madre указано соотношение базового кормления 2:1:2 (закваска:вода:мука) и стартовая гидратация 50%. " +
-                    "Мадре и закваску кормят белой пшеничной мукой высшего сорта с содержанием белка >10 г на 100 г. " +
-                    "Хранение в холодильнике при 4–6°C обычно даёт интервал кормления 3–5 дней. " +
+            if (selectedTab == 1) {
+            item {
+            PageLabel("Советы из руководства", Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 8.dp), color = colors.ink)
+            PaperCard(Modifier.padding(horizontal = 22.dp, vertical = 6.dp).testTag("diary-advice-card")) {
+                listOf(
+                    "В буклете Levito Madre указано соотношение базового кормления 2:1:2 (закваска:вода:мука) и стартовая гидратация 50%. " +
+                        "Мадре и закваску кормят белой пшеничной мукой высшего сорта с содержанием белка >10 г на 100 г.",
+                    "Хранение в холодильнике при 4–6°C обычно даёт интервал кормления 3–5 дней.",
                     "Пик чаще всего бывает около 3–5 часов, но фактически зависит от температуры, муки, печи и вашего ритма. " +
-                    "Стартовые значения формы 50/100/50 — это редактируемые удобные массы, а не формула.",
-                color = colors.cocoa, fontFamily = FontFamily.Serif, fontSize = 13.sp, lineHeight = 19.sp,
-                modifier = Modifier.padding(horizontal = 22.dp, vertical = 6.dp),
-            )
-            PageLabel("Формуляр кормлений", Modifier.padding(start = 22.dp, top = 10.dp), color = colors.espresso)
+                        "Стартовые значения формы 50/100/50 — это редактируемые удобные массы, а не формула.",
+                ).forEachIndexed { index, paragraph ->
+                    Text(paragraph, color = colors.ink2, style = PaperType.body, fontSize = 13.sp, lineHeight = 19.sp,
+                        modifier = Modifier.fillMaxWidth().padding(top = if (index == 0) 0.dp else 12.dp)
+                            .testTag("diary-advice-paragraph-$index"))
+                }
             }
-
-            // Шапка липнет к верху: пролистывая историю на год назад, человек
-            // всё ещё видит, какая колонка чем является.
-            stickyHeader { FormularyHeader() }
-
-            items(history, key = { feeding -> feeding.id }) { feeding ->
-                FormularyRow(feeding = feeding, currentYear = currentYear)
             }
-        }
-        }
-    }
-}
-
-/** Шесть колонок формуляра — одна ширина на шапку и на строки. */
-private val COLUMN_WEIGHTS = listOf(1.35f, 0.95f, 0.95f, 0.95f, 1.0f, 1.25f)
-private val COLUMN_TITLES = listOf("Дата", "Закв.", "Мука", "Вода", "Гидр.", "Хранение")
-private const val FORMULARY_HEADER_DESCRIPTION =
-    "Дата, Закваска, Мука, Вода, Гидратация, Хранение"
-
-@Composable
-private fun FormularyHeader() {
-    val colors = AppColors.current
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .drawBehind { drawRect(colors.paper) }
-            .semantics {
-                heading()
-                contentDescription = FORMULARY_HEADER_DESCRIPTION
-            },
-    ) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 8.dp)) {
-            COLUMN_TITLES.forEachIndexed { index, title ->
-                Text(
-                    title,
-                    color = colors.cocoa,
-                    fontFamily = FontFamily.SansSerif,
-                    fontSize = 10.sp,
-                    letterSpacing = 0.5.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Clip,
-                    textAlign = if (index == 0) TextAlign.Start else TextAlign.End,
-                    modifier = Modifier.weight(COLUMN_WEIGHTS[index]),
-                )
-            }
-        }
-        HairRule()
-    }
-}
-
-/**
- * Одна строка формуляра: шесть фактов и ничего сверх них. Для TalkBack строка
- * объявляется одним предложением по порядку колонок — иначе шесть отдельных
- * чисел без подписей читаются как считалка. Незаполненная гидратация старой
- * записи объявляется «не указана», а не выдумывается.
- */
-@Composable
-private fun FormularyRow(feeding: FeedingEntity, currentYear: Int) {
-    val colors = AppColors.current
-    var expanded by rememberSaveable(feeding.id) { mutableStateOf(false) }
-
-    val hydration = feeding.finalHydrationPercent ?: feeding.hydrationPercent
-    val storageShort = if (feeding.storageLocation == StorageLocation.FRIDGE) "холод" else "кухня"
-    val storageSpoken = if (feeding.storageLocation == StorageLocation.FRIDGE) "холодильник" else "кухня"
-    val cells = listOf(
-        RuShortDate.visible(feeding.timestampMillis, currentYear),
-        feeding.retainedStarterGrams?.toString() ?: "—",
-        feeding.flourGrams.toString(),
-        feeding.waterGrams.toString(),
-        hydration?.let { "$it%" } ?: "—",
-        storageShort,
-    )
-    val spoken = buildString {
-        append(RuShortDate.accessible(feeding.timestampMillis))
-        append(". Закваска: ")
-        append(feeding.retainedStarterGrams?.let { "$it граммов" } ?: "не указана")
-        append(". Мука: ${feeding.flourGrams} граммов")
-        append(". Вода: ${feeding.waterGrams} граммов")
-        append(". Гидратация: ")
-        append(hydration?.let { "$it процентов" } ?: "не указана")
-        append(". Хранение: $storageSpoken.")
-    }
-    val detail = feeding.generatedComment ?: feeding.starterObservation
-    val hasDetail = detail != null || feeding.notes != null || feeding.photoPath != null
-
-    Column(Modifier.fillMaxWidth()) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 22.dp, vertical = 10.dp)
-                .clearAndSetSemantics { contentDescription = spoken },
-        ) {
-            cells.forEachIndexed { index, cell ->
-                Text(
-                    cell,
-                    color = if (index == 0) colors.cocoa else colors.espresso,
-                    fontFamily = if (index == 0) FontFamily.SansSerif else FontFamily.Serif,
-                    fontSize = if (index == 0) 11.sp else 13.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Clip,
-                    textAlign = if (index == 0) TextAlign.Start else TextAlign.End,
-                    modifier = Modifier.weight(COLUMN_WEIGHTS[index]),
-                )
-            }
-        }
-
-        if (hasDetail) {
-            // Отдельное действие, а не часть строки: таблица остаётся таблицей,
-            // а длинный текст раскрывается по желанию. Текст раскрытия лежит
-            // СНАРУЖИ нажимаемой площади — иначе TalkBack прочитал бы его
-            // дважды, второй раз как подпись к кнопке.
-            Box(
-                Modifier
-                    .padding(start = 22.dp)
-                    .then(
-                        bookAction(
-                            if (expanded) "Свернуть подробности кормления ${RuShortDate.accessible(feeding.timestampMillis)}"
-                            else "Показать подробности кормления ${RuShortDate.accessible(feeding.timestampMillis)}"
-                        ) { expanded = !expanded }
-                    ),
-                contentAlignment = Alignment.CenterStart,
-            ) {
-                PageLabel(if (expanded) "свернуть" else "подробнее", color = colors.crust)
-            }
-            if (expanded) {
-                Column(Modifier.padding(start = 22.dp, end = 22.dp, bottom = 8.dp)) {
-                    detail?.let {
-                        Text(
-                            it,
-                            color = colors.cocoa,
-                            fontFamily = FontFamily.Serif,
-                            fontSize = 13.sp,
-                            lineHeight = 19.sp,
-                        )
-                    }
-                    feeding.notes?.let {
-                        Text(
-                            "Заметка: $it",
-                            color = colors.espresso,
-                            fontFamily = FontFamily.Cursive,
-                            fontSize = 15.sp,
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
-                    }
-                    feeding.photoPath?.let {
-                        Box(Modifier.padding(top = 8.dp)) {
-                            AgedPhoto(
-                                photoPath = it,
-                                takenAtMillis = feeding.timestampMillis,
-                                height = 140.dp,
-                                caption = "Фотокарточка кормления",
-                            )
+            } else {
+            // Pending deletion hides presentation only: its Room row is still history.
+            if (historyLoaded && history.isEmpty()) {
+                item(key = "diary-empty") {
+                    // Keep the shared PaperEmpty and palette intact; its 17sp note needs
+                    // readable ink on this page, not the kit's decorative muted ink.
+                    androidx.compose.runtime.CompositionLocalProvider(LocalPaper provides colors.copy(mut = colors.ink2)) {
+                        PaperEmpty("", "Дневник начнётся с первого кормления. $starterName ждёт.",
+                            Modifier.padding(horizontal = 22.dp).testTag("diary-empty")) {
+                            PaperButton("Покормить", onFeed, Modifier.fillMaxWidth().testTag("diary-empty-feed"),
+                                fillLabelWidth = true)
                         }
                     }
                 }
             }
+            journalWeeks(history.filterNot { row -> deletion.pending?.let {
+                row.id == it.row.id && row.sourdoughConfigId == it.book.configId
+            } == true }, scheduleNowMillis).forEach { week ->
+                item(key = "week-${week.start}") {
+                    Text(week.label, color = colors.ink2, style = PaperType.ui,
+                        modifier = Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 24.dp, bottom = 8.dp)
+                            .testTag("diary-week-${week.start}").semantics { heading() })
+                }
+                items(week.entries, key = { "${it.sourdoughConfigId}:${it.id}" }) { feeding ->
+                    JournalRow(feeding, currentYear, onRepeat, onDelete, deletion.pending == null)
+                }
+            }
+            }
         }
-        HairRule()
+        }
+        if (deletion.pending != null || deletion.error != null) {
+            PaperSurface(color = colors.bg, modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged {
+                deletionNoticeHeight = with(density) { it.height.toDp() }
+                onDeletionNoticeHeightChanged(deletionNoticeHeight)
+            }) {
+                Column(Modifier.fillMaxWidth().padding(22.dp).testTag("diary-delete-status"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val pending = deletion.pending
+                    Text(deletion.error ?: if (pending?.committing == true) "Удаляем запись…" else "Запись скрыта. Можно вернуть в течение 5 секунд.",
+                        color = colors.ink, style = PaperType.body,
+                        modifier = Modifier.semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite })
+                    if (pending != null && !pending.committing) PaperButton("Вернуть", { onUndoDelete(pending.token) },
+                        Modifier.fillMaxWidth().testTag("diary-delete-undo"), fillLabelWidth = true)
+                }
+            }
+        }
+        }
+    }
+}
+
+/** Same kit/variants, with full-width actions when their real labels need room. */
+@Composable
+private fun DiaryActions(photoCount: Int, onFeed: () -> Unit, onOpenGallery: () -> Unit) {
+    val feedLabel = "+ Покормить"
+    val photoLabel = "Фото $photoCount"
+    val measurer = rememberTextMeasurer()
+    val style = PaperType.ui.copy(fontWeight = FontWeight.Bold)
+    val labelWidth = with(LocalDensity.current) {
+        maxOf(measurer.measure(AnnotatedString(feedLabel), style, softWrap = false).size.width,
+            measurer.measure(AnnotatedString(photoLabel), style, softWrap = false).size.width).toDp()
+    }
+    BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 14.dp)) {
+        // PaperButton keeps 20dp padding on each side; never shrink its type.
+        if ((maxWidth - 10.dp) / 2 < labelWidth + 40.dp) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                PaperButton(feedLabel, onFeed, Modifier.fillMaxWidth(), fillLabelWidth = true)
+                PaperButton(photoLabel, onOpenGallery, Modifier.fillMaxWidth(), variant = PaperButtonVariant.SECONDARY, fillLabelWidth = true)
+            }
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                PaperButton(feedLabel, onFeed, Modifier.weight(1f), fillLabelWidth = true)
+                PaperButton(photoLabel, onOpenGallery, Modifier.weight(1f), variant = PaperButtonVariant.SECONDARY, fillLabelWidth = true)
+            }
+        }
     }
 }
 

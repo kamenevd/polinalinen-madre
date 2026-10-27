@@ -6,6 +6,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE_ROOT = ROOT / "app" / "src" / "main"
 VISIBLE_LITERAL = re.compile(r'"(?:[^"\\]|\\.)*"')
+NAV_PREFIX = "app/src/main/java/com/polinalinen/madre/ui/razvorot/"
+# NAV-SIMPLIFY23.10 explicitly reintroduces these three labels, not the old copy elsewhere.
+NAV_APPROVED_COPY = {
+    NAV_PREFIX + "BookCatalog.kt": {'"В печи"'},
+    NAV_PREFIX + "RazvorotReader.kt": {'"В печи · ${com.polinalinen.madre.model.BakeNumbers.label(active.bakeNumber)} · шаг ${active.currentStepIndex+1}"'},
+    NAV_PREFIX + "BookNavigationScreens.kt": {'"В печи · ${BakeNumbers.label(it.bakeNumber)} · шаг ${it.currentStepIndex + 1} из ${recipe.timeline.size}"'},
+}
 DESIGN = ROOT / "DESIGN-V4.md"
 PLAN = ROOT / "workflow" / "evidence" / "cycle26" / "plan.md"
 REMINDER_WORKER = (
@@ -43,7 +50,9 @@ def check_no_legacy_baking_phrase_in_user_visible_literals():
         for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             for literal in VISIBLE_LITERAL.findall(line):
                 if "В печи" in literal or "ещё в печи" in literal:
-                    offenders.append(f"{path.relative_to(ROOT)}:{line_number}: {literal}")
+                    relative = path.relative_to(ROOT).as_posix()
+                    if literal not in NAV_APPROVED_COPY.get(relative, set()):
+                        offenders.append(f"{relative}:{line_number}: {literal}")
     assert not offenders, "Legacy user-visible copy remains:\n" + "\n".join(offenders)
 
 

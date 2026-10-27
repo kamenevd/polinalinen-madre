@@ -1,11 +1,16 @@
 package com.polinalinen.madre.ui.screens
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -16,7 +21,7 @@ import com.polinalinen.madre.data.db.entities.StorageLocation
 import com.polinalinen.madre.notifications.FeedingSchedule
 import com.polinalinen.madre.sourdough.GrowthPhase
 import com.polinalinen.madre.sourdough.profileForInterval
-import com.polinalinen.madre.ui.theme.MadreTheme
+import com.polinalinen.madre.ui.kit.RazvorotTheme as MadreTheme
 import java.util.Calendar
 import org.junit.Rule
 import org.junit.Test
@@ -24,11 +29,7 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-/**
- * Cycle 26: «Формуляр кормлений» — таблица. Шесть колонок целиком помещаются
- * в портрет, длинный человеческий текст живёт отдельным раскрытием, а старая
- * запись без гидратации говорит «не указана», а не подставляет число.
- */
+/** Journal rows preserve the ordered facts and exact legacy disclosures. */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "ru-w360dp-h640dp-xhdpi", application = MadreApplication::class)
@@ -126,28 +127,28 @@ class StarterDiaryUiTest {
         }
     }
 
-    @Test fun `actions precede the formulary and its sticky header`() {
-        show(listOf(computed))
+    private fun revealHistory() {
+        rule.onNodeWithTag("diary-list").performScrollToNode(hasTestTag("diary-entry-7") or
+            hasTestTag("diary-entry-3") or hasTestTag("diary-entry-4") or hasTestTag("diary-entry-8"))
+    }
 
-        val feedTop = rule.onNodeWithText("Покормить").fetchSemanticsNode().boundsInRoot.top
-        val galleryTop = rule.onNodeWithText("Фото").fetchSemanticsNode().boundsInRoot.top
-        val formularyTop = rule.onNodeWithText("ФОРМУЛЯР КОРМЛЕНИЙ").performScrollTo()
-            .fetchSemanticsNode().boundsInRoot.top
-        assertThat(feedTop).isLessThan(formularyTop)
-        assertThat(galleryTop).isLessThan(formularyTop)
-        // Шапка таблицы: шесть колонок, ровно те и в том порядке.
-        listOf("Дата", "Закв.", "Мука", "Вода", "Гидр.", "Хранение").forEach { title ->
-            rule.onNodeWithText(title).performScrollTo().assertIsDisplayed()
-        }
-        rule.onNodeWithContentDescription(
-            "Дата, Закваска, Мука, Вода, Гидратация, Хранение"
-        ).assertIsDisplayed()
-        rule.onAllNodesWithText("Прошлые главы").assertCountEquals(0)
+    @Test fun `actions precede week groups and the journal has no table`() {
+        show(listOf(computed), nowMillis = computed.timestampMillis)
+        val feedTop = rule.onNodeWithText("+ Покормить").fetchSemanticsNode().boundsInRoot.top
+        val galleryTop = rule.onNodeWithText("Фото 0").fetchSemanticsNode().boundsInRoot.top
+        rule.onNodeWithTag("diary-list").performScrollToNode(androidx.compose.ui.test.hasText("Эта неделя"))
+        val weekTop = rule.onNodeWithText("Эта неделя").performScrollTo().fetchSemanticsNode().boundsInRoot.top
+        assertThat(feedTop).isLessThan(weekTop)
+        assertThat(galleryTop).isLessThan(weekTop)
+        rule.onNodeWithContentDescription("Дата, Закваска, Мука, Вода, Гидратация, Хранение").assertDoesNotExist()
+        listOf("Дата", "Закв.", "Мука", "Вода", "Гидр.", "Хранение").forEach { rule.onNodeWithText(it).assertDoesNotExist() }
     }
 
     /** Строка читается одним предложением: шесть подписанных значений с единицами. */
     @Test fun `a computed row is announced as one ordered sentence`() {
         show(listOf(computed))
+        revealHistory()
+        rule.onNodeWithTag("diary-list").performScrollToNode(hasContentDescription("18 августа 2025, 12:00", substring = true))
         rule.onNodeWithContentDescription(
             "18 августа 2025, 12:00. Закваска: 50 граммов. Мука: 100 граммов. " +
                 "Вода: 50 граммов. Гидратация: 50 процентов. Хранение: холодильник."
@@ -157,6 +158,8 @@ class StarterDiaryUiTest {
     /** Старая запись не выдумывает ни закваску, ни гидратацию. */
     @Test fun `a legacy row says the hydration is unknown`() {
         show(listOf(legacy))
+        revealHistory()
+        rule.onNodeWithTag("diary-list").performScrollToNode(hasContentDescription("10 августа 2025, 09:30", substring = true))
         rule.onNodeWithContentDescription(
             "10 августа 2025, 09:30. Закваска: не указана. Мука: 60 граммов. " +
                 "Вода: 30 граммов. Гидратация: не указана. Хранение: кухня."
@@ -169,27 +172,33 @@ class StarterDiaryUiTest {
      */
     @Test fun `the long detail is a separate optional disclosure`() {
         show(listOf(computed))
-        rule.onAllNodesWithText("пахнет яблоками", substring = true).assertCountEquals(0)
+        revealHistory()
+        rule.onNodeWithText("пахнет яблоками", useUnmergedTree = true).assertExists()
+        rule.onNodeWithText(computed.generatedComment!!).assertDoesNotExist()
 
-        rule.onNodeWithText("ПОДРОБНЕЕ").performScrollTo().performClick()
+        rule.onNodeWithContentDescription("18 августа 2025, 12:00", substring = true).performScrollTo().performClick()
 
         rule.onNodeWithText("Заметка: пахнет яблоками").performScrollTo().assertIsDisplayed()
         rule.onNodeWithText(
             "Записано 18 августа, 12:00. Расписание: каждые 24 ч."
         ).performScrollTo().assertIsDisplayed()
         // Раскрытая запись без заметок и комментария раскрывать нечего.
-        rule.onNodeWithText("СВЕРНУТЬ").assertExists()
+        rule.onNodeWithText("Свернуть", useUnmergedTree = true).assertExists()
     }
 
-    /** Записи без заметки, комментария и фото раскрывать нечем. */
-    @Test fun `a bare row offers no disclosure`() {
+    /** The same row tap also toggles a bare legacy row without inventing detail. */
+    @Test fun `a bare row still has a real disclosure action`() {
         show(listOf(legacy))
-        rule.onAllNodesWithText("ПОДРОБНЕЕ").assertCountEquals(0)
+        revealHistory()
+        rule.onNodeWithContentDescription("10 августа 2025, 09:30", substring = true).performScrollTo().performClick()
+        rule.onNodeWithText("Свернуть", useUnmergedTree = true).assertExists()
     }
 
     /** Старые ручные поля показываются в списке именно как display-only seed. */
     @Test fun `legacy hydration with no final value is shown from legacy seed`() {
         show(listOf(legacyHydrationFallback))
+        revealHistory()
+        rule.onNodeWithTag("diary-list").performScrollToNode(hasContentDescription("80 процентов", substring = true))
         rule.onNodeWithText("80%", useUnmergedTree = true).performScrollTo().assertIsDisplayed()
         rule.onNodeWithContentDescription("80 процентов", substring = true)
             .performScrollTo()
@@ -242,7 +251,9 @@ class StarterDiaryUiTest {
             intervalHours = 24,
             nowMillis = momentOf(2025, Calendar.AUGUST, 20, 9, 0),
         )
-        rule.onNodeWithText("18 авг. 2025", useUnmergedTree = true).performScrollTo().assertIsDisplayed()
+        // Both fixtures are on18August; shared rows may compose both at once.
+        revealHistory()
+        rule.onAllNodesWithText("18 авг. 2025", useUnmergedTree = true)[0].performScrollTo().assertIsDisplayed()
         rule.onNodeWithContentDescription(
             "18 августа 2025, 08:00. Закваска: 45 граммов. Мука: 150 граммов. " +
                 "Вода: 75 граммов. Гидратация: 86 процентов. Хранение: кухня.",

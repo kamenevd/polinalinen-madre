@@ -43,6 +43,27 @@ class SourdoughRepository(
     private val onPostInsert: suspend () -> Unit = {},
 ) {
 
+    /** Called on IO under the controller's owner/token fence. No files are removed.
+     * Revalidate the entire owned snapshot; recompute by insertion order, not wall time.
+     * Room serializes this transaction with saveFeeding, including a concurrent new feed.
+     */
+    fun deleteDiaryFeeding(book: com.polinalinen.madre.sourdough.DiaryBook, snapshot: FeedingEntity,
+        authorized: (() -> Boolean) -> Boolean = { it() }): Boolean =
+        db.runInTransaction(java.util.concurrent.Callable {
+            authorized {
+            val config = db.sourdoughConfigDao().getNow(book.configId)
+            val actual = db.feedingDao().getNow(snapshot.id)
+            if (config?.userId != book.userId || snapshot.sourdoughConfigId != book.configId || actual != snapshot) {
+                false
+            } else {
+                db.feedingDao().deleteNow(snapshot)
+                db.sourdoughConfigDao().updateLastFeedingNow(book.configId,
+                    db.feedingDao().getLastNow(book.configId)?.timestampMillis)
+                true
+            }
+            }
+        })
+
     fun observeConfig(userId: Long): Flow<SourdoughConfigEntity?> =
         db.sourdoughConfigDao().observeForUser(userId)
 

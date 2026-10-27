@@ -56,10 +56,10 @@ class BakingFinishOrderTest {
         sync.onEvent = { events += it }
 
         val id = seedActiveSession(vm, sessionId = 1L, recipe = sampleRecipe(), scaleFactor = 2.0)
-        vm.advanceStep(id)
+        vm.advanceStep(id).join()
         advanceUntilIdle()
         vm.stageBakePhoto(id, "bake_photos/final.jpg")
-        vm.finish(id, ShelfShareDecision.PUT_WITH_PHOTO) { events += "exit" }
+        vm.finish(id, ShelfShareDecision.PUT_WITH_PHOTO) { events += "exit" }?.join()
         advanceUntilIdle()
 
         assertThat(history.attachCalls).hasSize(1)
@@ -77,7 +77,7 @@ class BakingFinishOrderTest {
         val vm = BakingViewModel(app, history, sync, ledger)
 
         val id = seedActiveSession(vm, sessionId = 1L, recipe = sampleRecipe("keep"), scaleFactor = 1.0)
-        vm.advanceStep(id)
+        vm.advanceStep(id).join()
         advanceUntilIdle()
         vm.stageBakePhoto(id, "bake_photos/private.jpg")
         vm.finish(id, ShelfShareDecision.KEEP)

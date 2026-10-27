@@ -1,5 +1,6 @@
 package com.polinalinen.madre.navigation
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -13,7 +14,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
 import com.polinalinen.madre.MadreApplication
 import com.polinalinen.madre.shelf.FamilyShelf
-import com.polinalinen.madre.ui.theme.MadreTheme
+import com.polinalinen.madre.ui.kit.RazvorotTheme as MadreTheme
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Before
 import org.junit.Rule
@@ -53,7 +54,7 @@ class ShelfShortcutTest {
             }
         }
 
-        rule.onNodeWithText("Полка").performClick()
+        rule.onNodeWithTag("nav-3").performClick()
         rule.waitForIdle()
 
         assertThat(navController.currentBackStackEntry?.destination?.route)
@@ -70,7 +71,7 @@ class ShelfShortcutTest {
             }
         }
 
-        rule.onNodeWithText("Полка").performClick()
+        rule.onNodeWithTag("nav-3").performClick()
         rule.waitForIdle()
         navController.popBackStack()
         rule.waitForIdle()
@@ -86,7 +87,7 @@ class ShelfShortcutTest {
                 MadreNavHost()
             }
         }
-        rule.onNodeWithText("Полка").performClick()
+        rule.onNodeWithTag("nav-3").performClick()
         rule.waitForIdle()
         rule.onNodeWithTag(FamilyShelf.UNCUT_SPINE_TAG).assertExists()
         rule.onNodeWithTag(FamilyShelf.UNCUT_SPINE_TAG).assertHasNoClickAction()

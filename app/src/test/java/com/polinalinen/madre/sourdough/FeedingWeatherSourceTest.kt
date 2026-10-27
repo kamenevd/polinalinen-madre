@@ -1,5 +1,6 @@
 package com.polinalinen.madre.sourdough
 
+import android.app.Application
 import android.content.Context
 import com.google.common.truth.Truth.assertThat
 import androidx.test.core.app.ApplicationProvider
@@ -13,7 +14,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35])
+@Config(sdk = [35], application = Application::class)
 class FeedingWeatherSourceTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()

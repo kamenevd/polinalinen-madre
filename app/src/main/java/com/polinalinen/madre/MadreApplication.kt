@@ -21,6 +21,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
+import com.polinalinen.madre.model.BookDisplaySettings
 
 /**
  * Единая точка создания Room/repository — синглтоны живут в Application,
@@ -53,7 +57,53 @@ class MadreApplication : Application() {
     // Cycle 15: незавершённые выпечки — их читает BakeRestoreWorker после
     // перезагрузки телефона, поэтому репозиторий нужен и без единого экрана.
     val activeBakeRepository: ActiveBakeRepository by lazy { ActiveBakeRepository(database) }
+    /** One operation lane across every retained controller/Activity in this process. */
+    internal val plannedBakeOperationGate=kotlinx.coroutines.sync.Mutex()
+    val bakeNumbers by lazy { com.polinalinen.madre.navigation.BakeNumberStore(this) }
+    suspend fun prepareBakeNumbers() {
+        plannedBakeOperationGate.lock()
+        try {
+            val rows=activeBakeRepository.initializeLegacyKeys()
+            val pending=com.polinalinen.madre.utils.PrefsBakeSessionLedger(getSharedPreferences("madre_prefs",MODE_PRIVATE)).pendingSessionIds() +
+                bakeNumbers.finales().map{it.sessionId}
+            com.polinalinen.madre.navigation.BookPreferences(this).use{bakeNumbers.reconcile(rows,pending.toSet(),it)}
+        } finally {plannedBakeOperationGate.unlock()}
+    }
+    val voiceIdentityStore: com.polinalinen.madre.voice.VoiceIdentityStore by lazy {
+        com.polinalinen.madre.voice.VoiceIdentityStore(getSharedPreferences("madre_voice", MODE_PRIVATE), KeystoreTokenCipher())
+    }
+    val voiceCoordinator: com.polinalinen.madre.voice.VoiceCoordinator by lazy {
+        com.polinalinen.madre.voice.VoiceCoordinator(
+            voiceIdentityStore,
+            com.polinalinen.madre.voice.HttpsVoiceApi(), activeBakeRepository.commitFence, yandexTransport,
+        )
+    }
+    val rosterCoordinator by lazy { com.polinalinen.madre.integration.v2.RosterCoordinator(
+        voiceIdentityStore,
+        com.polinalinen.madre.integration.v2.RosterConnectionStore(getSharedPreferences("madre_roster_v2", MODE_PRIVATE), KeystoreTokenCipher()),
+        com.polinalinen.madre.integration.v2.HttpsRosterV2Api(), activeBakeRepository.commitFence,
+        { com.polinalinen.madre.config.FeatureFlags.FAMILY_ROSTER_V2 }) }
+    val yandexAccountStorage: com.polinalinen.madre.account.yandex.YandexAccountStorage by lazy {
+        com.polinalinen.madre.account.yandex.YandexAccountPrefs(this)
+    }
+    private val yandexTransport: com.polinalinen.madre.account.yandex.HttpsYandexAccountApi by lazy {
+        val installation=com.polinalinen.madre.account.yandex.YandexInstallationAccess(
+            voiceIdentityStore,com.polinalinen.madre.voice.HttpsVoiceApi())
+        com.polinalinen.madre.account.yandex.HttpsYandexAccountApi(installation::forBind,installation::forUnbind)
+    }
+    val yandexAccountApi: com.polinalinen.madre.account.yandex.YandexAccountApi get() = yandexTransport
+    fun disconnectVoice() {
+        voiceCoordinator.revokeLocally()
+        if (com.polinalinen.madre.config.FeatureFlags.FAMILY_ROSTER_V2) rosterCoordinator.revokeLocally()
+        appScope.launch {
+            if (com.polinalinen.madre.config.FeatureFlags.FAMILY_ROSTER_V2) rosterCoordinator.disconnect()
+            voiceCoordinator.disconnect()
+        }
+    }
     val familySettingsRepository: FamilySettingsRepository by lazy { FamilySettingsRepository(database) }
+    val bookDisplaySettings: StateFlow<BookDisplaySettings> by lazy {
+        familySettingsRepository.observeBookDisplaySettings().stateIn(appScope, SharingStarted.Eagerly, BookDisplaySettings())
+    }
     // Cycle 5: общая книга на PocketBase — клиент и очередь фоновой отправки.
     val madreApi: MadreApi by lazy { MadreApiFactory.create() }
     /**
@@ -70,6 +120,22 @@ class MadreApplication : Application() {
             api = FamilyBookApiFactory.create(),
             tokens = authTokenStore,
         )
+    }
+    val familyLinkApi by lazy { com.polinalinen.madre.integration.v2.HttpsFamilyLinkApi() }
+    val familyLinkRepository by lazy { com.polinalinen.madre.integration.v2.FamilyLinkRepository(
+        familyAccountRepository, familyLinkApi, familyLinkApi, familyLinkApi) }
+    /** No restore/login side effects: only the explicit SDK callback can invoke this adapter. */
+    internal val foregroundFamilyProvisioning: com.polinalinen.madre.account.yandex.ForegroundFamilyProvisioning? by lazy {
+        if (!com.polinalinen.madre.config.FeatureFlags.V2_ACCOUNT) null else {
+            val auth = familyLinkApi
+            object : com.polinalinen.madre.account.yandex.ForegroundFamilyProvisioning {
+                override suspend fun authenticate(token: com.polinalinen.madre.account.yandex.YandexLoginToken,
+                    isCurrent: () -> Boolean) {
+                    familyAccountRepository.authenticateYandex(token, auth, isCurrent)
+                }
+                override fun signOut() { familyAccountRepository.signOut() }
+            }
+        }
     }
     val syncRepository: SyncRepository by lazy { SyncRepository(this) }
 }

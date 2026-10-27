@@ -1,0 +1,23 @@
+name: Alice backend
+
+on:
+  pull_request:
+    paths:
+      - 'backend/alice/**'
+      - '.github/workflows/alice-backend.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # existing repository pin
+      - name: Compile and exercise real local backend
+        run: |
+          python3 --version
+          python3 -m compileall -q backend/alice
+          python3 -m unittest discover -s backend/alice/tests -v

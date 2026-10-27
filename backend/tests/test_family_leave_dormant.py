@@ -93,15 +93,14 @@ class FamilyLeaveDormantContractTests(unittest.TestCase):
             "поиск кандидатов на нового владельца должен сортироваться по created,id",
         )
 
-    def test_owner_transfer_takes_the_first_of_the_sorted(self):
+    def test_owner_transfer_is_never_silent_in_71_including_legacy(self):
+        # FAMILY K9 supersedes old automatic oldest-member transfer. Keep the
+        # test, strengthen its assertion; real HTTP tests cover old/new clients.
         leave = self.transaction_body("/api/madre/family/leave")
-        query_index = leave.index("findRecordsByFilter(")
-        owner_write = leave.index('family.set("owner", others[0].id)')
-        self.assertLess(
-            query_index,
-            owner_write,
-            "передача владельца должна брать others[0] после отсортированного запроса",
-        )
+        self.assertNotIn('family.set("owner", others[0].id)', leave)
+        self.assertLess(leave.index("legacyDeparture("), leave.index('member.set("family", "")'))
+        guard = read(ROOT / "backend/pb_hooks/lib/family_v2.js")
+        self.assertIn('throw new ApiError(409, "owner_transfer_required", null)', guard)
 
     def test_no_query_in_the_hook_sorts_by_an_empty_string(self):
         self.assertNotRegex(

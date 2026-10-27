@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.screens
 
+import com.polinalinen.madre.ui.kit.*
 import android.os.Looper
 import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.test.core.app.ApplicationProvider
@@ -7,7 +8,7 @@ import com.polinalinen.madre.MadreApplication
 import com.polinalinen.madre.data.repository.RecipeRepository
 import com.polinalinen.madre.model.Recipe
 import com.polinalinen.madre.sourdough.GrowthPhase
-import com.polinalinen.madre.ui.theme.MadreTheme
+import com.polinalinen.madre.ui.kit.RazvorotTheme as MadreTheme
 import kotlinx.coroutines.runBlocking
 import org.robolectric.Shadows.shadowOf
 
@@ -66,7 +67,7 @@ internal fun ComposeContentTestRule.showFrontPage(
 ) {
     setContent {
         MadreTheme {
-            HomeScreen(
+            LegacyHomeFixture(
                 madreHeadline = "я проголодалась!",
                 starterName = starterName,
                 phase = phase,

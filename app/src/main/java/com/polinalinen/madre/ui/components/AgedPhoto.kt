@@ -1,5 +1,6 @@
 package com.polinalinen.madre.ui.components
 
+import com.polinalinen.madre.ui.kit.*
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,7 +26,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
-import com.polinalinen.madre.ui.theme.AppColors
 import com.polinalinen.madre.utils.PhotoStore
 
 /**
@@ -125,7 +125,7 @@ fun AgedPhoto(
     openable: Boolean = true,
     caption: String? = null,
 ) {
-    val colors = AppColors.current
+    val colors = LocalPaper.current
     val matrix = remember(photoPath, takenAtMillis) { PhotoAging.colorMatrix(nowMillis - takenAtMillis) }
     var viewerOpen by remember(photoPath) { mutableStateOf(false) }
 
@@ -133,7 +133,7 @@ fun AgedPhoto(
         modifier
             .fillMaxWidth()
             .rotate(rotationDeg)
-            .drawBehind { drawRect(colors.cream) }
+            .drawBehind { drawRect(colors.card) }
             .padding(10.dp)
     ) {
         Box(
@@ -145,7 +145,7 @@ fun AgedPhoto(
                 ) { viewerOpen = true }
                 .drawWithContent {
                     drawContent()
-                    drawPhotoHolders(colors.cocoa.copy(alpha = 0.55f), 14.dp.toPx())
+                    drawPhotoHolders(colors.ink2.copy(alpha = 0.55f), 14.dp.toPx())
                 }
         ) {
             AsyncImage(

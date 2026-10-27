@@ -25,12 +25,258 @@ class WorkflowContractTests(unittest.TestCase):
             "python3 scripts/cycle.py validate",
             "testDebugUnitTest",
             "lintDebug",
+            "compileDebugKotlin",
+            "20 key native frames",
             "verifyRoborazziDebug",
             "assembleDebug",
-            "connectedDebugAndroidTest",
+            "bash scripts/run_native_acceptance.sh",
             "retention-days:",
         ):
             self.assertIn(required, text)
+        # The pinned emulator action executes each input line in its own shell.
+        # Follow the exact invoked helper, not a decoy command in a YAML comment.
+        coordinator = self.read("scripts/run_native_acceptance.sh")
+        self.assertIn("bash scripts/run_instrumented_acceptance.sh", coordinator)
+        script = self.read("scripts/run_instrumented_acceptance.sh")
+        self.assertRegex(script, r"(?m)^\s*\./gradlew connectedDebugAndroidTest ")
+        self.assertIn("./gradlew :app:connectedDebugAndroidTest", script)
+        self.assertIn("com.polinalinen.madre.FullscreenInstrumentedTest,com.polinalinen.madre.NavigationSmokeTest", script)
+        self.assertIn('|| result=$?', script)
+        self.assertIn('exit "$result"', script)
+        self.assertIn("adb shell cmd overlay enable com.android.internal.display.cutout.emulation.tall", script)
+
+    def test_extended_native_work_stays_optional_and_protected_smoke_is_separate(self):
+        text = self.read(".github/workflows/quality-gates.yml")
+        smoke = text.split("  instrumented-acceptance:\n", 1)[1]
+        self.assertIn("name: Optional extended instrumented acceptance", smoke)
+        self.assertEqual(1, text.count("    name: Instrumented smoke\n"))
+        protected = text.split("  instrumented-smoke:\n", 1)[1].split("  instrumented-acceptance:\n", 1)[0]
+        self.assertIn("needs: [workflow-contract, android-quality]", protected)
+        self.assertIn("needs.workflow-contract.outputs.final_qa == 'true'", protected)
+        self.assertNotIn("qaRegression=true", protected)
+        self.assertIn("if: (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && !inputs.critical_only && !inputs.family_link_render", smoke)
+        quality = text.split("  android-acceptance:\n", 1)[1].split("  qa-regression:\n", 1)[0]
+        self.assertIn("needs: [workflow-contract, android-quality]", quality)
+        critical = next(line for line in quality.splitlines() if "run: ./gradlew compileDebugKotlin" in line)
+        self.assertIn("testDebugUnitTest assembleDebug", critical)
+        self.assertNotIn("lintDebug", critical)
+        self.assertNotIn("verifyRoborazziDebug", critical)
+        self.assertIn("-Pmadre.extendedVerification=true", quality)
+        self.assertIn("github.event_name == 'workflow_dispatch' && inputs.capture_baseline", quality)
+
+    def test_lint_is_a_separate_nonblocking_report(self):
+        text = self.read(".github/workflows/quality-gates.yml")
+        lint = text.split("  lint-report:\n", 1)[1].split("  instrumented-acceptance:\n", 1)[0]
+        self.assertIn("continue-on-error: true", lint)
+        self.assertIn("lintDebug", lint)
+        self.assertIn("lint-reports", lint)
+
+    def test_coordinator_executes_as_one_command_under_the_pinned_actions_posix_shell(self):
+        import subprocess
+        text=self.read(".github/workflows/quality-gates.yml")
+        smoke=text.split("  instrumented-acceptance:\n",1)[1].split("  required-7015-performance:\n",1)[0]
+        line=next(line.strip().removeprefix('script: ') for line in smoke.splitlines() if line.strip().startswith('script: '))
+        self.assertEqual('bash scripts/run_native_acceptance.sh "${{ inputs.bake_numbers_native && \'true\' || \'false\' }}" "${{ inputs.exact_qa_timing && \'true\' || \'false\' }}"',line)
+        line=line.replace('bash scripts/run_native_acceptance.sh','printf %s')
+        for value in ['true','false']:
+            for exact in ['true','false']:
+                shell=line.replace("${{ inputs.bake_numbers_native && 'true' || 'false' }}",value).replace("${{ inputs.exact_qa_timing && 'true' || 'false' }}",exact)
+                result=subprocess.run(['sh','-c',shell],capture_output=True,text=True)
+                self.assertEqual(0,result.returncode,result.stderr)
+                self.assertEqual(value+exact,result.stdout)
+        upload=smoke.split('name: Upload independent native group logs and exact exit codes',1)[1].split('      - name:',1)[0]
+        self.assertIn('if: always()',upload)
+        self.assertIn('name: native-acceptance-status',upload)
+        self.assertIn('path: performance-evidence/native-acceptance/',upload)
+        self.assertIn('if-no-files-found: error',upload)
+
+    def test_qa_signing_is_verified_before_upload_without_a_fallback(self):
+        text = self.read(".github/workflows/quality-gates.yml")
+        quality = text.split("  android-acceptance:\n", 1)[1].split("  qa-regression:\n", 1)[0]
+        restore = quality.index("run: python3 scripts/restore_qa_signing.py\n")
+        build = quality.index("run: ./gradlew compileDebugKotlin")
+        verify = quality.index("id: verify_qa_signature")
+        upload = quality.index("name: Upload verified debug APK first")
+        self.assertLess(restore, build)
+        self.assertLess(build, verify)
+        self.assertLess(verify, upload)
+        gate = quality[quality.index("name: Verify stable QA APK identity"):quality.index("name: Extended visual verification")]
+        self.assertNotIn("continue-on-error", gate)
+        self.assertNotIn("if:", gate)
+        self.assertIn("scripts/verify_apk_signature.py app/build/outputs/apk/debug/app-debug.apk", gate)
+        self.assertIn("if: success() && steps.verify_qa_signature.outcome == 'success'", quality[upload:])
+        self.assertIn("path: app/build/outputs/apk/debug/app-debug.apk", quality[upload:])
+        self.assertIn('MADRE_BUILD_TOOLS_VERSION: "36.0.0"', quality)
+        self.assertIn('sdkmanager "build-tools;${MADRE_BUILD_TOOLS_VERSION}"', quality)
+        for name in ("KEYSTORE_BASE64", "KEYSTORE_PASSWORD", "KEY_ALIAS", "KEY_PASSWORD", "SIGNING_CERT_SHA256"):
+            self.assertIn("secrets.MADRE_QA_" + name, quality)
+        self.assertIn("MADRE_YANDEX_CLIENT_ID: ${{ secrets.MADRE_YANDEX_CLIENT_ID }}", quality)
+        self.assertNotIn("secrets.MADRE_KEYSTORE_", text)
+        self.assertIn("if: always()\n        run: python3 scripts/restore_qa_signing.py --cleanup", quality)
+
+    def test_delivery_artifact_is_frozen_before_test_only_abi_and_runtime_uses_delivery(self):
+        text=self.read(".github/workflows/quality-gates.yml")
+        freeze=text.index("name: Freeze ordinary delivery QA")
+        instrument=text.index("name: Build minified QA instrumentation separately")
+        self.assertLess(freeze,instrument)
+        delivery=text.split("name: madre-qa-release-like\n",1)[1].split("retention-days:",1)[0]
+        self.assertIn("path: .ci-delivery/",delivery)
+        self.assertIn("include-hidden-files: true",delivery)
+        self.assertIn("name: madre-qa-regression-target",text)
+        self.assertIn("MADRE_EXACT_QA_REGRESSION_DIR",self.read("scripts/run_minified_plan_regression.py"))
+        runtime=self.read("scripts/run_qa_runtime_acceptance.sh")
+        self.assertIn("delivery_phase delivery-seed",runtime)
+        self.assertIn("delivery_phase delivery-check",runtime)
+        self.assertIn("'test_only_persistence_ABI':False",runtime)
+        self.assertIn("actualUnmodifiedDeliveryReadsLegacyAndAddsPlan",self.read("macrobenchmark/src/main/java/com/polinalinen/madre/macrobenchmark/QaOwnerAcceptance.kt"))
+
+    def test_single_ordinary_r8_and_same_run_optional_consumers(self):
+        from scripts.tests.test_workflow_selector import sections, scalar, step_blocks
+        text = self.read(".github/workflows/quality-gates.yml")
+        jobs = sections(text.split("\njobs:\n", 1)[1], r"^  ([a-z0-9-]+):\n")
+        ordinary, regression = [], []
+        for name, job in jobs.items():
+            for line in job.splitlines():
+                if re.search(r"(?<![\w])(?::app:)?assembleQa(?![\w])", line):
+                    (regression if "-Pmadre.qaRegression=true" in line else ordinary).append(name)
+        self.assertEqual(["android-quality"], ordinary)
+        self.assertEqual(["qa-regression"], regression)
+        self.assertNotIn("qaRegression", jobs["android-quality"])
+        self.assertNotIn("assembleQa", jobs["android-acceptance"])
+        self.assertIsNone(scalar(jobs["android-quality"], "needs", 4))
+        self.assertEqual("[workflow-contract, android-quality]", scalar(jobs["android-acceptance"], "needs", 4))
+        self.assertEqual("[android-acceptance, qa-regression]", scalar(jobs["instrumented-acceptance"], "needs", 4))
+        download = step_blocks(jobs["android-acceptance"])["Download same-run ordinary QA, never rebuild delivery"]
+        self.assertIn("actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0", download)
+        self.assertEqual("madre-short-qa", scalar(download, "name", 10))
+        self.assertEqual("app/build", scalar(download, "path", 10))
+        for forbidden in ("run-id:", "github-token:", "continue-on-error:"):
+            self.assertNotIn(forbidden, download)
+        short = step_blocks(jobs["android-quality"])["Upload verified short QA and provenance"]
+        for path in ("outputs/apk/qa/app-qa.apk", "outputs/mapping/qa/", "intermediates/merged_manifests/qa/", "reports/qa-binary-provenance.json", "reports/qa-account-gate.json"):
+            self.assertIn("app/build/" + path, short)
+        self.assertIn("compiled_profile", self.read("scripts/verify_qa_release_like.py"))
+        for artifact in ("madre-qa-regression-target", "madre-qa-regression-test"):
+            self.assertIn("name: " + artifact, jobs["qa-regression"])
+            self.assertNotIn("name: " + artifact, jobs["android-acceptance"])
+            consumer = next(block for block in step_blocks(jobs["instrumented-acceptance"]).values() if "name: " + artifact in block)
+            self.assertNotIn("run-id:", consumer)
+            self.assertIn("inputs.bake_numbers_native || inputs.exact_qa_timing", consumer)
+        self.assertNotIn("continue-on-error: true", jobs["qa-regression"])
+
+    def test_gradle_cache_parallel_daemon_policy(self):
+        properties = self.read("gradle.properties")
+        for setting in ("org.gradle.caching=true", "org.gradle.parallel=true", "org.gradle.daemon=true", "org.gradle.workers.max=2", "org.gradle.jvmargs=-Xmx1536m -Dfile.encoding=UTF-8"):
+            self.assertIn(setting, properties.splitlines())
+        for workflow in ("quality-gates.yml", "release.yml"):
+            self.assertNotIn("--no-daemon", self.read(".github/workflows/" + workflow))
+
+    def test_minified_control_build_finishes_before_boot_and_transport_is_not_a_pass(self):
+        text=self.read(".github/workflows/quality-gates.yml")
+        self.assertLess(text.index("run: python3 scripts/run_minified_plan_regression.py --prepare"),text.index("name: Run emulator smoke tests"))
+        source=self.read("scripts/run_minified_plan_regression.py")
+        self.assertIn("metadata['controller_head']==head",source)
+        self.assertIn("source_hashes()==original",source)
+        self.assertIn("wait_for_emulator()",source)
+        self.assertIn("no data test PASS",source)
+        self.assertNotIn("kill-server",source)
+
+    def minified_transport_helpers(self):
+        # Execute the actual helpers without starting a build, adb or data tests.
+        import ast
+        import subprocess
+        import sys
+        from unittest.mock import Mock
+        source = ast.parse(self.read("scripts/run_minified_plan_regression.py"))
+        functions: list[ast.stmt] = [node for node in source.body if isinstance(node, ast.FunctionDef)
+                                    and node.name in ('run', 'wait_for_emulator')]
+        scope = {'subprocess': Mock(TimeoutExpired=subprocess.TimeoutExpired),
+                 'sys': sys, 'time': Mock(), 'transport_event': Mock(),
+                 'PACKAGE': 'com.polinalinen.madre.qa'}
+        exec(compile(ast.Module(body=functions, type_ignores=[]), '<actual-transport-helpers>', 'exec'), scope)
+        return scope
+
+    def test_minified_transport_retries_only_offline_idempotent_commands(self):
+        import subprocess
+        from unittest.mock import Mock
+        command = ['adb', 'install', '-r', 'test.apk']
+        for message, expected_calls in [('error: device offline', 2), ('INSTALL_FAILED_INVALID_APK', 1)]:
+            with self.subTest(message=message):
+                scope = self.minified_transport_helpers()
+                scope['wait_for_emulator'] = Mock()
+                scope['subprocess'].run.side_effect = [
+                    subprocess.CompletedProcess(command, 1, '', message),
+                    subprocess.CompletedProcess(command, 0, 'Success\n', '')]
+                if expected_calls == 2:
+                    self.assertEqual(0, scope['run'](command).returncode)
+                else:
+                    with self.assertRaises(subprocess.CalledProcessError):
+                        scope['run'](command)
+                self.assertEqual(expected_calls, scope['subprocess'].run.call_count)
+                self.assertEqual(expected_calls, scope['wait_for_emulator'].call_count)
+
+    def test_minified_transport_exhaustion_and_instrumentation_fail_closed(self):
+        import subprocess
+        from unittest.mock import Mock
+        scope = self.minified_transport_helpers()
+        scope['wait_for_emulator'] = Mock()
+        command = ['adb', 'pull', '/synthetic', '/local']
+        scope['subprocess'].run.return_value = subprocess.CompletedProcess(command, 1, '', 'error: device offline')
+        with self.assertRaises(subprocess.CalledProcessError):
+            scope['run'](command)
+        self.assertEqual(3, scope['subprocess'].run.call_count)
+        scope['subprocess'].run.reset_mock()
+        with self.assertRaisesRegex(AssertionError, 'Not a retryable adb operation'):
+            scope['run'](['adb', 'shell', 'am', 'instrument', '-w', 'synthetic.test'])
+        scope['subprocess'].run.assert_not_called()
+
+    def test_minified_wait_requires_booted_emulator_and_bounds_offline_wait(self):
+        import subprocess
+        for boot, succeeds in [('1\n1\n', True), ('0\n1\n', False), ('1\n0\n', False)]:
+            with self.subTest(boot=boot):
+                scope = self.minified_transport_helpers()
+                scope['subprocess'].run.side_effect = [
+                    result for _ in range(3) for result in (
+                        subprocess.CompletedProcess(['adb'], 0, '', ''),
+                        subprocess.CompletedProcess(['adb'], 0, boot, ''))]
+                if succeeds:
+                    scope['wait_for_emulator']()
+                    self.assertEqual(2, scope['subprocess'].run.call_count)
+                else:
+                    with self.assertRaisesRegex(RuntimeError, 'no data test PASS'):
+                        scope['wait_for_emulator']()
+                    self.assertEqual(6, scope['subprocess'].run.call_count)
+        scope = self.minified_transport_helpers()
+        scope['subprocess'].run.side_effect = subprocess.TimeoutExpired(['adb'], 120)
+        with self.assertRaisesRegex(RuntimeError, 'no data test PASS'):
+            scope['wait_for_emulator']()
+        self.assertEqual(3, scope['subprocess'].run.call_count)
+
+    def test_debug_signing_has_its_own_identity_and_keeps_qa_isolation(self):
+        text = self.read("app/build.gradle.kts")
+        debug = text.split("        debug {", 1)[1].split("        release {", 1)[0]
+        self.assertIn('applicationIdSuffix = ".qa"', debug)
+        self.assertIn('signingConfig = signingConfigs.findByName("qa")', debug)
+        self.assertNotIn('getByName("debug")', debug)
+        for name in ("QA_KEYSTORE_PATH", "QA_KEYSTORE_PASSWORD", "QA_KEY_ALIAS", "QA_KEY_PASSWORD"):
+            self.assertIn('System.getenv("' + name + '")', text)
+        self.assertIn("QA signing inputs are incomplete", text)
+        self.assertIn('applicationId = "com.polinalinen.madre"', text)
+
+    def test_style_boundary_is_a_real_checked_scanner_not_a_placeholder(self):
+        text = self.read("app/src/test/java/com/polinalinen/madre/ui/StyleBoundaryTest.kt")
+        self.assertIn('"scripts/style_boundary.py", "--check"', text)
+        self.assertIn("assertEquals(output, 0, process.waitFor())", text)
+        self.assertNotIn("@Ignore", text)
+
+    def test_rc_exclusions_are_exact_visual_classes_not_domain_packages(self):
+        text = self.read("app/build.gradle.kts")
+        excluded = text.split("val extendedOnlyTests = listOf(\n", 1)[1].split("\n)", 1)[0]
+        for name in re.findall(r'"([^"]+)"', excluded):
+            self.assertNotIn("*", name)
+            self.assertTrue((ROOT / "app/src/test/java" / (name.replace(".", "/") + ".kt")).is_file(), name)
+            self.assertTrue(name.endswith(("GoldenTest", "ExtendedRenderTest", "MaterialExtendedTest", "StaticFontCompatibilityTest")), name)
+        self.assertTrue((ROOT / "app/src/androidTest/java/com/polinalinen/madre/data/db/MigrationTest.kt").is_file())
 
     def test_release_workflow_is_tag_only_and_fail_closed(self):
         text = self.read(".github/workflows/release.yml")

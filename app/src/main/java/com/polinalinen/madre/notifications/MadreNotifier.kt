@@ -59,18 +59,26 @@ class MadreNotifier(private val context: Context) {
      * Разные шаги не затирают друг друга, повтор того же ключа заменяет своё же
      * уведомление, и ничего считать для этого не нужно.
      */
-    fun postBakingNotification(sessionId: Long, key: String, title: String, text: String) {
+    fun postBakingNotification(sessionId: Long, key: String, title: String, text: String,
+        bakeNumber:Int=(context.applicationContext as? com.polinalinen.madre.MadreApplication)?.bakeNumbers?.number(sessionId)?:0) {
+        // The existing durable notification ledger admits each step deadline once.
+        // Do not double a user-enabled notification-channel vibration.
+        ensureChannel(CHANNEL_BAKING,"Выпечка")
+        if(key.startsWith("step-done-") && context.getSystemService(NotificationManager::class.java)
+                ?.getNotificationChannel(CHANNEL_BAKING)?.shouldVibrate()!=true)
+            com.polinalinen.madre.ui.kit.performPaperHaptic(context,kind=com.polinalinen.madre.ui.kit.PaperHaptic.TIMER)
         post(
             channelId = CHANNEL_BAKING,
             channelName = "Выпечка",
             tag = key,
             id = ID_KEYED,
-            title = title,
+            title = if(bakeNumber in 1..9 && !title.startsWith("№"))"№$bakeNumber $title" else title,
             text = text,
             // Cycle 20: тап открывает ИМЕННО эту выпечку. [sessionId] здесь
             // обязателен, а не «по возможности»: уведомление про шаг всегда
             // знает, чей это шаг, и молча остаться без дороги не должно.
             contentIntent = BakeOpenIntent.pendingIntent(context, sessionId),
+            numbers=listOf(bakeNumber),
         )
     }
 
@@ -82,6 +90,16 @@ class MadreNotifier(private val context: Context) {
     fun cancelFeedingReminder() {
         NotificationManagerCompat.from(context).cancel(ID_FEEDING)
     }
+
+    fun postPlannedBake(plan: com.polinalinen.madre.navigation.PlannedBake, recipeName: String, nonce: String) {
+        post(CHANNEL_BAKING,"Выпечка","planned:${plan.id}",4000,(if(plan.number in 1..9)"№${plan.number} " else "")+"Пора ставить опару · $recipeName ×${plan.portions}",
+            "Начало ${java.text.SimpleDateFormat("d MMM, HH:mm",java.util.Locale.forLanguageTag("ru")).format(java.util.Date(plan.startAtMillis))}. Таймер начнётся только после «Начать».",
+            PlannedBakeActions.pendingIntent(context,plan,PlannedBakeAction.OPEN),
+            actions=listOf(
+                NotificationCompat.Action.Builder(0,"Начать",PlannedBakeActions.pendingIntent(context,plan,PlannedBakeAction.START,nonce)).build(),
+                NotificationCompat.Action.Builder(0,"Через 30 мин",PlannedBakeActions.pendingIntent(context,plan,PlannedBakeAction.SNOOZE,nonce)).build()),plannedNumber=plan.number)
+    }
+    fun cancelPlannedBake(id: String) { NotificationManagerCompat.from(context).cancel("planned:$id",4000) }
 
     /**
      * Снять уведомление, показанное по этому ключу (Cycle 12). Пара «тег + id»
@@ -117,6 +135,8 @@ class MadreNotifier(private val context: Context) {
         text: String,
         contentIntent: android.app.PendingIntent,
         action: NotificationCompat.Action? = null,
+        actions: List<NotificationCompat.Action> = emptyList(),
+        numbers: List<Int> = emptyList(),plannedNumber:Int?=null,
     ) {
         if (!canPost()) return
         ensureChannel(channelId, channelName)
@@ -130,7 +150,8 @@ class MadreNotifier(private val context: Context) {
             // сделанное — и звать туда, где делать больше нечего.
             .setAutoCancel(true)
             .setContentIntent(contentIntent)
-            .apply { if (action != null) addAction(action) }
+            .apply { if (action != null) addAction(action);actions.forEach{addAction(it)} }
+            .apply { if(channelId==CHANNEL_BAKING)bakingLockScreenPrivacy(context,channelId,false,numbers,plannedNumber) }
             .build()
         notifySafely(id, notification, tag)
     }

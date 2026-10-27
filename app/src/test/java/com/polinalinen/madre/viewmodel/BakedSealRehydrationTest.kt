@@ -1,6 +1,10 @@
 package com.polinalinen.madre.viewmodel
 
 import android.app.Application
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.runBlocking
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.Configuration
 import androidx.work.WorkManager
@@ -29,6 +33,7 @@ import org.robolectric.annotation.Config
 class BakedSealRehydrationTest {
     private val dispatcher = StandardTestDispatcher()
     private val app = ApplicationProvider.getApplicationContext<Application>()
+    private var controller: BakingViewModel? = null
 
     @Before
     fun setUp() {
@@ -40,6 +45,14 @@ class BakedSealRehydrationTest {
 
     @After
     fun tearDown() {
+        val scope=controller?.viewModelScope?.coroutineContext?.get(Job)
+        controller?.let { ViewModelStore().apply { put("bake",it);clear() } }
+        dispatcher.scheduler.advanceUntilIdle()
+        runBlocking {
+            kotlinx.coroutines.withTimeout(10_000) {
+                while(scope?.isCompleted==false){dispatcher.scheduler.runCurrent();kotlinx.coroutines.delay(1)}
+            }
+        }
         kotlinx.coroutines.Dispatchers.resetMain()
     }
 
@@ -59,6 +72,7 @@ class BakedSealRehydrationTest {
         }
         val ledger = FakeBakeSessionLedger().apply { put(sessionId = 4L, recordId = 23L) }
         val vm = BakingViewModel(app, history, FakeShelfSync(), ledger)
+        controller=vm
         advanceUntilIdle()
 
         vm.restoreCompletion(4L)

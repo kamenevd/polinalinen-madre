@@ -403,6 +403,28 @@ class MigrationTest {
         db.close()
     }
 
+    @Test fun migrate_11_to_12_backfillsStableNumbersAndKeepsLegacyData() {
+        helper.createDatabase(TEST_DB,11).use { db ->
+            for((id,clock) in listOf(872 to 2000,811 to 1000,899 to 1000)) {
+                db.execSQL("INSERT INTO active_bakes(sessionId,recipeId,recipeName,stepTitle,stepIndex,stepDurationMinutes,isWaitStep,startedAtWallClock,pausedAtWallClock,scaleFactor,bakeKey,revision,recipeRevision) VALUES(?, 'ciabatta','Чиабатта','Отдых',4,30,1,?,1200,NULL,?,7,'digest')",arrayOf<Any>(id,clock,"key-$id"))
+            }
+            db.execSQL("INSERT INTO family_settings VALUES('kept','семья')")
+        }
+        val db=helper.runMigrationsAndValidate(TEST_DB,12,true,*MadreDatabase.MIGRATIONS)
+        try {
+            db.query("SELECT sessionId,bake_number,scaleFactor,pausedAtWallClock,bakeKey,revision FROM active_bakes ORDER BY bake_number").use { rows ->
+                listOf(811L,899L,872L).forEachIndexed { index,id ->
+                    assertThat(rows.moveToNext()).isTrue();assertThat(rows.getLong(0)).isEqualTo(id)
+                    assertThat(rows.getInt(1)).isEqualTo(index+1);assertThat(rows.isNull(2)).isTrue()
+                    assertThat(rows.getLong(3)).isEqualTo(1200L);assertThat(rows.getString(4)).isEqualTo("key-$id")
+                    assertThat(rows.getLong(5)).isEqualTo(7L)
+                }
+                assertThat(rows.moveToNext()).isFalse()
+            }
+            assertThat(db.queryNullableString("SELECT value FROM family_settings WHERE `key`='kept'")).isEqualTo("семья")
+        } finally {db.close()}
+    }
+
     private companion object {
         const val TEST_DB = "migration-test.db"
     }

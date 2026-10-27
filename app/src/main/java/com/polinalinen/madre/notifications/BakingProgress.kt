@@ -37,6 +37,7 @@ data class BakingProgress(
     val isPaused: Boolean,
     /** Название шага, который начнётся после текущего; null on the last step. */
     val nextStepTitle: String? = null,
+    val bakeNumber: Int = 0,
 ) {
 
     /**
